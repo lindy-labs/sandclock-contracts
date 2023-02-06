@@ -18,7 +18,10 @@ contract scUSDC is sc4626 {
     // need to be able to receive eth rewards
     receive() external payable {}
 
-    function totalAssets() public view override returns (uint256 assets) {}
+    function totalAssets() public view override returns (uint256 assets) {
+        assets = asset.balanceOf(address(this));
+    }
+
     function afterDeposit(uint256, uint256) internal override {}
     function beforeWithdraw(uint256, uint256) internal override {}
 

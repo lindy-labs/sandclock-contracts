@@ -27,7 +27,7 @@ contract SandclockUSDCTest is DSTestPlus {
         underlying.approve(address(vault), amount);
 
         vault.deposit(amount, address(this));
-        //vault.withdraw(amount, address(this), address(this));
+        vault.withdraw(amount, address(this), address(this));
     }
 
     function testFailDepositWithNotEnoughApproval(uint256 amount) public {
