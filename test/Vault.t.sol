@@ -5,20 +5,25 @@ import {DSTestPlus} from "solmate/test/utils/DSTestPlus.sol";
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 import {scUSDC as Vault} from "../src/steth/scUSDC.sol";
+import {scWETH as Strategy} from "../src/steth/scWETH.sol";
 
 contract MockVault is Vault {
-    constructor(MockERC20 _underlying) Vault(_underlying) {}
+    constructor(MockERC20 _underlying, Strategy _scweth) Vault(_underlying, _scweth) {}
 }
 
 contract SandclockUSDCTest is DSTestPlus {
     using FixedPointMathLib for uint256;
 
     MockERC20 underlying;
+    MockERC20 weth;
+    Strategy scweth;
     MockVault vault;
 
     function setUp() public {
         underlying = new MockERC20("Mock USDC", "USDC", 6);
-        vault = new MockVault(underlying);
+        weth = new MockERC20("Mock WETH", "WETH", 18);
+        scweth = new Strategy(weth);
+        vault = new MockVault(underlying, scweth);
     }
 
     function testAtomicDepositWithdraw(uint256 amount) public {

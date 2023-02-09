@@ -4,24 +4,18 @@ pragma solidity ^0.8.10;
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
-import {IEulerEToken} from "./interfaces/IEulerEToken.sol";
-import {ERC4626} from "solmate/mixins/ERC4626.sol";
 import {sc4626} from "../sc4626.sol";
 
-contract scUSDC is sc4626 {
+contract scWETH is sc4626 {
     using SafeTransferLib for ERC20;
     using FixedPointMathLib for uint256;
 
     uint256 public totalInvested;
     uint256 public totalProfit;
 
-    ERC4626 public scWETH;
+    constructor(ERC20 _weth) sc4626(_weth, "Sandclock ETH Vault", "scETH") {}
 
-    constructor(ERC20 _usdc, ERC4626 _scWETH) sc4626(_usdc, "Sandclock USDC Vault", "scUSDC") {
-        scWETH = _scWETH;
-    }
-
-    // need to be able to receive eth rewards
+    // need to be able to receive eth
     receive() external payable {}
 
     function totalAssets() public view override returns (uint256 assets) {
