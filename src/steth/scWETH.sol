@@ -26,6 +26,11 @@ contract scWETH is sc4626, IFlashLoan {
     using SafeTransferLib for WETH;
     using FixedPointMathLib for uint256;
 
+    enum FlashLoanType {
+        Deposit,
+        Withdraw
+    }
+
     uint256 public constant MAX_BPS = 10000;
     address public constant EULER = 0x27182842E098f60e3D576794A5bFFb0777E025d3;
 
@@ -77,6 +82,26 @@ contract scWETH is sc4626, IFlashLoan {
         markets.enterMarket(0, address(wstETH));
     }
 
+    /////////////////// ADMIN/KEEPER METHODS //////////////////////////////////
+    function setSwapOnCurve(bool _val) external onlyRole(KEEPER_ROLE) {
+        swapOnCurve = _val;
+    }
+
+    function harvest() external onlyRole(KEEPER_ROLE) {}
+
+    // this is only separate to save
+    // gas for users depositing, ultimately controlled by float %
+    function depositIntoStrategy() external onlyRole(KEEPER_ROLE) {
+        _depositIntoStrategy();
+    }
+
+    /// @param amount : amount of asset to withdraw into the vault
+    function withdrawToVault(uint256 amount) external onlyRole(KEEPER_ROLE) {
+        _withdrawToVault(amount);
+    }
+
+    //////////////////// VIEW METHODS //////////////////////////
+
     // @dev: the actual ltv at which we borrow
     function flashloanLtv() public view returns (uint256) {
         return (ethWstEthMaxLtv * borrowPercentLtv) / 10000;
@@ -86,15 +111,62 @@ contract scWETH is sc4626, IFlashLoan {
         assets = asset.balanceOf(address(this));
     }
 
-    function afterDeposit(uint256, uint256) internal override {}
+    // returns the net leverage that the strategy is using right now
+    function getLeverage() public view returns (uint256) {}
 
-    function beforeWithdraw(uint256, uint256) internal override {}
+    // returns the net LTV at which we have borrowed till now
+    function getLtv() public view returns (uint256) {}
 
-    // @dev: access control not needed, this is only separate to save
-    // gas for users depositing, ultimately controlled by float %
-    function depositIntoStrategy() external {
-        _depositIntoStrategy();
+    //////////////////// EXTERNAL METHODS //////////////////////////
+
+    // called after the flashLoan on _depositIntoStrategy
+    function onFlashLoan(bytes memory data) external {
+        if (msg.sender != EULER) revert scWETH__InvalidFlashloanCaller();
+        (
+            uint256 bal,
+            uint256 flashLoanAmount,
+            FlashLoanType flashLoanType
+        ) = abi.decode(data, (uint256, uint256, FlashLoanType));
+
+        if (flashLoanType == FlashLoanType.Deposit) {
+            uint256 depositAmount = flashLoanAmount + bal;
+            // weth to eth
+            weth.withdraw(depositAmount);
+            if (swapOnCurve) {
+                // eth to steth
+                curve.exchange{value: depositAmount}(
+                    0,
+                    1,
+                    depositAmount,
+                    _calcMinSteth(
+                        depositAmount,
+                        ethToStEthCurveSlippageTolerance
+                    )
+                );
+            } else {
+                // stake to lido
+                stEth.submit{value: depositAmount}(address(0x00));
+            }
+
+            uint256 stEthBalance = stEth.balanceOf(address(this));
+            // wrap to wstEth
+            wstETH.wrap(stEthBalance);
+
+            // add wstETH Liquidity on Euler
+            eTokenwstETH.deposit(0, type(uint256).max);
+
+            // borrow enough weth from Euler to payback flashloan
+            dTokenWeth.borrow(0, flashLoanAmount);
+        } else if (flashLoanType == FlashLoanType.Withdraw) {}
+
+        // payback flashloan
+        weth.safeTransfer(EULER, flashLoanAmount);
     }
+
+    // need to be able to receive eth
+    receive() external payable {}
+
+    //////////////////// INTERNAL METHODS //////////////////////////
 
     function _depositIntoStrategy() internal {
         uint256 bal = totalAssets();
@@ -106,45 +178,21 @@ contract scWETH is sc4626, IFlashLoan {
         // take flash loan
         dTokenWeth.flashLoan(
             flashLoanAmount,
-            abi.encode(flashLoanAmount, flashLoanAmount + bal)
+            abi.encode(bal, flashLoanAmount, FlashLoanType.Deposit)
         );
     }
 
-    function onFlashLoan(bytes memory data) external {
-        if (msg.sender != EULER) revert scWETH__InvalidFlashloanCaller();
-        (uint256 flashLoanAmount, uint256 depositAmount) = abi.decode(
-            data,
-            (uint256, uint256)
-        );
-        // exchange optimum_eth + bal to stEth on curve or stake on lido (if swapOnCurve is false)
-        // weth to eth
-        weth.withdraw(depositAmount);
-        if (swapOnCurve) {
-            // eth to steth
-            curve.exchange{value: depositAmount}(
-                0,
-                1,
-                depositAmount,
-                _calcMinSteth(depositAmount, ethToStEthCurveSlippageTolerance)
-            );
-        } else {
-            // stake to lido
-            stEth.submit{value: depositAmount}(address(0x00));
-        }
-
-        uint256 stEthBalance = stEth.balanceOf(address(this));
-        // wrap to wstEth
-        wstETH.wrap(stEthBalance);
-
-        // add wstETH Liquidity on Euler
-        eTokenwstETH.deposit(0, type(uint256).max);
-
-        // borrow enough weth from Euler to payback flashloan
-        dTokenWeth.borrow(0, flashLoanAmount);
-
-        // payback flashloan
-        weth.safeTransfer(EULER, flashLoanAmount);
+    function _withdrawToVault(uint256 amount) internal {
+        // calculate the amount of weth that you have to flashloan to repay in order to withdraw 'amount' wstEth(collateral)
+        // take flashloan
+        // repay debt with flashloan
+        // withdraw amount wstEth(collateral)
+        // swap to Weth
     }
+
+    function afterDeposit(uint256, uint256) internal override {}
+
+    function beforeWithdraw(uint256, uint256) internal override {}
 
     function _calcMinSteth(uint256 _amount, uint256 _slippage)
         internal
@@ -152,15 +200,5 @@ contract scWETH is sc4626, IFlashLoan {
         returns (uint256)
     {
         return (_amount * _slippage) / 10000;
-    }
-
-    function harvest() external onlyRole(KEEPER_ROLE) {}
-
-    // need to be able to receive eth
-    receive() external payable {}
-
-    /////////////////// ADMIN/KEEPER METHODS //////////////////////////////////
-    function setSwapOnCurve(bool _val) external onlyRole(KEEPER_ROLE) {
-        swapOnCurve = _val;
     }
 }
