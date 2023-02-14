@@ -1,7 +1,7 @@
 
 
 ![Certora](https://hackmd.io/_uploads/H1yqrfBZY.png)
-# Formal Verification of SC4626 contract  
+# Formal Verification of scLiquity contract  
  
 
 
@@ -35,7 +35,7 @@ Hoare triples of the form {p} C {q} holds if any non-reverting execution of prog
 
 Formulas relate the results of method calls. In most cases, these methods are getters defined in the contracts, but in some cases they are getters we have added to our harness or definitions provided in the rules file. Undefined variables in the formulas are treated as arbitrary: the rule is checked for every possible value of the variables.
 
-## SC4626
+## scLiquity
 
 ### Rules
 #### 1. Integrity of totalShares calculation ✔️

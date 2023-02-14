@@ -14,3 +14,6 @@ out/
 
 # Mac OS
 .DS_Store
+
+# Certora
+.certora_internal

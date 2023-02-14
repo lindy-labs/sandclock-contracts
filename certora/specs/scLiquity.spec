@@ -21,9 +21,9 @@ methods {
     renounceRole(bytes32 role, address account)
 
     // view functions
+    convertToShares(uint256 assets) returns (uint256) // omit envfree for some rules
+    convertToAssets(uint256 shares) returns (uint256) // omit envfree for some rules
     totalAssets() returns (uint256) envfree
-    convertToShares(uint256 assets) returns (uint256) envfree
-    convertToAssets(uint256 shares) returns (uint256) envfree
     previewDeposit(uint256 assets) returns (uint256) envfree
     previewMint(uint256 shares) returns (uint256) envfree
     previewWithdraw(uint256 assets) returns (uint256) envfree
@@ -52,4 +52,13 @@ methods {
     KEEPER_ROLE() returns (bytes32) envfree
     asset() returns (address) envfree
     DEFAULT_ADMIN_ROLE() returns (bytes32) envfree
+}
+
+rule converToShares_returns_the_same_value(uint256 assets) {
+    env e;
+    uint256 _shares = convertToShares(e, assets);
+    env e2;
+    require e2.msg.sender != e.msg.sender;
+    uint256 shares_ = convertToShares(e2, assets);
+    assert _shares == shares_;
 }
