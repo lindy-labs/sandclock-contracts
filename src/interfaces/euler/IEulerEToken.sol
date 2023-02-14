@@ -11,4 +11,10 @@ interface IEulerEToken {
     /// @param subAccountId 0 for primary, 1-255 for a sub-account
     /// @param amount In underlying units (use max uint256 for full pool balance)
     function withdraw(uint256 subAccountId, uint256 amount) external;
+
+    /// @notice Balance of a particular account, in underlying units (increases as interest is earned)
+    function balanceOfUnderlying(address account)
+        external
+        view
+        returns (uint256);
 }
