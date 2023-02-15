@@ -2,6 +2,7 @@
 
 1. Add float if makes sense for small withdrawals
 2. Use 0x
+3. share price inflation attack
 
 Notes:
 

@@ -21,6 +21,9 @@ error scWETH__InvalidBorrowPercentLtv();
 error scWETH__InvalidFlashloanCaller();
 error scWETH_InvalidSlippageTolerance();
 
+// TODO:
+// Functions for leveraging up and leveraging down
+
 // Taking flasloan from Euler
 contract scWETH is sc4626, IFlashLoan {
     using SafeTransferLib for ERC20;
@@ -57,7 +60,8 @@ contract scWETH is sc4626, IFlashLoan {
     IwstETH public constant wstETH =
         IwstETH(0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0);
 
-    WETH public immutable weth;
+    WETH public constant weth =
+        WETH(payable(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2));
 
     // uint256 public totalInvested;
     // uint256 public totalProfit;
@@ -68,18 +72,16 @@ contract scWETH is sc4626, IFlashLoan {
     uint256 public slippageTolerance; // (1e18 = 100%)
 
     constructor(
-        ERC20 _weth,
         uint256 _ethWstEthMaxLtv,
         uint256 _borrowPercentLtv,
         uint256 _slippageTolerance
-    ) sc4626(_weth, "Sandclock ETH Vault", "scETH") {
+    ) sc4626(ERC20(address(weth)), "Sandclock WETH Vault", "scWETH") {
         if (_ethWstEthMaxLtv > WAD) revert scWETH__InvalidEthWstEthMaxLtv();
         if (_borrowPercentLtv > WAD) revert scWETH__InvalidBorrowPercentLtv();
         if (_slippageTolerance > WAD) revert scWETH_InvalidSlippageTolerance();
 
         ethWstEthMaxLtv = _ethWstEthMaxLtv;
         borrowPercentLtv = _borrowPercentLtv;
-        weth = WETH(payable(address(asset)));
         slippageTolerance = _slippageTolerance;
 
         ERC20(address(stEth)).safeApprove(address(wstETH), type(uint256).max);
@@ -255,5 +257,7 @@ contract scWETH is sc4626, IFlashLoan {
 
     function afterDeposit(uint256, uint256) internal override {}
 
-    function beforeWithdraw(uint256, uint256) internal override {}
+    function beforeWithdraw(uint256 assets, uint256) internal override {
+        _withdrawToVault(assets);
+    }
 }
