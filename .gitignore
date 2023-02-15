@@ -16,4 +16,5 @@ out/
 .DS_Store
 
 # Certora
-.certora_internal
+.certora_*
+.zip-*
