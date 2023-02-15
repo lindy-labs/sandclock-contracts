@@ -17,7 +17,11 @@ contract scUSDC is sc4626 {
 
     ERC4626 public scWETH;
 
-    constructor(ERC20 _usdc, ERC4626 _scWETH) sc4626(_usdc, "Sandclock USDC Vault", "scUSDC") {
+    constructor(
+        address _admin,
+        ERC20 _usdc,
+        ERC4626 _scWETH
+    ) sc4626(_admin, _usdc, "Sandclock USDC Vault", "scUSDC") {
         scWETH = _scWETH;
     }
 
@@ -29,6 +33,7 @@ contract scUSDC is sc4626 {
     }
 
     function afterDeposit(uint256, uint256) internal override {}
+
     function beforeWithdraw(uint256, uint256) internal override {}
 
     // @dev: access control not needed, this is only separate to save
