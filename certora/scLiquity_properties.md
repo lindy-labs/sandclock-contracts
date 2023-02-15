@@ -68,29 +68,29 @@ It has the following view functions, which do not change state
 | ---- | --------  | -------- | -------- | -------- | -------- | -------- |
 |  | `convertToShares(uint256 assets)` should return the same value for a given parameter regardless of the caller | high level | high | Y | N | []() |
 |  | `convertToShares(assets) >= previewDeposit(assets)`  | high level | high | Y | N | []() |
-|  | `convertToShares(uint256 assets)` should round down towards 0 | high level | high | N | N | []() |
+|  | `convertToShares(uint256 assets)` should round down towards 0 | high level | high | R | N | []() |
 |  | `convertToAssets(uint256 shares)` should return the same value for a given parameter regardless of the caller | high level | high | Y | N | []() |
 |  | `convertToAssets(shares) >= previewMint(shares)`  | high level | high | Y | N | []() |
-|  | `convertToAssets(uint256 shares)` should round down towards 0 | high level | high | N | N | []() |
+|  | `convertToAssets(uint256 shares)` should round down towards 0 | high level | high | R | N | []() |
 |  | `maxDeposit(address) == 2^256 - 1`  | high level | high | Y | N | []() |
 |  | `maxMint(address) == 2^256 - 1`  | high level | high | Y | N | []() |
 |  | `previewDeposit(assets) <= deposit(assets, receiver)`  | high level | high | Y | N | []() |
 |  | `previewMint(shares) >= mint(shares, receiver)`  | high level | high | Y | N | []() |
 |  | `previewWithdraw(assets) >= withdraw(assets, receiver, owner)`  | high level | high | Y | N | []() |
-|  | `previewRedeem(shares) <= redeem(shares, receiver, owner)`  | high level | high | N | Y | []() |
+|  | `previewRedeem(shares) <= redeem(shares, receiver, owner)`  | high level | high | Y | N | []() |
 |  | `depositWithPermit(uint256 amount, uint256 deadline, uint8 v, bytes32 r, bytes32 s)` should revert if it does not have the right permission | unit test | medium | N | N | []() |
-|  | `function deposit(uint256 assets, address receiver) public returns (uint256 shares)` mints exactly `shares` Vault shares to `receiver` by depositing exactly `assets` of underlying tokens | variable transition | high | N | N | []()  |
-|  | `function deposit(uint256 assets, address receiver) public returns (uint256 shares)` must revert if all of `assets` cannot be deposited (to complete) | unit test | N | N | []()  |
+|  | `function deposit(uint256 assets, address receiver) public returns (uint256 shares)` mints exactly `shares` Vault shares to `receiver` by depositing exactly `assets` of underlying tokens | variable transition | high | R | N | []()  |
+|  | `function deposit(uint256 assets, address receiver) public returns (uint256 shares)` must revert if all of `assets` cannot be deposited (to complete) | unit test | R | N | []()  |
 |  | `mint(uint256 shares, address receiver) public returns (uint256 assets)` mints exactly `shares` Vault shares to `receiver` | variable transition | high | N | N | []()  |
 |  | `mint(uint256 shares, address receiver) public returns (uint256 assets)` must revert if all of `shares` cannot be minted | unit test | high | N | N | []()  |
-|  | `withdraw(uint256 assets, address receiver, address owner) public returns (uint256 shares)` must burn `shares` from `owner` and sends exactly `assets` of underlying tokens to `receiver` | variable transition | high | N | N | []()  |
+|  | `withdraw(uint256 assets, address receiver, address owner) public returns (uint256 shares)` must burn `shares` from `owner` and sends exactly `assets` of underlying tokens to `receiver` | variable transition | high | R | N | []()  |
 |  | `withdraw(uint256 assets, address receiver, address owner) public returns (uint256 shares)` must revert if all of `assets` cannot be withdrawn | unit test | high | N | N | []()  |
 |  | `redeem(uint256 shares, address receiver, address owner) public returns (uint256 assets)` must burn exactly `shares` from `owner` and sends assets of underlying tokens to `receiver` | variable transition | high | N | N | []()  |
 |  | `redeem(uint256 shares, address receiver, address owner) public returns (uint256 assets)` must revert if all of `shares` cannot be redeemed | unit test | high | N | N | []()  |
-|  | `setPerformanceFee(uint256 newPerformanceFee)` should update the state variable `performanceFee` with the value provided by `newPerformanceFee`, as long as `newPerformanceFee` is less than or qual to `1e18` | variable transition | medium | N | N | []()  |
-|  | `setFloatPercentage(uint256 newFloatPercentage)` should update the state variable `floatPercentage` with the value provided by `newFloatPercentage`, as long as `newFloatPercentage` is less than or qual to `1e18` | variable transition | medium | N | N | []()  |
-|  | `setTreasury(address newTreasury)` should update the state variable `treasury` with the value provided by `newTreasury`, as long as `newTreasury` is not the address zero | variable transition | medium | N | N | []()  |
+|  | `setPerformanceFee(uint256 newPerformanceFee)` should update the state variable `performanceFee` with the value provided by `newPerformanceFee`, as long as `newPerformanceFee` is less than or qual to `1e18` | variable transition | medium | Y | N | []()  |
+|  | `setFloatPercentage(uint256 newFloatPercentage)` should update the state variable `floatPercentage` with the value provided by `newFloatPercentage`, as long as `newFloatPercentage` is less than or qual to `1e18` | variable transition | medium | Y | N | []()  |
+|  | `setTreasury(address newTreasury)` should update the state variable `treasury` with the value provided by `newTreasury`, as long as `newTreasury` is not the address zero | variable transition | medium | Y | N | []()  |
 |  | `depositWithPermit(uint256 amount, uint256 deadline, uint8 v, bytes32 r, bytes32 s)` should deposit `amount` in the address of the message sender, as long as it has the right permission | variable transition | high | N | N | []()  |
-|  | `setPerformanceFee(uint256 newPerformanceFee)` should revert if `newPerformanceFee` is greater than `1e18` | unit test | medium | N | N | []()  |
-|  | `setFloatPercentage(uint256 newFloatPercentage)` should revert if `newFloatPercentage` is greater than `1e18` | unit test | medium | N | N | []() |
-|  | `setTreasury(address newTreasury)` should revert if `newTreasury` is the address zero | unit test | medium | N | N | []()  |
+|  | `setPerformanceFee(uint256 newPerformanceFee)` should revert if `newPerformanceFee` is greater than `1e18` | unit test | medium | Y | N | []()  |
+|  | `setFloatPercentage(uint256 newFloatPercentage)` should revert if `newFloatPercentage` is greater than `1e18` | unit test | medium | Y | N | []() |
+|  | `setTreasury(address newTreasury)` should revert if `newTreasury` is the address zero | unit test | medium | Y | N | []()  |

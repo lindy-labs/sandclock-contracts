@@ -47,6 +47,7 @@ methods {
     floatPercentage() returns (uint256) envfree
     treasury() returns (address) envfree
     nonces(address) returns (uint256) envfree
+    totalSupply() returns (uint256) envfree
 
    // state constants
     KEEPER_ROLE() returns (bytes32) envfree
@@ -69,6 +70,11 @@ rule convertToShares_gte_previewDeposit(uint256 assets) {
 }
 
 // TODO `convertToShares(uint256 assets)` should round down towards 0
+rule converToShares_rounds_down_towards_0(uint256 assets) {
+    env e;
+    require totalSupply() != 0;
+    assert (assets * totalSupply()) / totalAssets() == convertToShares(e, assets); // To revise...
+}
 
 rule converToAssets_returns_the_same_value(uint256 shares) {
     env e;
@@ -85,6 +91,11 @@ rule convertToAssets_gte_previewMint(uint256 shares) {
 }
 
 // TODO `convertToAssets(uint256 shares)` should round down towards 0
+rule convertToAssets_rounds_down_towards_0(uint256 shares) {
+    env e;
+    require totalSupply() != 0;
+    assert (shares * totalAssets()) / totalSupply() == convertToAssets(e, shares); // To revise...
+}
 
 rule maxDeposit_returns_correct_value(address receiver) {
     assert maxDeposit(receiver) == 2^256 - 1;
@@ -112,4 +123,78 @@ rule previewWithdraw_gte_withdraw(uint256 assets, address receiver, address owne
 rule previewRedeem_lte_redeem(uint256 shares, address receiver, address owner) {
     env e;
     assert previewRedeem(shares) <= redeem(e, shares, receiver, owner);
+}
+
+rule integrityOfdeposit(uint256 assets, address receiver) { // Revise
+    env e;
+    uint256 amount;
+    underlying.mint(currentContract, amount);
+    underlying.approve(address(vault), amount);
+
+    uint256 preDepositBal = underlying.balanceOf(currentContract);
+
+    deposit(amount, currentContract);
+
+    assert convertToAssets(10 ** vault.decimals()) == 10^18;
+    assert totalInvested() == amount - amount.mulWadDown(vault.floatPercentage());
+    assert totalAssets() == amount;
+    assert balanceOf(currentContract) == amount;
+    assert convertToAssets(vault.balanceOf(currentContract)) == amount;
+    assert underlying.balanceOf(currentContract) == preDepositBal - amount;
+}
+
+
+rule integrityOfwithdraw(uint256 assets, address receiver, address owner) { // Revise
+    env e;
+    uint256 amount;
+    underlying.mint(currentContract, amount);
+    underlying.approve(vault, amount);
+
+    uint256 preDepositBal = underlying.balanceOf(currentContract);
+
+    withdraw(amount, currentContract, currentContract);
+
+    assert convertToAssets(10 ** vault.decimals()) == 10^18;
+    assert totalInvested() == 0;
+    assert totalAssets() == 0;
+    assert balanceOf(currentContract) == 0;
+    assert convertToAssets(vault.balanceOf(currentContract)) == 0;
+    assert underlying.balanceOf(currentContract) == preDepositBal;
+}
+
+rule integrityOfsetPerformanceFee(uint256 newPerformanceFee) {
+    env e;
+    setPerformanceFee(e, newPerformanceFee);
+    assert performanceFee() == newPerformanceFee;
+}
+
+rule integrityOfsetFloatPercentage(uint256 newFloatPercentage) {
+    env e;
+    setFloatPercentage(e, newFloatPercentage);
+    assert floatPercentage() == newFloatPercentage;
+}
+
+rule integrityOfsetTreasury(address newTreasury) {
+    env e;
+    setTreasury(e, newTreasury);
+    assert treasury() == newTreasury;
+}
+
+rule setPerformanceFee_reverts_if_newPerformanceFee_is_greater_than_1e18(uint256 newPerformanceFee) {
+    require newPerformanceFee > 10^18;
+    env e;
+    setPerformanceFee@withrevert(e, newPerformanceFee);
+    assert lastReverted;
+}
+
+rule setFloatPercentage_reverts_if_newFloatPercentage_is_greater_than_1e18(uint256 newFloatPercentage) {
+    env e;
+    setFloatPercentage@withrevert(e, newFloatPercentage);
+    assert lastReverted;
+}
+
+rule setTreasury_reverts_if_address_is_zero() {
+    env e;
+    setTreasury@withrevert(e, 0);
+    assert lastReverted;
 }
