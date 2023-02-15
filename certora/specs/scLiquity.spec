@@ -62,3 +62,54 @@ rule converToShares_returns_the_same_value(uint256 assets) {
     uint256 shares_ = convertToShares(e2, assets);
     assert _shares == shares_;
 }
+
+rule convertToShares_gte_previewDeposit(uint256 assets) {
+    env e;
+    assert convertToShares(e, assets) >= previewDeposit(assets);
+}
+
+// TODO `convertToShares(uint256 assets)` should round down towards 0
+
+rule converToAssets_returns_the_same_value(uint256 shares) {
+    env e;
+    uint256 _assets = convertToAssets(e, shares);
+    env e2;
+    require e2.msg.sender != e.msg.sender;
+    uint256 assets_ = convertToAssets(e2, shares);
+    assert _assets == assets_;
+}
+
+rule convertToAssets_gte_previewMint(uint256 shares) {
+    env e;
+    assert convertToAssets(e, shares) >= previewMint(shares);
+}
+
+// TODO `convertToAssets(uint256 shares)` should round down towards 0
+
+rule maxDeposit_returns_correct_value(address receiver) {
+    assert maxDeposit(receiver) == 2^256 - 1;
+}
+
+rule maxMint_returns_correct_value(address a) {
+    assert maxMint(receiver) == 2^256 - 1;
+}
+
+rule previewDeposit_lte_deposit(uint256 assets, address receiver) {
+    env e;
+    assert previewDeposit(assets) <= deposit(e, assets, receiver);
+}
+
+rule previewMint_gte_mint(uint256 shares, address receiver) {
+    env e;
+    assert previewMint(shares) >= mint(e, shares, receiver);
+}
+
+rule previewWithdraw_gte_withdraw(uint256 assets, address receiver) {
+    env e;
+    assert previewWithdraw(assets) >= withdraw(e, assets, receiver);
+}
+
+rule previewRedeem_lte_redeem(uint256 shares, address receiver) {
+    env e;
+    assert previewRedeem(shares) <= redeem(e, shares, receiver);
+}

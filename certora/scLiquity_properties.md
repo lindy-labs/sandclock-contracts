@@ -66,18 +66,18 @@ It has the following view functions, which do not change state
 
 | No. | Property  | Category | Priority | Specified | Verified | Report |
 | ---- | --------  | -------- | -------- | -------- | -------- | -------- |
-|  | `convertToShares(uint256 assets)` should return the same value for a given parameter regardless of the caller | high level | high | N | N | []() |
-|  | `convertToShares(assets) >= previewDeposit(assets)`  | high level | high | N | N | []() |
+|  | `convertToShares(uint256 assets)` should return the same value for a given parameter regardless of the caller | high level | high | Y | N | []() |
+|  | `convertToShares(assets) >= previewDeposit(assets)`  | high level | high | Y | N | []() |
 |  | `convertToShares(uint256 assets)` should round down towards 0 | high level | high | N | N | []() |
-|  | `convertToAssets(uint256 shares)` should return the same value for a given parameter regardless of the caller | high level | high | N | N | []() |
-|  | `convertToAssets(shares) >= previewMint(shares)`  | high level | high | N | N | []() |
-|  | `convertToShares(uint256 assets)` should round down towards 0 | high level | high | N | N | []() |
-|  | `maxDeposit(address) == 2^256 - 1`  | high level | high | N | N | []() |
-|  | `maxMint(address) == 2^256 - 1`  | high level | high | N | N | []() |
-|  | `previewDeposit(assets) <= deposit(assets, receiver)`  | high level | high | N | N | []() |
-|  | `previewMint(shares) >= mint(shares, receiver)`  | high level | high | N | N | []() |
-|  | `previewWithdraw(assets) >= withdraw(assets, receiver, owner)`  | high level | high | N | N | []() |
-|  | `previewRedeem(shares) <= redeem(shares, receiver, owner)`  | high level | high | N | N | []() |
+|  | `convertToAssets(uint256 shares)` should return the same value for a given parameter regardless of the caller | high level | high | Y | N | []() |
+|  | `convertToAssets(shares) >= previewMint(shares)`  | high level | high | Y | N | []() |
+|  | `convertToAssets(uint256 shares)` should round down towards 0 | high level | high | N | N | []() |
+|  | `maxDeposit(address) == 2^256 - 1`  | high level | high | Y | N | []() |
+|  | `maxMint(address) == 2^256 - 1`  | high level | high | Y | N | []() |
+|  | `previewDeposit(assets) <= deposit(assets, receiver)`  | high level | high | Y | N | []() |
+|  | `previewMint(shares) >= mint(shares, receiver)`  | high level | high | Y | N | []() |
+|  | `previewWithdraw(assets) >= withdraw(assets, receiver, owner)`  | high level | high | Y | N | []() |
+|  | `previewRedeem(shares) <= redeem(shares, receiver, owner)`  | high level | high | N | Y | []() |
 |  | `depositWithPermit(uint256 amount, uint256 deadline, uint8 v, bytes32 r, bytes32 s)` should revert if it does not have the right permission | unit test | medium | N | N | []() |
 |  | `function deposit(uint256 assets, address receiver) public returns (uint256 shares)` mints exactly `shares` Vault shares to `receiver` by depositing exactly `assets` of underlying tokens | variable transition | high | N | N | []()  |
 |  | `function deposit(uint256 assets, address receiver) public returns (uint256 shares)` must revert if all of `assets` cannot be deposited (to complete) | unit test | N | N | []()  |
