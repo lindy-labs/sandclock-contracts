@@ -90,7 +90,7 @@ rule maxDeposit_returns_correct_value(address receiver) {
     assert maxDeposit(receiver) == 2^256 - 1;
 }
 
-rule maxMint_returns_correct_value(address a) {
+rule maxMint_returns_correct_value(address receiver) {
     assert maxMint(receiver) == 2^256 - 1;
 }
 
@@ -104,12 +104,12 @@ rule previewMint_gte_mint(uint256 shares, address receiver) {
     assert previewMint(shares) >= mint(e, shares, receiver);
 }
 
-rule previewWithdraw_gte_withdraw(uint256 assets, address receiver) {
+rule previewWithdraw_gte_withdraw(uint256 assets, address receiver, address owner) {
     env e;
-    assert previewWithdraw(assets) >= withdraw(e, assets, receiver);
+    assert previewWithdraw(assets) >= withdraw(e, assets, receiver, owner);
 }
 
-rule previewRedeem_lte_redeem(uint256 shares, address receiver) {
+rule previewRedeem_lte_redeem(uint256 shares, address receiver, address owner) {
     env e;
-    assert previewRedeem(shares) <= redeem(e, shares, receiver);
+    assert previewRedeem(shares) <= redeem(e, shares, receiver, owner);
 }
