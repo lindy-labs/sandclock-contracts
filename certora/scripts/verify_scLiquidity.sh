@@ -21,6 +21,7 @@ then
     --loop_iter 3 \
     --packages  solmate=lib/solmate/src \
                 openzeppelin-contracts=lib/openzeppelin-contracts/contracts \
+    --settings -optimisticUnboundedHashing=true \
     --msg "verifying Vault"
 elif [ "$#" -eq 1 ]
 then
@@ -43,6 +44,7 @@ then
     --loop_iter 3 \
     --packages  solmate=lib/solmate/src \
                 openzeppelin-contracts=lib/openzeppelin-contracts/contracts \
+    --settings -optimisticUnboundedHashing=true \
     --rule "$1" \
     --msg "verifying rule $1 for Vault"
 else

@@ -1,5 +1,7 @@
 import "erc20.spec"
 
+using MockLUSD as asset
+
 methods {
     // state modifying functions
     depositIntoStrategy()
@@ -53,6 +55,11 @@ methods {
     KEEPER_ROLE() returns (bytes32) envfree
     asset() returns (address) envfree
     DEFAULT_ADMIN_ROLE() returns (bytes32) envfree
+
+    // erc20
+    currentContract.balanceOf(address) returns (uint256) envfree
+    currentContract.allowance(address, address) returns (uint256) envfree
+    asset.balanceOf(address) returns (uint256) envfree
 }
 
 rule converToShares_returns_the_same_value(uint256 assets) {
@@ -69,11 +76,10 @@ rule convertToShares_gte_previewDeposit(uint256 assets) {
     assert convertToShares(e, assets) >= previewDeposit(assets);
 }
 
-// TODO `convertToShares(uint256 assets)` should round down towards 0
 rule converToShares_rounds_down_towards_0(uint256 assets) {
     env e;
     require totalSupply() != 0;
-    assert (assets * totalSupply()) / totalAssets() == convertToShares(e, assets); // To revise...
+    assert (assets * totalSupply()) / totalAssets() == convertToShares(e, assets);
 }
 
 rule converToAssets_returns_the_same_value(uint256 shares) {
@@ -90,11 +96,10 @@ rule convertToAssets_gte_previewMint(uint256 shares) {
     assert convertToAssets(e, shares) >= previewMint(shares);
 }
 
-// TODO `convertToAssets(uint256 shares)` should round down towards 0
 rule convertToAssets_rounds_down_towards_0(uint256 shares) {
     env e;
     require totalSupply() != 0;
-    assert (shares * totalAssets()) / totalSupply() == convertToAssets(e, shares); // To revise...
+    assert (shares * totalAssets()) / totalSupply() == convertToAssets(e, shares);
 }
 
 rule maxDeposit_returns_correct_value(address receiver) {
@@ -125,56 +130,123 @@ rule previewRedeem_lte_redeem(uint256 shares, address receiver, address owner) {
     assert previewRedeem(shares) <= redeem(e, shares, receiver, owner);
 }
 
-rule integrityOfdeposit(uint256 assets, address receiver) { // Revise
+// TODO depositWithPermit
+
+rule integrity_of_deposit(uint256 assets, address receiver) {
     env e;
-    uint256 amount;
-    underlying.mint(currentContract, amount);
-    underlying.approve(address(vault), amount);
+    uint256 _userAssets = asset.balanceOf(e.msg.sender);
+    uint256 _totalAssets = totalAssets();
+    uint256 _receiverShares = balanceOf(receiver);
 
-    uint256 preDepositBal = underlying.balanceOf(currentContract);
+    uint256 shares = deposit(e, assets, receiver);
 
-    deposit(amount, currentContract);
+    uint256 userAssets_ = asset.balanceOf(e.msg.sender);
+    uint256 totalAssets_ = totalAssets();
+    uint256 receiverShares_ = balanceOf(receiver);
 
-    assert convertToAssets(10 ** vault.decimals()) == 10^18;
-    assert totalInvested() == amount - amount.mulWadDown(vault.floatPercentage());
-    assert totalAssets() == amount;
-    assert balanceOf(currentContract) == amount;
-    assert convertToAssets(vault.balanceOf(currentContract)) == amount;
-    assert underlying.balanceOf(currentContract) == preDepositBal - amount;
+    assert _userAssets - assets == userAssets_;
+    assert _totalAssets + assets == totalAssets_;
+    assert _receiverShares + shares == receiverShares_;
 }
 
 
-rule integrityOfwithdraw(uint256 assets, address receiver, address owner) { // Revise
+rule deposit_reverts_if_not_enough_assets(uint256 assets, address receiver) {
     env e;
-    uint256 amount;
-    underlying.mint(currentContract, amount);
-    underlying.approve(vault, amount);
+    uint256 userAssets = asset.balanceOf(e.msg.sender);
+    require userAssets < assets;
 
-    uint256 preDepositBal = underlying.balanceOf(currentContract);
+    deposit@withrevert(e, assets, receiver);
 
-    withdraw(amount, currentContract, currentContract);
-
-    assert convertToAssets(10 ** vault.decimals()) == 10^18;
-    assert totalInvested() == 0;
-    assert totalAssets() == 0;
-    assert balanceOf(currentContract) == 0;
-    assert convertToAssets(vault.balanceOf(currentContract)) == 0;
-    assert underlying.balanceOf(currentContract) == preDepositBal;
+    assert lastReverted;
 }
 
-rule integrityOfsetPerformanceFee(uint256 newPerformanceFee) {
+rule integrity_of_mint(uint256 shares, address receiver) {
+    env e;
+    uint256 _userAssets = asset.balanceOf(e.msg.sender);
+    uint256 _totalAssets = totalAssets();
+    uint256 _receiverShares = balanceOf(receiver);
+
+    uint256 assets = mint(e, shares, receiver);
+
+    uint256 userAssets_ = asset.balanceOf(e.msg.sender);
+    uint256 totalAssets_ = totalAssets();
+    uint256 receiverShares_ = balanceOf(receiver);
+
+    assert _userAssets - assets == userAssets_;
+    assert _totalAssets + assets == totalAssets_;
+    assert _receiverShares + shares == receiverShares_;
+}
+
+
+rule integrity_of_withdraw(uint256 assets, address receiver, address owner) {
+    env e;
+    uint256 _receiverAssets = asset.balanceOf(receiver);
+    uint256 _ownerShares = balanceOf(owner);
+    uint256 _senderAllowance = allowance(owner, e.msg.sender);
+
+    uint256 shares = withdraw(e, assets, receiver, owner);
+
+    uint256 receiverAssets_ = asset.balanceOf(receiver);
+    uint256 ownerShares_ = balanceOf(owner);
+    uint256 senderAllowance_ = allowance(owner, e.msg.sender);
+
+    assert _receiverAssets + assets == receiverAssets_;
+    assert _ownerShares - shares == ownerShares_;
+    assert e.msg.sender != owner => 
+        _senderAllowance == 2^256 -1 && senderAllowance_ == 2^256 -1 
+        || _senderAllowance - shares == senderAllowance_;
+}
+
+rule withdraw_reverts_if_not_enough_assets(uint256 assets, address receiver, address owner) {
+    require totalAssets() < assets;
+
+    env e;
+    withdraw@withrevert(e, assets, receiver, owner);
+
+    assert lastReverted;
+}
+
+rule integrity_of_redeem(uint256 shares, address receiver, address owner) {
+    env e;
+    uint256 _receiverAssets = asset.balanceOf(receiver);
+    uint256 _ownerShares = balanceOf(owner);
+    uint256 _senderAllowance = allowance(owner, e.msg.sender);
+
+    uint256 assets = redeem(e, shares, receiver, owner);
+
+    uint256 receiverAssets_ = asset.balanceOf(receiver);
+    uint256 ownerShares_ = balanceOf(owner);
+    uint256 senderAllowance_ = allowance(owner, e.msg.sender);
+
+    assert _receiverAssets + assets == receiverAssets_;
+    assert _ownerShares - shares == ownerShares_;
+    assert e.msg.sender != owner => 
+        _senderAllowance == 2^256 -1 && senderAllowance_ == 2^256 -1 
+        || _senderAllowance - shares == senderAllowance_;
+}
+
+rule redeem_reverts_if_not_enough_shares(uint256 shares, address receiver, address owner) {
+    env e;
+    require balanceOf(owner) < shares || e.msg.sender != owner && allowance(owner, e.msg.sender) < shares;
+
+    redeem@withrevert(e, shares, receiver, owner);
+
+    assert lastReverted;
+}
+
+rule integrit_of_setPerformanceFee(uint256 newPerformanceFee) {
     env e;
     setPerformanceFee(e, newPerformanceFee);
     assert performanceFee() == newPerformanceFee;
 }
 
-rule integrityOfsetFloatPercentage(uint256 newFloatPercentage) {
+rule integrity_of_setFloatPercentage(uint256 newFloatPercentage) {
     env e;
     setFloatPercentage(e, newFloatPercentage);
     assert floatPercentage() == newFloatPercentage;
 }
 
-rule integrityOfsetTreasury(address newTreasury) {
+rule integrity_of_setTreasury(address newTreasury) {
     env e;
     setTreasury(e, newTreasury);
     assert treasury() == newTreasury;
@@ -188,6 +260,7 @@ rule setPerformanceFee_reverts_if_newPerformanceFee_is_greater_than_1e18(uint256
 }
 
 rule setFloatPercentage_reverts_if_newFloatPercentage_is_greater_than_1e18(uint256 newFloatPercentage) {
+    require newFloatPercentage > 10^18;
     env e;
     setFloatPercentage@withrevert(e, newFloatPercentage);
     assert lastReverted;
