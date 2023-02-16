@@ -97,6 +97,7 @@ contract scWETH is sc4626, IFlashLoanRecipient {
             type(uint256).max
         );
         ERC20(address(wstETH)).safeApprove(EULER, type(uint256).max);
+        ERC20(address(weth)).safeApprove(EULER, type(uint256).max);
         // Enter the euler collateral market (collateral's address, *not* the eToken address) ,
         markets.enterMarket(0, address(wstETH));
     }
@@ -126,19 +127,8 @@ contract scWETH is sc4626, IFlashLoanRecipient {
     }
 
     // total wstETH supplied as collateral (in ETH terms)
-    function totalCollateralSupplied() public view returns (uint256 value) {
-        uint256 collateralWstETH = eTokenwstETH.balanceOfUnderlying(
-            address(this)
-        );
-
-        if (collateralWstETH > 0) {
-            // wstETh to stEth using exchangeRate
-            uint256 collateralstEth = wstETH.getStETHByWstETH(collateralWstETH);
-
-            // stEth to eth
-            (, int256 price, , , ) = stEThToEthPriceFeed.latestRoundData();
-            value = collateralstEth.mulWadDown(uint256(price));
-        }
+    function totalCollateralSupplied() public view returns (uint256) {
+        return _wstEthToEth(eTokenwstETH.balanceOfUnderlying(address(this)));
     }
 
     // total eth borrowed
@@ -181,7 +171,9 @@ contract scWETH is sc4626, IFlashLoanRecipient {
             // stake to lido / eth => stETH
             stEth.submit{value: depositAmount}(address(0x00));
 
+            // console2.log("Deposit");
             // console2.log("amount", params.amount);
+            // console2.log("flashLoanAmount", flashLoanAmount);
             // console2.log("depositAmount", depositAmount);
             // console2.log("steth balance", stEth.balanceOf(address(this)));
 
@@ -194,24 +186,66 @@ contract scWETH is sc4626, IFlashLoanRecipient {
             // borrow enough weth from Euler to payback flashloan
             dTokenWeth.borrow(0, flashLoanAmount);
         } else if (params.flashLoanType == FlashLoanType.Withdraw) {
-            // repay debt
-            dTokenWeth.repay(0, flashLoanAmount);
+            bool withdrawAll = false;
+            // activates in case of total withdrawal
+            if (flashLoanAmount > totalDebt()) {
+                console2.log("WITHDRAWLL TRUE");
+                withdrawAll = true;
+            }
+            // console2.log("WITHDRAWWW");
+            // console2.log("amount", params.amount);
+            // console2.log("repay/flashLoanAmount", flashLoanAmount);
+
+            // repay eth debt
+            dTokenWeth.repay(
+                0,
+                withdrawAll ? type(uint256).max : flashLoanAmount
+            );
+
+            // console2.log("collateral", totalCollateralSupplied());
+
+            uint256 wstEthAmount = _ethToWstEth(
+                flashLoanAmount + params.amount
+            );
+
+            // console2.log("wstEthAmount", wstEthAmount);
 
             // withdraw amount wstEth(collateral)
-            eTokenwstETH.withdraw(0, params.amount);
+            eTokenwstETH.withdraw(
+                0,
+                withdrawAll ? type(uint256).max : wstEthAmount
+            );
+
+            // console2.log("wstETH balance", wstETH.balanceOf(address(this)));
 
             // wstETH to stEth
-            uint256 stEthAmount = wstETH.unwrap(params.amount);
+            uint256 stEthAmount = wstETH.unwrap(
+                wstETH.balanceOf(address(this))
+            );
+
+            // console2.log("stETH balance", stEthAmount);
+
+            // console2.log("eth balance prev", address(this).balance);
 
             // stETH to eth
             curvePool.exchange(1, 0, stEthAmount, _calcMinDy(stEthAmount));
 
+            // console2.log("eth balance", address(this).balance);
+
             // eth to weth
             weth.deposit{value: address(this).balance}();
+
+            // there should be enough assets here to payback the flashloan and withdraw the amount
+            // console2.log("weth balance", weth.balanceOf(address(this)));
         }
 
         // payback flashloan
         weth.safeTransfer(address(balancerVault), flashLoanAmount);
+
+        // console2.log(
+        //     "weth balance after flashloan payment",
+        //     weth.balanceOf(address(this))
+        // );
     }
 
     // need to be able to receive eth
@@ -267,6 +301,37 @@ contract scWETH is sc4626, IFlashLoanRecipient {
 
     function _calcMinDy(uint256 amount) internal view returns (uint256) {
         return amount.mulWadDown(slippageTolerance);
+    }
+
+    function _wstEthToEth(uint256 wstEthAmount)
+        internal
+        view
+        returns (uint256 ethAmount)
+    {
+        if (wstEthAmount > 0) {
+            // wstETh to stEth using exchangeRate
+            uint256 stEthAmount = wstETH.getStETHByWstETH(wstEthAmount);
+
+            // stEth to eth
+            (, int256 price, , , ) = stEThToEthPriceFeed.latestRoundData();
+            ethAmount = stEthAmount.mulWadDown(uint256(price));
+        }
+    }
+
+    function _ethToWstEth(uint256 ethAmount)
+        internal
+        view
+        returns (uint256 wstEthAmount)
+    {
+        if (ethAmount > 0) {
+            (, int256 price, , , ) = stEThToEthPriceFeed.latestRoundData();
+
+            // eth to stEth
+            uint256 stEthAmount = ethAmount.divWadDown(uint256(price));
+
+            // stEth to wstEth
+            wstEthAmount = wstETH.getWstETHByStETH(stEthAmount);
+        }
     }
 
     function afterDeposit(uint256, uint256) internal override {}
