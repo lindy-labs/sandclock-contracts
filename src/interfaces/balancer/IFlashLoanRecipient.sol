@@ -3,8 +3,6 @@ pragma solidity ^0.8.0;
 
 // Inspired by Aave Protocol's IFlashLoanReceiver.
 
-import {IERC20} from "openzeppelin-contracts/token/ERC20/IERC20.sol";
-
 interface IFlashLoanRecipient {
     /**
      * @dev When `flashLoan` is called on the Vault, it invokes the `receiveFlashLoan` hook on the recipient.
@@ -16,7 +14,7 @@ interface IFlashLoanRecipient {
      * `userData` is the same value passed in the `IVault.flashLoan` call.
      */
     function receiveFlashLoan(
-        IERC20[] memory tokens,
+        address[] memory tokens,
         uint256[] memory amounts,
         uint256[] memory feeAmounts,
         bytes memory userData

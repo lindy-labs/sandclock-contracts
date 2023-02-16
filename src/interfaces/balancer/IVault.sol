@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import "./IFlashLoanRecipient.sol";
-
 interface IVault {
     /**
      * @dev Performs a 'flash loan', sending tokens to `recipient`, executing the `receiveFlashLoan` hook on it,
@@ -16,10 +14,6 @@ interface IVault {
      *
      * Emits `FlashLoan` events.
      */
-    function flashLoan(
-        IFlashLoanRecipient recipient,
-        IERC20[] memory tokens,
-        uint256[] memory amounts,
-        bytes memory userData
-    ) external;
+    function flashLoan(address recipient, address[] memory tokens, uint256[] memory amounts, bytes memory userData)
+        external;
 }
