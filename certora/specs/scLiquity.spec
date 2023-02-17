@@ -135,6 +135,9 @@ rule previewRedeem_lte_redeem(uint256 shares, address receiver, address owner) {
 
 rule integrity_of_deposit(uint256 assets, address receiver) {
     env e;
+    require e.msg.sender != currentContract;
+    require receiver != currentContract;
+    
     uint256 _userAssets = asset.balanceOf(e.msg.sender);
     uint256 _totalAssets = totalAssets();
     uint256 _receiverShares = balanceOf(receiver);
@@ -163,6 +166,9 @@ rule deposit_reverts_if_not_enough_assets(uint256 assets, address receiver) {
 
 rule integrity_of_mint(uint256 shares, address receiver) {
     env e;
+    require e.msg.sender != currentContract;
+    require receiver != currentContract;
+
     uint256 _userAssets = asset.balanceOf(e.msg.sender);
     uint256 _totalAssets = totalAssets();
     uint256 _receiverShares = balanceOf(receiver);
@@ -181,6 +187,9 @@ rule integrity_of_mint(uint256 shares, address receiver) {
 
 rule integrity_of_withdraw(uint256 assets, address receiver, address owner) {
     env e;
+    require e.msg.sender != currentContract;
+    require receiver != currentContract;
+
     uint256 _receiverAssets = asset.balanceOf(receiver);
     uint256 _ownerShares = balanceOf(owner);
     uint256 _senderAllowance = allowance(owner, e.msg.sender);
@@ -213,6 +222,9 @@ rule integrity_of_redeem(uint256 shares, address receiver, address owner) {
     uint256 _totalAssets = totalAssets();
     uint256 _ownerShares = balanceOf(owner);
     uint256 _senderAllowance = allowance(owner, e.msg.sender);
+
+    require e.msg.sender != currentContract;
+    require receiver != currentContract;
     require totalSupply() >= _ownerShares;
     require asset.totalSupply() >= _receiverAssets + asset.balanceOf(currentContract);
 
