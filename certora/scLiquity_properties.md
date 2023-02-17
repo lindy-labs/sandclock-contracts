@@ -70,7 +70,7 @@ It has the following view functions, which do not change state
 |  | `convertToShares(assets) >= previewDeposit(assets)`  | high level | high | Y | N | []() |
 |  | `convertToShares(uint256 assets)` should round down towards 0 | high level | high | Y | N | []() |
 |  | `convertToAssets(uint256 shares)` should return the same value for a given parameter regardless of the caller | high level | high | Y | N | []() |
-|  | `convertToAssets(shares) >= previewMint(shares)`  | high level | high | Y | N | []() |
+|  | `convertToAssets(shares) <= previewMint(shares)`  | high level | high | Y | N | []() |
 |  | `convertToAssets(uint256 shares)` should round down towards 0 | high level | high | Y | N | []() |
 |  | `maxDeposit(address) == 2^256 - 1`  | high level | high | Y | N | []() |
 |  | `maxMint(address) == 2^256 - 1`  | high level | high | Y | N | []() |

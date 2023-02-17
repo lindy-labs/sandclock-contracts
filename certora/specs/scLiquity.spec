@@ -49,7 +49,6 @@ methods {
     floatPercentage() returns (uint256) envfree
     treasury() returns (address) envfree
     nonces(address) returns (uint256) envfree
-    totalSupply() returns (uint256) envfree
 
    // state constants
     KEEPER_ROLE() returns (bytes32) envfree
@@ -57,8 +56,10 @@ methods {
     DEFAULT_ADMIN_ROLE() returns (bytes32) envfree
 
     // erc20
+    currentContract.totalSupply() returns (uint256) envfree
     currentContract.balanceOf(address) returns (uint256) envfree
     currentContract.allowance(address, address) returns (uint256) envfree
+    asset.totalSupply() returns (uint256) envfree
     asset.balanceOf(address) returns (uint256) envfree
 }
 
@@ -91,9 +92,9 @@ rule converToAssets_returns_the_same_value(uint256 shares) {
     assert _assets == assets_;
 }
 
-rule convertToAssets_gte_previewMint(uint256 shares) {
+rule convertToAssets_lte_previewMint(uint256 shares) {
     env e;
-    assert convertToAssets(e, shares) >= previewMint(shares);
+    assert convertToAssets(e, shares) <= previewMint(shares);
 }
 
 rule convertToAssets_rounds_down_towards_0(uint256 shares) {
@@ -209,15 +210,20 @@ rule withdraw_reverts_if_not_enough_assets(uint256 assets, address receiver, add
 rule integrity_of_redeem(uint256 shares, address receiver, address owner) {
     env e;
     uint256 _receiverAssets = asset.balanceOf(receiver);
+    uint256 _totalAssets = totalAssets();
     uint256 _ownerShares = balanceOf(owner);
     uint256 _senderAllowance = allowance(owner, e.msg.sender);
+    require totalSupply() >= _ownerShares;
+    require asset.totalSupply() >= _receiverAssets + asset.balanceOf(currentContract);
 
     uint256 assets = redeem(e, shares, receiver, owner);
 
+    uint256 totalAssets_ = totalAssets();
     uint256 receiverAssets_ = asset.balanceOf(receiver);
     uint256 ownerShares_ = balanceOf(owner);
     uint256 senderAllowance_ = allowance(owner, e.msg.sender);
 
+    assert _totalAssets - assets == totalAssets_;
     assert _receiverAssets + assets == receiverAssets_;
     assert _ownerShares - shares == ownerShares_;
     assert e.msg.sender != owner => 
