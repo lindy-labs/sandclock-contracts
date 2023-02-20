@@ -1,6 +1,7 @@
 import "erc20.spec"
 
 using MockLUSD as asset
+using MockStabilityPool as stabilityPool
 
 methods {
     // state modifying functions
@@ -63,6 +64,14 @@ methods {
     asset.balanceOf(address) returns (uint256) envfree
 }
 
+/*
+    @Rule
+
+    @Category: High level
+
+    @Description:
+        function converToShares returns the same value for a given parameter regardless of the caller
+*/
 rule converToShares_returns_the_same_value(uint256 assets) {
     env e;
     uint256 _shares = convertToShares(e, assets);
@@ -72,18 +81,72 @@ rule converToShares_returns_the_same_value(uint256 assets) {
     assert _shares == shares_;
 }
 
+/*
+    @Rule
+
+    @Category: High legel
+
+    @Description:
+        function convertToShares returns at least the same amount of shares than function previewDeposit
+*/
 rule convertToShares_gte_previewDeposit(uint256 assets) {
     env e;
     assert convertToShares(e, assets) >= previewDeposit(assets);
 }
 
+/*
+    @Rule
+
+    @Category: High level
+
+    @Description:
+        function converToShares rounds down shares towards zero
+*/
 rule converToShares_rounds_down_towards_0(uint256 assets) {
     env e;
     require totalSupply() != 0;
     assert (assets * totalSupply()) / totalAssets() == convertToShares(e, assets);
 }
 
+/*
+    @Rule
+
+    @Category: High level
+
+    @Description:
+        function convertToShares maintains share prices
+*/
 // TODO add ghosts of totalSupply and totalAssets to prove this
+ghost totalOfSupply() returns uint256   {
+    init_state axiom totalOfSupply() == 0;
+}
+
+hook Sstore currentContract.balanceOf[KEY address k].(offset 32) uint256 amount (uint256 oldAmount) STORAGE {
+    havoc totalOfSupply assuming totalOfSupply@new() == totalOfSupply@old() + (amount - oldAmount);
+}
+
+invariant totalSupply_equals_total_of_supply()
+    totalSupply() == totalOfSupply()
+
+ghost totalOfAssets() returns uint256   {
+    init_state axiom totalOfAssets() == 0;
+}
+
+hook Sstore asset.balanceOf[KEY address k].(offset 32) uint256 amount (uint256 oldAmount) STORAGE {
+    havoc totalOfAssets assuming totalOfAssets@new() == totalOfAssets@old() + (amount - oldAmount);
+}
+
+ghost totalOfStability() returns uint256   {
+    init_state axiom totalOfStability() == 0;
+}
+
+hook Sstore stabilityPool.balances[KEY address k].(offset 0) uint256 amount (uint256 oldAmount) STORAGE {
+    havoc totalOfStability assuming totalOfStability@new() == totalOfStability@old() + (amount - oldAmount);
+}
+
+invariant totalAssets_equals_total_of_assets()
+    totalAssets() == totalOfAssets() + totalOfStability()
+
 rule share_price_maintained(uint256 assets, method f) filtered {
     f -> !f.isView && f.selector != harvest(uint256, bytes, uint256, bytes).selector
 } {
@@ -95,11 +158,20 @@ rule share_price_maintained(uint256 assets, method f) filtered {
     f(e1, args);
 
     env e2;
+
     uint256 shares_ = convertToShares(e2, assets);
 
     assert _shares == shares_;
 }
 
+/*
+    @Rule
+
+    @Category: High level
+
+    @Description:
+        function convertToAssets returns the same value for a given parameter regardless of the caller
+*/
 rule converToAssets_returns_the_same_value(uint256 shares) {
     env e;
     uint256 _assets = convertToAssets(e, shares);
@@ -109,40 +181,104 @@ rule converToAssets_returns_the_same_value(uint256 shares) {
     assert _assets == assets_;
 }
 
+/*
+    @Rule
+
+    @Category: High level
+
+    @Description:
+        function convertToAssets returns at most the same amount of assets than function previewMint
+*/
 rule convertToAssets_lte_previewMint(uint256 shares) {
     env e;
     assert convertToAssets(e, shares) <= previewMint(shares);
 }
 
+/*
+    @Rule
+
+    @Category: High level
+
+    @Description:
+        function convertToAssets rounds assets towards zero
+*/
 rule convertToAssets_rounds_down_towards_0(uint256 shares) {
     env e;
     require totalSupply() != 0;
     assert (shares * totalAssets()) / totalSupply() == convertToAssets(e, shares);
 }
 
+/*
+    @Rule
+
+    @Category: High level
+
+    @Description:
+        function maxDeposit returns the maximum expected value of a deposit
+*/
 rule maxDeposit_returns_correct_value(address receiver) {
     assert maxDeposit(receiver) == 2^256 - 1;
 }
 
+/*
+    @Rule
+
+    @Category: High level
+
+    @Description:
+        function maxMint returns the maximum expected value of a mint
+*/
 rule maxMint_returns_correct_value(address receiver) {
     assert maxMint(receiver) == 2^256 - 1;
 }
 
+/*
+    @Rule
+
+    @Category: High level
+
+    @Description:
+        function previewDeposit returns at most the same amount of assets than function deposit
+*/
 rule previewDeposit_lte_deposit(uint256 assets, address receiver) {
     env e;
     assert previewDeposit(assets) <= deposit(e, assets, receiver);
 }
 
+/*
+    @Rule
+
+    @Category: High level
+
+    @Description:
+        function previewMint returns at least the same amount of shares than function mint
+*/
 rule previewMint_gte_mint(uint256 shares, address receiver) {
     env e;
     assert previewMint(shares) >= mint(e, shares, receiver);
 }
 
+/*
+    @Rule
+
+    @Category: High level
+
+    @Description:
+        function previewWithdraw returns at least the same amount of assets than function withdraw
+*/
 rule previewWithdraw_gte_withdraw(uint256 assets, address receiver, address owner) {
     env e;
     assert previewWithdraw(assets) >= withdraw(e, assets, receiver, owner);
 }
 
+/*
+    @Rule
+
+    @Category: High level
+
+    @Description:
+        function previewRedeem returns at most the same amount of shares than function redeem
+*/
 rule previewRedeem_lte_redeem(uint256 shares, address receiver, address owner) {
     env e;
     assert previewRedeem(shares) <= redeem(e, shares, receiver, owner);
@@ -150,6 +286,14 @@ rule previewRedeem_lte_redeem(uint256 shares, address receiver, address owner) {
 
 // TODO depositWithPermit
 
+/*
+    @Rule
+
+    @Category: High
+
+    @Description:
+        function deposit mints exactly shares Vault shares to receiver by depositing exactly assets of underlying tokens
+*/
 rule integrity_of_deposit(uint256 assets, address receiver) {
     env e;
     require e.msg.sender != currentContract;
@@ -175,6 +319,14 @@ rule integrity_of_deposit(uint256 assets, address receiver) {
 }
 
 
+/*
+    @Rule
+
+    @Category: Unit test
+
+    @Description:
+        function deposit must revert if all of assets cannot be deposited
+*/
 rule deposit_reverts_if_not_enough_assets(uint256 assets, address receiver) {
     env e;
     uint256 userAssets = asset.balanceOf(e.msg.sender);
@@ -185,6 +337,14 @@ rule deposit_reverts_if_not_enough_assets(uint256 assets, address receiver) {
     assert lastReverted;
 }
 
+/*
+    @Rule
+
+    @Category: High
+
+    @Description:
+        function mint mints exactly shares Vault shares to receiver
+*/
 rule integrity_of_mint(uint256 shares, address receiver) {
     env e;
     require e.msg.sender != currentContract;
@@ -209,6 +369,14 @@ rule integrity_of_mint(uint256 shares, address receiver) {
 }
 
 
+/*
+    @Rule
+
+    @Category: High
+
+    @Description:
+        function withdraw must burn shares from owner and sends exactly assets of underlying tokens to receiver
+*/
 rule integrity_of_withdraw(uint256 assets, address receiver, address owner) {
     env e;
     require e.msg.sender != currentContract;
@@ -233,6 +401,14 @@ rule integrity_of_withdraw(uint256 assets, address receiver, address owner) {
         || _senderAllowance - shares == senderAllowance_;
 }
 
+/*
+    @Rule
+
+    @Category: Unit test
+
+    @Description:
+        function withdraw reverts if there is not enough assets
+*/
 rule withdraw_reverts_if_not_enough_assets(uint256 assets, address receiver, address owner) {
     require totalAssets() < assets;
 
@@ -242,6 +418,14 @@ rule withdraw_reverts_if_not_enough_assets(uint256 assets, address receiver, add
     assert lastReverted;
 }
 
+/*
+    @Rule
+
+    @Category: High
+
+    @Description:
+        function redeem must burn exactly shares from owner and sends assets of underlying tokens to receiver
+*/
 rule integrity_of_redeem(uint256 shares, address receiver, address owner) {
     env e;
     uint256 _receiverAssets = asset.balanceOf(receiver);
@@ -269,6 +453,14 @@ rule integrity_of_redeem(uint256 shares, address receiver, address owner) {
         || _senderAllowance - shares == senderAllowance_;
 }
 
+/*
+    @Rule
+
+    @Category: Unit test
+
+    @Description:
+        function redeem reverts if there is not enough shares
+*/
 rule redeem_reverts_if_not_enough_shares(uint256 shares, address receiver, address owner) {
     env e;
     require balanceOf(owner) < shares || e.msg.sender != owner && allowance(owner, e.msg.sender) < shares;
@@ -278,24 +470,56 @@ rule redeem_reverts_if_not_enough_shares(uint256 shares, address receiver, addre
     assert lastReverted;
 }
 
+/*
+    @Rule
+
+    @Category: Unit test
+
+    @Description:
+        function setPerformanceFee updates the state variable performanceFee using newPerformanceFee
+*/
 rule integrit_of_setPerformanceFee(uint256 newPerformanceFee) {
     env e;
     setPerformanceFee(e, newPerformanceFee);
     assert performanceFee() == newPerformanceFee;
 }
 
+/*
+    @Rule
+
+    @Category: To be filled
+
+    @Description:
+        To be filled
+*/
 rule integrity_of_setFloatPercentage(uint256 newFloatPercentage) {
     env e;
     setFloatPercentage(e, newFloatPercentage);
     assert floatPercentage() == newFloatPercentage;
 }
 
+/*
+    @Rule
+
+    @Category: To be filled
+
+    @Description:
+        To be filled
+*/
 rule integrity_of_setTreasury(address newTreasury) {
     env e;
     setTreasury(e, newTreasury);
     assert treasury() == newTreasury;
 }
 
+/*
+    @Rule
+
+    @Category: To be filled
+
+    @Description:
+        To be filled
+*/
 rule setPerformanceFee_reverts_if_newPerformanceFee_is_greater_than_1e18(uint256 newPerformanceFee) {
     require newPerformanceFee > 10^18;
     env e;
@@ -303,6 +527,14 @@ rule setPerformanceFee_reverts_if_newPerformanceFee_is_greater_than_1e18(uint256
     assert lastReverted;
 }
 
+/*
+    @Rule
+
+    @Category: To be filled
+
+    @Description:
+        To be filled
+*/
 rule setFloatPercentage_reverts_if_newFloatPercentage_is_greater_than_1e18(uint256 newFloatPercentage) {
     require newFloatPercentage > 10^18;
     env e;
@@ -310,6 +542,14 @@ rule setFloatPercentage_reverts_if_newFloatPercentage_is_greater_than_1e18(uint2
     assert lastReverted;
 }
 
+/*
+    @Rule
+
+    @Category: To be filled
+
+    @Description:
+        To be filled
+*/
 rule setTreasury_reverts_if_address_is_zero() {
     env e;
     setTreasury@withrevert(e, 0);
