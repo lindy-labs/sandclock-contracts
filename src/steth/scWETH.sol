@@ -134,6 +134,7 @@ contract scWETH is sc4626, IFlashLoanRecipient {
     // total wstETH supplied as collateral (in ETH terms)
     function totalCollateralSupplied() public view returns (uint256) {
         return _wstEthToEth(eToken.balanceOfUnderlying(address(this)));
+
     }
 
     // total eth borrowed
@@ -201,6 +202,7 @@ contract scWETH is sc4626, IFlashLoanRecipient {
             // unwrap wstETH
             uint256 stEthAmount = wstETH.unwrap(wstETH.balanceOf(address(this)));
 
+
             // stETH to eth
             curvePool.exchange(1, 0, stEthAmount, stEthAmount.mulWadDown(slippageTolerance));
 
@@ -256,7 +258,12 @@ contract scWETH is sc4626, IFlashLoanRecipient {
         balancerVault.flashLoan(address(this), tokens, amounts, abi.encode(false, amount));
     }
 
-    function _wstEthToEth(uint256 wstEthAmount) internal view returns (uint256 ethAmount) {
+
+    function wstEthToEth(uint256 wstEthAmount)
+        public
+        view
+        returns (uint256 ethAmount)
+    {
         if (wstEthAmount > 0) {
             // wstETh to stEth using exchangeRate
             uint256 stEthAmount = wstETH.getStETHByWstETH(wstEthAmount);
