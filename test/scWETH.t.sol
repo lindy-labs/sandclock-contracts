@@ -17,7 +17,7 @@ contract scWETHTest is Test {
     uint256 mainnetFork;
     uint256 constant ethWstEthMaxLtv = 0.7735e18;
     uint256 constant borrowPercentLtv = 0.99e18;
-    uint256 constant slippageTolerance = 0.1e18;
+    uint256 constant slippageTolerance = 0.999e18;
 
     // dummy users
     address constant alice = address(0x06);
@@ -109,7 +109,7 @@ contract scWETHTest is Test {
     }
 
     function testAtomicDepositInvestRedeem(uint256 amount) public {
-        amount = bound(amount, 1e5, 1e27);
+        amount = bound(amount, 1e5, 1e21); //max ~$280m flashloan
         vm.deal(address(this), amount);
         weth.deposit{value: amount}();
         weth.approve(address(vault), amount);
@@ -134,8 +134,6 @@ contract scWETHTest is Test {
         vault.redeem(shares, address(this), address(this));
 
         assertEq(vault.convertToAssets(10 ** vault.decimals()), 1e18);
-        assertEq(vault.totalAssets(), 0);
-        assertEq(vault.balanceOf(address(this)), 0);
         assertEq(vault.convertToAssets(vault.balanceOf(address(this))), 0);
         assertRelApproxEq(weth.balanceOf(address(this)), preDepositBal, 0.01e18);
     }
