@@ -21,7 +21,7 @@ contract scWETHTest is Test {
     uint256 mainnetFork;
     uint256 constant ethWstEthMaxLtv = 0.7735e18;
     uint256 constant slippageTolerance = 0.999e18;
-    uint256 constant flashLoanLtv = 0.5000e18;
+    uint256 constant flashLoanLtv = 0.5e18;
 
     // dummy users
     address constant alice = address(0x06);
@@ -79,7 +79,7 @@ contract scWETHTest is Test {
 
         vault.deposit(amount, address(this));
 
-        assertEq(vault.convertToAssets(10**vault.decimals()), 1e18);
+        assertEq(vault.convertToAssets(10 ** vault.decimals()), 1e18);
         assertEq(vault.totalAssets(), amount);
         assertEq(vault.balanceOf(address(this)), amount);
         assertEq(vault.convertToAssets(vault.balanceOf(address(this))), amount);
@@ -87,7 +87,7 @@ contract scWETHTest is Test {
 
         vault.withdraw(amount, address(this), address(this));
 
-        assertEq(vault.convertToAssets(10**vault.decimals()), 1e18);
+        assertEq(vault.convertToAssets(10 ** vault.decimals()), 1e18);
         assertEq(vault.totalAssets(), 0);
         assertEq(vault.balanceOf(address(this)), 0);
         assertEq(vault.convertToAssets(vault.balanceOf(address(this))), 0);
@@ -140,7 +140,7 @@ contract scWETHTest is Test {
 
         uint256 shares = vault.deposit(amount, address(this));
 
-        assertEq(vault.convertToAssets(10**vault.decimals()), 1e18);
+        assertEq(vault.convertToAssets(10 ** vault.decimals()), 1e18);
         assertEq(vault.totalAssets(), amount);
         assertEq(vault.balanceOf(address(this)), amount);
         assertEq(vault.convertToAssets(vault.balanceOf(address(this))), amount);
@@ -150,11 +150,7 @@ contract scWETHTest is Test {
 
         assertRelApproxEq(vault.totalAssets(), amount, 0.01e18);
         assertEq(vault.balanceOf(address(this)), amount);
-        assertRelApproxEq(
-            vault.convertToAssets(vault.balanceOf(address(this))),
-            amount,
-            0.01e18
-        );
+        assertRelApproxEq(vault.convertToAssets(vault.balanceOf(address(this))), amount, 0.01e18);
 
         assertEq(weth.balanceOf(address(this)), preDepositBal - amount);
 
@@ -162,11 +158,7 @@ contract scWETHTest is Test {
 
         assertEq(vault.convertToAssets(10 ** vault.decimals()), 1e18);
         assertEq(vault.convertToAssets(vault.balanceOf(address(this))), 0);
-        assertRelApproxEq(
-            weth.balanceOf(address(this)),
-            preDepositBal,
-            0.01e18
-        );
+        assertRelApproxEq(weth.balanceOf(address(this)), preDepositBal, 0.01e18);
     }
 
     function testWithdrawalAmounts() public {
@@ -178,11 +170,7 @@ contract scWETHTest is Test {
         vault.depositIntoStrategy();
 
         vault.redeem(shares1 / 2, address(this), address(this));
-        assertRelApproxEq(
-            weth.balanceOf(address(this)),
-            depositAmount1 / 2,
-            0.01e18
-        );
+        assertRelApproxEq(weth.balanceOf(address(this)), depositAmount1 / 2, 0.01e18);
 
         vm.prank(alice);
         vault.redeem(shares2 / 2, alice, alice);
@@ -191,11 +179,7 @@ contract scWETHTest is Test {
         console.log(weth.balanceOf(address(vault)));
 
         vault.redeem(shares1 / 2, address(this), address(this));
-        assertRelApproxEq(
-            weth.balanceOf(address(this)),
-            depositAmount1,
-            0.01e18
-        );
+        assertRelApproxEq(weth.balanceOf(address(this)), depositAmount1, 0.01e18);
 
         vm.prank(alice);
         vault.redeem(shares2 / 2, alice, alice);
@@ -207,26 +191,13 @@ contract scWETHTest is Test {
         depositToVault(address(this), depositAmount);
         vault.depositIntoStrategy();
         vault.changeLeverage(0.76e18);
-        assertApproxEqRel(
-            vault.getLtv(),
-            0.76e18,
-            0.01e18,
-            "leverage up failed"
-        );
+        assertApproxEqRel(vault.getLtv(), 0.76e18, 0.01e18, "leverage up failed");
 
         vault.changeLeverage(0.5e18);
-        assertApproxEqRel(
-            vault.getLtv(),
-            0.5e18,
-            0.01e18,
-            "leverage up failed"
-        );
+        assertApproxEqRel(vault.getLtv(), 0.5e18, 0.01e18, "leverage up failed");
     }
 
-    function depositToVault(address user, uint256 amount)
-        public
-        returns (uint256 shares)
-    {
+    function depositToVault(address user, uint256 amount) public returns (uint256 shares) {
         vm.deal(user, amount);
         vm.startPrank(user);
         weth.deposit{value: amount}();
