@@ -128,7 +128,7 @@ contract scWETH is sc4626, IFlashLoanRecipient {
 
     // total wstETH supplied as collateral (in ETH terms)
     function totalCollateralSupplied() public view returns (uint256) {
-        return _wstEthToEth(eTokenwstETH.balanceOfUnderlying(address(this)));
+        return wstEthToEth(eTokenwstETH.balanceOfUnderlying(address(this)));
     }
 
     // total eth borrowed
@@ -224,6 +224,7 @@ contract scWETH is sc4626, IFlashLoanRecipient {
             );
 
             // console2.log("stETH balance", stEthAmount);
+            // console2.log("assets balance", stEthAmount - flashLoanAmount);
 
             // console2.log("eth balance prev", address(this).balance);
 
@@ -303,8 +304,8 @@ contract scWETH is sc4626, IFlashLoanRecipient {
         return amount.mulWadDown(slippageTolerance);
     }
 
-    function _wstEthToEth(uint256 wstEthAmount)
-        internal
+    function wstEthToEth(uint256 wstEthAmount)
+        public
         view
         returns (uint256 ethAmount)
     {
