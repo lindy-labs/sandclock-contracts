@@ -13,8 +13,5 @@ interface IEulerEToken {
     function withdraw(uint256 subAccountId, uint256 amount) external;
 
     /// @notice Balance of a particular account, in underlying units (increases as interest is earned)
-    function balanceOfUnderlying(address account)
-        external
-        view
-        returns (uint256);
+    function balanceOfUnderlying(address account) external view returns (uint256);
 }

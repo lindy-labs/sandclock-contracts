@@ -4,7 +4,8 @@ pragma solidity ^0.8.10;
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
-import {IEulerEToken} from "./interfaces/IEulerEToken.sol";
+import {IEulerDToken} from "../interfaces/euler/IEulerDToken.sol";
+import {IEulerEToken} from "../interfaces/euler/IEulerEToken.sol";
 import {ERC4626} from "solmate/mixins/ERC4626.sol";
 import {sc4626} from "../sc4626.sol";
 
@@ -17,11 +18,7 @@ contract scUSDC is sc4626 {
 
     ERC4626 public scWETH;
 
-    constructor(
-        address _admin,
-        ERC20 _usdc,
-        ERC4626 _scWETH
-    ) sc4626(_admin, _usdc, "Sandclock USDC Vault", "scUSDC") {
+    constructor(address _admin, ERC20 _usdc, ERC4626 _scWETH) sc4626(_admin, _usdc, "Sandclock USDC Vault", "scUSDC") {
         scWETH = _scWETH;
     }
 
