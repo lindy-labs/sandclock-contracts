@@ -83,6 +83,23 @@ rule converToShares_rounds_down_towards_0(uint256 assets) {
     assert (assets * totalSupply()) / totalAssets() == convertToShares(e, assets);
 }
 
+// TODO add ghosts of totalSupply and totalAssets to prove this
+rule share_price_maintained(uint256 assets, method f) filtered {
+    f -> !f.isView && f.selector != harvest(uint256, bytes, uint256, bytes).selector
+} {
+    env e;
+    uint256 _shares = convertToShares(e, assets);
+
+    env e1;
+    calldataarg args;
+    f(e1, args);
+
+    env e2;
+    uint256 shares_ = convertToShares(e2, assets);
+
+    assert _shares == shares_;
+}
+
 rule converToAssets_returns_the_same_value(uint256 shares) {
     env e;
     uint256 _assets = convertToAssets(e, shares);
