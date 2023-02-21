@@ -4,7 +4,9 @@
 2. Use 0x in the depositToStrategy, because in case of an event
    where price of stETH falls very much (which happened few months ago) it will
    be better to swap from other protocols instead of just staking to lido
-3. share price inflation attack
+3. share price inflation attack\
+4. deposit eth
+5. chainlink backup
 
 Notes:
 
