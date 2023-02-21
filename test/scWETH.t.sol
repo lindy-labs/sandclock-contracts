@@ -94,14 +94,14 @@ contract scWETHTest is Test {
         assertEq(weth.balanceOf(address(this)), preDepositBal);
     }
 
-    function testFailDepositWithNotEnoughApproval(uint256 amount) public {
+    function testFailDepositWithInsufficientApproval(uint256 amount) public {
         vm.deal(address(this), amount / 2);
         weth.deposit{value: amount / 2}();
         weth.approve(address(vault), amount / 2);
         vault.deposit(amount, address(this));
     }
 
-    function testFailWithdrawWithNotEnoughBalance(uint256 amount) public {
+    function testFailWithdrawWithInsufficientBalance(uint256 amount) public {
         vm.deal(address(this), amount / 2);
         weth.deposit{value: amount / 2}();
         weth.approve(address(vault), amount / 2);
@@ -109,7 +109,7 @@ contract scWETHTest is Test {
         vault.withdraw(amount, address(this), address(this));
     }
 
-    function testFailRedeemWithNotEnoughBalance(uint256 amount) public {
+    function testFailRedeemWithInsufficientBalance(uint256 amount) public {
         vm.deal(address(this), amount / 2);
         weth.deposit{value: amount / 2}();
         weth.approve(address(vault), amount / 2);
