@@ -1,7 +1,7 @@
 import "erc20.spec"
 
 using MockLUSD as asset
-using MockStabilityPool as stabilityPool
+using MockPriceFeed as priceFeed
 
 methods {
     // state modifying functions
@@ -62,7 +62,39 @@ methods {
     currentContract.allowance(address, address) returns (uint256) envfree
     asset.totalSupply() returns (uint256) envfree
     asset.balanceOf(address) returns (uint256) envfree
+    priceFeed.latestAnswer() returns (int256) envfree
 }
+
+definition coreFunctions(method f) returns bool =
+    f.selector == mint(uint256, address).selector
+    ||
+    f.selector == depositWithPermit(uint256, uint256, uint8, bytes32, bytes32).selector
+    ||
+    f.selector == deposit(uint256, address).selector
+    ||
+    f.selector == withdraw(uint256, address, address).selector
+    ||
+    f.selector == redeem(uint256, address, address).selector;
+
+ghost uint256 totalShares {
+    init_state axiom totalShares == 0;
+}
+
+hook Sstore balanceOf[KEY address k] uint256 amount (uint256 oldAmount) STORAGE {
+    totalShares = totalShares + amount - oldAmount;
+}
+
+/*
+    @Invariant
+
+    @Category: High level
+
+    @Description:
+        totalSupply == sum(balanceOf(user))
+*/
+invariant totalSupply_equals_totalShares()
+    totalSupply() == totalShares
+    filtered { f->!f.isView }
 
 /*
     @Rule
@@ -84,7 +116,7 @@ rule converToShares_returns_the_same_value(uint256 assets) {
 /*
     @Rule
 
-    @Category: High legel
+    @Category: High level
 
     @Description:
         function convertToShares returns at least the same amount of shares than function previewDeposit
@@ -116,44 +148,16 @@ rule converToShares_rounds_down_towards_0(uint256 assets) {
     @Description:
         function convertToShares maintains share prices
 */
-// TODO add ghosts of totalSupply and totalAssets to prove this
-ghost totalOfSupply() returns uint256   {
-    init_state axiom totalOfSupply() == 0;
-}
-
-hook Sstore currentContract.balanceOf[KEY address k].(offset 32) uint256 amount (uint256 oldAmount) STORAGE {
-    havoc totalOfSupply assuming totalOfSupply@new() == totalOfSupply@old() + (amount - oldAmount);
-}
-
-invariant totalSupply_equals_total_of_supply()
-    totalSupply() == totalOfSupply()
-
-ghost totalOfAssets() returns uint256   {
-    init_state axiom totalOfAssets() == 0;
-}
-
-hook Sstore asset.balanceOf[KEY address k].(offset 32) uint256 amount (uint256 oldAmount) STORAGE {
-    havoc totalOfAssets assuming totalOfAssets@new() == totalOfAssets@old() + (amount - oldAmount);
-}
-
-ghost totalOfStability() returns uint256   {
-    init_state axiom totalOfStability() == 0;
-}
-
-hook Sstore stabilityPool.balances[KEY address k].(offset 0) uint256 amount (uint256 oldAmount) STORAGE {
-    havoc totalOfStability assuming totalOfStability@new() == totalOfStability@old() + (amount - oldAmount);
-}
-
-invariant totalAssets_equals_total_of_assets()
-    totalAssets() == totalOfAssets() + totalOfStability()
-
-rule share_price_maintained(uint256 assets, method f) filtered {
-    f -> !f.isView && f.selector != harvest(uint256, bytes, uint256, bytes).selector
+rule share_price_maintained_after_non_core_functions(uint256 assets, method f) filtered {
+    f -> !f.isView && !coreFunctions(f) &&
+    f.selector != harvest(uint256, bytes, uint256, bytes).selector
 } {
+    requireInvariant totalSupply_equals_totalShares;
     env e;
     uint256 _shares = convertToShares(e, assets);
 
     env e1;
+    require e1.msg.value == 0;
     calldataarg args;
     f(e1, args);
 
@@ -163,6 +167,32 @@ rule share_price_maintained(uint256 assets, method f) filtered {
 
     assert _shares == shares_;
 }
+
+/*
+    @Rule
+
+    @Category: High level
+
+    @Description:
+        share price maintained after mint
+*/
+rule share_price_maintained_after_mint(uint256 shares, address receiver) {
+    env e;
+    require e.msg.sender != currentContract;
+    require e.msg.sender != stabilityPool();
+    require receiver != currentContract;
+
+    uint256 _totalAssets = totalAssets();
+    require _totalAssets == 0 <=> totalSupply() == 0;
+
+    require priceFeed.latestAnswer() == 0; // make sure no capital gain
+
+    uint256 assets = mint(e, shares, receiver);
+    require _totalAssets + assets <= asset.totalSupply(); // avoid overflow
+    
+    assert assets == previewMint(shares);
+}
+
 
 /*
     @Rule
@@ -289,7 +319,7 @@ rule previewRedeem_lte_redeem(uint256 shares, address receiver, address owner) {
 /*
     @Rule
 
-    @Category: High
+    @Category: High level
 
     @Description:
         function deposit mints exactly shares Vault shares to receiver by depositing exactly assets of underlying tokens
