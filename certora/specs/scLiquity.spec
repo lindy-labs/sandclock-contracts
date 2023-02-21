@@ -398,6 +398,23 @@ rule integrity_of_mint(uint256 shares, address receiver) {
     assert _receiverShares + shares == receiverShares_;
 }
 
+/*
+    @Rule
+
+    @Category: Unit test
+
+    @Description:
+        function mint must revert if all of shares cannot be minted
+*/
+rule mint_reverts_if_not_enough_shares(uint256 shares, address receiver) {
+    env e;
+    uint256 receiverShares = balanceOf(receiver);
+    require receiverShares + shares > totalSupply();
+
+    mint@withrevert(e, shares, receiver);
+
+    assert lastReverted;
+}
 
 /*
     @Rule
@@ -517,10 +534,10 @@ rule integrit_of_setPerformanceFee(uint256 newPerformanceFee) {
 /*
     @Rule
 
-    @Category: To be filled
+    @Category: Unit test
 
     @Description:
-        To be filled
+        function setFloatPercentage updates the state variable performanceFee with the value provided by the parameter newPerformanceFee
 */
 rule integrity_of_setFloatPercentage(uint256 newFloatPercentage) {
     env e;
@@ -531,10 +548,10 @@ rule integrity_of_setFloatPercentage(uint256 newFloatPercentage) {
 /*
     @Rule
 
-    @Category: To be filled
+    @Category: Unit test
 
     @Description:
-        To be filled
+        function setTreasury updates the state variable treasury with the value provided by the parameter newTreasury
 */
 rule integrity_of_setTreasury(address newTreasury) {
     env e;
@@ -545,10 +562,10 @@ rule integrity_of_setTreasury(address newTreasury) {
 /*
     @Rule
 
-    @Category: To be filled
+    @Category: Unit test
 
     @Description:
-        To be filled
+        function setPerformanceFee reverts if the value of the parameter newPerformanceFee is greater than 10^18
 */
 rule setPerformanceFee_reverts_if_newPerformanceFee_is_greater_than_1e18(uint256 newPerformanceFee) {
     require newPerformanceFee > 10^18;
@@ -560,10 +577,10 @@ rule setPerformanceFee_reverts_if_newPerformanceFee_is_greater_than_1e18(uint256
 /*
     @Rule
 
-    @Category: To be filled
+    @Category: Unit test
 
     @Description:
-        To be filled
+        function setFloatPercentage reverts if the value of the parameter newFloatPercentage is greater than 10^18
 */
 rule setFloatPercentage_reverts_if_newFloatPercentage_is_greater_than_1e18(uint256 newFloatPercentage) {
     require newFloatPercentage > 10^18;
@@ -575,10 +592,10 @@ rule setFloatPercentage_reverts_if_newFloatPercentage_is_greater_than_1e18(uint2
 /*
     @Rule
 
-    @Category: To be filled
+    @Category: Unit test
 
     @Description:
-        To be filled
+        function setTreasury reverts if address(0)
 */
 rule setTreasury_reverts_if_address_is_zero() {
     env e;
