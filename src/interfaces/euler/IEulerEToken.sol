@@ -14,4 +14,6 @@ interface IEulerEToken {
 
     /// @notice Balance of a particular account, in underlying units (increases as interest is earned)
     function balanceOfUnderlying(address account) external view returns (uint256);
+
+    function symbol() external view returns (string memory);
 }

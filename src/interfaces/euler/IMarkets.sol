@@ -6,4 +6,9 @@ interface IMarkets {
     /// @param subAccountId 0 for primary, 1-255 for a sub-account
     /// @param newMarket Underlying token address
     function enterMarket(uint256 subAccountId, address newMarket) external;
+
+    // Given an underlying, lookup the associated EToken
+    function underlyingToEToken(
+        address underlying
+    ) external view returns (address);
 }
