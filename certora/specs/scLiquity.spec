@@ -404,12 +404,13 @@ rule integrity_of_mint(uint256 shares, address receiver) {
     @Category: Unit test
 
     @Description:
-        function mint must revert if all of shares cannot be minted
+        function mint must revert if the minter has not enough assets
 */
-rule mint_reverts_if_not_enough_shares(uint256 shares, address receiver) {
+rule mint_reverts_if_not_enough_assets(uint256 shares, address receiver) {
     env e;
-    uint256 receiverShares = balanceOf(receiver);
-    require receiverShares + shares > totalSupply();
+    uint256 assets = previewMint(shares);
+
+    require asset.balanceOf(e.msg.sender) < assets;
 
     mint@withrevert(e, shares, receiver);
 
