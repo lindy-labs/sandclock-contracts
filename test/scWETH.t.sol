@@ -192,7 +192,7 @@ contract scWETHTest is Test {
         amount = bound(amount, 1e5, 1e20);
         depositToVault(address(this), amount);
         vault.depositIntoStrategy();
-        newLtv = bound(newLtv, vault.getLtv() + 1e15, 0.7e18);
+        newLtv = bound(newLtv, vault.getLtv() + 1e15, ethWstEthMaxLtv-0.001e18);
         console.log("vault.getLtv()", vault.getLtv());
         vault.changeLeverage(newLtv);
         console.log("vault.getLtv()", vault.getLtv());
