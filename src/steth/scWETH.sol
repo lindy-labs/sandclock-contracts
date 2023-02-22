@@ -134,6 +134,9 @@ contract scWETH is sc4626, IFlashLoanRecipient {
         // value of the supplied collateral in eth terms using chainlink oracle
         assets = totalCollateralSupplied();
 
+        // account for slippage losses
+        assets = assets.mulWadDown(slippageTolerance);
+
         // add float
         assets += asset.balanceOf(address(this));
 
@@ -167,7 +170,7 @@ contract scWETH is sc4626, IFlashLoanRecipient {
 
     //////////////////// EXTERNAL METHODS //////////////////////////
 
-    // called after the flashLoan on _depositIntoStrategy
+    // called after the flashLoan on _rebalancePosition
     function receiveFlashLoan(address[] memory, uint256[] memory amounts, uint256[] memory, bytes memory userData)
         external
     {
@@ -260,9 +263,9 @@ contract scWETH is sc4626, IFlashLoanRecipient {
 
     function _withdrawToVault(uint256 amount) internal {
         uint256 ltv = getLtv();
-        // calculate the amount of weth that you have to flashloan to repay in order to withdraw 'amount' wstEth(collateral)
-        // uint256 flashLoanAmount = amount.mulWadDown(getLeverage() - 1e18);
-        uint256 flashLoanAmount = amount.mulDivUp(ltv, 1e18 - ltv);
+        uint256 debt = totalDebt();
+
+        uint256 flashLoanAmount = (debt - ltv.mulWadDown(amount)).divWadDown(1e18 - ltv);
 
         address[] memory tokens = new address[](1);
         tokens[0] = address(weth);

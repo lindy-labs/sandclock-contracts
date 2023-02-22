@@ -12,7 +12,7 @@ contract DeployScript is CREATE3Script {
 
         uint256 ethWstEthMaxLtv = 0.7735e18;
         uint256 borrowPercentLtv = 0.99e18;
-        uint256 slippageTolerance = 0.1e18;
+        uint256 slippageTolerance = 0.999e18;
 
         vm.startBroadcast(deployerPrivateKey);
         v = new Vault(
