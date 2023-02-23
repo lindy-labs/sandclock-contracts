@@ -217,8 +217,12 @@ contract scWETH is sc4626, IFlashLoanRecipient {
             // unwrap wstETH
             uint256 stEthAmount = wstETH.unwrap(wstETH.balanceOf(address(this)));
 
+            // stEth to eth
+            (, int256 price,,,) = stEThToEthPriceFeed.latestRoundData();
+            uint256 expected = stEthAmount.mulWadDown(uint256(price));
+
             // stETH to eth
-            curvePool.exchange(1, 0, stEthAmount, stEthAmount.mulWadDown(slippageTolerance));
+            curvePool.exchange(1, 0, stEthAmount, expected.mulWadDown(slippageTolerance));
 
             // wrap eth
             weth.deposit{value: address(this).balance}();
