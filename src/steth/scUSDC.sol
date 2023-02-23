@@ -66,39 +66,38 @@ contract scUSDC is sc4626 {
         markets.enterMarket(0, address(usdc));
     }
 
-    function totalAssets() public view override returns (uint256 assets) {
+    function totalAssets() public view override returns (uint256) {
         uint256 collateral = eToken.balanceOfUnderlying(address(this));
-        uint256 wethDebt = dToken.balanceOf(address(this));
-        (, int256 usdcPriceInWeth, , , ) = usdcToEthPriceFeed.latestRoundData();
 
-        uint256 debtInUsdc = getUsdcFromWeth(
-            wethDebt,
-            uint256(usdcPriceInWeth)
-        );
+        uint256 wethDebt = dToken.balanceOf(address(this));
+        uint256 debtInUsdc = getUsdcFromWeth(wethDebt);
 
         uint256 wethInvested = scWETH.convertToAssets(
             scWETH.balanceOf(address(this))
         );
-        uint256 investedInUsdc = getUsdcFromWeth(
-            wethInvested,
-            uint256(usdcPriceInWeth)
-        );
+        uint256 investedInUsdc = getUsdcFromWeth(wethInvested);
 
-        assets = collateral + investedInUsdc - debtInUsdc;
+        return
+            asset.balanceOf(address(this)) +
+            collateral +
+            investedInUsdc -
+            debtInUsdc;
     }
 
     function getUsdcFromWeth(
-        uint256 _wethAmount,
-        uint256 _usdcPriceInWeth
-    ) public pure returns (uint256) {
-        return _wethAmount.divWadDown(uint256(_usdcPriceInWeth)) / 1e12;
+        uint256 _wethAmount
+    ) public view returns (uint256) {
+        (, int256 usdcPriceInWeth, , , ) = usdcToEthPriceFeed.latestRoundData();
+
+        return _wethAmount.divWadDown(uint256(usdcPriceInWeth)) / 1e12;
     }
 
     function getWethFromUsdc(
-        uint256 _usdcAmount,
-        uint256 _usdcPriceInWeth
-    ) public pure returns (uint256) {
-        return (_usdcAmount * 1e12).mulWadDown(uint256(_usdcPriceInWeth));
+        uint256 _usdcAmount
+    ) public view returns (uint256) {
+        (, int256 usdcPriceInWeth, , , ) = usdcToEthPriceFeed.latestRoundData();
+
+        return (_usdcAmount * 1e12).mulWadDown(uint256(usdcPriceInWeth));
     }
 
     function afterDeposit(uint256, uint256) internal override {}
@@ -129,7 +128,6 @@ contract scUSDC is sc4626 {
     }
 
     function _depositIntoStrategy() internal {
-        (, int256 usdcPriceInWeth, , , ) = usdcToEthPriceFeed.latestRoundData();
         uint256 currentLtv = getLtv();
 
         if (currentLtv == 0) currentLtv = usdcWethMaxLtv;
@@ -140,7 +138,7 @@ contract scUSDC is sc4626 {
 
         // borrow weth from euler
         uint256 wethToBorrow = currentLtv.mulWadUp(
-            getWethFromUsdc(usdcBalance, uint256(usdcPriceInWeth))
+            getWethFromUsdc(usdcBalance)
         );
         dToken.borrow(0, wethToBorrow);
 
@@ -159,15 +157,11 @@ contract scUSDC is sc4626 {
 
     // returns the net LTV at which we have borrowed till now (1e18 = 100%)
     function getLtv() public view returns (uint256) {
-        if (totalDebt() == 0) return 0;
+        uint256 debt = totalDebt();
 
-        uint256 debt = dToken.balanceOf(address(this));
+        if (debt == 0) return 0;
 
-        (, int256 usdcPriceInWeth, , , ) = usdcToEthPriceFeed.latestRoundData();
-        uint256 debtPriceInUsdc = getUsdcFromWeth(
-            debt,
-            uint256(usdcPriceInWeth)
-        );
+        uint256 debtPriceInUsdc = getUsdcFromWeth(debt);
 
         // totalDebt / totalSupplied
         return debtPriceInUsdc.divWadUp(totalCollateralSupplied());
