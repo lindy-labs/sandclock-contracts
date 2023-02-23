@@ -54,11 +54,7 @@ contract scUSDCTest is Test {
             slippageTolerance
         );
 
-        vault = new Vault(
-            address(this),
-            ERC20(0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48),
-            wethVault
-        );
+        vault = new Vault(address(this), wethVault);
 
         // set vault eth balance to zero
         vm.deal(address(vault), 0);
@@ -73,7 +69,7 @@ contract scUSDCTest is Test {
 
     function testAtomicDepositWithdraw() public {
         // vault.depositIntoStrategy();
-        deal(address(vault.USDC()), alice, 10000e6);
+        deal(address(vault.usdc()), alice, 10000e6);
 
         vm.startPrank(alice);
         ERC20(0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48).approve(
@@ -97,7 +93,7 @@ contract scUSDCTest is Test {
     }
 
     function testTotalAssets() public {
-        deal(address(vault.USDC()), address(vault), 10000e6);
+        deal(address(vault.usdc()), address(vault), 10000e6);
         // assertEq(ERC20(vault.USDC()).balanceOf(alice), 10000e6);
         // vault.totalAssets();
         vault.depositIntoStrategy();
