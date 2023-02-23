@@ -122,7 +122,7 @@ contract scWETH is sc4626, IFlashLoanRecipient {
         }
 
         // reinvest
-        _depositIntoStrategy();
+        _rebalancePosition();
 
         totalInvested = totalAssets();
 
