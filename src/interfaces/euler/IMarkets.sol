@@ -8,7 +8,5 @@ interface IMarkets {
     function enterMarket(uint256 subAccountId, address newMarket) external;
 
     // Given an underlying, lookup the associated EToken
-    function underlyingToEToken(
-        address underlying
-    ) external view returns (address);
+    function underlyingToEToken(address underlying) external view returns (address);
 }

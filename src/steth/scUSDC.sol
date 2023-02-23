@@ -20,23 +20,18 @@ contract scUSDC is sc4626 {
 
     error StrategyEULSwapFailed();
 
-    WETH public constant weth =
-        WETH(payable(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2));
-    ERC20 public constant usdc =
-        ERC20(0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48);
+    WETH public constant weth = WETH(payable(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2));
+    ERC20 public constant usdc = ERC20(0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48);
 
     address public constant EULER = 0x27182842E098f60e3D576794A5bFFb0777E025d3;
     // EUL token
     ERC20 eul = ERC20(0xd9Fcd98c322942075A5C3860693e9f4f03AAE07b);
     // The Euler market contract
-    IMarkets public constant markets =
-        IMarkets(0x3520d5a913427E6F0D6A83E07ccD4A4da316e4d3);
+    IMarkets public constant markets = IMarkets(0x3520d5a913427E6F0D6A83E07ccD4A4da316e4d3);
     // Euler supply token for USDC (eUSDC)
-    IEulerEToken public constant eToken =
-        IEulerEToken(0xEb91861f8A4e1C12333F42DCE8fB0Ecdc28dA716);
+    IEulerEToken public constant eToken = IEulerEToken(0xEb91861f8A4e1C12333F42DCE8fB0Ecdc28dA716);
     // Euler debt token for WETH (dWETH)
-    IEulerDToken public constant dToken =
-        IEulerDToken(0x62e28f054efc24b26A794F5C1249B6349454352C);
+    IEulerDToken public constant dToken = IEulerDToken(0x62e28f054efc24b26A794F5C1249B6349454352C);
 
     // 0x swap router
     address xrouter = 0xDef1C0ded9bec7F1a1670819833240f027b25EfF;
@@ -48,15 +43,12 @@ contract scUSDC is sc4626 {
     ERC4626 public immutable scWETH;
     uint256 public immutable usdcWethMaxLtv = 0.81e18;
 
-    constructor(
-        address _admin,
-        ERC4626 _scWETH
-    ) sc4626(_admin, usdc, "Sandclock USDC Vault", "scUSDC") {
+    constructor(address _admin, ERC4626 _scWETH) sc4626(_admin, usdc, "Sandclock USDC Vault", "scUSDC") {
         scWETH = _scWETH;
-        usdc.approve(EULER, type(uint).max);
+        usdc.approve(EULER, type(uint256).max);
 
-        weth.approve(EULER, type(uint).max);
-        weth.approve(address(_scWETH), type(uint).max);
+        weth.approve(EULER, type(uint256).max);
+        weth.approve(address(_scWETH), type(uint256).max);
 
         markets.enterMarket(0, address(usdc));
     }
@@ -67,30 +59,20 @@ contract scUSDC is sc4626 {
         uint256 wethDebt = dToken.balanceOf(address(this));
         uint256 debtInUsdc = getUsdcFromWeth(wethDebt);
 
-        uint256 wethInvested = scWETH.convertToAssets(
-            scWETH.balanceOf(address(this))
-        );
+        uint256 wethInvested = scWETH.convertToAssets(scWETH.balanceOf(address(this)));
         uint256 investedInUsdc = getUsdcFromWeth(wethInvested);
 
-        return
-            asset.balanceOf(address(this)) +
-            collateral +
-            investedInUsdc -
-            debtInUsdc;
+        return asset.balanceOf(address(this)) + collateral + investedInUsdc - debtInUsdc;
     }
 
-    function getUsdcFromWeth(
-        uint256 _wethAmount
-    ) public view returns (uint256) {
-        (, int256 usdcPriceInWeth, , , ) = usdcToEthPriceFeed.latestRoundData();
+    function getUsdcFromWeth(uint256 _wethAmount) public view returns (uint256) {
+        (, int256 usdcPriceInWeth,,,) = usdcToEthPriceFeed.latestRoundData();
 
         return _wethAmount.divWadDown(uint256(usdcPriceInWeth)) / 1e12;
     }
 
-    function getWethFromUsdc(
-        uint256 _usdcAmount
-    ) public view returns (uint256) {
-        (, int256 usdcPriceInWeth, , , ) = usdcToEthPriceFeed.latestRoundData();
+    function getWethFromUsdc(uint256 _usdcAmount) public view returns (uint256) {
+        (, int256 usdcPriceInWeth,,,) = usdcToEthPriceFeed.latestRoundData();
 
         return (_usdcAmount * 1e12).mulWadDown(uint256(usdcPriceInWeth));
     }
@@ -105,11 +87,7 @@ contract scUSDC is sc4626 {
         // to keep the same ltv, weth debt to repay has to be proporitional to collateral withdrawn
         uint256 wethNeeded = _assets.mulWadUp(wethDebt).divWadUp(collateral);
 
-        scWETH.withdraw(
-            scWETH.convertToShares(wethNeeded),
-            address(this),
-            address(this)
-        );
+        scWETH.withdraw(scWETH.convertToShares(wethNeeded), address(this), address(this));
 
         // repay debt and take out collateral on euler
         dToken.repay(0, wethNeeded);
@@ -132,9 +110,7 @@ contract scUSDC is sc4626 {
         eToken.deposit(0, usdcBalance);
 
         // borrow weth from euler
-        uint256 wethToBorrow = currentLtv.mulWadUp(
-            getWethFromUsdc(usdcBalance)
-        );
+        uint256 wethToBorrow = currentLtv.mulWadUp(getWethFromUsdc(usdcBalance));
         dToken.borrow(0, wethToBorrow);
 
         scWETH.deposit(wethToBorrow, address(this));

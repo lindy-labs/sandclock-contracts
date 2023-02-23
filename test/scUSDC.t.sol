@@ -72,10 +72,7 @@ contract scUSDCTest is Test {
         deal(address(vault.usdc()), alice, 10000e6);
 
         vm.startPrank(alice);
-        ERC20(0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48).approve(
-            address(vault),
-            type(uint256).max
-        );
+        ERC20(0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48).approve(address(vault), type(uint256).max);
         vault.deposit(10000e6, alice);
         vm.stopPrank();
 
@@ -83,10 +80,7 @@ contract scUSDCTest is Test {
 
         console2.log("totalAssets", vault.totalAssets());
         console2.log("alice balance", vault.balanceOf(alice));
-        console2.log(
-            "alices usdc assets",
-            vault.convertToAssets(vault.balanceOf(alice))
-        );
+        console2.log("alices usdc assets", vault.convertToAssets(vault.balanceOf(alice)));
 
         vm.startPrank(alice);
         vault.withdraw(5000e6, alice, alice);
