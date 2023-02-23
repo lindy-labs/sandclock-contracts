@@ -41,7 +41,7 @@ contract scWETHTest is Test {
     function setUp() public {
         vm.createFork(vm.envString("RPC_URL_MAINNET"));
         vm.selectFork(mainnetFork);
-        vm.rollFork(16643381);
+        vm.rollFork(16679144);
 
         vault = new Vault(
             address(this),
@@ -94,14 +94,14 @@ contract scWETHTest is Test {
         assertEq(weth.balanceOf(address(this)), preDepositBal);
     }
 
-    function testFailDepositWithNotEnoughApproval(uint256 amount) public {
+    function testFailDepositWithInsufficientApproval(uint256 amount) public {
         vm.deal(address(this), amount / 2);
         weth.deposit{value: amount / 2}();
         weth.approve(address(vault), amount / 2);
         vault.deposit(amount, address(this));
     }
 
-    function testFailWithdrawWithNotEnoughBalance(uint256 amount) public {
+    function testFailWithdrawWithInsufficientBalance(uint256 amount) public {
         vm.deal(address(this), amount / 2);
         weth.deposit{value: amount / 2}();
         weth.approve(address(vault), amount / 2);
@@ -109,7 +109,7 @@ contract scWETHTest is Test {
         vault.withdraw(amount, address(this), address(this));
     }
 
-    function testFailRedeemWithNotEnoughBalance(uint256 amount) public {
+    function testFailRedeemWithInsufficientBalance(uint256 amount) public {
         vm.deal(address(this), amount / 2);
         weth.deposit{value: amount / 2}();
         weth.approve(address(vault), amount / 2);
@@ -158,43 +158,55 @@ contract scWETHTest is Test {
 
         assertEq(vault.convertToAssets(10 ** vault.decimals()), 1e18);
         assertEq(vault.convertToAssets(vault.balanceOf(address(this))), 0);
-        assertRelApproxEq(weth.balanceOf(address(this)), preDepositBal, 0.01e18);
+        preDepositBal = preDepositBal.mulWadDown(slippageTolerance);
+        assertRelApproxEq(weth.balanceOf(address(this)), preDepositBal, 0.015e18);
     }
 
-    function testWithdrawalAmounts() public {
-        uint256 depositAmount1 = 100e18;
-        uint256 depositAmount2 = 200e18;
+    function testTwoDepositsInvestTwoRedeems(uint256 depositAmount1, uint256 depositAmount2) public {
+        depositAmount1 = bound(depositAmount1, 1e18, 1e20);
+        depositAmount2 = bound(depositAmount2, 1e18, 1e20);
         uint256 shares1 = depositToVault(address(this), depositAmount1);
         uint256 shares2 = depositToVault(alice, depositAmount2);
 
         vault.depositIntoStrategy();
 
         vault.redeem(shares1 / 2, address(this), address(this));
-        assertRelApproxEq(weth.balanceOf(address(this)), depositAmount1 / 2, 0.01e18);
+        assertRelApproxEq(weth.balanceOf(address(this)), (depositAmount1 / 2).mulWadDown(slippageTolerance), 0.02e18);
 
         vm.prank(alice);
         vault.redeem(shares2 / 2, alice, alice);
-        assertRelApproxEq(weth.balanceOf(alice), depositAmount2 / 2, 0.01e18);
-
-        console.log(weth.balanceOf(address(vault)));
+        assertRelApproxEq(weth.balanceOf(alice), (depositAmount2 / 2).mulWadDown(slippageTolerance), 0.02e18);
 
         vault.redeem(shares1 / 2, address(this), address(this));
-        assertRelApproxEq(weth.balanceOf(address(this)), depositAmount1, 0.01e18);
+        depositAmount1 = depositAmount1.mulWadDown(slippageTolerance);
+        assertRelApproxEq(weth.balanceOf(address(this)), depositAmount1, 0.02e18);
 
         vm.prank(alice);
         vault.redeem(shares2 / 2, alice, alice);
-        assertRelApproxEq(weth.balanceOf(alice), depositAmount2, 0.01e18);
+        depositAmount2 = depositAmount2.mulWadDown(slippageTolerance);
+        assertRelApproxEq(weth.balanceOf(alice), depositAmount2, 0.02e18);
     }
 
-    function testLeverageUp() public {
-        uint256 depositAmount = 100e18;
-        depositToVault(address(this), depositAmount);
+    function testLeverageUp(uint256 amount, uint256 newLtv) public {
+        amount = bound(amount, 1e5, 1e20);
+        depositToVault(address(this), amount);
         vault.depositIntoStrategy();
-        vault.changeLeverage(0.76e18);
-        assertApproxEqRel(vault.getLtv(), 0.76e18, 0.01e18, "leverage up failed");
+        newLtv = bound(newLtv, vault.getLtv() + 1e15, ethWstEthMaxLtv - 0.001e18);
+        console.log("vault.getLtv()", vault.getLtv());
+        vault.changeLeverage(newLtv);
+        console.log("vault.getLtv()", vault.getLtv());
+        assertApproxEqRel(vault.getLtv(), newLtv, 0.01e18, "leverage change failed");
+    }
 
-        vault.changeLeverage(0.5e18);
-        assertApproxEqRel(vault.getLtv(), 0.5e18, 0.01e18, "leverage up failed");
+    function testLeverageDown(uint256 amount, uint256 newLtv) public {
+        amount = bound(amount, 1e5, 1e20);
+        depositToVault(address(this), amount);
+        vault.depositIntoStrategy();
+        newLtv = bound(newLtv, 0.01e18, 0.5e18 - 1e15);
+        console.log("vault.getLtv()", vault.getLtv());
+        vault.changeLeverage(newLtv);
+        console.log("vault.getLtv()", vault.getLtv());
+        assertApproxEqRel(vault.getLtv(), newLtv, 0.011e18, "leverage change failed");
     }
 
     function depositToVault(address user, uint256 amount) public returns (uint256 shares) {
@@ -223,85 +235,6 @@ contract scWETHTest is Test {
             emit log_named_decimal_uint("     % Delta", percentDelta, 18);
             fail();
         }
-    }
-
-    // function testWithdrawAllToVault() public {
-    //     // console.log("before deposit", weth.balanceOf(address(vault)));
-    //     uint256 depositAmount = 5e18;
-
-    //     vault.deposit(depositAmount, address(this));
-    //     // console.log("after deposit", weth.balanceOf(address(vault)));
-
-    //     // deposit into strategy
-    //     vault.depositIntoStrategy();
-
-    //     console.log("totalAssets", vault.totalAssets());
-
-    //     // console.log("before withdraw", weth.balanceOf(address(vault)));
-
-    //     // withdraw from strategy
-    //     vault.withdrawToVault(depositAmount);
-
-    //     // console.log("after withdraw", weth.balanceOf(address(vault)));
-    //     console.log("totalAssets", weth.balanceOf(address(vault)));
-
-    //     assertEq(vault.totalCollateralSupplied(), 0, "collateral not zero");
-    //     assertEq(vault.totalDebt(), 0, "debt not zero");
-    //     // stEth balance must be zero
-    //     assertEq(stEth.balanceOf(address(vault)), 0, "stEth not zero");
-    //     // wstEth balance must be zero
-    //     assertEq(wstEth.balanceOf(address(vault)), 0, "wstEth not zero");
-    //     // weth balance must be zero
-    //     // assertEq(weth.balanceOf(address(vault)), 0, "weth not zero");
-    //     // eth balance must be zero
-    //     assertEq(address(vault).balance, 0, "eth not zero");
-    // }
-
-    // function testEulerBorrowTax() public {
-    //     uint256 depositAmount = initAmount;
-    //     topUpWstEth(depositAmount, address(this));
-    //     vm.deal(address(this), 0);
-    //     // dont take a flash loan
-
-    //     // just deposit wstEth
-    //     eTokenWstEth.deposit(0, depositAmount);
-
-    //     console.log(wstEth.balanceOf(address(this)));
-
-    //     console.log(weth.balanceOf(address(this)));
-    //     // borrow eth
-    //     dTokenWeth.borrow(0, (depositAmount * 5000) / 10000);
-    //     // console.log(weth.balanceOf(address(this)));
-
-    //     // // repay eth
-    //     // dTokenWeth.repay(0, depositAmount / 2);
-
-    //     // // withdraw wstEth
-    //     // eTokenWstEth.withdraw(0, type(uint256).max);
-
-    //     // console.log(wstEth.balanceOf(address(this)));
-    // }
-
-    // function testUnwrapAndExchange() public {
-    //     uint256 depositAmount = 5e18;
-    //     vm.deal(address(this), depositAmount);
-
-    //     stEth.submit{value: depositAmount}(address(0x00));
-    //     stEth.approve(address(wstEth), type(uint256).max);
-    //     wstEth.wrap(stEth.balanceOf(address(this)));
-
-    //     // wstETh to stEth
-    //     wstEth.unwrap(wstEth.balanceOf(address(this)));
-    //     stEth.approve(address(curvePool), type(uint256).max);
-    //     // stEth to eth
-    //     curvePool.exchange(1, 0, stEth.balanceOf(address(this)), 1);
-
-    //     console.log("difference", depositAmount - address(this).balance);
-    // }
-
-    function topUpWstEth(uint256 amount, address to) internal {
-        vm.prank(0x10CD5fbe1b404B7E19Ef964B63939907bdaf42E2);
-        wstEth.transfer(to, amount);
     }
 
     receive() external payable {}

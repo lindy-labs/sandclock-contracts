@@ -136,47 +136,19 @@ contract scWETH is sc4626, IFlashLoanRecipient {
         _mint(treasury, fee.mulDivDown(1e18, convertToAssets(1e18)));
     }
 
-    // change the leverage used by the strategy
-    function changeLeverage(uint256 _flashLoanLtv) public onlyRole(KEEPER_ROLE) {
-        if (_flashLoanLtv >= ethWstEthMaxLtv) revert InvalidFlashLoanLtv();
-        uint256 currentLtv = getLtv(); // the current ltv at which we are borrowing
-
-        if (_flashLoanLtv > currentLtv) {
-            // leverage up
-            // (totalCollateralSupplied() * _flashLoanLtv - totalDebt()) / (1 - _flashLoanLtv)
-            uint256 flashLoanAmount =
-                (totalCollateralSupplied().mulWadDown(_flashLoanLtv) - totalDebt()).divWadDown(1e18 - _flashLoanLtv);
-
-            address[] memory tokens = new address[](1);
-            tokens[0] = address(weth);
-
-            uint256[] memory amounts = new uint256[](1);
-            amounts[0] = flashLoanAmount;
-
-            // take flashloan
-            balancerVault.flashLoan(address(this), tokens, amounts, abi.encode(true, 0));
-        } else if (_flashLoanLtv < currentLtv) {
-            // leverage down
-            uint256 flashLoanAmount =
-                (totalDebt() - totalCollateralSupplied().mulWadDown(_flashLoanLtv)).divWadDown(1e18 - _flashLoanLtv);
-
-            address[] memory tokens = new address[](1);
-            tokens[0] = address(weth);
-
-            uint256[] memory amounts = new uint256[](1);
-            amounts[0] = flashLoanAmount;
-
-            // take flashloan
-            balancerVault.flashLoan(address(this), tokens, amounts, abi.encode(false, 0));
+    // increase/decrease the net leverage used by the strategy
+    function changeLeverage(uint256 _targetLtv) public onlyRole(KEEPER_ROLE) {
+        if (_targetLtv >= ethWstEthMaxLtv) {
+            revert InvalidFlashLoanLtv();
         }
 
-        // change the global flashLoanLtv so that all future flashloans are taken at this new one
-        flashloanLtv = _flashLoanLtv;
+        flashloanLtv = _targetLtv;
+        _rebalancePosition();
     }
 
     // separate to save gas for users depositing
     function depositIntoStrategy() external onlyRole(KEEPER_ROLE) {
-        _depositIntoStrategy();
+        _rebalancePosition();
     }
 
     /// @param amount : amount of asset to withdraw into the vault
@@ -189,6 +161,9 @@ contract scWETH is sc4626, IFlashLoanRecipient {
     function totalAssets() public view override returns (uint256 assets) {
         // value of the supplied collateral in eth terms using chainlink oracle
         assets = totalCollateralSupplied();
+
+        // account for slippage losses
+        assets = assets.mulWadDown(slippageTolerance);
 
         // add float
         assets += asset.balanceOf(address(this));
@@ -213,14 +188,17 @@ contract scWETH is sc4626, IFlashLoanRecipient {
     }
 
     // returns the net LTV at which we have borrowed till now (1e18 = 100%)
-    function getLtv() public view returns (uint256) {
-        // totalDebt / totalSupplied
-        return totalDebt().divWadUp(totalCollateralSupplied());
+    function getLtv() public view returns (uint256 ltv) {
+        uint256 collateral = totalCollateralSupplied();
+        if (collateral > 0) {
+            // totalDebt / totalSupplied
+            ltv = totalDebt().divWadUp(collateral);
+        }
     }
 
     //////////////////// EXTERNAL METHODS //////////////////////////
 
-    // called after the flashLoan on _depositIntoStrategy
+    // called after the flashLoan on _rebalancePosition
     function receiveFlashLoan(address[] memory, uint256[] memory amounts, uint256[] memory, bytes memory userData)
         external
     {
@@ -261,7 +239,7 @@ contract scWETH is sc4626, IFlashLoanRecipient {
                 eToken.withdraw(0, type(uint256).max);
             } else {
                 dToken.repay(0, flashLoanAmount);
-                eToken.withdraw(0, _ethToWstEth(amount));
+                eToken.withdraw(0, _ethToWstEth(amount).divWadDown(slippageTolerance));
             }
 
             // unwrap wstETH
@@ -283,12 +261,20 @@ contract scWETH is sc4626, IFlashLoanRecipient {
 
     //////////////////// INTERNAL METHODS //////////////////////////
 
-    function _depositIntoStrategy() internal {
+    function _rebalancePosition() internal {
+        // storage loads
         uint256 amount = asset.balanceOf(address(this));
-
-        // calculate optimum weth to flashloan
         uint256 ltv = flashloanLtv;
-        uint256 flashLoanAmount = (amount * ltv) / (1e18 - ltv);
+        uint256 debt = totalDebt();
+        uint256 collateral = totalCollateralSupplied();
+
+        uint256 target = ltv.mulWadDown(amount + collateral);
+
+        // whether we should deposit or withdraw
+        bool deposit = target > debt;
+
+        // calculate the flashloan amount needed
+        uint256 flashLoanAmount = (deposit ? target - debt : debt - target).divWadDown(1e18 - ltv);
 
         address[] memory tokens = new address[](1);
         tokens[0] = address(weth);
@@ -297,7 +283,7 @@ contract scWETH is sc4626, IFlashLoanRecipient {
         amounts[0] = flashLoanAmount;
 
         // take flashloan
-        balancerVault.flashLoan(address(this), tokens, amounts, abi.encode(true, amount));
+        balancerVault.flashLoan(address(this), tokens, amounts, abi.encode(deposit, amount));
 
         // needed otherwise counted as profit during harvest
         totalInvested += amount;
@@ -305,9 +291,9 @@ contract scWETH is sc4626, IFlashLoanRecipient {
 
     function _withdrawToVault(uint256 amount) internal {
         uint256 ltv = getLtv();
-        // calculate the amount of weth that you have to flashloan to repay in order to withdraw 'amount' wstEth(collateral)
-        // uint256 flashLoanAmount = amount.mulWadDown(getLeverage() - 1e18);
-        uint256 flashLoanAmount = amount.mulDivUp(ltv, 1e18 - ltv);
+        uint256 debt = totalDebt();
+
+        uint256 flashLoanAmount = (debt - ltv.mulWadDown(amount)).divWadDown(1e18 - ltv);
 
         address[] memory tokens = new address[](1);
         tokens[0] = address(weth);
