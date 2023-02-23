@@ -6,8 +6,6 @@ import {WETH} from "solmate/tokens/WETH.sol";
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 import {IMarkets} from "../interfaces/euler/IMarkets.sol";
-import {IEulerEulDistributor} from "../interfaces/euler/IEulerEulDistributor.sol";
-
 import {AggregatorV3Interface} from "../interfaces/chainlink/AggregatorV3Interface.sol";
 import {IEulerDToken} from "../interfaces/euler/IEulerDToken.sol";
 import {IEulerEToken} from "../interfaces/euler/IEulerEToken.sol";
@@ -30,9 +28,6 @@ contract scUSDC is sc4626 {
     address public constant EULER = 0x27182842E098f60e3D576794A5bFFb0777E025d3;
     // EUL token
     ERC20 eul = ERC20(0xd9Fcd98c322942075A5C3860693e9f4f03AAE07b);
-    // EUL distributor
-    IEulerEulDistributor eulDistributor =
-        IEulerEulDistributor(0xd524E29E3BAF5BB085403Ca5665301E94387A7e2);
     // The Euler market contract
     IMarkets public constant markets =
         IMarkets(0x3520d5a913427E6F0D6A83E07ccD4A4da316e4d3);
@@ -165,31 +160,5 @@ contract scUSDC is sc4626 {
 
         // totalDebt / totalSupplied
         return debtPriceInUsdc.divWadUp(totalCollateralSupplied());
-    }
-
-    function harvest(
-        uint256 _claimable,
-        bytes32[] calldata _proof,
-        uint256 _eulAmount,
-        bytes calldata _eulSwapData
-    ) external onlyRole(KEEPER_ROLE) {
-        // claim EUL rewards
-        eulDistributor.claim(
-            address(this),
-            address(eul),
-            _claimable,
-            _proof,
-            address(0)
-        );
-
-        // swap EUL -> WETH
-        if (_eulAmount > 0) {
-            eul.safeApprove(xrouter, _eulAmount);
-            (bool success, ) = xrouter.call{value: 0}(_eulSwapData);
-            if (!success) revert StrategyEULSwapFailed();
-        }
-
-        // reinvest
-        _depositIntoStrategy();
     }
 }
