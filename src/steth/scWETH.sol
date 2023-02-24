@@ -16,10 +16,7 @@ import {AggregatorV3Interface} from "../interfaces/chainlink/AggregatorV3Interfa
 import {IVault} from "../interfaces/balancer/IVault.sol";
 import {IFlashLoanRecipient} from "../interfaces/balancer/IFlashLoanRecipient.sol";
 
-import {console} from "forge-std/console.sol";
-
-error InvalidEthWstEthMaxLtv();
-error InvalidFlashLoanLtv();
+error InvalidTargetLtv();
 error InvalidFlashLoanCaller();
 error InvalidSlippageTolerance();
 error AdminZeroAddress();
@@ -27,6 +24,10 @@ error AdminZeroAddress();
 contract scWETH is sc4626, IFlashLoanRecipient {
     using SafeTransferLib for ERC20;
     using FixedPointMathLib for uint256;
+
+    event SlippageToleranceUpdated(address indexed user, uint256 newSlippageTolerance);
+    event TargetLtvRatioUpdated(address indexed user, uint256 newTargetLtv);
+    event Harvest(uint256 profitSinceLastHarvest, uint256 performanceFee);
 
     address public constant EULER = 0x27182842E098f60e3D576794A5bFFb0777E025d3;
 
@@ -62,25 +63,16 @@ contract scWETH is sc4626, IFlashLoanRecipient {
     uint256 public totalProfit;
 
     // The max loan to value(ltv) ratio for borrowing eth on euler with wsteth as collateral for the flashloan
-    uint256 public immutable ethWstEthMaxLtv;
+    uint256 public immutable ethWstEthMaxLtv = 0.7735e18;
 
-    // the ltv at which we actually borrow (<= ethWstEthMaxLtv)
-    uint256 public flashloanLtv;
+    // the target ltv ratio at which we actually borrow (<= ethWstEthMaxLtv)
+    uint256 public targetLtv = 0.5e18;
 
     // slippage for curve swaps
-    uint256 public slippageTolerance;
+    uint256 public slippageTolerance = 0.99e18;
 
-    constructor(address _admin, uint256 _ethWstEthMaxLtv, uint256 _flashloanLtv, uint256 _slippageTolerance)
-        sc4626(_admin, ERC20(address(weth)), "Sandclock WETH Vault", "scWETH")
-    {
+    constructor(address _admin) sc4626(_admin, ERC20(address(weth)), "Sandclock WETH Vault", "scWETH") {
         if (_admin == address(0)) revert AdminZeroAddress();
-        if (_ethWstEthMaxLtv > 1e18) revert InvalidEthWstEthMaxLtv();
-        if (_flashloanLtv >= _ethWstEthMaxLtv) revert InvalidFlashLoanLtv();
-        if (_slippageTolerance > 1e18) revert InvalidSlippageTolerance();
-
-        ethWstEthMaxLtv = _ethWstEthMaxLtv;
-        flashloanLtv = _flashloanLtv;
-        slippageTolerance = _slippageTolerance;
 
         ERC20(address(stEth)).safeApprove(address(wstETH), type(uint256).max);
         ERC20(address(stEth)).safeApprove(address(curvePool), type(uint256).max);
@@ -88,6 +80,12 @@ contract scWETH is sc4626, IFlashLoanRecipient {
         ERC20(address(weth)).safeApprove(EULER, type(uint256).max);
         // Enter the euler collateral market (collateral's address, *not* the eToken address) ,
         markets.enterMarket(0, address(wstETH));
+    }
+
+    function setSlippageTolerance(uint256 newSlippageTolerance) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (newSlippageTolerance <= 1e18) revert InvalidSlippageTolerance();
+        slippageTolerance = newSlippageTolerance;
+        emit SlippageToleranceUpdated(msg.sender, newSlippageTolerance);
     }
 
     /////////////////// ADMIN/KEEPER METHODS //////////////////////////////////
@@ -106,15 +104,17 @@ contract scWETH is sc4626, IFlashLoanRecipient {
 
         // mint equivalent amount of tokens to the performance fee beneficiary ie the treasury
         _mint(treasury, fee.mulDivDown(1e18, convertToAssets(1e18)));
+
+        emit Harvest(profit, fee);
     }
 
     // increase/decrease the net leverage used by the strategy
-    function changeLeverage(uint256 _targetLtv) public onlyRole(KEEPER_ROLE) {
-        if (_targetLtv >= ethWstEthMaxLtv) {
-            revert InvalidFlashLoanLtv();
-        }
+    function changeLeverage(uint256 newTargetLtv) public onlyRole(KEEPER_ROLE) {
+        if (newTargetLtv >= ethWstEthMaxLtv) revert InvalidTargetLtv();
 
-        flashloanLtv = _targetLtv;
+        targetLtv = newTargetLtv;
+        emit TargetLtvRatioUpdated(msg.sender, newTargetLtv);
+
         _rebalancePosition();
     }
 
@@ -240,7 +240,7 @@ contract scWETH is sc4626, IFlashLoanRecipient {
     function _rebalancePosition() internal {
         // storage loads
         uint256 amount = asset.balanceOf(address(this));
-        uint256 ltv = flashloanLtv;
+        uint256 ltv = targetLtv;
         uint256 debt = totalDebt();
         uint256 collateral = totalCollateralSupplied();
 
@@ -258,11 +258,11 @@ contract scWETH is sc4626, IFlashLoanRecipient {
         uint256[] memory amounts = new uint256[](1);
         amounts[0] = flashLoanAmount;
 
-        // take flashloan
-        balancerVault.flashLoan(address(this), tokens, amounts, abi.encode(deposit, amount));
-
         // needed otherwise counted as profit during harvest
         totalInvested += amount;
+
+        // take flashloan
+        balancerVault.flashLoan(address(this), tokens, amounts, abi.encode(deposit, amount));
     }
 
     function _withdrawToVault(uint256 amount) internal {

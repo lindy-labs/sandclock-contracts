@@ -19,9 +19,6 @@ contract scWETHTest is Test {
     using FixedPointMathLib for uint256;
 
     uint256 mainnetFork;
-    uint256 constant ethWstEthMaxLtv = 0.7735e18;
-    uint256 constant flashLoanLtv = 0.5e18;
-    uint256 constant slippageTolerance = 0.99e18;
 
     // dummy users
     address constant alice = address(0x06);
@@ -37,18 +34,16 @@ contract scWETHTest is Test {
     IEulerDToken dTokenWeth;
     IMarkets markets;
     ICurvePool curvePool;
+    uint256 slippageTolerance;
+    uint256 ethWstEthMaxLtv;
+    uint256 targetLtv;
 
     function setUp() public {
         vm.createFork(vm.envString("RPC_URL_MAINNET"));
         vm.selectFork(mainnetFork);
         vm.rollFork(16691971);
 
-        vault = new Vault(
-            address(this),
-            ethWstEthMaxLtv,
-            flashLoanLtv,
-            slippageTolerance
-        );
+        vault = new Vault(address(this));
 
         // set vault eth balance to zero
         vm.deal(address(vault), 0);
@@ -56,6 +51,10 @@ contract scWETHTest is Test {
         weth = vault.weth();
         stEth = vault.stEth();
         wstEth = vault.wstETH();
+
+        slippageTolerance = vault.slippageTolerance();
+        ethWstEthMaxLtv = vault.ethWstEthMaxLtv();
+        targetLtv = vault.targetLtv();
 
         eTokenWstEth = vault.eToken();
         dTokenWeth = vault.dToken();
