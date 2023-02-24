@@ -29,7 +29,7 @@ jobs:
       - name: Install Dependencies
         run: |
           forge --version
-          forge install
+          FOUNDRY_PROFILE=ci forge install
         id: dependencies
 
       - name: Run Forge build
