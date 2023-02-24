@@ -16,6 +16,11 @@ jobs:
 
     name: Foundry project
     runs-on: ubuntu-latest
+    
+    env:
+      RPC_URL_MAINNET: ${{ secrets.RPC_URL_MAINNET }}
+      RPC_URL_GOERLI: ${{ secrets.RPC_URL_GOERLI }}
+    
     steps:
       - uses: actions/checkout@v3
         with:
