@@ -14,11 +14,15 @@ import {sc4626} from "../sc4626.sol";
 
 import "forge-std/console2.sol";
 
+// TODOs: 1. add events
+//        2. add leverage up/down & rebalancing?
+//        3. harvest euler rewards
+//        3. add tests
 contract scUSDC is sc4626 {
     using SafeTransferLib for ERC20;
     using FixedPointMathLib for uint256;
 
-    error StrategyEULSwapFailed();
+    error InvalidUsdcWethTargetLtv();
 
     WETH public constant weth = WETH(payable(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2));
     ERC20 public constant usdc = ERC20(0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48);
@@ -42,6 +46,7 @@ contract scUSDC is sc4626 {
 
     ERC4626 public immutable scWETH;
     uint256 public immutable usdcWethMaxLtv = 0.81e18;
+    uint256 public usdcWethTargetLtv = 0.65e18;
 
     constructor(address _admin, ERC4626 _scWETH) sc4626(_admin, usdc, "Sandclock USDC Vault", "scUSDC") {
         scWETH = _scWETH;
@@ -53,7 +58,14 @@ contract scUSDC is sc4626 {
         markets.enterMarket(0, address(usdc));
     }
 
+    function setUsdcWethTargetLtv(uint256 _usdcWethTargetLtv) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (_usdcWethTargetLtv > usdcWethMaxLtv || _usdcWethTargetLtv == 0) revert InvalidUsdcWethTargetLtv();
+
+        usdcWethTargetLtv = _usdcWethTargetLtv;
+    }
+
     function totalAssets() public view override returns (uint256) {
+        uint256 float = asset.balanceOf(address(this));
         uint256 collateral = eToken.balanceOfUnderlying(address(this));
 
         uint256 wethDebt = dToken.balanceOf(address(this));
@@ -62,7 +74,7 @@ contract scUSDC is sc4626 {
         uint256 wethInvested = scWETH.convertToAssets(scWETH.balanceOf(address(this)));
         uint256 investedInUsdc = getUsdcFromWeth(wethInvested);
 
-        return asset.balanceOf(address(this)) + collateral + investedInUsdc - debtInUsdc;
+        return float + collateral + investedInUsdc - debtInUsdc;
     }
 
     function getUsdcFromWeth(uint256 _wethAmount) public view returns (uint256) {
@@ -77,21 +89,25 @@ contract scUSDC is sc4626 {
         return (_usdcAmount * 1e12).mulWadDown(uint256(usdcPriceInWeth));
     }
 
-    function afterDeposit(uint256, uint256) internal override {}
-
     function beforeWithdraw(uint256 _assets, uint256) internal override {
-        // need to make usdc available for withdrawal
-        uint256 wethDebt = dToken.balanceOf(address(this));
-        uint256 collateral = eToken.balanceOfUnderlying(address(this));
+        uint256 usdcBalance = asset.balanceOf(address(this));
+        // if we have enough assets, we don't need to withdraw from euler
+        if (_assets <= usdcBalance) return;
+
+        // if we don't have enough assets, we need to withdraw what's missing from euler
+        uint256 floatRequired = totalAssets().mulWadUp(1e18 - floatPercentage);
+        uint256 usdcToWithdraw = _assets + floatRequired - usdcBalance;
 
         // to keep the same ltv, weth debt to repay has to be proporitional to collateral withdrawn
-        uint256 wethNeeded = _assets.mulWadUp(wethDebt).divWadUp(collateral);
+        uint256 wethDebt = dToken.balanceOf(address(this));
+        uint256 collateral = eToken.balanceOfUnderlying(address(this));
+        uint256 wethNeeded = usdcToWithdraw.mulWadUp(wethDebt).divWadUp(collateral);
 
-        scWETH.withdraw(scWETH.convertToShares(wethNeeded), address(this), address(this));
+        scWETH.withdraw(wethNeeded, address(this), address(this));
 
         // repay debt and take out collateral on euler
         dToken.repay(0, wethNeeded);
-        eToken.withdraw(0, _assets);
+        eToken.withdraw(0, usdcToWithdraw);
     }
 
     // @dev: access control not needed, this is only separate to save
@@ -103,25 +119,34 @@ contract scUSDC is sc4626 {
     function _depositIntoStrategy() internal {
         uint256 currentLtv = getLtv();
 
-        if (currentLtv == 0) currentLtv = usdcWethMaxLtv;
+        if (currentLtv == 0) currentLtv = usdcWethTargetLtv;
 
         // supply usdc collateral to euler
         uint256 usdcBalance = asset.balanceOf(address(this));
-        eToken.deposit(0, usdcBalance);
+        uint256 floatRequired = totalAssets().mulWadUp(1e18 - floatPercentage);
+
+        if (usdcBalance < floatRequired) {
+            // we have enough balance to deposit
+            return;
+        }
+
+        uint256 depositAmount = usdcBalance - floatRequired;
+
+        eToken.deposit(0, depositAmount);
 
         // borrow weth from euler
-        uint256 wethToBorrow = currentLtv.mulWadUp(getWethFromUsdc(usdcBalance));
+        uint256 wethToBorrow = currentLtv.mulWadUp(getWethFromUsdc(depositAmount));
         dToken.borrow(0, wethToBorrow);
 
         scWETH.deposit(wethToBorrow, address(this));
     }
 
-    // total wstETH supplied as collateral (in ETH terms)
+    // total USDC supplied as collateral to euler
     function totalCollateralSupplied() public view returns (uint256) {
         return eToken.balanceOfUnderlying(address(this));
     }
 
-    // total eth borrowed
+    // total eth borrowed from euler
     function totalDebt() public view returns (uint256) {
         return dToken.balanceOf(address(this));
     }
