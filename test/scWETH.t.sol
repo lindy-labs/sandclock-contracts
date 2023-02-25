@@ -213,6 +213,12 @@ contract scWETHTest is Test {
         assertApproxEqRel(vault.getLtv(), newLtv, 0.011e18, "leverage change failed");
     }
 
+    function testHarvest() public {
+        // simulate wstETH supply interest to EULER
+
+        // simulate weth borrow interest on EULER
+    }
+
     function depositToVault(address user, uint256 amount) public returns (uint256 shares) {
         vm.deal(user, amount);
         vm.startPrank(user);
