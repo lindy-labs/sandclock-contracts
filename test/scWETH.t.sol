@@ -219,19 +219,15 @@ contract scWETHTest is Test {
         stEth.approve(address(curvePool), type(uint256).max);
         wstEth.approve(EULER, type(uint256).max);
         weth.approve(EULER, type(uint256).max);
-
         stEth.submit{value: amount}(address(0));
-
         wstEth.wrap(stEth.balanceOf(address(this)));
-
-        // add wstETH liquidity on Euler
         eTokenWstEth.deposit(0, wstEth.balanceOf(address(this)));
 
-        // borrow enough weth from Euler to payback flashloan
+        // borrow at max ltv should fail
         vm.expectRevert("e/collateral-violation");
         dTokenWeth.borrow(0, amount.mulWadDown(ethWstEthMaxLtv));
 
-        // should pass without errors
+        // borrow at a little less than maxLtv should pass without errors
         dTokenWeth.borrow(0, amount.mulWadDown(ethWstEthMaxLtv - 1e17));
     }
 
