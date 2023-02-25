@@ -10,10 +10,8 @@ import {scWETH as Vault} from "../src/steth/scWETH.sol";
 import {WETH} from "solmate/tokens/WETH.sol";
 import {ILido} from "../src/interfaces/lido/ILido.sol";
 import {IwstETH} from "../src/interfaces/lido/IwstETH.sol";
-import {IEulerDToken} from "../src/interfaces/euler/IEulerDToken.sol";
-import {IEulerEToken} from "../src/interfaces/euler/IEulerEToken.sol";
-import {IMarkets} from "../src/interfaces/euler/IMarkets.sol";
 import {ICurvePool} from "../src/interfaces/curve/ICurvePool.sol";
+import {IEulerDToken, IEulerEToken, IEulerMarkets} from "euler/IEuler.sol";
 
 contract scWETHTest is Test {
     using FixedPointMathLib for uint256;
@@ -32,7 +30,7 @@ contract scWETHTest is Test {
     IwstETH wstEth;
     IEulerEToken eTokenWstEth;
     IEulerDToken dTokenWeth;
-    IMarkets markets;
+    IEulerMarkets markets;
     ICurvePool curvePool;
     uint256 slippageTolerance;
     uint256 ethWstEthMaxLtv;

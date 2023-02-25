@@ -6,12 +6,10 @@ import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 import {WETH} from "solmate/tokens/WETH.sol";
 import {sc4626} from "../sc4626.sol";
-import {IEulerDToken} from "../interfaces/euler/IEulerDToken.sol";
-import {IEulerEToken} from "../interfaces/euler/IEulerEToken.sol";
+import {IEulerDToken, IEulerEToken, IEulerMarkets} from "euler/IEuler.sol";
 import {ICurvePool} from "../interfaces/curve/ICurvePool.sol";
 import {ILido} from "../interfaces/lido/ILido.sol";
 import {IwstETH} from "../interfaces/lido/IwstETH.sol";
-import {IMarkets} from "../interfaces/euler/IMarkets.sol";
 import {AggregatorV3Interface} from "../interfaces/chainlink/AggregatorV3Interface.sol";
 import {IVault} from "../interfaces/balancer/IVault.sol";
 import {IFlashLoanRecipient} from "../interfaces/balancer/IFlashLoanRecipient.sol";
@@ -32,7 +30,7 @@ contract scWETH is sc4626, IFlashLoanRecipient {
     address public constant EULER = 0x27182842E098f60e3D576794A5bFFb0777E025d3;
 
     // The Euler market contract
-    IMarkets public constant markets = IMarkets(0x3520d5a913427E6F0D6A83E07ccD4A4da316e4d3);
+    IEulerMarkets public constant markets = IEulerMarkets(0x3520d5a913427E6F0D6A83E07ccD4A4da316e4d3);
 
     // Euler supply token for wstETH (ewstETH)
     IEulerEToken public constant eToken = IEulerEToken(0xbd1bd5C956684f7EB79DA40f582cbE1373A1D593);
