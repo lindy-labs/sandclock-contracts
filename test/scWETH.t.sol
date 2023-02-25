@@ -11,7 +11,7 @@ import {WETH} from "solmate/tokens/WETH.sol";
 import {ILido} from "../src/interfaces/lido/ILido.sol";
 import {IwstETH} from "../src/interfaces/lido/IwstETH.sol";
 import {ICurvePool} from "../src/interfaces/curve/ICurvePool.sol";
-import {IEulerDToken, IEulerEToken, IEulerMarkets} from "euler/IEuler.sol";
+import {IEulerDToken, IEulerEToken, IEulerMarkets, IEuler} from "euler/IEuler.sol";
 
 contract scWETHTest is Test {
     using FixedPointMathLib for uint256;
@@ -209,6 +209,30 @@ contract scWETHTest is Test {
         vault.changeLeverage(newLtv);
         console.log("vault.getLtv()", vault.getLtv());
         assertApproxEqRel(vault.getLtv(), newLtv, 0.011e18, "leverage change failed");
+    }
+
+    function testBorrowOverMaxLtvFail(uint256 amount) public {
+        amount = bound(amount, 1e5, 1e21);
+        vm.deal(address(this), amount);
+
+        stEth.approve(address(wstEth), type(uint256).max);
+        stEth.approve(address(curvePool), type(uint256).max);
+        wstEth.approve(EULER, type(uint256).max);
+        weth.approve(EULER, type(uint256).max);
+
+        stEth.submit{value: amount}(address(0));
+
+        wstEth.wrap(stEth.balanceOf(address(this)));
+
+        // add wstETH liquidity on Euler
+        eTokenWstEth.deposit(0, wstEth.balanceOf(address(this)));
+
+        // borrow enough weth from Euler to payback flashloan
+        vm.expectRevert("e/collateral-violation");
+        dTokenWeth.borrow(0, amount.mulWadDown(ethWstEthMaxLtv));
+
+        // should pass without errors
+        dTokenWeth.borrow(0, amount.mulWadDown(ethWstEthMaxLtv - 1e17));
     }
 
     function testHarvest() public {

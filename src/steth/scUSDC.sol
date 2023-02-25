@@ -4,8 +4,6 @@ pragma solidity ^0.8.10;
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
-import {IEulerDToken} from "../interfaces/euler/IEulerDToken.sol";
-import {IEulerEToken} from "../interfaces/euler/IEulerEToken.sol";
 import {ERC4626} from "solmate/mixins/ERC4626.sol";
 import {sc4626} from "../sc4626.sol";
 
