@@ -228,7 +228,7 @@ contract scWETHTest is Test {
         dTokenWeth.borrow(0, amount.mulWadDown(ethWstEthMaxLtv));
 
         // borrow at a little less than maxLtv should pass without errors
-        dTokenWeth.borrow(0, amount.mulWadDown(ethWstEthMaxLtv - 1e17));
+        dTokenWeth.borrow(0, amount.mulWadDown(ethWstEthMaxLtv - 1e16));
     }
 
     function testHarvest() public {
