@@ -233,8 +233,20 @@ contract scWETHTest is Test {
 
     function testHarvest() public {
         // simulate wstETH supply interest to EULER
+        uint256 amount = 100 ether;
+        depositToVault(address(this), amount);
+        vault.depositIntoStrategy();
 
-        // simulate weth borrow interest on EULER
+        uint256 initVaultBalance = vault.totalCollateralSupplied();
+        uint256 initDebt = vault.totalDebt();
+
+        vm.warp(block.timestamp + 365 days);
+
+        // vault.harvest();
+
+        console.log(vault.totalCollateralSupplied() - initVaultBalance);
+        console.log(vault.totalDebt() - initDebt);
+        // console.log(vault.totalProfit());
     }
 
     function depositToVault(address user, uint256 amount) public returns (uint256 shares) {
