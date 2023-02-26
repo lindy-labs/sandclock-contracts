@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-pragma solidity ^0.8.10;
+pragma solidity ^0.8.13;
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {WETH} from "solmate/tokens/WETH.sol";
@@ -11,6 +11,7 @@ import {IEulerDToken} from "../interfaces/euler/IEulerDToken.sol";
 import {IEulerEToken} from "../interfaces/euler/IEulerEToken.sol";
 import {ERC4626} from "solmate/mixins/ERC4626.sol";
 import {sc4626} from "../sc4626.sol";
+import {ISwapRouter} from "../interfaces/uniswap/ISwapRouter.sol";
 
 import "forge-std/console2.sol";
 
@@ -38,6 +39,9 @@ contract scUSDC is sc4626 {
     // Euler debt token for WETH (dWETH)
     IEulerDToken public constant dToken = IEulerDToken(0x62e28f054efc24b26A794F5C1249B6349454352C);
 
+    // Uniswap V3 router
+    ISwapRouter public constant swapRouter = ISwapRouter(0xE592427A0AEce92De3Edee1F18E0157C05861564);
+
     // 0x swap router
     address xrouter = 0xDef1C0ded9bec7F1a1670819833240f027b25EfF;
 
@@ -55,6 +59,7 @@ contract scUSDC is sc4626 {
         usdc.approve(EULER, type(uint256).max);
 
         weth.approve(EULER, type(uint256).max);
+        weth.approve(address(swapRouter), type(uint256).max);
         weth.approve(address(_scWETH), type(uint256).max);
 
         markets.enterMarket(0, address(usdc));
@@ -100,26 +105,32 @@ contract scUSDC is sc4626 {
         // if we don't have enough assets, we need to withdraw what's missing from scWETH & euler
         uint256 floatRequired = (totalAssets() - _assets).mulWadUp(1e18 - floatPercentage);
         uint256 usdcToWithdraw = _assets + floatRequired - balance;
-        uint256 wethToWithdraw = getWethFromUsdc(usdcToWithdraw);
 
         // to keep the same ltv, weth debt to repay has to be proporitional to collateral withdrawn
         uint256 wethDebt = totalDebt();
         uint256 wethInvested = scWETH.convertToAssets(scWETH.balanceOf(address(this)));
-        // TODO: check if this is correct, can we have more debt than invested?
-        if (wethInvested > wethDebt) {
-            // this means we can sell some weth we earned to get usdc
-            uint256 wethToSell = wethInvested - wethDebt;
-            if (wethToSell > wethToWithdraw) wethToSell = wethToWithdraw;
 
-            // now withdraw weth, sell and return  if we had enough;
-            // if not, update usdcToWithdraw by the amount we got from selling
+        if (wethInvested > wethDebt) {
+            uint256 wethProfit = wethInvested - wethDebt;
+            uint256 wethToWithdraw = usdcToWithdraw.mulWadUp(wethDebt).divWadUp(wethInvested);
+
+            if (wethProfit >= wethToWithdraw) {
+                // we can sell all weth
+                scWETH.withdraw(wethToWithdraw, address(this), address(this));
+                _swapWethForUSDC(wethToWithdraw);
+                return;
+            }
+
+            // sell some and take rest to repay debt on euler
+            scWETH.withdraw(wethProfit, address(this), address(this));
+            uint256 usdcAmountOut = _swapWethForUSDC(wethProfit);
+            usdcToWithdraw -= usdcAmountOut;
         }
 
-        // at this point we need weth to repay debt withdraw usdc from euler
+        // at this point we need more weth to repay debt withdraw usdc collateral from euler
         uint256 collateral = totalCollateralSupplied();
         uint256 wethNeeded = usdcToWithdraw.mulWadUp(wethDebt).divWadUp(collateral);
 
-        // TODO: reconsider this, we might not need to withdraw all the weth
         scWETH.withdraw(wethNeeded, address(this), address(this));
 
         // repay debt and take out collateral on euler
@@ -217,5 +228,23 @@ contract scUSDC is sc4626 {
 
         // totalDebt / totalSupplied
         return debtPriceInUsdc.divWadUp(totalCollateralSupplied());
+    }
+
+    function _swapWethForUSDC(uint256 _wethAmount) internal returns (uint256 amountOut) {
+        // TODO: amount out min
+        uint256 amountOutMin = 0;
+
+        ISwapRouter.ExactInputSingleParams memory params = ISwapRouter.ExactInputSingleParams({
+            tokenIn: address(weth),
+            tokenOut: address(asset),
+            fee: 500,
+            recipient: address(this),
+            deadline: block.timestamp,
+            amountIn: _wethAmount,
+            amountOutMinimum: amountOutMin,
+            sqrtPriceLimitX96: 0
+        });
+
+        amountOut = swapRouter.exactInputSingle(params);
     }
 }
