@@ -17,7 +17,8 @@ import "forge-std/console2.sol";
 // TODOs: 1. add events
 //        2. add leverage up/down & rebalancing?
 //        3. harvest euler rewards
-//        3. add tests
+//        4. add tests
+//        5. add code styile guidelines docs
 contract scUSDC is sc4626 {
     using SafeTransferLib for ERC20;
     using FixedPointMathLib for uint256;
@@ -45,6 +46,7 @@ contract scUSDC is sc4626 {
         AggregatorV3Interface(0x986b5E1e1755e3C2440e960477f25201B0a8bbD4);
 
     ERC4626 public immutable scWETH;
+    // TODO: see if this can change
     uint256 public immutable usdcWethMaxLtv = 0.81e18;
     uint256 public usdcWethTargetLtv = 0.65e18;
 
@@ -58,17 +60,18 @@ contract scUSDC is sc4626 {
         markets.enterMarket(0, address(usdc));
     }
 
-    function setUsdcWethTargetLtv(uint256 _usdcWethTargetLtv) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function setUsdcWethTargetLtvAndRebalance(uint256 _usdcWethTargetLtv) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (_usdcWethTargetLtv > usdcWethMaxLtv || _usdcWethTargetLtv == 0) revert InvalidUsdcWethTargetLtv();
 
         usdcWethTargetLtv = _usdcWethTargetLtv;
+        rebalance();
     }
 
     function totalAssets() public view override returns (uint256) {
-        uint256 float = asset.balanceOf(address(this));
+        uint256 float = usdcBalance();
         uint256 collateral = eToken.balanceOfUnderlying(address(this));
 
-        uint256 wethDebt = dToken.balanceOf(address(this));
+        uint256 wethDebt = totalDebt();
         uint256 debtInUsdc = getUsdcFromWeth(wethDebt);
 
         uint256 wethInvested = scWETH.convertToAssets(scWETH.balanceOf(address(this)));
@@ -90,19 +93,33 @@ contract scUSDC is sc4626 {
     }
 
     function beforeWithdraw(uint256 _assets, uint256) internal override {
-        uint256 usdcBalance = asset.balanceOf(address(this));
+        uint256 balance = usdcBalance();
         // if we have enough assets, we don't need to withdraw from euler
-        if (_assets <= usdcBalance) return;
+        if (_assets <= balance) return;
 
-        // if we don't have enough assets, we need to withdraw what's missing from euler
-        uint256 floatRequired = totalAssets().mulWadUp(1e18 - floatPercentage);
-        uint256 usdcToWithdraw = _assets + floatRequired - usdcBalance;
+        // if we don't have enough assets, we need to withdraw what's missing from scWETH & euler
+        uint256 floatRequired = (totalAssets() - _assets).mulWadUp(1e18 - floatPercentage);
+        uint256 usdcToWithdraw = _assets + floatRequired - balance;
+        uint256 wethToWithdraw = getWethFromUsdc(usdcToWithdraw);
 
         // to keep the same ltv, weth debt to repay has to be proporitional to collateral withdrawn
-        uint256 wethDebt = dToken.balanceOf(address(this));
-        uint256 collateral = eToken.balanceOfUnderlying(address(this));
+        uint256 wethDebt = totalDebt();
+        uint256 wethInvested = scWETH.convertToAssets(scWETH.balanceOf(address(this)));
+        // TODO: check if this is correct, can we have more debt than invested?
+        if (wethInvested > wethDebt) {
+            // this means we can sell some weth we earned to get usdc
+            uint256 wethToSell = wethInvested - wethDebt;
+            if (wethToSell > wethToWithdraw) wethToSell = wethToWithdraw;
+
+            // now withdraw weth, sell and return  if we had enough;
+            // if not, update usdcToWithdraw by the amount we got from selling
+        }
+
+        // at this point we need weth to repay debt withdraw usdc from euler
+        uint256 collateral = totalCollateralSupplied();
         uint256 wethNeeded = usdcToWithdraw.mulWadUp(wethDebt).divWadUp(collateral);
 
+        // TODO: reconsider this, we might not need to withdraw all the weth
         scWETH.withdraw(wethNeeded, address(this), address(this));
 
         // repay debt and take out collateral on euler
@@ -113,7 +130,8 @@ contract scUSDC is sc4626 {
     // @dev: access control not needed, this is only separate to save
     // gas for users depositing, ultimately controlled by float %
     function depositIntoStrategy() external {
-        _depositIntoStrategy();
+        // _depositIntoStrategy();
+        rebalance();
     }
 
     function _depositIntoStrategy() internal {
@@ -122,23 +140,61 @@ contract scUSDC is sc4626 {
         if (currentLtv == 0) currentLtv = usdcWethTargetLtv;
 
         // supply usdc collateral to euler
-        uint256 usdcBalance = asset.balanceOf(address(this));
+        uint256 balance = usdcBalance();
         uint256 floatRequired = totalAssets().mulWadUp(1e18 - floatPercentage);
 
-        if (usdcBalance < floatRequired) {
+        if (balance < floatRequired) {
             // we have enough balance to deposit
             return;
         }
 
-        uint256 depositAmount = usdcBalance - floatRequired;
+        uint256 depositAmount = balance - floatRequired;
 
         eToken.deposit(0, depositAmount);
 
-        // borrow weth from euler
+        // borrow weth on euler
         uint256 wethToBorrow = currentLtv.mulWadUp(getWethFromUsdc(depositAmount));
         dToken.borrow(0, wethToBorrow);
 
         scWETH.deposit(wethToBorrow, address(this));
+    }
+
+    function rebalance() public {
+        // first deposit if there is anything to deposit
+        uint256 balance = usdcBalance();
+        uint256 floatRequired = totalAssets().mulWadUp(1e18 - floatPercentage);
+        if (balance > floatRequired) {
+            eToken.deposit(0, balance - floatRequired);
+        }
+
+        // second check ltv and see if we need to rebalance
+        uint256 currentDebt = totalDebt();
+        uint256 targetDebt = getWethFromUsdc(totalCollateralSupplied().mulWadDown(usdcWethTargetLtv));
+
+        // ToDO: add some tollarance when comparing ltvs, for ex 0.1%
+        if (currentDebt > targetDebt) {
+            // we need to withdraw weth from scWETH and repay debt on euler
+            uint256 delta = currentDebt - targetDebt;
+
+            scWETH.withdraw(delta, address(this), address(this));
+            dToken.repay(0, delta);
+        } else if (currentDebt < targetDebt) {
+            // we need to borrow more weth on euler and deposit it in scWETH
+            uint256 delta = targetDebt - currentDebt;
+
+            dToken.borrow(0, delta);
+            scWETH.deposit(delta, address(this));
+        }
+    }
+
+    function harvest() public {
+        // get euler rewards and swap to usdc
+
+        rebalance();
+    }
+
+    function usdcBalance() public view returns (uint256) {
+        return asset.balanceOf(address(this));
     }
 
     // total USDC supplied as collateral to euler
@@ -146,12 +202,12 @@ contract scUSDC is sc4626 {
         return eToken.balanceOfUnderlying(address(this));
     }
 
-    // total eth borrowed from euler
+    // total eth borrowed on euler
     function totalDebt() public view returns (uint256) {
         return dToken.balanceOf(address(this));
     }
 
-    // returns the net LTV at which we have borrowed till now (1e18 = 100%)
+    // returns the net LTV at which we have borrowed untill now (1e18 = 100%)
     function getLtv() public view returns (uint256) {
         uint256 debt = totalDebt();
 
