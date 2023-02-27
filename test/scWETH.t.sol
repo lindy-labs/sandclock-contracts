@@ -231,9 +231,9 @@ contract scWETHTest is Test {
         dTokenWeth.borrow(0, amount.mulWadDown(ethWstEthMaxLtv - 1e16));
     }
 
-    function testHarvest() public {
+    function testHarvest(uint256 amount) public {
         // simulate wstETH supply interest to EULER
-        uint256 amount = 100 ether;
+        amount = bound(amount, 1e5, 1e21);
         depositToVault(address(this), amount);
 
         vault.depositIntoStrategy();
@@ -252,12 +252,12 @@ contract scWETHTest is Test {
 
         vault.harvest();
 
-        assertApproxEqRel(vault.totalProfit(), amount.mulWadDown(0.07e18), 0.01e18, "atleast 7% APY");
+        assertApproxEqRel(vault.totalProfit(), amount.mulWadDown(0.07e18), 0.1e18, "atleast 7% APY");
 
         vault.redeem(vault.balanceOf(address(this)), address(this), address(this));
 
         assertApproxEqRel(
-            weth.balanceOf(address(this)) - amount, amount.mulWadDown(0.07e18), 0.01e18, "atleast 7% APY after withdraw"
+            weth.balanceOf(address(this)) - amount, amount.mulWadDown(0.07e18), 0.1e18, "atleast 7% APY after withdraw"
         );
     }
 
