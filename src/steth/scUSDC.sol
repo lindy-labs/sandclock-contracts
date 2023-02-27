@@ -43,7 +43,7 @@ contract scUSDC is sc4626 {
     ISwapRouter public constant swapRouter = ISwapRouter(0xE592427A0AEce92De3Edee1F18E0157C05861564);
 
     // 0x swap router
-    address xrouter = 0xDef1C0ded9bec7F1a1670819833240f027b25EfF;
+    address constant xrouter = 0xDef1C0ded9bec7F1a1670819833240f027b25EfF;
 
     // Chainlink pricefeed (USDC -> WETH)
     AggregatorV3Interface public constant usdcToEthPriceFeed =
