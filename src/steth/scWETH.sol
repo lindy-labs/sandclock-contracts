@@ -49,7 +49,7 @@ contract scWETH is sc4626, IFlashLoanRecipient {
     ILido public constant stEth = ILido(0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84);
 
     // 0x swap router
-    address xrouter = 0xDef1C0ded9bec7F1a1670819833240f027b25EfF;
+    address constant xrouter = 0xDef1C0ded9bec7F1a1670819833240f027b25EfF;
 
     // EUL token
     ERC20 eul = ERC20(0xd9Fcd98c322942075A5C3860693e9f4f03AAE07b);
