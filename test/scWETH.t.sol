@@ -235,18 +235,30 @@ contract scWETHTest is Test {
         // simulate wstETH supply interest to EULER
         uint256 amount = 100 ether;
         depositToVault(address(this), amount);
+
         vault.depositIntoStrategy();
 
-        uint256 initVaultBalance = vault.totalCollateralSupplied();
-        uint256 initDebt = vault.totalDebt();
-
+        // fast forward time to simulate supply and borrow interests
         vm.warp(block.timestamp + 365 days);
+        // 5% increase in stETH contract eth balance to simulate profits from Lido staking
+        uint256 prevBalance = stEth.getTotalPooledEther();
+        vm.store(
+            address(stEth),
+            keccak256(abi.encodePacked("lido.Lido.beaconBalance")),
+            bytes32(prevBalance.mulWadDown(1.05e18))
+        );
 
-        // vault.harvest();
+        assertEq(vault.totalProfit(), 0);
 
-        console.log(vault.totalCollateralSupplied() - initVaultBalance);
-        console.log(vault.totalDebt() - initDebt);
-        // console.log(vault.totalProfit());
+        vault.harvest();
+
+        assertApproxEqRel(vault.totalProfit(), amount.mulWadDown(0.07e18), 0.01e18, "atleast 7% APY");
+
+        vault.redeem(vault.balanceOf(address(this)), address(this), address(this));
+
+        assertApproxEqRel(
+            weth.balanceOf(address(this)) - amount, amount.mulWadDown(0.07e18), 0.01e18, "atleast 7% APY after withdraw"
+        );
     }
 
     function depositToVault(address user, uint256 amount) public returns (uint256 shares) {
