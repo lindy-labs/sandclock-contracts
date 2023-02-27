@@ -85,13 +85,13 @@ contract scWETH is sc4626, IFlashLoanRecipient {
     }
 
     function setSlippageTolerance(uint256 newSlippageTolerance) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (newSlippageTolerance <= 1e18) revert InvalidSlippageTolerance();
+        if (newSlippageTolerance > 1e18) revert InvalidSlippageTolerance();
         slippageTolerance = newSlippageTolerance;
         emit SlippageToleranceUpdated(msg.sender, newSlippageTolerance);
     }
 
     function setMaxLtv(uint256 newMaxLtv) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (newMaxLtv <= 1e18) revert InvalidMaxLtv();
+        if (newMaxLtv > 1e18) revert InvalidMaxLtv();
         maxLtv = newMaxLtv;
         emit MaxLtvUpdated(msg.sender, newMaxLtv);
     }
