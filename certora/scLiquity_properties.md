@@ -23,43 +23,43 @@ The scLiquity has mainly the following state variables
 * `treasury` (type `address`), the treasury where fees go to
 * `nonces` (type `address to uint256`), mapping given for replay protection
 
-The scLiquity contract has the following external/public functions that change state variables:
-* `function setPerformanceFee(uint256 newPerformanceFee) external onlyRole(DEFAULT_ADMIN_ROLE)` sets the `performanceFee` to `newPerformanceFee` as long as the `newPerformanceFee` is less than or equal to `1e18`
-* `function setFloatPercentage(uint256 newFloatPercentage) external onlyRole(DEFAULT_ADMIN_ROLE)` sets the `floatPercentage` to `newFloatPercentage` as long as the `newFloatPercentage` is less than or equal to `1e18`
-* `function setTreasury(address newTreasury) external onlyRole(DEFAULT_ADMIN_ROLE)` sets the `treasury` to `newTreasury` as long as the `newTreasury` is not the zero address
-* `function deposit(uint256 assets, address receiver) public returns (uint256 shares)` deposits `assets` of underlying tokens into the vault and grants ownership of `shares` to `receiver`
-* `function mint(uint256 shares, address receiver) public returns (uint256 assets)` mints exactly `shares` vault shares to `receiver` by depositing assets of underlying tokens
-* `function withdraw(uint256 assets, address receiver, address owner) public returns (uint256 shares)` burns `shares` from `owner` and send exactly `assets` token from the vault to `receiver`
-* `function redeem(uint256 shares, address receiver, address owner) public returns (uint256 assets)` redeems a specific number of `shares` from `owner` and send `assets` of underlying token from the vault to `receiver`
-* `function depositWithPermit(uint256 amount, uint256 deadline, uint8 v, bytes32 r, bytes32 s) external` performs a `deposit` if it is permitted
-* `function approve(address spender, uint256 amount) public returns (bool)` returns `true` if it can sets the `amount` as the allowance of `spender` over the caller’s tokens
-* `function transfer(address to, uint256 amount) public returns (bool)` returns `true` if it can move `amount` tokens from the caller’s `account` to `recipient`
-* `function transferFrom(address from, address to, uint256 amount) public returns (bool)` returns `true` if it can move amount tokens from `sender` to `recipient` using the allowance mechanism, deducing the `amount` from the caller’s allowance
+The scLiquity contract has the following external/functions that change state variables:
+* `setPerformanceFee(uint256 newPerformanceFee) onlyRole(DEFAULT_ADMIN_ROLE)` sets the `performanceFee` to `newPerformanceFee` as long as the `newPerformanceFee` is less than or equal to `1e18`
+* `setFloatPercentage(uint256 newFloatPercentage) onlyRole(DEFAULT_ADMIN_ROLE)` sets the `floatPercentage` to `newFloatPercentage` as long as the `newFloatPercentage` is less than or equal to `1e18`
+* `setTreasury(address newTreasury) onlyRole(DEFAULT_ADMIN_ROLE)` sets the `treasury` to `newTreasury` as long as the `newTreasury` is not the zero address
+* `deposit(uint256 assets, address receiver) returns (uint256 shares)` deposits `assets` of underlying tokens into the vault and grants ownership of `shares` to `receiver`
+* `mint(uint256 shares, address receiver) returns (uint256 assets)` mints exactly `shares` vault shares to `receiver` by depositing assets of underlying tokens
+* `withdraw(uint256 assets, address receiver, address owner) returns (uint256 shares)` burns `shares` from `owner` and send exactly `assets` token from the vault to `receiver`
+* `redeem(uint256 shares, address receiver, address owner) returns (uint256 assets)` redeems a specific number of `shares` from `owner` and send `assets` of underlying token from the vault to `receiver`
+* `depositWithPermit(uint256 amount, uint256 deadline, uint8 v, bytes32 r, bytes32 s) external` performs a `deposit` if it is permitted
+* `approve(address spender, uint256 amount) returns (bool)` returns `true` if it can sets the `amount` as the allowance of `spender` over the caller’s tokens
+* `transfer(address to, uint256 amount) returns (bool)` returns `true` if it can move `amount` tokens from the caller’s `account` to `recipient`
+* `transferFrom(address from, address to, uint256 amount) returns (bool)` returns `true` if it can move amount tokens from `sender` to `recipient` using the allowance mechanism, deducing the `amount` from the caller’s allowance
     permit(address owner, address spender, uint256 value, uint256 deadline, uint8 v, bytes32 r, bytes32 s)
-* `function grantRole(bytes32 role, address account) public onlyRole(getRoleAdmin(role))` grants `role` to `account`
-* `function revokeRole(bytes32 role, address account) public onlyRole(getRoleAdmin(role))` revokes `role` from `account`
-* `function renounceRole(bytes32 role, address account)` revokes `role` from the calling `account`
-* `function depositIntoStrategy() external` deposit floating asset into the strategy 
-* `function harvest(uint256 _lqtyAmount, bytes calldata _lqtySwapData, uint256 _ethAmount, bytes calldata _ethSwapData) external onlyRole(KEEPER_ROLE)` harvest any unclaimed rewards, and swaps LQTY with LUSD, and reinvest the LUSD
+* `grantRole(bytes32 role, address account) onlyRole(getRoleAdmin(role))` grants `role` to `account`
+* `revokeRole(bytes32 role, address account) onlyRole(getRoleAdmin(role))` revokes `role` from `account`
+* `renounceRole(bytes32 role, address account)` revokes `role` from the calling `account`
+* `depositIntoStrategy() external` deposit floating asset into the strategy 
+* `harvest(uint256 _lqtyAmount, bytes calldata _lqtySwapData, uint256 _ethAmount, bytes calldata _ethSwapData) onlyRole(KEEPER_ROLE)` harvest any unclaimed rewards, and swaps LQTY with LUSD, and reinvest the LUSD
 
 
 
 It has the following view functions, which do not change state
-* `function totalAssets() public view returns (uint256)` returns the `total amount` of underlying assets held by the vault
-* `function convertToShares(uint256 assets) public view returns (uint256 shares)` returns the amount of `shares` that would be exchanged by the vault for the amount of `assets` provided
-* `function convertToAssets(uint256 shares) public view returns (uint256 assets)` returns the amount of `assets` that would be exchanged by the vault for the amount of `shares` provided
-* `function previewDeposit(uint256 assets) public view returns (uint256)` allows users to simulate the effects of their deposit at the current block
-* `function previewMint(uint256 shares) public view returns (uint256)` allows users to simulate the effects of their mint at the current block
-* `function previewWithdraw(uint256 assets) public view returns (uint256)` allows users to simulate the effects of their withdrawal at the current block
-* `function previewRedeem(uint256 shares) public view returns (uint256)` allows users to simulate the effects of their redeemption at the current block
-* `function maxDeposit(address receiver) public view returns (uint256)` returns the maximum amount of underlying assets that can be deposited in a `single deposit` call by the `receiver`
-* `function maxMint(address receiver) public view returns (uint256)` returns the maximum amount of shares that can be minted in a `single mint` call by the `receiver`
-* `function maxWithdraw(address owner) public view returns (uint256)` returns the maximum amount of underlying assets that can be withdrawn from the `owner` balance with a `single withdraw` call
-* `function maxRedeem(address owner) public view returns (uint256)` returns the maximum amount of shares that can be redeem from the `owner` balance through a `redeem` call
-* `function DOMAIN_SEPARATOR() returns (bytes32)` returns the domain separator of the underlying protocol
+* `totalAssets() returns (uint256)` returns the `total amount` of underlying assets held by the vault
+* `convertToShares(uint256 assets) returns (uint256 shares)` returns the amount of `shares` that would be exchanged by the vault for the amount of `assets` provided
+* `convertToAssets(uint256 shares) returns (uint256 assets)` returns the amount of `assets` that would be exchanged by the vault for the amount of `shares` provided
+* `previewDeposit(uint256 assets) returns (uint256)` allows users to simulate the effects of their deposit at the current block
+* `previewMint(uint256 shares) returns (uint256)` allows users to simulate the effects of their mint at the current block
+* `previewWithdraw(uint256 assets) returns (uint256)` allows users to simulate the effects of their withdrawal at the current block
+* `previewRedeem(uint256 shares) returns (uint256)` allows users to simulate the effects of their redeemption at the current block
+* `maxDeposit(address receiver) returns (uint256)` returns the maximum amount of underlying assets that can be deposited in a `single deposit` call by the `receiver`
+* `maxMint(address receiver) returns (uint256)` returns the maximum amount of shares that can be minted in a `single mint` call by the `receiver`
+* `maxWithdraw(address owner) returns (uint256)` returns the maximum amount of underlying assets that can be withdrawn from the `owner` balance with a `single withdraw` call
+* `maxRedeem(address owner) returns (uint256)` returns the maximum amount of shares that can be redeem from the `owner` balance through a `redeem` call
+* `DOMAIN_SEPARATOR() returns (bytes32)` returns the domain separator of the underlying protocol
 * `supportsInterface(bytes4 interfaceId) returns (bool)` returns `true` if this contract implements the interface defined by `interfaceId`
-* `function hasRole(bytes32 role, address account) returns (bool)` returns `true` if `account` has been granted `role`
-* `function getRoleAdmin(bytes32 role) returns (bytes32)` returns the `admin role` that controls `role`
+* `hasRole(bytes32 role, address account) returns (bool)` returns `true` if `account` has been granted `role`
+* `getRoleAdmin(bytes32 role) returns (bytes32)` returns the `admin role` that controls `role`
 
 
 ## Properties
@@ -80,14 +80,14 @@ It has the following view functions, which do not change state
 | 12 | `previewMint(shares) >= mint(shares, receiver)`  | high level | high | Y | Y | [Link](https://prover.certora.com/output/52311/9d8b633eb8594ce496dd9d8389359f74?anonymousKey=7116474830420dfc91c9992c28f17bcd11f744ae) |
 | 13 | `previewWithdraw(assets) >= withdraw(assets, receiver, owner)`  | high level | high | Y | Y | [Link](https://prover.certora.com/output/52311/9d8b633eb8594ce496dd9d8389359f74?anonymousKey=7116474830420dfc91c9992c28f17bcd11f744ae) |
 | 14 | `previewRedeem(shares) <= redeem(shares, receiver, owner)`  | high level | high | Y | Y | [Link](https://prover.certora.com/output/52311/9d8b633eb8594ce496dd9d8389359f74?anonymousKey=7116474830420dfc91c9992c28f17bcd11f744ae) |
-| 15 | `function deposit(uint256 assets, address receiver) public returns (uint256 shares)` mints exactly `shares` Vault shares to `receiver` by depositing exactly `assets` of underlying tokens | variable transition | high | Y | Y | [Link](https://prover.certora.com/output/52311/a417c4eebad14173b81e4c59be3e4369?anonymousKey=f91ecbec305f3cad05192627b715f08143183a5f)  |
-| 16 | `function deposit(uint256 assets, address receiver) public returns (uint256 shares)` must revert if all of `assets` cannot be deposited (to complete) | unit test | Y | Y | [Link]()  |
-| 17 | `mint(uint256 shares, address receiver) public returns (uint256 assets)` mints exactly `shares` Vault shares to `receiver` | variable transition | high | Y | Y | [Link](https://prover.certora.com/output/52311/93e7c51f1d72446bae7d7f6a65df101c?anonymousKey=fd149ac8abcef42e2361085f1b628384dbfbbb00)  |
-| 18 | `mint(uint256 shares, address receiver) public returns (uint256 assets)` must revert if the minter has not enough assets | unit test | high | Y | Y | [Link](https://prover.certora.com/output/52311/2db40e540a674f4d8f741346f75f371e?anonymousKey=94709f383dbfbeb05133292fd5d5abb43edf4ef5)  |
-| 19 | `withdraw(uint256 assets, address receiver, address owner) public returns (uint256 shares)` must burn `shares` from `owner` and sends exactly `assets` of underlying tokens to `receiver` | variable transition | high | Y | Y | [Link](https://prover.certora.com/output/52311/93e7c51f1d72446bae7d7f6a65df101c?anonymousKey=fd149ac8abcef42e2361085f1b628384dbfbbb00)  |
-| 20 | `withdraw(uint256 assets, address receiver, address owner) public returns (uint256 shares)` must revert if all of `assets` cannot be withdrawn | unit test | high | Y | Y | [Link](https://prover.certora.com/output/52311/9d8b633eb8594ce496dd9d8389359f74?anonymousKey=7116474830420dfc91c9992c28f17bcd11f744ae)  |
-| 21 | `redeem(uint256 shares, address receiver, address owner) public returns (uint256 assets)` must burn exactly `shares` from `owner` and sends assets of underlying tokens to `receiver` | variable transition | high | Y | Y | [Link](https://prover.certora.com/output/52311/1c33ea168c8f4e46853d273e5bfa9af0?anonymousKey=ad3cb2132614d0826550e81123e54aa12eabe28f)  |
-| 22 | `redeem(uint256 shares, address receiver, address owner) public returns (uint256 assets)` must revert if all of `shares` cannot be redeemed | unit test | high | Y | Y | [Link](https://prover.certora.com/output/52311/48da1c2a8f84493d9052ab5e9e68d6f8?anonymousKey=17d357366cbd9490a6679e23eafaea35206eb216)  |
+| 15 | `deposit(uint256 assets, address receiver) returns (uint256 shares)` mints exactly `shares` Vault shares to `receiver` by depositing exactly `assets` of underlying tokens | variable transition | high | Y | Y | [Link](https://prover.certora.com/output/52311/a417c4eebad14173b81e4c59be3e4369?anonymousKey=f91ecbec305f3cad05192627b715f08143183a5f)  |
+| 16 | `deposit(uint256 assets, address receiver) returns (uint256 shares)` must revert if all of `assets` cannot be deposited (to complete) | unit test | Y | Y | [Link]()  |
+| 17 | `mint(uint256 shares, address receiver) returns (uint256 assets)` mints exactly `shares` Vault shares to `receiver` | variable transition | high | Y | Y | [Link](https://prover.certora.com/output/52311/93e7c51f1d72446bae7d7f6a65df101c?anonymousKey=fd149ac8abcef42e2361085f1b628384dbfbbb00)  |
+| 18 | `mint(uint256 shares, address receiver) returns (uint256 assets)` must revert if the minter has not enough assets | unit test | high | Y | Y | [Link](https://prover.certora.com/output/52311/2db40e540a674f4d8f741346f75f371e?anonymousKey=94709f383dbfbeb05133292fd5d5abb43edf4ef5)  |
+| 19 | `withdraw(uint256 assets, address receiver, address owner) returns (uint256 shares)` must burn `shares` from `owner` and sends exactly `assets` of underlying tokens to `receiver` | variable transition | high | Y | Y | [Link](https://prover.certora.com/output/52311/93e7c51f1d72446bae7d7f6a65df101c?anonymousKey=fd149ac8abcef42e2361085f1b628384dbfbbb00)  |
+| 20 | `withdraw(uint256 assets, address receiver, address owner) returns (uint256 shares)` must revert if all of `assets` cannot be withdrawn | unit test | high | Y | Y | [Link](https://prover.certora.com/output/52311/9d8b633eb8594ce496dd9d8389359f74?anonymousKey=7116474830420dfc91c9992c28f17bcd11f744ae)  |
+| 21 | `redeem(uint256 shares, address receiver, address owner) returns (uint256 assets)` must burn exactly `shares` from `owner` and sends assets of underlying tokens to `receiver` | variable transition | high | Y | Y | [Link](https://prover.certora.com/output/52311/1c33ea168c8f4e46853d273e5bfa9af0?anonymousKey=ad3cb2132614d0826550e81123e54aa12eabe28f)  |
+| 22 | `redeem(uint256 shares, address receiver, address owner) returns (uint256 assets)` must revert if all of `shares` cannot be redeemed | unit test | high | Y | Y | [Link](https://prover.certora.com/output/52311/48da1c2a8f84493d9052ab5e9e68d6f8?anonymousKey=17d357366cbd9490a6679e23eafaea35206eb216)  |
 | 23 | `setPerformanceFee(uint256 newPerformanceFee)` should update the state variable `performanceFee` with the value provided by `newPerformanceFee`, as long as `newPerformanceFee` is less than or qual to `1e18` | variable transition | medium | Y | Y | [Link](https://prover.certora.com/output/52311/9d8b633eb8594ce496dd9d8389359f74?anonymousKey=7116474830420dfc91c9992c28f17bcd11f744ae)  |
 | 24 | `setFloatPercentage(uint256 newFloatPercentage)` should update the state variable `floatPercentage` with the value provided by `newFloatPercentage`, as long as `newFloatPercentage` is less than or qual to `1e18` | variable transition | medium | Y | Y | [Link](https://prover.certora.com/output/52311/9d8b633eb8594ce496dd9d8389359f74?anonymousKey=7116474830420dfc91c9992c28f17bcd11f744ae)  |
 | 25 | `setTreasury(address newTreasury)` should update the state variable `treasury` with the value provided by `newTreasury`, as long as `newTreasury` is not the address zero | variable transition | medium | Y | Y | [Link](https://prover.certora.com/output/52311/9d8b633eb8594ce496dd9d8389359f74?anonymousKey=7116474830420dfc91c9992c28f17bcd11f744ae)  |

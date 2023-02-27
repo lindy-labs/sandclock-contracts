@@ -20,7 +20,7 @@ then
     --packages  solmate=lib/solmate/src \
                 openzeppelin-contracts=lib/openzeppelin-contracts/contracts \
     --settings -optimisticFallback=true \
-    --msg "verifying Vault"
+    --msg "verifying scLiquity"
 elif [ "$#" -eq 1 ]
 then
   certoraRun  src/liquity/scLiquity.sol \
@@ -42,7 +42,7 @@ then
                 openzeppelin-contracts=lib/openzeppelin-contracts/contracts \
     --settings -optimisticFallback=true \
     --rule "$1" \
-    --msg "verifying rule $1 for Vault"
+    --msg "verifying rule $1 for scLiquity"
 else
   echo "You can have only one argument to specify which rule to verify"
 fi

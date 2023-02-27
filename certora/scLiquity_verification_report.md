@@ -8,13 +8,15 @@
 
 ## Summary
 
-The Certora Prover proved the implementation of the Vault contract is correct with respect to formal specifications written by the security team of Lindy Labs.  The team also performed a manual audit of these contracts.
+The Certora Prover proved the implementation of the scLiquity contract is correct with respect to formal specifications written by the security team of Lindy Labs.  The team also performed a manual audit of these contracts.
 
 ## List of Issues Discovered
 
 # Overview of the verification
 
-## Description of the Vault contract
+## Description of the scLiquity contract
+
+scLiquity is a tokenized vault contract based on ERC-4626 standard. It's underlying asset is LUSD and its investment strategy is simply invest a certain proportion of the underlying asset in the vault into the Liquity stability pool. The vault and the strategy are not separated but in the same contract.
 
 ## Assumptions and Simplifications
 
