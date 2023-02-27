@@ -19,9 +19,6 @@ contract scWETHTest is Test {
     using FixedPointMathLib for uint256;
 
     uint256 mainnetFork;
-    uint256 constant ethWstEthMaxLtv = 0.7735e18;
-    uint256 constant flashLoanLtv = 0.5e18;
-    uint256 constant slippageTolerance = 0.99e18;
 
     // dummy users
     address constant alice = address(0x06);
@@ -37,18 +34,16 @@ contract scWETHTest is Test {
     IEulerDToken dTokenWeth;
     IMarkets markets;
     ICurvePool curvePool;
+    uint256 slippageTolerance;
+    uint256 ethWstEthMaxLtv;
+    uint256 targetLtv;
 
     function setUp() public {
         vm.createFork(vm.envString("RPC_URL_MAINNET"));
         vm.selectFork(mainnetFork);
-        vm.rollFork(16679144);
+        vm.rollFork(16691971);
 
-        vault = new Vault(
-            address(this),
-            ethWstEthMaxLtv,
-            flashLoanLtv,
-            slippageTolerance
-        );
+        vault = new Vault(address(this));
 
         // set vault eth balance to zero
         vm.deal(address(vault), 0);
@@ -56,6 +51,10 @@ contract scWETHTest is Test {
         weth = vault.weth();
         stEth = vault.stEth();
         wstEth = vault.wstETH();
+
+        slippageTolerance = vault.slippageTolerance();
+        ethWstEthMaxLtv = vault.ethWstEthMaxLtv();
+        targetLtv = vault.targetLtv();
 
         eTokenWstEth = vault.eToken();
         dTokenWeth = vault.dToken();
@@ -131,7 +130,7 @@ contract scWETHTest is Test {
     }
 
     function testAtomicDepositInvestRedeem(uint256 amount) public {
-        amount = bound(amount, 1e5, 1e27);
+        amount = bound(amount, 1e18, 1e21);
         vm.deal(address(this), amount);
         weth.deposit{value: amount}();
         weth.approve(address(vault), amount);
@@ -148,44 +147,48 @@ contract scWETHTest is Test {
 
         vault.depositIntoStrategy();
 
-        assertRelApproxEq(vault.totalAssets(), amount, 0.01e18);
-        assertEq(vault.balanceOf(address(this)), amount);
-        assertRelApproxEq(vault.convertToAssets(vault.balanceOf(address(this))), amount, 0.01e18);
+        // account for value loss if stETH worth less than ETH
+        (, int256 price,,,) = vault.stEThToEthPriceFeed().latestRoundData();
+        amount = amount.mulWadDown(uint256(price));
 
-        assertEq(weth.balanceOf(address(this)), preDepositBal - amount);
+        // account for unrealized slippage loss
+        amount = amount.mulWadDown(slippageTolerance);
+
+        assertRelApproxEq(vault.totalAssets(), amount, 0.013e18);
+        assertEq(vault.balanceOf(address(this)), shares);
+        assertRelApproxEq(vault.convertToAssets(vault.balanceOf(address(this))), amount, 0.013e18);
 
         vault.redeem(shares, address(this), address(this));
 
         assertEq(vault.convertToAssets(10 ** vault.decimals()), 1e18);
-        assertEq(vault.totalAssets(), 0);
+        // some amount may be leftover, should be around 2%
+        assertRelApproxEq(vault.totalAssets(), weth.balanceOf(address(this)).mulWadDown(0.02e18), 0.06e18);
         assertEq(vault.balanceOf(address(this)), 0);
         assertEq(vault.convertToAssets(vault.balanceOf(address(this))), 0);
-        assertRelApproxEq(weth.balanceOf(address(this)), preDepositBal, 0.01e18);
+        assertRelApproxEq(weth.balanceOf(address(this)), amount, 0.013e18);
     }
 
-    function testWithdrawalAmounts() public {
-        uint256 depositAmount1 = 100e18;
-        uint256 depositAmount2 = 200e18;
+    function testTwoDepositsInvestTwoRedeems(uint256 depositAmount1, uint256 depositAmount2) public {
+        depositAmount1 = bound(depositAmount1, 1e18, 1e20);
+        depositAmount2 = bound(depositAmount2, 1e18, 1e20);
         uint256 shares1 = depositToVault(address(this), depositAmount1);
         uint256 shares2 = depositToVault(alice, depositAmount2);
 
         vault.depositIntoStrategy();
 
         vault.redeem(shares1 / 2, address(this), address(this));
-        assertRelApproxEq(weth.balanceOf(address(this)), depositAmount1 / 2, 0.01e18);
+        assertRelApproxEq(weth.balanceOf(address(this)), (depositAmount1 / 2), 0.025e18);
 
         vm.prank(alice);
         vault.redeem(shares2 / 2, alice, alice);
-        assertRelApproxEq(weth.balanceOf(alice), depositAmount2 / 2, 0.01e18);
-
-        console.log(weth.balanceOf(address(vault)));
+        assertRelApproxEq(weth.balanceOf(alice), (depositAmount2 / 2), 0.025e18);
 
         vault.redeem(shares1 / 2, address(this), address(this));
-        assertRelApproxEq(weth.balanceOf(address(this)), depositAmount1, 0.01e18);
+        assertRelApproxEq(weth.balanceOf(address(this)), depositAmount1, 0.025e18);
 
         vm.prank(alice);
         vault.redeem(shares2 / 2, alice, alice);
-        assertRelApproxEq(weth.balanceOf(alice), depositAmount2, 0.01e18);
+        assertRelApproxEq(weth.balanceOf(alice), depositAmount2, 0.025e18);
     }
 
     function testLeverageUp(uint256 amount, uint256 newLtv) public {

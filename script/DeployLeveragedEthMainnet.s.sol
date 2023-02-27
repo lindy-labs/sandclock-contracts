@@ -10,17 +10,8 @@ contract DeployScript is CREATE3Script {
     function run() external returns (Vault v) {
         uint256 deployerPrivateKey = uint256(vm.envBytes32("PRIVATE_KEY"));
 
-        uint256 ethWstEthMaxLtv = 0.7735e18;
-        uint256 borrowPercentLtv = 0.99e18;
-        uint256 slippageTolerance = 0.1e18;
-
         vm.startBroadcast(deployerPrivateKey);
-        v = new Vault(
-            address(this),
-            ethWstEthMaxLtv,
-            borrowPercentLtv,
-            slippageTolerance
-        );
+        v = new Vault(address(this));
         vm.stopBroadcast();
     }
 }
