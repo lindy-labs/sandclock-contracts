@@ -81,9 +81,9 @@ contract scUSDCTest is TestPlus {
 
         vault.rebalance();
 
-        assertEq(vault.totalCollateralSupplied(), 9899999999); // ~ 100e6 - 1
+        assertApproxEq(vault.totalCollateralSupplied(), amount.mulWadDown(0.99e18), 1); // - float
         assertEq(vault.totalDebt(), 3758780024415885000);
-        assertEq(vault.usdcBalance(), 100e6);
+        assertEq(vault.usdcBalance(), amount.mulWadUp(vault.floatPercentage())); // float
         assertApproxEq(vault.totalAssets(), amount, 1); // account for rounding error
     }
 
@@ -104,7 +104,7 @@ contract scUSDCTest is TestPlus {
         vault.rebalance();
 
         assertTrue(vault.getLtv() <= vault.targetLtv());
-        assertTrue(vault.targetLtv() - vault.getLtv() < 0.001e18);
+        assertApproxEq(vault.getLtv(), vault.targetLtv(), 0.001e18);
     }
 
     function test_getLtv_Returns0IfNoWethWasBorrowed() public {
@@ -121,13 +121,15 @@ contract scUSDCTest is TestPlus {
         vault.rebalance();
 
         uint256 oldTargetLtv = vault.targetLtv();
-        uint256 newTargetLtv = oldTargetLtv + 0.1e18;
+        uint256 debtBefore = vault.totalDebt();
+        // add 10% to target ltv
+        uint256 newTargetLtv = oldTargetLtv.mulWadUp(1.1e18);
 
         vault.applyNewTargetLtv(newTargetLtv);
 
         assertEq(vault.targetLtv(), newTargetLtv);
-        assertTrue(vault.getLtv() > oldTargetLtv);
-        assertTrue(vault.getLtv() <= newTargetLtv);
+        assertApproxEqRel(vault.getLtv(), newTargetLtv, 0.001e18);
+        assertApproxEqRel(vault.totalDebt(), debtBefore.mulWadUp(1.1e18), 0.001e18);
     }
 
     function test_applyNewTargetLtv_changesLtvDown() public {
@@ -136,13 +138,15 @@ contract scUSDCTest is TestPlus {
         vault.rebalance();
 
         uint256 oldTargetLtv = vault.targetLtv();
-        uint256 newTargetLtv = oldTargetLtv - 0.1e18;
+        uint256 debtBefore = vault.totalDebt();
+        // subtract 10% from target ltv
+        uint256 newTargetLtv = oldTargetLtv.mulWadDown(0.9e18);
 
         vault.applyNewTargetLtv(newTargetLtv);
 
         assertEq(vault.targetLtv(), newTargetLtv);
-        assertTrue(vault.getLtv() < oldTargetLtv);
-        assertTrue(vault.getLtv() <= newTargetLtv);
+        assertApproxEqRel(vault.getLtv(), newTargetLtv, 0.001e18);
+        assertApproxEqRel(vault.totalDebt(), debtBefore.mulWadUp(0.9e18), 0.001e18);
     }
 
     function test_applyNewTargetLtv_FailsIfNewLtvIsTooHigh() public {
