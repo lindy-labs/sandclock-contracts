@@ -8,7 +8,6 @@ import {WETH} from "solmate/tokens/WETH.sol";
 import {sc4626} from "../sc4626.sol";
 import {IEulerDToken} from "../interfaces/euler/IEulerDToken.sol";
 import {IEulerEToken} from "../interfaces/euler/IEulerEToken.sol";
-import {IEulerEulDistributor} from "../interfaces/euler/IEulerEulDistributor.sol";
 import {ICurvePool} from "../interfaces/curve/ICurvePool.sol";
 import {ILido} from "../interfaces/lido/ILido.sol";
 import {IwstETH} from "../interfaces/lido/IwstETH.sol";
@@ -53,9 +52,6 @@ contract scWETH is sc4626, IFlashLoanRecipient {
 
     // EUL token
     ERC20 eul = ERC20(0xd9Fcd98c322942075A5C3860693e9f4f03AAE07b);
-
-    // EUL distributor
-    IEulerEulDistributor eulDistributor = IEulerEulDistributor(0xd524E29E3BAF5BB085403Ca5665301E94387A7e2);
 
     IwstETH public constant wstETH = IwstETH(0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0);
     WETH public constant weth = WETH(payable(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2));
@@ -104,19 +100,13 @@ contract scWETH is sc4626, IFlashLoanRecipient {
 
     /////////////////// ADMIN/KEEPER METHODS //////////////////////////////////
 
-    function harvest(uint256 _claimable, bytes32[] calldata _proof, uint256 _eulAmount, bytes calldata _eulSwapData)
-        external
-        onlyRole(KEEPER_ROLE)
-    {
+    function harvest(bytes calldata _eulSwapData) external onlyRole(KEEPER_ROLE) {
         // store the old total
         uint256 oldTotalInvested = totalInvested;
 
-        // claim EUL rewards
-        eulDistributor.claim(address(this), address(eul), _claimable, _proof, address(0));
-
         // swap EUL -> WETH
-        if (_eulAmount > 0) {
-            eul.safeApprove(xrouter, _eulAmount);
+        if (_eulSwapData.length > 0) {
+            eul.safeApprove(xrouter, eul.balanceOf(address(this)));
             (bool success,) = xrouter.call{value: 0}(_eulSwapData);
             if (!success) revert StrategyEULSwapFailed();
         }
