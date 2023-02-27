@@ -47,12 +47,7 @@ contract scUSDCTest is Test {
         vm.selectFork(mainnetFork);
         vm.rollFork(16643381);
 
-        wethVault = new WethVault(
-            address(this),
-            ethWstEthMaxLtv,
-            flashLoanLtv,
-            slippageTolerance
-        );
+        wethVault = new WethVault(address(this));
 
         vault = new Vault(address(this), wethVault);
 
@@ -68,7 +63,6 @@ contract scUSDCTest is Test {
     }
 
     function testAtomicDepositWithdraw() public {
-        // vault.depositIntoStrategy();
         deal(address(vault.usdc()), alice, 10000e6);
 
         vm.startPrank(alice);
@@ -76,7 +70,7 @@ contract scUSDCTest is Test {
         vault.deposit(10000e6, alice);
         vm.stopPrank();
 
-        vault.depositIntoStrategy();
+        vault.rebalance();
 
         console2.log("totalAssets", vault.totalAssets());
         console2.log("alice balance", vault.balanceOf(alice));
@@ -90,7 +84,7 @@ contract scUSDCTest is Test {
         deal(address(vault.usdc()), address(vault), 10000e6);
         // assertEq(ERC20(vault.USDC()).balanceOf(alice), 10000e6);
         // vault.totalAssets();
-        vault.depositIntoStrategy();
+        vault.rebalance();
 
         console2.log("totalAssets", vault.totalAssets());
     }

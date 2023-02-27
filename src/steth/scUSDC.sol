@@ -141,38 +141,6 @@ contract scUSDC is sc4626 {
         eToken.withdraw(0, usdcToWithdraw);
     }
 
-    // @dev: access control not needed, this is only separate to save
-    // gas for users depositing, ultimately controlled by float %
-    function depositIntoStrategy() external {
-        // _depositIntoStrategy();
-        rebalance();
-    }
-
-    function _depositIntoStrategy() internal {
-        uint256 currentLtv = getLtv();
-
-        if (currentLtv == 0) currentLtv = usdcWethTargetLtv;
-
-        // supply usdc collateral to euler
-        uint256 balance = usdcBalance();
-        uint256 floatRequired = totalAssets().mulWadUp(1e18 - floatPercentage);
-
-        if (balance < floatRequired) {
-            // we have enough balance to deposit
-            return;
-        }
-
-        uint256 depositAmount = balance - floatRequired;
-
-        eToken.deposit(0, depositAmount);
-
-        // borrow weth on euler
-        uint256 wethToBorrow = currentLtv.mulWadUp(getWethFromUsdc(depositAmount));
-        dToken.borrow(0, wethToBorrow);
-
-        scWETH.deposit(wethToBorrow, address(this));
-    }
-
     function rebalance() public {
         // first deposit if there is anything to deposit
         uint256 balance = usdcBalance();
