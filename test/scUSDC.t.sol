@@ -1,24 +1,20 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.13;
 
-import "forge-std/Test.sol";
-import "forge-std/console2.sol";
-
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {DSTestPlus} from "solmate/test/utils/DSTestPlus.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
-import {scUSDC as Vault} from "../src/steth/scUSDC.sol";
-import {scWETH as WethVault} from "../src/steth/scWETH.sol";
+import {scUSDC} from "../src/steth/scUSDC.sol";
+import {scWETH} from "../src/steth/scWETH.sol";
 import {WETH} from "solmate/tokens/WETH.sol";
-import {ILido} from "../src/interfaces/lido/ILido.sol";
-import {IwstETH} from "../src/interfaces/lido/IwstETH.sol";
 import {IEulerDToken} from "../src/interfaces/euler/IEulerDToken.sol";
 import {IEulerEToken} from "../src/interfaces/euler/IEulerEToken.sol";
 import {IMarkets} from "../src/interfaces/euler/IMarkets.sol";
-import {ICurvePool} from "../src/interfaces/curve/ICurvePool.sol";
 import {scWETH} from "../src/steth/scWETH.sol";
 
-contract scUSDCTest is Test {
+import {TestPlus} from "./utils/TestPlus.sol";
+
+contract scUSDCTest is TestPlus {
     using FixedPointMathLib for uint256;
 
     uint256 mainnetFork;
@@ -29,63 +25,172 @@ contract scUSDCTest is Test {
     // dummy users
     address constant alice = address(0x06);
 
-    Vault vault;
-    WethVault wethVault;
+    scUSDC vault;
+    scWETH wethVault;
     uint256 initAmount = 100e18;
 
     address EULER;
     WETH weth;
-    ILido stEth;
-    IwstETH wstEth;
+    ERC20 usdc;
     IEulerEToken eTokenWstEth;
     IEulerDToken dTokenWeth;
     IMarkets markets;
-    ICurvePool curvePool;
 
     function setUp() public {
         vm.createFork(vm.envString("RPC_URL_MAINNET"));
         vm.selectFork(mainnetFork);
         vm.rollFork(16643381);
 
-        wethVault = new WethVault(address(this));
+        usdc = ERC20(0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48);
+        weth = WETH(payable(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2));
 
-        vault = new Vault(address(this), wethVault);
+        wethVault = new scWETH(address(this));
+
+        vault = new scUSDC(address(this), wethVault);
 
         // set vault eth balance to zero
         vm.deal(address(vault), 0);
-
-        // weth = WETH(payable(vault.WETH()));
-        // EULER = vault.EULER();
-
-        // wstEth.approve(EULER, type(uint256).max);
-        // weth.approve(EULER, type(uint256).max);
-        // markets.enterMarket(0, address(wstEth));
     }
 
-    function testAtomicDepositWithdraw() public {
-        deal(address(vault.usdc()), alice, 10000e6);
+    /// #deposit ///
+
+    function testFuzz_deposit(uint256 amount) public {
+        amount = bound(amount, 1e2, 1e18);
+        deal(address(usdc), alice, amount);
 
         vm.startPrank(alice);
-        ERC20(0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48).approve(address(vault), type(uint256).max);
-        vault.deposit(10000e6, alice);
+        usdc.approve(address(vault), type(uint256).max);
+
+        vault.deposit(amount, alice);
+
         vm.stopPrank();
 
-        vault.rebalance();
-
-        console2.log("totalAssets", vault.totalAssets());
-        console2.log("alice balance", vault.balanceOf(alice));
-        console2.log("alices usdc assets", vault.convertToAssets(vault.balanceOf(alice)));
-
-        vm.startPrank(alice);
-        vault.withdraw(5000e6, alice, alice);
+        assertEq(vault.convertToAssets(vault.balanceOf(alice)), amount);
+        // 1 share = 1 usdc
+        assertEq(vault.balanceOf(alice), amount);
     }
 
-    function testTotalAssets() public {
-        deal(address(vault.usdc()), address(vault), 10000e6);
-        // assertEq(ERC20(vault.USDC()).balanceOf(alice), 10000e6);
-        // vault.totalAssets();
+    /// #rebalance ///
+
+    function test_rebalance_DepositsUsdcAndBorrowsWethOnEuler() public {
+        uint256 amount = 10000e6;
+        deal(address(usdc), address(vault), amount);
+
+        assertEq(vault.totalCollateralSupplied(), 0);
+        assertEq(vault.totalDebt(), 0);
+
         vault.rebalance();
 
-        console2.log("totalAssets", vault.totalAssets());
+        assertEq(vault.totalCollateralSupplied(), 9899999999); // ~ 100e6 - 1
+        assertEq(vault.totalDebt(), 3758780024415885000);
+        assertEq(vault.usdcBalance(), 100e6);
+        assertApproxEq(vault.totalAssets(), amount, 1); // account for rounding error
+    }
+
+    function test_rebalance_RespectsRequiredFloatAmount() public {
+        uint256 amount = 10000e6;
+        uint256 floatRequired = 100e6; // 1% as default
+        deal(address(usdc), address(vault), amount);
+
+        vault.rebalance();
+
+        assertEq(vault.usdcBalance(), floatRequired);
+        assertApproxEq(vault.totalCollateralSupplied(), amount - floatRequired, 1); // account for rounding error
+    }
+
+    function test_rebalance_RespectsTargetLtvPercentage() public {
+        deal(address(usdc), address(vault), 10000e6);
+
+        vault.rebalance();
+
+        assertTrue(vault.getLtv() <= vault.targetLtv());
+        assertTrue(vault.targetLtv() - vault.getLtv() < 0.001e18);
+    }
+
+    function test_getLtv_Returns0IfNoWethWasBorrowed() public {
+        deal(address(usdc), address(vault), 10000e6);
+
+        assertEq(vault.getLtv(), 0);
+    }
+
+    /// #applyNewTargetLtv ///
+
+    function test_applyNewTargetLtv_changesLtvUp() public {
+        deal(address(usdc), address(vault), 10000e6);
+
+        vault.rebalance();
+
+        uint256 oldTargetLtv = vault.targetLtv();
+        uint256 newTargetLtv = oldTargetLtv + 0.1e18;
+
+        vault.applyNewTargetLtv(newTargetLtv);
+
+        assertEq(vault.targetLtv(), newTargetLtv);
+        assertTrue(vault.getLtv() > oldTargetLtv);
+        assertTrue(vault.getLtv() <= newTargetLtv);
+    }
+
+    function test_applyNewTargetLtv_changesLtvDown() public {
+        deal(address(usdc), address(vault), 10000e6);
+
+        vault.rebalance();
+
+        uint256 oldTargetLtv = vault.targetLtv();
+        uint256 newTargetLtv = oldTargetLtv - 0.1e18;
+
+        vault.applyNewTargetLtv(newTargetLtv);
+
+        assertEq(vault.targetLtv(), newTargetLtv);
+        assertTrue(vault.getLtv() < oldTargetLtv);
+        assertTrue(vault.getLtv() <= newTargetLtv);
+    }
+
+    function test_applyNewTargetLtv_FailsIfNewLtvIsTooHigh() public {
+        deal(address(usdc), address(vault), 10000e6);
+
+        uint256 tooHighLtv = vault.maxLtv() + 1;
+
+        vm.expectRevert(scUSDC.InvalidUsdcWethTargetLtv.selector);
+        vault.applyNewTargetLtv(tooHighLtv);
+    }
+
+    function test_applyNewTargetLtv_worksIfNewLtvIs0() public {
+        deal(address(usdc), address(vault), 10000e6);
+
+        vault.rebalance();
+
+        assertTrue(vault.getLtv() > 0);
+
+        vault.applyNewTargetLtv(0);
+
+        assertEq(vault.getLtv(), 0);
+        assertEq(vault.totalDebt(), 0);
+    }
+
+    /// #totalAssets ///
+
+    function test_totalAssets_ReturnsTotalAssets() public {
+        uint256 amount = 10000e6;
+        deal(address(usdc), address(vault), amount);
+
+        vault.rebalance();
+
+        assertApproxEq(vault.totalAssets(), amount, 1);
+    }
+
+    function test_totalAssets_AccountsForProfitsMade() public {
+        uint256 amount = 10000e6;
+        deal(address(usdc), address(vault), amount);
+
+        vault.rebalance();
+
+        // add 100% profit to the weth vault
+        uint256 wethInvested = weth.balanceOf(address(wethVault));
+        deal(address(weth), address(wethVault), wethInvested * 2);
+
+        // ~6.5% profit because of 65% target ltv
+        uint256 expectedProfit = amount.mulWadDown(vault.targetLtv());
+
+        assertApproxEqRel(vault.totalAssets(), amount + expectedProfit, 0.005e18);
     }
 }

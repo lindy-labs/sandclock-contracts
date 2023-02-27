@@ -50,9 +50,11 @@ contract scUSDC is sc4626 {
         AggregatorV3Interface(0x986b5E1e1755e3C2440e960477f25201B0a8bbD4);
 
     ERC4626 public immutable scWETH;
-    // TODO: see if this can change
-    uint256 public immutable usdcWethMaxLtv = 0.81e18;
-    uint256 public usdcWethTargetLtv = 0.65e18;
+    // TODO: this can be changed
+    // USDC / WETH max LTV (loan to value)
+    uint256 public maxLtv = 0.81e18;
+    // USDC / WETH target LTV
+    uint256 public targetLtv = 0.65e18;
     // TODO: add slippage tolerance for uniswap swaps
 
     constructor(address _admin, ERC4626 _scWETH) sc4626(_admin, usdc, "Sandclock USDC Vault", "scUSDC") {
@@ -67,25 +69,26 @@ contract scUSDC is sc4626 {
         markets.enterMarket(0, address(usdc));
     }
 
-    function setUsdcWethTargetLtvAndRebalance(uint256 _usdcWethTargetLtv) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (_usdcWethTargetLtv > usdcWethMaxLtv || _usdcWethTargetLtv == 0) revert InvalidUsdcWethTargetLtv();
+    function applyNewTargetLtv(uint256 _usdcWethTargetLtv) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (_usdcWethTargetLtv > maxLtv) revert InvalidUsdcWethTargetLtv();
 
-        usdcWethTargetLtv = _usdcWethTargetLtv;
+        targetLtv = _usdcWethTargetLtv;
 
         rebalance();
     }
 
-    function totalAssets() public view override returns (uint256) {
-        uint256 float = usdcBalance();
-        uint256 collateral = eToken.balanceOfUnderlying(address(this));
+    function totalAssets() public view override returns (uint256 total) {
+        // add float
+        total = usdcBalance();
 
-        uint256 wethDebt = totalDebt();
-        uint256 debtInUsdc = getUsdcFromWeth(wethDebt);
+        // add collateral
+        total += eToken.balanceOfUnderlying(address(this));
 
-        uint256 wethInvested = scWETH.convertToAssets(scWETH.balanceOf(address(this)));
-        uint256 investedInUsdc = getUsdcFromWeth(wethInvested);
+        // subtract debt
+        total -= getUsdcFromWeth(totalDebt());
 
-        return float + collateral + investedInUsdc - debtInUsdc;
+        // add invested amount
+        total += getUsdcFromWeth(scWETH.convertToAssets(scWETH.balanceOf(address(this))));
     }
 
     function getUsdcFromWeth(uint256 _wethAmount) public view returns (uint256) {
@@ -106,7 +109,7 @@ contract scUSDC is sc4626 {
         if (_assets <= balance) return;
 
         // if we don't have enough assets, we need to withdraw what's missing from scWETH & euler
-        uint256 floatRequired = (totalAssets() - _assets).mulWadUp(1e18 - floatPercentage);
+        uint256 floatRequired = (totalAssets() - _assets).mulWadUp(1e18);
         uint256 usdcToWithdraw = _assets + floatRequired - balance;
 
         uint256 wethDebt = totalDebt();
@@ -144,14 +147,15 @@ contract scUSDC is sc4626 {
     function rebalance() public {
         // first deposit if there is anything to deposit
         uint256 balance = usdcBalance();
-        uint256 floatRequired = totalAssets().mulWadUp(1e18 - floatPercentage);
+        uint256 floatRequired = totalAssets().mulWadUp(floatPercentage);
+
         if (balance > floatRequired) {
             eToken.deposit(0, balance - floatRequired);
         }
 
         // second check ltv and see if we need to rebalance
         uint256 currentDebt = totalDebt();
-        uint256 targetDebt = getWethFromUsdc(totalCollateralSupplied().mulWadDown(usdcWethTargetLtv));
+        uint256 targetDebt = getWethFromUsdc(totalCollateralSupplied().mulWadDown(targetLtv));
 
         // ToDO: add some tollarance when comparing ltvs, for ex 0.1%
         if (currentDebt > targetDebt) {
@@ -169,8 +173,9 @@ contract scUSDC is sc4626 {
         }
     }
 
+    // ToDo: implement this
     function harvest() public {
-        // get euler rewards and swap to usdc
+        // note: euler rewards can be claimed by another account, we only have to swap them here using 0xrouter
 
         rebalance();
     }
