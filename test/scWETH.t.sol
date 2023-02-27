@@ -233,19 +233,22 @@ contract scWETHTest is Test {
 
     function testHarvest(uint256 amount) public {
         // simulate wstETH supply interest to EULER
+        uint256 timePeriod = 365 days;
+        uint256 stEthStakingInterest = 1.05e18;
+
         amount = bound(amount, 1e5, 1e21);
         depositToVault(address(this), amount);
 
         vault.depositIntoStrategy();
 
         // fast forward time to simulate supply and borrow interests
-        vm.warp(block.timestamp + 365 days);
+        vm.warp(block.timestamp + timePeriod);
         // 5% increase in stETH contract eth balance to simulate profits from Lido staking
         uint256 prevBalance = stEth.getTotalPooledEther();
         vm.store(
             address(stEth),
             keccak256(abi.encodePacked("lido.Lido.beaconBalance")),
-            bytes32(prevBalance.mulWadDown(1.05e18))
+            bytes32(prevBalance.mulWadDown(stEthStakingInterest))
         );
 
         assertEq(vault.totalProfit(), 0);
