@@ -17,6 +17,7 @@ import {IVault} from "../interfaces/balancer/IVault.sol";
 import {IFlashLoanRecipient} from "../interfaces/balancer/IFlashLoanRecipient.sol";
 
 error InvalidTargetLtv();
+error InvalidMaxLtv();
 error InvalidFlashLoanCaller();
 error InvalidSlippageTolerance();
 error AdminZeroAddress();
@@ -26,6 +27,7 @@ contract scWETH is sc4626, IFlashLoanRecipient {
     using FixedPointMathLib for uint256;
 
     event SlippageToleranceUpdated(address indexed user, uint256 newSlippageTolerance);
+    event MaxLtvUpdated(address indexed user, uint256 newMaxLtv);
     event TargetLtvRatioUpdated(address indexed user, uint256 newTargetLtv);
     event Harvest(uint256 profitSinceLastHarvest, uint256 performanceFee);
 
@@ -63,9 +65,9 @@ contract scWETH is sc4626, IFlashLoanRecipient {
     uint256 public totalProfit;
 
     // The max loan to value(ltv) ratio for borrowing eth on euler with wsteth as collateral for the flashloan
-    uint256 public immutable ethWstEthMaxLtv = 0.7735e18;
+    uint256 public maxLtv = 0.7735e18;
 
-    // the target ltv ratio at which we actually borrow (<= ethWstEthMaxLtv)
+    // the target ltv ratio at which we actually borrow (<= maxLtv)
     uint256 public targetLtv = 0.5e18;
 
     // slippage for curve swaps
@@ -83,9 +85,15 @@ contract scWETH is sc4626, IFlashLoanRecipient {
     }
 
     function setSlippageTolerance(uint256 newSlippageTolerance) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (newSlippageTolerance <= 1e18) revert InvalidSlippageTolerance();
+        if (newSlippageTolerance > 1e18) revert InvalidSlippageTolerance();
         slippageTolerance = newSlippageTolerance;
         emit SlippageToleranceUpdated(msg.sender, newSlippageTolerance);
+    }
+
+    function setMaxLtv(uint256 newMaxLtv) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (newMaxLtv > 1e18) revert InvalidMaxLtv();
+        maxLtv = newMaxLtv;
+        emit MaxLtvUpdated(msg.sender, newMaxLtv);
     }
 
     /////////////////// ADMIN/KEEPER METHODS //////////////////////////////////
@@ -110,7 +118,7 @@ contract scWETH is sc4626, IFlashLoanRecipient {
 
     // increase/decrease the net leverage used by the strategy
     function changeLeverage(uint256 newTargetLtv) public onlyRole(KEEPER_ROLE) {
-        if (newTargetLtv >= ethWstEthMaxLtv) revert InvalidTargetLtv();
+        if (newTargetLtv >= maxLtv) revert InvalidTargetLtv();
 
         targetLtv = newTargetLtv;
         emit TargetLtvRatioUpdated(msg.sender, newTargetLtv);
