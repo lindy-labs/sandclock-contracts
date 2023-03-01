@@ -2,21 +2,14 @@
 pragma solidity ^0.8.13;
 
 import "forge-std/console2.sol";
-
+import "forge-std/Test.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
-import {DSTestPlus} from "solmate/test/utils/DSTestPlus.sol";
+import {WETH} from "solmate/tokens/WETH.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 import {scUSDC} from "../src/steth/scUSDC.sol";
 import {scWETH} from "../src/steth/scWETH.sol";
-import {WETH} from "solmate/tokens/WETH.sol";
-import {IEulerDToken} from "../src/interfaces/euler/IEulerDToken.sol";
-import {IEulerEToken} from "../src/interfaces/euler/IEulerEToken.sol";
-import {IMarkets} from "../src/interfaces/euler/IMarkets.sol";
-import {scWETH} from "../src/steth/scWETH.sol";
 
-import {TestPlus} from "./utils/TestPlus.sol";
-
-contract scUSDCTest is TestPlus {
+contract scUSDCTest is Test {
     using FixedPointMathLib for uint256;
 
     uint256 mainnetFork;
@@ -33,9 +26,6 @@ contract scUSDCTest is TestPlus {
 
     WETH weth;
     ERC20 usdc;
-    IEulerEToken eTokenWstEth;
-    IEulerDToken dTokenWeth;
-    IMarkets markets;
 
     function setUp() public {
         vm.createFork(vm.envString("RPC_URL_MAINNET"));
@@ -98,10 +88,10 @@ contract scUSDCTest is TestPlus {
 
         vault.rebalance();
 
-        assertApproxEq(vault.totalCollateralSupplied(), amount.mulWadDown(0.99e18), 1); // - float
-        assertEq(vault.totalDebt(), 3758780024415885000);
-        assertEq(vault.usdcBalance(), amount.mulWadUp(vault.floatPercentage())); // float
-        assertApproxEq(vault.totalAssets(), amount, 1); // account for rounding error
+        assertApproxEqAbs(vault.totalCollateralSupplied(), amount.mulWadDown(0.99e18), 1, "collateral"); // - float
+        assertEq(vault.totalDebt(), 3758780024415885000, "debt");
+        assertEq(vault.usdcBalance(), amount.mulWadUp(vault.floatPercentage()), "float");
+        assertApproxEqAbs(vault.totalAssets(), amount, 1, "total assets");
     }
 
     function test_rebalance_DoesntDepositIfFloatRequirementIsGreaterThanBalance() public {
@@ -112,7 +102,8 @@ contract scUSDCTest is TestPlus {
         // set float to 2%
         vault.setFloatPercentage(0.02e18);
 
-        assertTrue(vault.usdcBalance() < vault.floatPercentage().mulWadDown(vault.totalAssets()));
+        uint256 floatExpected = vault.floatPercentage().mulWadDown(vault.totalAssets());
+        assertTrue(vault.usdcBalance() < floatExpected);
 
         uint256 collateralBefore = vault.totalCollateralSupplied();
 
@@ -130,18 +121,20 @@ contract scUSDCTest is TestPlus {
         vault.rebalance();
 
         assertEq(vault.usdcBalance(), floatRequired);
-        assertApproxEq(vault.totalCollateralSupplied(), amount - floatRequired, 1); // account for rounding error
+        uint256 collateralExpected = amount - floatRequired;
+        assertApproxEqAbs(vault.totalCollateralSupplied(), collateralExpected, 1, "collateral");
     }
 
     function test_rebalance_RespectsTargetLtvPercentage() public {
         deal(address(usdc), address(vault), 10000e6);
 
+        // no debt yet
         assertEq(vault.getLtv(), 0);
 
         vault.rebalance();
 
         assertTrue(vault.getLtv() <= vault.targetLtv());
-        assertApproxEq(vault.getLtv(), vault.targetLtv(), 0.001e18);
+        assertApproxEqAbs(vault.getLtv(), vault.targetLtv(), 0.001e18);
     }
 
     /// #applyNewTargetLtv ///
@@ -158,9 +151,9 @@ contract scUSDCTest is TestPlus {
 
         vault.applyNewTargetLtv(newTargetLtv);
 
-        assertEq(vault.targetLtv(), newTargetLtv);
-        assertApproxEqRel(vault.getLtv(), newTargetLtv, 0.001e18);
-        assertApproxEqRel(vault.totalDebt(), debtBefore.mulWadUp(1.1e18), 0.001e18);
+        assertEq(vault.targetLtv(), newTargetLtv, "target ltv");
+        assertApproxEqRel(vault.getLtv(), newTargetLtv, 0.001e18, "ltv");
+        assertApproxEqRel(vault.totalDebt(), debtBefore.mulWadUp(1.1e18), 0.001e18, "debt");
     }
 
     function test_applyNewTargetLtv_ChangesLtvDownAndRebalances() public {
@@ -175,9 +168,9 @@ contract scUSDCTest is TestPlus {
 
         vault.applyNewTargetLtv(newTargetLtv);
 
-        assertEq(vault.targetLtv(), newTargetLtv);
-        assertApproxEqRel(vault.getLtv(), newTargetLtv, 0.001e18);
-        assertApproxEqRel(vault.totalDebt(), debtBefore.mulWadUp(0.9e18), 0.001e18);
+        assertEq(vault.targetLtv(), newTargetLtv, "target ltv");
+        assertApproxEqRel(vault.getLtv(), newTargetLtv, 0.001e18, "ltv");
+        assertApproxEqRel(vault.totalDebt(), debtBefore.mulWadUp(0.9e18), 0.001e18, "debt");
     }
 
     function test_applyNewTargetLtv_FailsIfNewLtvIsTooHigh() public {
@@ -199,9 +192,9 @@ contract scUSDCTest is TestPlus {
 
         vault.applyNewTargetLtv(0);
 
-        assertEq(vault.getLtv(), 0);
-        assertEq(vault.totalDebt(), 0);
-        assertEq(vault.totalCollateralSupplied(), collateralBefore);
+        assertEq(vault.getLtv(), 0, "ltv");
+        assertEq(vault.totalDebt(), 0, "debt");
+        assertEq(vault.totalCollateralSupplied(), collateralBefore, "collateral");
     }
 
     /// #totalAssets ///
@@ -212,11 +205,11 @@ contract scUSDCTest is TestPlus {
 
         vault.rebalance();
 
-        assertApproxEq(vault.totalAssets(), amount, 1);
+        assertApproxEqAbs(vault.totalAssets(), amount, 1, "total assets before ltv change");
 
         vault.applyNewTargetLtv(0.5e18);
 
-        assertApproxEq(vault.totalAssets(), amount, 1);
+        assertApproxEqAbs(vault.totalAssets(), amount, 1, "total assets after ltv change");
     }
 
     function test_totalAssets_AccountsProfitsMade() public {
@@ -232,7 +225,7 @@ contract scUSDCTest is TestPlus {
         // ~65% profit because of 65% target ltv
         uint256 expectedProfit = amount.mulWadDown(vault.targetLtv());
 
-        assertApproxEqRel(vault.totalAssets(), amount + expectedProfit, 0.005e18);
+        assertApproxEqRel(vault.totalAssets(), amount + expectedProfit, 0.005e18, "total assets");
     }
 
     /// #withdraw ///
@@ -252,14 +245,14 @@ contract scUSDCTest is TestPlus {
 
         uint256 assets = vault.convertToAssets(vault.balanceOf(alice));
 
-        assertApproxEq(assets, amount, 1);
+        assertApproxEqAbs(assets, amount, 1);
 
         vm.startPrank(alice);
         vault.withdraw(assets, alice, alice);
 
-        assertApproxEq(vault.balanceOf(alice), 0, 1);
-        assertApproxEq(vault.totalAssets(), 0, 1);
-        assertRelApproxEq(usdc.balanceOf(alice), amount, 0.001e18);
+        assertApproxEqAbs(vault.balanceOf(alice), 0, 1);
+        assertApproxEqAbs(vault.totalAssets(), 0, 1);
+        assertApproxEqRel(usdc.balanceOf(alice), amount, 0.001e18);
 
         vm.stopPrank();
     }
@@ -279,18 +272,18 @@ contract scUSDCTest is TestPlus {
         uint256 floatBefore = vault.usdcBalance();
         uint256 collateralBefore = vault.totalCollateralSupplied();
 
-        assertApproxEq(floatBefore, deposit / 2, 1);
-        assertApproxEq(collateralBefore, deposit / 2, 1);
+        assertApproxEqAbs(floatBefore, deposit / 2, 1);
+        assertApproxEqAbs(collateralBefore, deposit / 2, 1);
 
         uint256 withdrawAmount = 5000e6;
         vm.startPrank(alice);
         vault.withdraw(withdrawAmount, address(alice), address(alice));
         vm.stopPrank();
 
-        assertApproxEq(usdc.balanceOf(alice), withdrawAmount, 1);
-        assertApproxEq(vault.totalAssets(), deposit - withdrawAmount, 1);
-        assertEq(vault.usdcBalance(), floatBefore - withdrawAmount);
-        assertEq(vault.totalCollateralSupplied(), collateralBefore);
+        assertApproxEqAbs(usdc.balanceOf(alice), withdrawAmount, 1, "alice's usdc balance");
+        assertApproxEqAbs(vault.totalAssets(), deposit - withdrawAmount, 1, "vault total assets");
+        assertEq(vault.usdcBalance(), floatBefore - withdrawAmount, "vault float");
+        assertEq(vault.totalCollateralSupplied(), collateralBefore, "vault collateral");
     }
 
     function test_withdraw_UsesAssetsFromProfitsSecond() public {
@@ -316,12 +309,12 @@ contract scUSDCTest is TestPlus {
         vault.withdraw(withdrawAmount, address(alice), address(alice));
         vm.stopPrank();
 
-        assertApproxEq(usdc.balanceOf(alice), withdrawAmount, 1);
-        assertApproxEq(vault.totalAssets(), totalAssetsBefore - withdrawAmount, 0.001e18);
-        assertEq(vault.totalCollateralSupplied(), collateralBefore);
+        assertApproxEqAbs(usdc.balanceOf(alice), withdrawAmount, 1, "alice's usdc balance");
+        assertApproxEqAbs(vault.totalAssets(), totalAssetsBefore - withdrawAmount, 0.001e18, "vault total assets");
+        assertEq(vault.totalCollateralSupplied(), collateralBefore, "vault collateral");
         // float is maintained
         uint256 floatExpeced = vault.totalAssets().mulWadDown(vault.floatPercentage());
-        assertApproxEqRel(vault.usdcBalance(), floatExpeced, 0.05e18);
+        assertApproxEqRel(vault.usdcBalance(), floatExpeced, 0.05e18, "vault float");
     }
 
     function test_withdraw_UsesAssetsFromCollateralLast() public {
@@ -346,12 +339,12 @@ contract scUSDCTest is TestPlus {
         vault.withdraw(withdrawAmount, address(alice), address(alice));
         vm.stopPrank();
 
-        assertApproxEq(usdc.balanceOf(alice), withdrawAmount, 1);
-        assertApproxEq(vault.totalAssets(), totalAssetsBefore - withdrawAmount, 0.001e18);
+        assertApproxEqAbs(usdc.balanceOf(alice), withdrawAmount, 1, "alice's usdc balance");
+        assertApproxEqAbs(vault.totalAssets(), totalAssetsBefore - withdrawAmount, 0.001e18, "vault total assets");
         // float is maintained
         uint256 floatExpeced = vault.totalAssets().mulWadDown(vault.floatPercentage());
-        assertApproxEqRel(vault.usdcBalance(), floatExpeced, 0.05e18);
+        assertApproxEqRel(vault.usdcBalance(), floatExpeced, 0.05e18, "vault float");
         uint256 collateralExpected = totalAssetsBefore - floatExpeced - withdrawAmount;
-        assertApproxEqRel(vault.totalCollateralSupplied(), collateralExpected, 0.01e18);
+        assertApproxEqRel(vault.totalCollateralSupplied(), collateralExpected, 0.01e18, "vault collateral");
     }
 }
