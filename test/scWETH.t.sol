@@ -236,8 +236,8 @@ contract scWETHTest is Test {
         // simulate wstETH supply interest to EULER
         uint256 timePeriod = bound(tP, 260 days, 365 days);
         uint256 annualPeriod = 365 days;
-        uint256 annualApy = 0.05e18;
-        uint256 stEthStakingInterest = 1e18 + annualApy.mulDivDown(timePeriod, annualPeriod);
+        uint256 stEthStakingApy = 0.05e18;
+        uint256 stEthStakingInterest = 1e18 + stEthStakingApy.mulDivDown(timePeriod, annualPeriod);
 
         console.log(stEthStakingInterest, 1.004e18);
 
