@@ -43,7 +43,7 @@ contract scUSDC is sc4626 {
     ISwapRouter public constant swapRouter = ISwapRouter(0xE592427A0AEce92De3Edee1F18E0157C05861564);
 
     // 0x swap router
-    address constant xrouter = 0xDef1C0ded9bec7F1a1670819833240f027b25EfF;
+    address public constant xrouter = 0xDef1C0ded9bec7F1a1670819833240f027b25EfF;
 
     // Chainlink pricefeed (USDC -> WETH)
     AggregatorV3Interface public constant usdcToEthPriceFeed =
@@ -109,15 +109,17 @@ contract scUSDC is sc4626 {
         if (_assets <= balance) return;
 
         // if we don't have enough assets, we need to withdraw what's missing from scWETH & euler
-        uint256 floatRequired = (totalAssets() - _assets).mulWadUp(1e18);
+        uint256 total = totalAssets();
+        uint256 floatRequired = total > _assets ? (totalAssets() - _assets).mulWadUp(floatPercentage) : 0;
         uint256 usdcToWithdraw = _assets + floatRequired - balance;
 
         uint256 wethDebt = totalDebt();
         uint256 wethInvested = scWETH.convertToAssets(scWETH.balanceOf(address(this)));
 
         if (wethInvested > wethDebt) {
+            // we have some profit in weth
             uint256 wethProfit = wethInvested - wethDebt;
-            uint256 wethToWithdraw = usdcToWithdraw.mulWadUp(wethDebt).divWadUp(wethInvested);
+            uint256 wethToWithdraw = getWethFromUsdc(usdcToWithdraw);
 
             if (wethProfit >= wethToWithdraw) {
                 // we cover withdrawal amount from selling weth profit
@@ -158,13 +160,15 @@ contract scUSDC is sc4626 {
         uint256 targetDebt = getWethFromUsdc(totalCollateralSupplied().mulWadDown(targetLtv));
 
         // ToDO: add some tollarance when comparing ltvs, for ex 0.1%
+        if (currentDebt == targetDebt) return;
+
         if (currentDebt > targetDebt) {
             // we need to withdraw weth from scWETH and repay debt on euler
             uint256 delta = currentDebt - targetDebt;
 
             scWETH.withdraw(delta, address(this), address(this));
             dToken.repay(0, delta);
-        } else if (currentDebt < targetDebt) {
+        } else {
             // we need to borrow more weth on euler and deposit it in scWETH
             uint256 delta = targetDebt - currentDebt;
 
