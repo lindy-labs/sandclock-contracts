@@ -340,11 +340,43 @@ contract scUSDCTest is Test {
         vm.stopPrank();
 
         assertApproxEqAbs(usdc.balanceOf(alice), withdrawAmount, 1, "alice's usdc balance");
-        assertApproxEqAbs(vault.totalAssets(), totalAssetsBefore - withdrawAmount, 0.001e18, "vault total assets");
+        assertApproxEqRel(vault.totalAssets(), totalAssetsBefore - withdrawAmount, 0.005e18, "vault total assets");
         // float is maintained
         uint256 floatExpeced = vault.totalAssets().mulWadDown(vault.floatPercentage());
         assertApproxEqRel(vault.usdcBalance(), floatExpeced, 0.05e18, "vault float");
         uint256 collateralExpected = totalAssetsBefore - floatExpeced - withdrawAmount;
         assertApproxEqRel(vault.totalCollateralSupplied(), collateralExpected, 0.01e18, "vault collateral");
+    }
+
+    function test_withdraw_WorksWhenWithdrawingMaxAvailable() public {
+        uint256 deposit = 10000e6;
+        deal(address(usdc), alice, deposit);
+
+        vm.startPrank(alice);
+        usdc.approve(address(vault), type(uint256).max);
+        vault.deposit(deposit, alice);
+        vm.stopPrank();
+
+        vault.rebalance();
+
+        // add 100% profit to the weth vault
+        uint256 wethInvested = weth.balanceOf(address(wethVault));
+        deal(address(weth), address(wethVault), wethInvested * 2);
+
+        uint256 totalAssetsBefore = vault.totalAssets();
+        uint256 totalCollateralBefore = vault.totalCollateralSupplied();
+
+        vm.startPrank(alice);
+        vault.withdraw(totalAssetsBefore, address(alice), address(alice));
+        vm.stopPrank();
+
+        assertApproxEqAbs(usdc.balanceOf(alice), totalAssetsBefore, 1, "alice's usdc balance");
+
+        assertApproxEqRel(vault.usdcBalance(), 0, 0.05e18, "vault float");
+        // some dust can be left in as collateral
+        assertApproxEqRel(
+            vault.totalCollateralSupplied(), totalCollateralBefore.mulWadUp(0.0005e18), 1e18, "vault collateral"
+        );
+        assertApproxEqRel(vault.totalAssets(), totalAssetsBefore.mulWadUp(0.0005e18), 1e18, "vault total assets");
     }
 }
