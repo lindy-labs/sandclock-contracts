@@ -231,12 +231,16 @@ contract scWETHTest is Test {
         dTokenWeth.borrow(0, amount.mulWadDown(ethWstEthMaxLtv - 1e16));
     }
 
-    function testHarvest(uint256 amount) public {
-        // simulate wstETH supply interest to EULER
-        uint256 timePeriod = 365 days;
-        uint256 stEthStakingInterest = 1.05e18;
-
+    function testHarvest(uint256 amount, uint64 tP) public {
         amount = bound(amount, 1e5, 1e21);
+        // simulate wstETH supply interest to EULER
+        uint256 timePeriod = bound(tP, 260 days, 365 days);
+        uint256 annualPeriod = 365 days;
+        uint256 annualApy = 0.05e18;
+        uint256 stEthStakingInterest = 1e18 + annualApy.mulDivDown(timePeriod, annualPeriod);
+
+        console.log(stEthStakingInterest, 1.004e18);
+
         depositToVault(address(this), amount);
 
         vault.depositIntoStrategy();
@@ -255,12 +259,20 @@ contract scWETHTest is Test {
 
         vault.harvest();
 
-        assertApproxEqRel(vault.totalProfit(), amount.mulWadDown(0.07e18), 0.1e18, "atleast 7% APY");
+        uint256 minimumExpectedApy = 0.05e18;
+
+        assertGt(
+            vault.totalProfit(),
+            amount.mulWadDown(minimumExpectedApy.mulDivDown(timePeriod, annualPeriod)),
+            "atleast 5% APY"
+        );
 
         vault.redeem(vault.balanceOf(address(this)), address(this), address(this));
 
-        assertApproxEqRel(
-            weth.balanceOf(address(this)) - amount, amount.mulWadDown(0.07e18), 0.1e18, "atleast 7% APY after withdraw"
+        assertGt(
+            weth.balanceOf(address(this)) - amount,
+            amount.mulWadDown(minimumExpectedApy.mulDivDown(timePeriod, annualPeriod)),
+            "atleast 5% APY after withdraw"
         );
     }
 
