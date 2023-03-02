@@ -2,6 +2,14 @@
 pragma solidity ^0.8.13;
 
 interface IMarkets {
+    struct AssetConfig {
+        address eTokenAddress;
+        bool borrowIsolated;
+        uint32 collateralFactor;
+        uint32 borrowFactor;
+        uint24 twapWindow;
+    }
+
     /// @notice Add an asset to the entered market list, or do nothing if already entered
     /// @param subAccountId 0 for primary, 1-255 for a sub-account
     /// @param newMarket Underlying token address
@@ -9,4 +17,6 @@ interface IMarkets {
 
     // Given an underlying, lookup the associated EToken
     function underlyingToEToken(address underlying) external view returns (address);
+
+    function underlyingToAssetConfig(address underlying) external view returns (AssetConfig memory);
 }

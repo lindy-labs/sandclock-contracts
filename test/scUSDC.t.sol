@@ -8,6 +8,7 @@ import {WETH} from "solmate/tokens/WETH.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 import {scUSDC} from "../src/steth/scUSDC.sol";
 import {scWETH} from "../src/steth/scWETH.sol";
+import {IMarkets} from "../src/interfaces/euler/IMarkets.sol";
 
 contract scUSDCTest is Test {
     using FixedPointMathLib for uint256;
@@ -57,6 +58,14 @@ contract scUSDCTest is Test {
             weth.allowance(address(vault), address(vault.swapRouter())), type(uint256).max, "weth->swapRouter allowance"
         );
         assertEq(weth.allowance(address(vault), address(vault.scWETH())), type(uint256).max, "weth->scWETH allowance");
+    }
+
+    /// #getMaxLtv ///
+
+    function test_maxLtv() public {
+        // at the current fork block, usdc collateral factor = 0.9 & weth borrow factor = 0.91
+        // maxLtv = 0.9 * 0.91 = 0.819
+        assertEq(vault.getMaxLtv(), 0.819e18);
     }
 
     /// #deposit ///
@@ -176,7 +185,7 @@ contract scUSDCTest is Test {
     function test_applyNewTargetLtv_FailsIfNewLtvIsTooHigh() public {
         deal(address(usdc), address(vault), 10000e6);
 
-        uint256 tooHighLtv = vault.maxLtv() + 1;
+        uint256 tooHighLtv = vault.getMaxLtv() + 1;
 
         vm.expectRevert(scUSDC.InvalidUsdcWethTargetLtv.selector);
         vault.applyNewTargetLtv(tooHighLtv);
