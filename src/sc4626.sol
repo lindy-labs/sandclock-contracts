@@ -22,9 +22,16 @@ abstract contract sc4626 is ERC4626, AccessControl {
     /// Role allowed to harvest/reinvest
     bytes32 public constant KEEPER_ROLE = keccak256("KEEPER_ROLE");
 
+    error CallerNotKeeper();
+
     event PerformanceFeeUpdated(address indexed user, uint256 newPerformanceFee);
     event FloatPercentageUpdated(address indexed user, uint256 newFloatPercentage);
     event TreasuryUpdated(address indexed user, address newTreasury);
+
+    modifier onlyKeeper() {
+        if (!hasRole(KEEPER_ROLE, msg.sender)) revert CallerNotKeeper();
+        _;
+    }
 
     function setPerformanceFee(uint256 newPerformanceFee) external onlyRole(DEFAULT_ADMIN_ROLE) {
         require(newPerformanceFee <= 1e18, "fee too high");
