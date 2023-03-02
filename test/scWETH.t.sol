@@ -211,6 +211,7 @@ contract scWETHTest is Test {
         assertApproxEqRel(vault.getLtv(), newLtv, 0.011e18, "leverage change failed");
     }
 
+
     function testBorrowOverMaxLtvFail(uint256 amount) public {
         amount = bound(amount, 1e5, 1e21);
         vm.deal(address(this), amount);
@@ -274,6 +275,20 @@ contract scWETHTest is Test {
             amount.mulWadDown(minimumExpectedApy.mulDivDown(timePeriod, annualPeriod)),
             "atleast 5% APY after withdraw"
         );
+        
+    function testDepositEth(uint256 amount) public {
+        amount = bound(amount, 1e5, 1e21);
+        vm.deal(address(this), amount);
+
+        assertEq(weth.balanceOf(address(this)), 0);
+        assertEq(address(this).balance, amount);
+
+        vault.deposit{value: amount}(address(this));
+
+        assertEq(address(this).balance, 0, "eth not transferred from user");
+        assertEq(vault.balanceOf(address(this)), amount, "shares not minted");
+        assertEq(weth.balanceOf(address(vault)), amount, "weth not transferred to vault");
+
     }
 
     function depositToVault(address user, uint256 amount) public returns (uint256 shares) {
