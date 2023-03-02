@@ -145,7 +145,7 @@ contract scWETHTest is Test {
         assertEq(vault.convertToAssets(vault.balanceOf(address(this))), amount);
         assertEq(weth.balanceOf(address(this)), preDepositBal - amount);
 
-        vault.depositIntoStrategy();
+        vault.depositIntoStrategy(0);
 
         // account for value loss if stETH worth less than ETH
         (, int256 price,,,) = vault.stEThToEthPriceFeed().latestRoundData();
@@ -174,7 +174,7 @@ contract scWETHTest is Test {
         uint256 shares1 = depositToVault(address(this), depositAmount1);
         uint256 shares2 = depositToVault(alice, depositAmount2);
 
-        vault.depositIntoStrategy();
+        vault.depositIntoStrategy(0);
 
         vault.redeem(shares1 / 2, address(this), address(this));
         assertRelApproxEq(weth.balanceOf(address(this)), (depositAmount1 / 2), 0.025e18);
@@ -194,10 +194,10 @@ contract scWETHTest is Test {
     function testLeverageUp(uint256 amount, uint256 newLtv) public {
         amount = bound(amount, 1e5, 1e20);
         depositToVault(address(this), amount);
-        vault.depositIntoStrategy();
+        vault.depositIntoStrategy(0);
         newLtv = bound(newLtv, vault.getLtv() + 1e15, ethWstEthMaxLtv - 0.001e18);
         console.log("vault.getLtv()", vault.getLtv());
-        vault.changeLeverage(newLtv);
+        vault.changeLeverage(newLtv, 0);
         console.log("vault.getLtv()", vault.getLtv());
         assertApproxEqRel(vault.getLtv(), newLtv, 0.01e18, "leverage change failed");
     }
@@ -205,10 +205,10 @@ contract scWETHTest is Test {
     function testLeverageDown(uint256 amount, uint256 newLtv) public {
         amount = bound(amount, 1e5, 1e20);
         depositToVault(address(this), amount);
-        vault.depositIntoStrategy();
+        vault.depositIntoStrategy(0);
         newLtv = bound(newLtv, 0.01e18, vault.getLtv() - 1e15);
         console.log("vault.getLtv()", vault.getLtv());
-        vault.changeLeverage(newLtv);
+        vault.changeLeverage(newLtv, 0);
         console.log("vault.getLtv()", vault.getLtv());
         assertApproxEqRel(vault.getLtv(), newLtv, 0.011e18, "leverage change failed");
     }

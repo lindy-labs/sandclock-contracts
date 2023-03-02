@@ -21,6 +21,7 @@ error InvalidMaxLtv();
 error InvalidFlashLoanCaller();
 error InvalidSlippageTolerance();
 error AdminZeroAddress();
+error InvalidCurveSwapPercentage();
 
 contract scWETH is sc4626, IFlashLoanRecipient {
     using SafeTransferLib for ERC20;
@@ -31,6 +32,13 @@ contract scWETH is sc4626, IFlashLoanRecipient {
     event TargetLtvRatioUpdated(address indexed user, uint256 newTargetLtv);
     event Harvest(uint256 profitSinceLastHarvest, uint256 performanceFee);
 
+    struct FlashLoanParams {
+        bool isDeposit;
+        uint256 amount;
+        uint256 curveSwapPercentage; // 0 in case of withdrawal
+    }
+
+    uint256 constant WAD = 1e18;
     address public constant EULER = 0x27182842E098f60e3D576794A5bFFb0777E025d3;
 
     // The Euler market contract
@@ -85,13 +93,13 @@ contract scWETH is sc4626, IFlashLoanRecipient {
     }
 
     function setSlippageTolerance(uint256 newSlippageTolerance) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (newSlippageTolerance > 1e18) revert InvalidSlippageTolerance();
+        if (newSlippageTolerance > WAD) revert InvalidSlippageTolerance();
         slippageTolerance = newSlippageTolerance;
         emit SlippageToleranceUpdated(msg.sender, newSlippageTolerance);
     }
 
     function setMaxLtv(uint256 newMaxLtv) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (newMaxLtv > 1e18) revert InvalidMaxLtv();
+        if (newMaxLtv > WAD) revert InvalidMaxLtv();
         maxLtv = newMaxLtv;
         emit MaxLtvUpdated(msg.sender, newMaxLtv);
     }
@@ -111,24 +119,24 @@ contract scWETH is sc4626, IFlashLoanRecipient {
         uint256 fee = profit.mulWadDown(performanceFee);
 
         // mint equivalent amount of tokens to the performance fee beneficiary ie the treasury
-        _mint(treasury, fee.mulDivDown(1e18, convertToAssets(1e18)));
+        _mint(treasury, fee.mulDivDown(WAD, convertToAssets(WAD)));
 
         emit Harvest(profit, fee);
     }
 
     // increase/decrease the net leverage used by the strategy
-    function changeLeverage(uint256 newTargetLtv) public onlyRole(KEEPER_ROLE) {
+    function changeLeverage(uint256 newTargetLtv, uint256 curveSwapPercentage) public onlyRole(KEEPER_ROLE) {
         if (newTargetLtv >= maxLtv) revert InvalidTargetLtv();
 
         targetLtv = newTargetLtv;
         emit TargetLtvRatioUpdated(msg.sender, newTargetLtv);
 
-        _rebalancePosition();
+        _rebalancePosition(curveSwapPercentage);
     }
 
     // separate to save gas for users depositing
-    function depositIntoStrategy() external onlyRole(KEEPER_ROLE) {
-        _rebalancePosition();
+    function depositIntoStrategy(uint256 curveSwapPercentage) external onlyRole(KEEPER_ROLE) {
+        _rebalancePosition(curveSwapPercentage);
     }
 
     /// @param amount : amount of asset to withdraw into the vault
@@ -154,7 +162,7 @@ contract scWETH is sc4626, IFlashLoanRecipient {
 
     // total wstETH supplied as collateral (in ETH terms)
     function totalCollateralSupplied() public view returns (uint256) {
-        return wstEthToEth(eToken.balanceOfUnderlying(address(this)));
+        return _wstEthToEth(eToken.balanceOfUnderlying(address(this)));
     }
 
     // total eth borrowed
@@ -207,17 +215,25 @@ contract scWETH is sc4626, IFlashLoanRecipient {
         uint256 flashLoanAmount = amounts[0];
 
         // decode user data
-        (bool isDeposit, uint256 amount) = abi.decode(userData, (bool, uint256));
+        FlashLoanParams memory params = abi.decode(userData, (FlashLoanParams));
 
-        amount += flashLoanAmount;
+        params.amount += flashLoanAmount;
 
         // if flashloan received as part of a deposit
-        if (isDeposit) {
+        if (params.isDeposit) {
             // unwrap eth
-            weth.withdraw(amount);
+            weth.withdraw(params.amount);
 
-            // stake to lido / eth => stETH
-            stEth.submit{value: amount}(address(0x00));
+            uint256 curveSwapAmount = params.amount.mulWadDown(params.curveSwapPercentage);
+
+            if (curveSwapAmount > 0) {
+                //  eth => stETH
+                curvePool.exchange(0, 1, curveSwapAmount, _ethToStEth(curveSwapAmount).mulWadDown(slippageTolerance));
+            }
+            if (params.curveSwapPercentage != WAD) {
+                // stake to lido / eth => stETH
+                stEth.submit{value: params.amount - curveSwapAmount}(address(0x00));
+            }
 
             // wrap stETH
             wstETH.wrap(stEth.balanceOf(address(this)));
@@ -236,18 +252,14 @@ contract scWETH is sc4626, IFlashLoanRecipient {
                 eToken.withdraw(0, type(uint256).max);
             } else {
                 dToken.repay(0, flashLoanAmount);
-                eToken.withdraw(0, _ethToWstEth(amount).divWadDown(slippageTolerance));
+                eToken.withdraw(0, _ethToWstEth(params.amount).divWadDown(slippageTolerance));
             }
 
             // unwrap wstETH
             uint256 stEthAmount = wstETH.unwrap(wstETH.balanceOf(address(this)));
 
-            // stEth to eth
-            (, int256 price,,,) = stEThToEthPriceFeed.latestRoundData();
-            uint256 expected = stEthAmount.mulWadDown(uint256(price));
-
             // stETH to eth
-            curvePool.exchange(1, 0, stEthAmount, expected.mulWadDown(slippageTolerance));
+            curvePool.exchange(1, 0, stEthAmount, _stEthToEth(stEthAmount).mulWadDown(slippageTolerance));
 
             // wrap eth
             weth.deposit{value: address(this).balance}();
@@ -262,7 +274,9 @@ contract scWETH is sc4626, IFlashLoanRecipient {
 
     //////////////////// INTERNAL METHODS //////////////////////////
 
-    function _rebalancePosition() internal {
+    /// @param curveSwapPercentage: percentage of the amount of weth to swap on curve to stEth (the remaining to be staked to lido)
+    function _rebalancePosition(uint256 curveSwapPercentage) internal {
+        if (curveSwapPercentage > WAD) revert InvalidCurveSwapPercentage();
         // storage loads
         uint256 amount = asset.balanceOf(address(this));
         uint256 ltv = targetLtv;
@@ -275,7 +289,7 @@ contract scWETH is sc4626, IFlashLoanRecipient {
         bool isDeposit = target > debt;
 
         // calculate the flashloan amount needed
-        uint256 flashLoanAmount = (isDeposit ? target - debt : debt - target).divWadDown(1e18 - ltv);
+        uint256 flashLoanAmount = (isDeposit ? target - debt : debt - target).divWadDown(WAD - ltv);
 
         address[] memory tokens = new address[](1);
         tokens[0] = address(weth);
@@ -286,15 +300,17 @@ contract scWETH is sc4626, IFlashLoanRecipient {
         // needed otherwise counted as profit during harvest
         totalInvested += amount;
 
+        FlashLoanParams memory params = FlashLoanParams(isDeposit, amount, curveSwapPercentage);
+
         // take flashloan
-        balancerVault.flashLoan(address(this), tokens, amounts, abi.encode(isDeposit, amount));
+        balancerVault.flashLoan(address(this), tokens, amounts, abi.encode(params));
     }
 
     function _withdrawToVault(uint256 amount) internal {
         uint256 ltv = getLtv();
         uint256 debt = totalDebt();
 
-        uint256 flashLoanAmount = (debt - ltv.mulWadDown(amount)).divWadDown(1e18 - ltv);
+        uint256 flashLoanAmount = (debt - ltv.mulWadDown(amount)).divWadDown(WAD - ltv);
 
         address[] memory tokens = new address[](1);
         tokens[0] = address(weth);
@@ -302,30 +318,40 @@ contract scWETH is sc4626, IFlashLoanRecipient {
         uint256[] memory amounts = new uint256[](1);
         amounts[0] = flashLoanAmount;
 
+        FlashLoanParams memory params = FlashLoanParams(false, amount, 0);
+
         // take flashloan
-        balancerVault.flashLoan(address(this), tokens, amounts, abi.encode(false, amount));
+        balancerVault.flashLoan(address(this), tokens, amounts, abi.encode(params));
     }
 
-    function wstEthToEth(uint256 wstEthAmount) public view returns (uint256 ethAmount) {
+    function _wstEthToEth(uint256 wstEthAmount) internal view returns (uint256 ethAmount) {
         if (wstEthAmount > 0) {
             // wstETh to stEth using exchangeRate
             uint256 stEthAmount = wstETH.getStETHByWstETH(wstEthAmount);
 
             // stEth to eth
-            (, int256 price,,,) = stEThToEthPriceFeed.latestRoundData();
-            ethAmount = stEthAmount.mulWadDown(uint256(price));
+            ethAmount = _stEthToEth(stEthAmount);
         }
     }
 
     function _ethToWstEth(uint256 ethAmount) internal view returns (uint256 wstEthAmount) {
         if (ethAmount > 0) {
-            (, int256 price,,,) = stEThToEthPriceFeed.latestRoundData();
-
-            // eth to stEth
-            uint256 stEthAmount = ethAmount.divWadDown(uint256(price));
-
             // stEth to wstEth
-            wstEthAmount = wstETH.getWstETHByStETH(stEthAmount);
+            wstEthAmount = wstETH.getWstETHByStETH(_ethToStEth(ethAmount));
+        }
+    }
+
+    function _stEthToEth(uint256 stEthAmount) internal view returns (uint256 ethAmount) {
+        if (stEthAmount > 0) {
+            (, int256 price,,,) = stEThToEthPriceFeed.latestRoundData();
+            ethAmount = stEthAmount.mulWadDown(uint256(price));
+        }
+    }
+
+    function _ethToStEth(uint256 ethAmount) internal view returns (uint256 stEthAmount) {
+        if (ethAmount > 0) {
+            (, int256 price,,,) = stEThToEthPriceFeed.latestRoundData();
+            stEthAmount = ethAmount.divWadDown(uint256(price));
         }
     }
 
