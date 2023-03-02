@@ -24,7 +24,10 @@ contract scUSDC is sc4626 {
     using SafeTransferLib for ERC20;
     using FixedPointMathLib for uint256;
 
-    error InvalidUsdcWethTargetLtv();
+    error InvalidTargetLtv();
+
+    event NewTargetLtvApplied(uint256 newtargetLtv);
+    event Rebalanced(uint256 collateral, uint256 debt, uint256 ltv);
 
     WETH public constant weth = WETH(payable(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2));
     ERC20 public constant usdc = ERC20(0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48);
@@ -82,12 +85,14 @@ contract scUSDC is sc4626 {
         return scaledUsdcCollateralFactor.mulWadDown(scaledWethBorrowFactor);
     }
 
-    function applyNewTargetLtv(uint256 _usdcWethTargetLtv) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (_usdcWethTargetLtv > getMaxLtv()) revert InvalidUsdcWethTargetLtv();
+    function applyNewTargetLtv(uint256 _newTargetLtv) external onlyKeeper {
+        if (_newTargetLtv > getMaxLtv()) revert InvalidTargetLtv();
 
-        targetLtv = _usdcWethTargetLtv;
+        targetLtv = _newTargetLtv;
 
         rebalance();
+
+        emit NewTargetLtvApplied(_newTargetLtv);
     }
 
     function totalAssets() public view override returns (uint256 total) {
@@ -145,6 +150,8 @@ contract scUSDC is sc4626 {
             dToken.borrow(0, delta);
             scWETH.deposit(delta, address(this));
         }
+
+        emit Rebalanced(totalCollateralSupplied(), totalDebt(), getLtv());
     }
 
     // ToDo: implement this

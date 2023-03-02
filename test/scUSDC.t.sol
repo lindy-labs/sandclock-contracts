@@ -6,12 +6,16 @@ import "forge-std/Test.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {WETH} from "solmate/tokens/WETH.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
+import {sc4626} from "../src/sc4626.sol";
 import {scUSDC} from "../src/steth/scUSDC.sol";
 import {scWETH} from "../src/steth/scWETH.sol";
 import {IMarkets} from "../src/interfaces/euler/IMarkets.sol";
 
 contract scUSDCTest is Test {
     using FixedPointMathLib for uint256;
+
+    event NewTargetLtvApplied(uint256 newtargetLtv);
+    event Rebalanced(uint256 collateral, uint256 debt, uint256 ltv);
 
     uint256 mainnetFork;
     uint256 constant ethWstEthMaxLtv = 0.7735e18;
@@ -23,7 +27,6 @@ contract scUSDCTest is Test {
 
     scUSDC vault;
     scWETH wethVault;
-    uint256 initAmount = 100e18;
 
     WETH weth;
     ERC20 usdc;
@@ -103,6 +106,15 @@ contract scUSDCTest is Test {
         assertApproxEqAbs(vault.totalAssets(), amount, 1, "total assets");
     }
 
+    function test_rebalance_EmitsEventOnSuccess() public {
+        deal(address(usdc), address(vault), 10000e6);
+
+        vm.expectEmit(true, true, true, true);
+        emit Rebalanced(9899999999, 3758780024415885000, 649999999964646465);
+
+        vault.rebalance();
+    }
+
     function test_rebalance_DoesntDepositIfFloatRequirementIsGreaterThanBalance() public {
         deal(address(usdc), address(vault), 10000e6);
 
@@ -148,6 +160,23 @@ contract scUSDCTest is Test {
 
     /// #applyNewTargetLtv ///
 
+    function test_applyNewTargetLtv_FailsIfCallerIsNotKeeper() public {
+        uint256 newTargetLtv = vault.targetLtv() / 2;
+
+        vm.startPrank(alice);
+        vm.expectRevert(sc4626.CallerNotKeeper.selector);
+        vault.applyNewTargetLtv(newTargetLtv);
+    }
+
+    function test_applyNewTargetLtv_EmitsEventOnSuccess() public {
+        uint256 newTargetLtv = vault.targetLtv() / 2;
+
+        vm.expectEmit(true, true, true, true);
+        emit NewTargetLtvApplied(newTargetLtv);
+
+        vault.applyNewTargetLtv(newTargetLtv);
+    }
+
     function test_applyNewTargetLtv_ChangesLtvUpAndRebalances() public {
         deal(address(usdc), address(vault), 10000e6);
 
@@ -187,7 +216,7 @@ contract scUSDCTest is Test {
 
         uint256 tooHighLtv = vault.getMaxLtv() + 1;
 
-        vm.expectRevert(scUSDC.InvalidUsdcWethTargetLtv.selector);
+        vm.expectRevert(scUSDC.InvalidTargetLtv.selector);
         vault.applyNewTargetLtv(tooHighLtv);
     }
 
@@ -380,7 +409,6 @@ contract scUSDCTest is Test {
         vm.stopPrank();
 
         assertApproxEqAbs(usdc.balanceOf(alice), totalAssetsBefore, 1, "alice's usdc balance");
-
         assertApproxEqRel(vault.usdcBalance(), 0, 0.05e18, "vault float");
         // some dust can be left in as collateral
         assertApproxEqRel(
