@@ -65,7 +65,7 @@ contract scWETH is sc4626, IFlashLoanRecipient {
     // The max loan to value(ltv) ratio for borrowing eth on euler with wsteth as collateral for the flashloan
     uint256 public maxLtv = 0.7735e18;
 
-    // the target ltv ratio at which we actually borrow (<= ethWstEthMaxLtv)
+    // the target ltv ratio at which we actually borrow (<= maxLtv)
     uint256 public targetLtv = 0.7e18;
 
     // slippage for curve swaps
