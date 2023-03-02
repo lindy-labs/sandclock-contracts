@@ -15,10 +15,10 @@ import {ISwapRouter} from "../interfaces/uniswap/ISwapRouter.sol";
 
 import "forge-std/console2.sol";
 
-// TODOs: 1. add events
+// TODOs: 1. add events - done
 //        2. add leverage up/down & rebalancing? - done
-//        3. harvest euler rewardsS
-//        4. add tests
+//        3. harvest euler rewards - add test
+//        4. add tests - almost done
 //        5. add code styile guidelines docs
 contract scUSDC is sc4626 {
     using SafeTransferLib for ERC20;
@@ -27,13 +27,17 @@ contract scUSDC is sc4626 {
 
     error InvalidTargetLtv();
     error EULSwapFailed();
+    error InvalidSlippageTolerance();
+    error SlippageTooHigh();
 
     event NewTargetLtvApplied(uint256 newtargetLtv);
+    event SlippageToleranceUpdated(uint256 newSlippageTolerance);
     event Rebalanced(uint256 collateral, uint256 debt, uint256 ltv);
 
     WETH public constant weth = WETH(payable(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2));
     ERC20 public constant usdc = ERC20(0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48);
 
+    uint256 constant ONE = 1e18;
     // vaule used to scale the token's collateral/borrow factors from the euler market
     uint32 constant CONFIG_FACTOR_SCALE = 4_000_000_000;
 
@@ -57,11 +61,13 @@ contract scUSDC is sc4626 {
     AggregatorV3Interface public constant usdcToEthPriceFeed =
         AggregatorV3Interface(0x986b5E1e1755e3C2440e960477f25201B0a8bbD4);
 
-    ERC4626 public immutable scWETH;
-
     // USDC / WETH target LTV
     uint256 public targetLtv = 0.65e18;
-    // TODO: add slippage tolerance for uniswap swaps
+    // max slippage for swapping WETH -> USDC
+    uint256 public slippageTolerance = 0.01e18; // 1% default
+
+    // lev (w)eth vault
+    ERC4626 public immutable scWETH;
 
     constructor(address _admin, ERC4626 _scWETH) sc4626(_admin, usdc, "Sandclock USDC Vault", "scUSDC") {
         scWETH = _scWETH;
@@ -75,6 +81,14 @@ contract scUSDC is sc4626 {
         eul.safeApprove(xrouter, type(uint256).max);
 
         markets.enterMarket(0, address(usdc));
+    }
+
+    function setSlippageTolerance(uint256 _slippageTolerance) external onlyAdmin {
+        if (_slippageTolerance > 1e18) revert InvalidSlippageTolerance();
+
+        slippageTolerance = _slippageTolerance;
+
+        emit SlippageToleranceUpdated(_slippageTolerance);
     }
 
     // gets the cuurent max LTV for USDC / WETH loans on euler
@@ -202,7 +216,7 @@ contract scUSDC is sc4626 {
         // if we don't have enough assets, we need to withdraw what's missing from scWETH & euler
         uint256 total = totalAssets();
         uint256 floatRequired = total > _assets ? (totalAssets() - _assets).mulWadUp(floatPercentage) : 0;
-        uint256 usdcToWithdraw = _assets + floatRequired - balance;
+        uint256 usdcNeeded = _assets + floatRequired - balance;
 
         uint256 wethDebt = totalDebt();
         uint256 wethInvested = scWETH.convertToAssets(scWETH.balanceOf(address(this)));
@@ -210,7 +224,7 @@ contract scUSDC is sc4626 {
         if (wethInvested > wethDebt) {
             // we have some profit in weth
             uint256 wethProfit = wethInvested - wethDebt;
-            uint256 wethToWithdraw = getWethFromUsdc(usdcToWithdraw);
+            uint256 wethToWithdraw = getWethFromUsdc(usdcNeeded);
 
             if (wethProfit >= wethToWithdraw) {
                 // we cover withdrawal amount from selling weth profit
@@ -223,24 +237,21 @@ contract scUSDC is sc4626 {
             // we cannot cover withdrawal amount only from selling weth profit
             // so we sell as much as we can and withdraw the rest from euler
             scWETH.withdraw(wethProfit, address(this), address(this));
-            usdcToWithdraw -= _swapWethForUsdc(wethProfit);
+            usdcNeeded -= _swapWethForUsdc(wethProfit);
         }
 
         // to keep the same ltv, weth debt to repay has to be proporitional to collateral withdrawn
         uint256 collateral = totalCollateralSupplied();
-        uint256 wethNeeded = usdcToWithdraw.mulDivUp(wethDebt, collateral);
+        uint256 wethNeeded = usdcNeeded.mulDivUp(wethDebt, collateral);
 
         scWETH.withdraw(wethNeeded, address(this), address(this));
 
         // repay debt and take out collateral on euler
         dToken.repay(0, wethNeeded);
-        eToken.withdraw(0, usdcToWithdraw);
+        eToken.withdraw(0, usdcNeeded);
     }
 
     function _swapWethForUsdc(uint256 _wethAmount) internal returns (uint256 amountOut) {
-        // TODO: amount out min based on slippage tolerance
-        uint256 amountOutMin = 0;
-
         ISwapRouter.ExactInputSingleParams memory params = ISwapRouter.ExactInputSingleParams({
             tokenIn: address(weth),
             tokenOut: address(asset),
@@ -253,6 +264,9 @@ contract scUSDC is sc4626 {
         });
 
         amountOut = swapRouter.exactInputSingle(params);
-        // TODO: check if amountOut is enough and revert if not
+
+        uint256 minUsdcAmountOut = getUsdcFromWeth(_wethAmount).mulWadDown(1e18 - slippageTolerance);
+
+        if (amountOut < minUsdcAmountOut) revert SlippageTooHigh();
     }
 }

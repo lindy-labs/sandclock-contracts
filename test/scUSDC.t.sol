@@ -15,6 +15,7 @@ contract scUSDCTest is Test {
     using FixedPointMathLib for uint256;
 
     event NewTargetLtvApplied(uint256 newtargetLtv);
+    event SlippageToleranceUpdated(uint256 newSlippageTolerance);
     event Rebalanced(uint256 collateral, uint256 debt, uint256 ltv);
 
     uint256 mainnetFork;
@@ -102,7 +103,7 @@ contract scUSDCTest is Test {
         vault.rebalance();
 
         assertApproxEqAbs(vault.totalCollateralSupplied(), amount.mulWadDown(0.99e18), 1, "collateral"); // - float
-        assertEq(vault.totalDebt(), 3758780024415885000, "debt");
+        assertEq(vault.totalDebt(), 3_758780024415885000, "debt");
         assertEq(vault.usdcBalance(), amount.mulWadUp(vault.floatPercentage()), "float");
         assertApproxEqAbs(vault.totalAssets(), amount, 1, "total assets");
     }
@@ -111,7 +112,7 @@ contract scUSDCTest is Test {
         deal(address(usdc), address(vault), 10000e6);
 
         vm.expectEmit(true, true, true, true);
-        emit Rebalanced(9899999999, 3758780024415885000, 649999999964646465);
+        emit Rebalanced(9899_999999, 3_758780024415885000, 0.649999999964646465e18);
 
         vault.rebalance();
     }
@@ -373,7 +374,7 @@ contract scUSDCTest is Test {
 
         uint256 totalAssetsBefore = vault.totalAssets();
 
-        uint256 withdrawAmount = 15000e6;
+        uint256 withdrawAmount = 15000e6; // this amount forces selling of whole profits
         vm.startPrank(alice);
         vault.withdraw(withdrawAmount, address(alice), address(alice));
         vm.stopPrank();
@@ -416,5 +417,49 @@ contract scUSDCTest is Test {
             vault.totalCollateralSupplied(), totalCollateralBefore.mulWadUp(0.0005e18), 1e18, "vault collateral"
         );
         assertApproxEqRel(vault.totalAssets(), totalAssetsBefore.mulWadUp(0.0005e18), 1e18, "vault total assets");
+    }
+
+    function test_withdraw_FailsIfAmountOutIsLessThanMinWhenSwappingWETHtoUSDC() public {
+        uint256 deposit = 1_000_000e6;
+        deal(address(usdc), alice, deposit);
+
+        vm.startPrank(alice);
+        usdc.approve(address(vault), type(uint256).max);
+        vault.deposit(deposit, alice);
+        vm.stopPrank();
+
+        vault.rebalance();
+
+        // add 100% profit to the weth vault
+        uint256 wethInvested = weth.balanceOf(address(wethVault));
+        deal(address(weth), address(wethVault), wethInvested * 2);
+
+        vault.setSlippageTolerance(0);
+
+        uint256 withdrawAmount = 1_000_000e6; // this amount forces selling of whole profits
+        vm.startPrank(alice);
+        vm.expectRevert(scUSDC.SlippageTooHigh.selector);
+        vault.withdraw(withdrawAmount, address(alice), address(alice));
+        vm.stopPrank();
+    }
+
+    /// #setSlippageTolerance ///
+    function test_setSlippageTolerance_FailsIfCallerIsNotAdmin() public {
+        uint256 tolerance = 0.01e18;
+
+        vm.startPrank(alice);
+        vm.expectRevert(sc4626.CallerNotAdmin.selector);
+        vault.setSlippageTolerance(tolerance);
+    }
+
+    function test_setSlippageTolearnce_UpdatesSlippageTolerance() public {
+        uint256 newTolerance = 0.01e18;
+
+        vm.expectEmit(true, true, true, true);
+        emit SlippageToleranceUpdated(newTolerance);
+
+        vault.setSlippageTolerance(newTolerance);
+
+        assertEq(vault.slippageTolerance(), newTolerance, "slippage tolerance");
     }
 }
