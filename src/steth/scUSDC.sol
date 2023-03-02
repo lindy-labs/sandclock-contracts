@@ -198,15 +198,15 @@ contract scUSDC is sc4626 {
         return debtPriceInUsdc.divWadUp(totalCollateralSupplied());
     }
 
-    // gets the cuurent max LTV for USDC / WETH loans on euler
+    // gets the current max LTV for USDC / WETH loans on euler
     function getMaxLtv() public view returns (uint256) {
-        IMarkets.AssetConfig memory assetConfigUsdc = markets.underlyingToAssetConfig(address(usdc));
-        IMarkets.AssetConfig memory assetConfigWeth = markets.underlyingToAssetConfig(address(weth));
+        uint256 collateralFactor = markets.underlyingToAssetConfig(address(usdc)).collateralFactor;
+        uint256 borrowFactor = markets.underlyingToAssetConfig(address(weth)).borrowFactor;
 
-        uint256 scaledUsdcCollateralFactor = uint256(assetConfigUsdc.collateralFactor) * 1e18 / CONFIG_FACTOR_SCALE;
-        uint256 scaledWethBorrowFactor = uint256(assetConfigWeth.borrowFactor) * 1e18 / CONFIG_FACTOR_SCALE;
+        uint256 scaledCollateralFactor = collateralFactor.divWadDown(CONFIG_FACTOR_SCALE);
+        uint256 scaledBorrowFactor = borrowFactor.divWadDown(CONFIG_FACTOR_SCALE);
 
-        return scaledUsdcCollateralFactor.mulWadDown(scaledWethBorrowFactor);
+        return scaledCollateralFactor.mulWadDown(scaledBorrowFactor);
     }
 
     /*//////////////////////////////////////////////////////////////
