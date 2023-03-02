@@ -61,6 +61,7 @@ contract scUSDCTest is Test {
             weth.allowance(address(vault), address(vault.swapRouter())), type(uint256).max, "weth->swapRouter allowance"
         );
         assertEq(weth.allowance(address(vault), address(vault.scWETH())), type(uint256).max, "weth->scWETH allowance");
+        assertEq(vault.eul().allowance(address(vault), vault.xrouter()), type(uint256).max, "eul->0xruter allowance");
     }
 
     /// #getMaxLtv ///

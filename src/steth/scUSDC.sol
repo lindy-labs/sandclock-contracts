@@ -22,9 +22,11 @@ import "forge-std/console2.sol";
 //        5. add code styile guidelines docs
 contract scUSDC is sc4626 {
     using SafeTransferLib for ERC20;
+    using SafeTransferLib for WETH;
     using FixedPointMathLib for uint256;
 
     error InvalidTargetLtv();
+    error EULSwapFailed();
 
     event NewTargetLtvApplied(uint256 newtargetLtv);
     event Rebalanced(uint256 collateral, uint256 debt, uint256 ltv);
@@ -36,8 +38,8 @@ contract scUSDC is sc4626 {
     uint32 constant CONFIG_FACTOR_SCALE = 4_000_000_000;
 
     address public constant EULER = 0x27182842E098f60e3D576794A5bFFb0777E025d3;
-    // EUL token
-    ERC20 eul = ERC20(0xd9Fcd98c322942075A5C3860693e9f4f03AAE07b);
+    // euler rewards token EUL
+    ERC20 public eul = ERC20(0xd9Fcd98c322942075A5C3860693e9f4f03AAE07b);
     // The Euler market contract
     IMarkets public constant markets = IMarkets(0x3520d5a913427E6F0D6A83E07ccD4A4da316e4d3);
     // Euler supply token for USDC (eUSDC)
@@ -56,7 +58,6 @@ contract scUSDC is sc4626 {
         AggregatorV3Interface(0x986b5E1e1755e3C2440e960477f25201B0a8bbD4);
 
     ERC4626 public immutable scWETH;
-    // TODO: this can be changed
 
     // USDC / WETH target LTV
     uint256 public targetLtv = 0.65e18;
@@ -65,11 +66,13 @@ contract scUSDC is sc4626 {
     constructor(address _admin, ERC4626 _scWETH) sc4626(_admin, usdc, "Sandclock USDC Vault", "scUSDC") {
         scWETH = _scWETH;
 
-        usdc.approve(EULER, type(uint256).max);
+        usdc.safeApprove(EULER, type(uint256).max);
 
-        weth.approve(EULER, type(uint256).max);
-        weth.approve(address(swapRouter), type(uint256).max);
-        weth.approve(address(_scWETH), type(uint256).max);
+        weth.safeApprove(EULER, type(uint256).max);
+        weth.safeApprove(address(swapRouter), type(uint256).max);
+        weth.safeApprove(address(_scWETH), type(uint256).max);
+
+        eul.safeApprove(xrouter, type(uint256).max);
 
         markets.enterMarket(0, address(usdc));
     }
@@ -134,7 +137,7 @@ contract scUSDC is sc4626 {
         uint256 currentDebt = totalDebt();
         uint256 targetDebt = getWethFromUsdc(totalCollateralSupplied().mulWadDown(targetLtv));
 
-        // ToDO: add some tollarance when comparing ltvs, for ex 0.1%
+        // TODO: add some tollarance when comparing ltvs, for ex 0.1%
         if (currentDebt == targetDebt) return;
 
         if (currentDebt > targetDebt) {
@@ -154,9 +157,13 @@ contract scUSDC is sc4626 {
         emit Rebalanced(totalCollateralSupplied(), totalDebt(), getLtv());
     }
 
-    // ToDo: implement this
-    function harvest() public {
-        // note: euler rewards can be claimed by another account, we only have to swap them here using 0xrouter
+    /// note: euler rewards can be claimed by another account, we only have to swap them here using 0xrouter
+    function reinvestEulerRewards(bytes calldata _swapData) public {
+        if (eul.balanceOf(address(this)) == 0) return;
+
+        // swap EUL -> WETH
+        (bool success,) = xrouter.call{value: 0}(_swapData);
+        if (!success) revert EULSwapFailed();
 
         rebalance();
     }
@@ -208,7 +215,7 @@ contract scUSDC is sc4626 {
             if (wethProfit >= wethToWithdraw) {
                 // we cover withdrawal amount from selling weth profit
                 scWETH.withdraw(wethToWithdraw, address(this), address(this));
-                _swapWethForUSDC(wethToWithdraw);
+                _swapWethForUsdc(wethToWithdraw);
 
                 return;
             }
@@ -216,7 +223,7 @@ contract scUSDC is sc4626 {
             // we cannot cover withdrawal amount only from selling weth profit
             // so we sell as much as we can and withdraw the rest from euler
             scWETH.withdraw(wethProfit, address(this), address(this));
-            usdcToWithdraw -= _swapWethForUSDC(wethProfit);
+            usdcToWithdraw -= _swapWethForUsdc(wethProfit);
         }
 
         // to keep the same ltv, weth debt to repay has to be proporitional to collateral withdrawn
@@ -230,7 +237,7 @@ contract scUSDC is sc4626 {
         eToken.withdraw(0, usdcToWithdraw);
     }
 
-    function _swapWethForUSDC(uint256 _wethAmount) internal returns (uint256 amountOut) {
+    function _swapWethForUsdc(uint256 _wethAmount) internal returns (uint256 amountOut) {
         // TODO: amount out min based on slippage tolerance
         uint256 amountOutMin = 0;
 
@@ -241,10 +248,11 @@ contract scUSDC is sc4626 {
             recipient: address(this),
             deadline: block.timestamp,
             amountIn: _wethAmount,
-            amountOutMinimum: amountOutMin,
+            amountOutMinimum: 0,
             sqrtPriceLimitX96: 0
         });
 
         amountOut = swapRouter.exactInputSingle(params);
+        // TODO: check if amountOut is enough and revert if not
     }
 }
