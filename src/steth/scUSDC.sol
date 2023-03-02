@@ -15,11 +15,8 @@ import {ISwapRouter} from "../interfaces/uniswap/ISwapRouter.sol";
 
 import "forge-std/console2.sol";
 
-// TODOs: 1. add events - done
-//        2. add leverage up/down & rebalancing? - done
-//        3. harvest euler rewards - add test
-//        4. add tests - almost done
-//        5. add code styile guidelines docs
+// TODOs: 1. harvest euler rewards - add test
+//        2. add tolerance when comapring ltv-s
 contract scUSDC is sc4626 {
     using SafeTransferLib for ERC20;
     using SafeTransferLib for WETH;
@@ -83,23 +80,16 @@ contract scUSDC is sc4626 {
         markets.enterMarket(0, address(usdc));
     }
 
+    /*//////////////////////////////////////////////////////////////
+                            PUBLIC API
+    //////////////////////////////////////////////////////////////*/
+
     function setSlippageTolerance(uint256 _slippageTolerance) external onlyAdmin {
         if (_slippageTolerance > 1e18) revert InvalidSlippageTolerance();
 
         slippageTolerance = _slippageTolerance;
 
         emit SlippageToleranceUpdated(_slippageTolerance);
-    }
-
-    // gets the cuurent max LTV for USDC / WETH loans on euler
-    function getMaxLtv() public view returns (uint256) {
-        IMarkets.AssetConfig memory assetConfigUsdc = markets.underlyingToAssetConfig(address(usdc));
-        IMarkets.AssetConfig memory assetConfigWeth = markets.underlyingToAssetConfig(address(weth));
-
-        uint256 scaledUsdcCollateralFactor = uint256(assetConfigUsdc.collateralFactor) * 1e18 / CONFIG_FACTOR_SCALE;
-        uint256 scaledWethBorrowFactor = uint256(assetConfigWeth.borrowFactor) * 1e18 / CONFIG_FACTOR_SCALE;
-
-        return scaledUsdcCollateralFactor.mulWadDown(scaledWethBorrowFactor);
     }
 
     function applyNewTargetLtv(uint256 _newTargetLtv) external onlyKeeper {
@@ -110,32 +100,6 @@ contract scUSDC is sc4626 {
         rebalance();
 
         emit NewTargetLtvApplied(_newTargetLtv);
-    }
-
-    function totalAssets() public view override returns (uint256 total) {
-        // add float
-        total = usdcBalance();
-
-        // add collateral
-        total += eToken.balanceOfUnderlying(address(this));
-
-        // subtract debt
-        total -= getUsdcFromWeth(totalDebt());
-
-        // add invested amount
-        total += getUsdcFromWeth(scWETH.convertToAssets(scWETH.balanceOf(address(this))));
-    }
-
-    function getUsdcFromWeth(uint256 _wethAmount) public view returns (uint256) {
-        (, int256 usdcPriceInWeth,,,) = usdcToEthPriceFeed.latestRoundData();
-
-        return _wethAmount.divWadDown(uint256(usdcPriceInWeth)) / 1e12;
-    }
-
-    function getWethFromUsdc(uint256 _usdcAmount) public view returns (uint256) {
-        (, int256 usdcPriceInWeth,,,) = usdcToEthPriceFeed.latestRoundData();
-
-        return (_usdcAmount * 1e12).mulWadDown(uint256(usdcPriceInWeth));
     }
 
     function rebalance() public {
@@ -182,6 +146,32 @@ contract scUSDC is sc4626 {
         rebalance();
     }
 
+    function totalAssets() public view override returns (uint256 total) {
+        // add float
+        total = usdcBalance();
+
+        // add collateral
+        total += eToken.balanceOfUnderlying(address(this));
+
+        // subtract debt
+        total -= getUsdcFromWeth(totalDebt());
+
+        // add invested amount
+        total += getUsdcFromWeth(scWETH.convertToAssets(scWETH.balanceOf(address(this))));
+    }
+
+    function getUsdcFromWeth(uint256 _wethAmount) public view returns (uint256) {
+        (, int256 usdcPriceInWeth,,,) = usdcToEthPriceFeed.latestRoundData();
+
+        return _wethAmount.divWadDown(uint256(usdcPriceInWeth)) / 1e12;
+    }
+
+    function getWethFromUsdc(uint256 _usdcAmount) public view returns (uint256) {
+        (, int256 usdcPriceInWeth,,,) = usdcToEthPriceFeed.latestRoundData();
+
+        return (_usdcAmount * 1e12).mulWadDown(uint256(usdcPriceInWeth));
+    }
+
     function usdcBalance() public view returns (uint256) {
         return asset.balanceOf(address(this));
     }
@@ -207,6 +197,21 @@ contract scUSDC is sc4626 {
         // totalDebt / totalSupplied
         return debtPriceInUsdc.divWadUp(totalCollateralSupplied());
     }
+
+    // gets the cuurent max LTV for USDC / WETH loans on euler
+    function getMaxLtv() public view returns (uint256) {
+        IMarkets.AssetConfig memory assetConfigUsdc = markets.underlyingToAssetConfig(address(usdc));
+        IMarkets.AssetConfig memory assetConfigWeth = markets.underlyingToAssetConfig(address(weth));
+
+        uint256 scaledUsdcCollateralFactor = uint256(assetConfigUsdc.collateralFactor) * 1e18 / CONFIG_FACTOR_SCALE;
+        uint256 scaledWethBorrowFactor = uint256(assetConfigWeth.borrowFactor) * 1e18 / CONFIG_FACTOR_SCALE;
+
+        return scaledUsdcCollateralFactor.mulWadDown(scaledWethBorrowFactor);
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                            INTERNAL API
+    //////////////////////////////////////////////////////////////*/
 
     function beforeWithdraw(uint256 _assets, uint256) internal override {
         uint256 balance = usdcBalance();
