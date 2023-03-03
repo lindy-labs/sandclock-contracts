@@ -3,20 +3,20 @@ pragma solidity ^0.8.13;
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {WETH} from "solmate/tokens/WETH.sol";
+import {ERC4626} from "solmate/mixins/ERC4626.sol";
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
+
 import {IMarkets} from "../interfaces/euler/IMarkets.sol";
 import {AggregatorV3Interface} from "../interfaces/chainlink/AggregatorV3Interface.sol";
 import {IEulerDToken} from "../interfaces/euler/IEulerDToken.sol";
 import {IEulerEToken} from "../interfaces/euler/IEulerEToken.sol";
-import {ERC4626} from "solmate/mixins/ERC4626.sol";
-import {sc4626} from "../sc4626.sol";
 import {ISwapRouter} from "../interfaces/uniswap/ISwapRouter.sol";
+import {sc4626} from "../sc4626.sol";
 
 import "forge-std/console2.sol";
 
-// TODOs: 1. harvest euler rewards - add test
-//        2. add tolerance when comapring ltv-s
+// TODOs: add tolerance when comapring ltv-s
 contract scUSDC is sc4626 {
     using SafeTransferLib for ERC20;
     using SafeTransferLib for WETH;

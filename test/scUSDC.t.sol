@@ -6,6 +6,7 @@ import "forge-std/Test.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {WETH} from "solmate/tokens/WETH.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
+
 import {sc4626} from "../src/sc4626.sol";
 import {scUSDC} from "../src/steth/scUSDC.sol";
 import {scWETH} from "../src/steth/scWETH.sol";
@@ -444,6 +445,7 @@ contract scUSDCTest is Test {
     }
 
     /// #setSlippageTolerance ///
+
     function test_setSlippageTolerance_FailsIfCallerIsNotAdmin() public {
         uint256 tolerance = 0.01e18;
 
@@ -461,5 +463,30 @@ contract scUSDCTest is Test {
         vault.setSlippageTolerance(newTolerance);
 
         assertEq(vault.slippageTolerance(), newTolerance, "slippage tolerance");
+    }
+
+    /// #reinvestEulerRewards ///
+
+    function test_reinvestEulerRewards_SwapsEulForUsdcAndRebalances() public {
+        vm.rollFork(16744453);
+        // redeploy vault
+        vault = new scUSDC(address(this), new scWETH(address(this)));
+
+        deal(address(vault.eul()), address(vault), 1000e18);
+
+        assertEq(vault.eul().balanceOf(address(vault)), 1000e18, "eul balance");
+        assertEq(vault.usdcBalance(), 0, "usdc balance");
+        assertEq(vault.totalAssets(), 0, "total assets");
+
+        // data obtained from 0x api for swapping 1000 eul for ~7883 usdc
+        // https://api.0x.org/swap/v1/quote?buyToken=USDC&sellToken=0xd9Fcd98c322942075A5C3860693e9f4f03AAE07b&sellAmount=1000000000000000000000
+        bytes memory swapData =
+            hex"6af479b2000000000000000000000000000000000000000000000000000000000000008000000000000000000000000000000000000000000000003635c9adc5dea0000000000000000000000000000000000000000000000000000000000001d16e269100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000042d9fcd98c322942075a5c3860693e9f4f03aae07b002710c02aaa39b223fe8d0a0e5c4f27ead9083c756cc2000064a0b86991c6218b36c1d19d4a2e9eb0ce3606eb48000000000000000000000000000000000000000000000000000000000000869584cd00000000000000000000000010000000000000000000000000000000000000110000000000000000000000000000000000000000000000e6464241aa64013c9d";
+
+        vault.reinvestEulerRewards(swapData);
+
+        assertEq(vault.eul().balanceOf(address(vault)), 0, "vault eul balance");
+        assertEq(vault.totalAssets(), 7883_963201, "vault total assets");
+        assertEq(vault.usdcBalance(), 78_839633, "vault usdc balance");
     }
 }
