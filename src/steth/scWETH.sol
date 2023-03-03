@@ -178,6 +178,23 @@ contract scWETH is sc4626, IFlashLoanRecipient {
 
     //////////////////// EXTERNAL METHODS //////////////////////////
 
+    // helper method to directly deposit ETH instead of weth
+    function deposit(address receiver) external payable returns (uint256 shares) {
+        uint256 assets = msg.value;
+
+        // Check for rounding error since we round down in previewDeposit.
+        require((shares = previewDeposit(assets)) != 0, "ZERO_SHARES");
+
+        // wrap eth
+        weth.deposit{value: assets}();
+
+        _mint(receiver, shares);
+
+        emit Deposit(msg.sender, receiver, assets, shares);
+
+        afterDeposit(assets, shares);
+    }
+
     // called after the flashLoan on _rebalancePosition
     function receiveFlashLoan(address[] memory, uint256[] memory amounts, uint256[] memory, bytes memory userData)
         external
@@ -190,12 +207,12 @@ contract scWETH is sc4626, IFlashLoanRecipient {
         uint256 flashLoanAmount = amounts[0];
 
         // decode user data
-        (bool deposit, uint256 amount) = abi.decode(userData, (bool, uint256));
+        (bool isDeposit, uint256 amount) = abi.decode(userData, (bool, uint256));
 
         amount += flashLoanAmount;
 
         // if flashloan received as part of a deposit
-        if (deposit) {
+        if (isDeposit) {
             // unwrap eth
             weth.withdraw(amount);
 
@@ -255,10 +272,10 @@ contract scWETH is sc4626, IFlashLoanRecipient {
         uint256 target = ltv.mulWadDown(amount + collateral);
 
         // whether we should deposit or withdraw
-        bool deposit = target > debt;
+        bool isDeposit = target > debt;
 
         // calculate the flashloan amount needed
-        uint256 flashLoanAmount = (deposit ? target - debt : debt - target).divWadDown(1e18 - ltv);
+        uint256 flashLoanAmount = (isDeposit ? target - debt : debt - target).divWadDown(1e18 - ltv);
 
         address[] memory tokens = new address[](1);
         tokens[0] = address(weth);
@@ -270,7 +287,7 @@ contract scWETH is sc4626, IFlashLoanRecipient {
         totalInvested += amount;
 
         // take flashloan
-        balancerVault.flashLoan(address(this), tokens, amounts, abi.encode(deposit, amount));
+        balancerVault.flashLoan(address(this), tokens, amounts, abi.encode(isDeposit, amount));
     }
 
     function _withdrawToVault(uint256 amount) internal {
