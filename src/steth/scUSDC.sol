@@ -37,6 +37,8 @@ contract scUSDC is sc4626 {
     uint256 constant ONE = 1e18;
     // vaule used to scale the token's collateral/borrow factors from the euler market
     uint32 constant CONFIG_FACTOR_SCALE = 4_000_000_000;
+    // delta threshold for rebalancing in percentage
+    uint256 constant DEBT_DELTA_THRESHOLD = 0.01e18;
 
     address public constant EULER = 0x27182842E098f60e3D576794A5bFFb0777E025d3;
     // euler rewards token EUL
@@ -115,19 +117,17 @@ contract scUSDC is sc4626 {
         uint256 currentDebt = totalDebt();
         uint256 targetDebt = getWethFromUsdc(totalCollateralSupplied().mulWadDown(targetLtv));
 
-        // TODO: add some tollarance when comparing ltvs, for ex 0.1%
-        if (currentDebt == targetDebt) return;
+        // dont need to rebalance if the difference between current and target debt is relatevely small
+        uint256 delta = currentDebt > targetDebt ? currentDebt - targetDebt : targetDebt - currentDebt;
+
+        if (delta <= DEBT_DELTA_THRESHOLD) return;
 
         if (currentDebt > targetDebt) {
             // we need to withdraw weth from scWETH and repay debt on euler
-            uint256 delta = currentDebt - targetDebt;
-
-            scWETH.withdraw(delta, address(this), address(this));
+            _disinvest(delta);
             dToken.repay(0, delta);
         } else {
             // we need to borrow more weth on euler and deposit it in scWETH
-            uint256 delta = targetDebt - currentDebt;
-
             dToken.borrow(0, delta);
             scWETH.deposit(delta, address(this));
         }
@@ -233,7 +233,7 @@ contract scUSDC is sc4626 {
 
             if (wethProfit >= wethToWithdraw) {
                 // we cover withdrawal amount from selling weth profit
-                scWETH.withdraw(wethToWithdraw, address(this), address(this));
+                _disinvest(wethToWithdraw);
                 _swapWethForUsdc(wethToWithdraw);
 
                 return;
@@ -241,19 +241,22 @@ contract scUSDC is sc4626 {
 
             // we cannot cover withdrawal amount only from selling weth profit
             // so we sell as much as we can and withdraw the rest from euler
-            scWETH.withdraw(wethProfit, address(this), address(this));
+            _disinvest(wethProfit);
             usdcNeeded -= _swapWethForUsdc(wethProfit);
         }
 
         // to keep the same ltv, weth debt to repay has to be proporitional to collateral withdrawn
-        uint256 collateral = totalCollateralSupplied();
-        uint256 wethNeeded = usdcNeeded.mulDivUp(wethDebt, collateral);
+        uint256 wethNeeded = usdcNeeded.mulDivUp(wethDebt, totalCollateralSupplied());
 
-        scWETH.withdraw(wethNeeded, address(this), address(this));
+        _disinvest(wethNeeded);
 
         // repay debt and take out collateral on euler
         dToken.repay(0, wethNeeded);
         eToken.withdraw(0, usdcNeeded);
+    }
+
+    function _disinvest(uint256 _wethAmount) internal {
+        scWETH.withdraw(_wethAmount, address(this), address(this));
     }
 
     function _swapWethForUsdc(uint256 _wethAmount) internal returns (uint256 amountOut) {

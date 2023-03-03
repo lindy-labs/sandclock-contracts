@@ -161,6 +161,27 @@ contract scUSDCTest is Test {
         assertApproxEqAbs(vault.getLtv(), vault.targetLtv(), 0.001e18);
     }
 
+    function test_rebalance_DoesntRebalanceWhenLtvIsWithinRange() public {
+        uint256 initialBalance = 10000e6;
+        deal(address(usdc), address(vault), initialBalance);
+
+        // no debt yet
+        assertEq(vault.getLtv(), 0);
+
+        vault.rebalance();
+
+        uint256 collateralBefore = vault.totalCollateralSupplied();
+        uint256 debtBefore = vault.totalDebt();
+
+        // add 1% more assets
+        deal(address(usdc), address(vault), vault.totalAssets().mulWadUp(0.01e18));
+
+        vault.rebalance();
+
+        assertEq(vault.totalCollateralSupplied(), collateralBefore);
+        assertEq(vault.totalDebt(), debtBefore);
+    }
+
     /// #applyNewTargetLtv ///
 
     function test_applyNewTargetLtv_FailsIfCallerIsNotKeeper() public {
