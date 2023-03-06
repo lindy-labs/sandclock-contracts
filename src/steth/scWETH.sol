@@ -77,7 +77,7 @@ contract scWETH is sc4626, IFlashLoanRecipient {
     uint256 public targetLtv = 0.5e18;
 
     // slippage for curve swaps
-    uint256 public slippageTolerance = 0.999e18;
+    uint256 public slippageTolerance = 0.01e18;
 
     constructor(address _admin) sc4626(_admin, ERC20(address(weth)), "Sandclock WETH Vault", "scWETH") {
         if (_admin == address(0)) revert ZeroAddress();
@@ -158,11 +158,8 @@ contract scWETH is sc4626, IFlashLoanRecipient {
         // value of the supplied collateral in eth terms using chainlink oracle
         assets = totalCollateralSupplied();
 
-        // subtract the debt
-        assets -= totalDebt();
-
-        // account for slippage
-        assets = assets.mulWadDown(slippageTolerance);
+        // account for slippage losses
+        assets = assets.mulWadDown(1e18 - slippageTolerance);
 
         // add float
         assets += asset.balanceOf(address(this));
@@ -275,7 +272,7 @@ contract scWETH is sc4626, IFlashLoanRecipient {
             uint256 expected = stEthAmount.mulWadDown(uint256(price));
 
             // stETH to eth
-            curvePool.exchange(1, 0, stEthAmount, expected.mulWadDown(slippageTolerance));
+            curvePool.exchange(1, 0, stEthAmount, expected.mulWadDown(1e18 - slippageTolerance));
 
             // wrap eth
             weth.deposit{value: address(this).balance}();

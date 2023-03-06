@@ -445,7 +445,7 @@ contract scUSDCTest is Test {
         uint256 wethInvested = weth.balanceOf(address(wethVault));
         deal(address(weth), address(wethVault), wethInvested * 2);
 
-        vault.setSlippageTolerance(1e18);
+        vault.setSlippageTolerance(0);
 
         uint256 withdrawAmount = 1_000_000e6; // this amount forces selling of whole profits
         vm.startPrank(alice);
