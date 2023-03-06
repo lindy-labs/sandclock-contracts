@@ -69,7 +69,7 @@ contract scUSDC is sc4626 {
     // max slippage for swapping WETH -> USDC
     uint256 public slippageTolerance = 0.01e18; // 1% default
 
-    // lev (w)eth vault
+    // leveraged (w)eth vault
     ERC4626 public immutable scWETH;
 
     constructor(address _admin, ERC4626 _scWETH) sc4626(_admin, usdc, "Sandclock USDC Vault", "scUSDC") {
