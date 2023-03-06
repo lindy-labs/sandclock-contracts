@@ -275,7 +275,7 @@ contract scUSDC is sc4626 {
             recipient: address(this),
             deadline: block.timestamp,
             amountIn: _wethAmount,
-            amountOutMinimum: getUsdcFromWeth(_wethAmount).mulWadDown(ONE - slippageTolerance),
+            amountOutMinimum: getUsdcFromWeth(_wethAmount).mulWadDown(slippageTolerance),
             sqrtPriceLimitX96: 0
         });
 
