@@ -57,7 +57,7 @@ contract scWETH is sc4626, IFlashLoanRecipient {
     // Balancer vault for flashloans
     IVault public constant balancerVault = IVault(0xBA12222222228d8Ba445958a75a0704d566BF2C8);
 
-    // vaule used to scale the token's collateral/borrow factors from the euler market
+    // value used to scale the token's collateral/borrow factors from the euler market
     uint32 constant CONFIG_FACTOR_SCALE = 4_000_000_000;
 
     // total invested during last harvest/rebalance
