@@ -196,25 +196,21 @@ contract scWETHTest is Test {
         depositToVault(address(this), amount);
         vault.depositIntoStrategy(0);
         newLtv = bound(newLtv, vault.getLtv() + 1e15, ethWstEthMaxLtv - 0.001e18);
-        console.log("vault.getLtv()", vault.getLtv());
         vault.changeLeverage(newLtv, 0);
-        console.log("vault.getLtv()", vault.getLtv());
         assertApproxEqRel(vault.getLtv(), newLtv, 0.01e18, "leverage change failed");
     }
 
     function testLeverageDown(uint256 amount, uint256 newLtv) public {
-        amount = bound(amount, 1e5, 1e20);
+        amount = bound(amount, 1e5, 1e21);
         depositToVault(address(this), amount);
         vault.depositIntoStrategy(0);
         newLtv = bound(newLtv, 0.01e18, vault.getLtv() - 1e15);
-        console.log("vault.getLtv()", vault.getLtv());
         vault.changeLeverage(newLtv, 0);
-        console.log("vault.getLtv()", vault.getLtv());
         assertApproxEqRel(vault.getLtv(), newLtv, 0.011e18, "leverage change failed");
     }
 
     function testDepositEth(uint256 amount) public {
-        amount = bound(amount, 1e5, 1e21);
+        amount = bound(amount, 1e5, 10000 ether);
         vm.deal(address(this), amount);
 
         assertEq(weth.balanceOf(address(this)), 0);
@@ -225,6 +221,37 @@ contract scWETHTest is Test {
         assertEq(address(this).balance, 0, "eth not transferred from user");
         assertEq(vault.balanceOf(address(this)), amount, "shares not minted");
         assertEq(weth.balanceOf(address(vault)), amount, "weth not transferred to vault");
+    }
+
+    function testConfigurableSwapAmounts100Percent(uint256 amount) public {
+        amount = bound(amount, 1e5, 10000 ether);
+        depositToVault(address(this), amount);
+
+        uint256 snapshot = vm.snapshot();
+
+        // 100% deposit to lido
+        vault.depositIntoStrategy(0);
+        uint256 fullLidoSwap = vault.totalCollateralSupplied();
+
+        vm.revertTo(snapshot);
+
+        // 100% curve swap eth=>stEth
+        vault.depositIntoStrategy(1e18);
+        uint256 fullCurveSwap = vault.totalCollateralSupplied();
+
+        if (amount > 9417e18) {
+            assertLt(
+                fullCurveSwap,
+                fullLidoSwap,
+                "full curve swap should give worse rate than full lido swap for high amounts"
+            );
+        } else {
+            assertGt(
+                fullCurveSwap,
+                fullLidoSwap,
+                "full curve swap should give better rate than full lido swap for small amounts"
+            );
+        }
     }
 
     function depositToVault(address user, uint256 amount) public returns (uint256 shares) {

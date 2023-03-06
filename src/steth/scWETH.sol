@@ -228,8 +228,12 @@ contract scWETH is sc4626, IFlashLoanRecipient {
 
             if (curveSwapAmount > 0) {
                 //  eth => stETH
-                curvePool.exchange(0, 1, curveSwapAmount, _ethToStEth(curveSwapAmount).mulWadDown(slippageTolerance));
+                curvePool.exchange{value: curveSwapAmount}(
+                    0, 1, curveSwapAmount, _ethToStEth(curveSwapAmount).mulWadDown(slippageTolerance)
+                );
             }
+
+            // if 100% has not been swapped on curve
             if (params.curveSwapPercentage != WAD) {
                 // stake to lido / eth => stETH
                 stEth.submit{value: params.amount - curveSwapAmount}(address(0x00));
