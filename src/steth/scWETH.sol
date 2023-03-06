@@ -22,6 +22,7 @@ error InvalidFlashLoanCaller();
 error InvalidSlippageTolerance();
 error AdminZeroAddress();
 error InvalidCurveSwapPercentage();
+error InvalidDepositAmount();
 
 contract scWETH is sc4626, IFlashLoanRecipient {
     using SafeTransferLib for ERC20;
@@ -131,12 +132,14 @@ contract scWETH is sc4626, IFlashLoanRecipient {
         targetLtv = newTargetLtv;
         emit TargetLtvRatioUpdated(msg.sender, newTargetLtv);
 
-        _rebalancePosition(curveSwapPercentage);
+        _rebalancePosition(asset.balanceOf(address(this)), curveSwapPercentage);
     }
 
     // separate to save gas for users depositing
-    function depositIntoStrategy(uint256 curveSwapPercentage) external onlyRole(KEEPER_ROLE) {
-        _rebalancePosition(curveSwapPercentage);
+    function depositIntoStrategy(uint256 amount, uint256 curveSwapPercentage) external onlyRole(KEEPER_ROLE) {
+        if (amount == 0) revert InvalidDepositAmount();
+
+        _rebalancePosition(amount, curveSwapPercentage);
     }
 
     /// @param amount : amount of asset to withdraw into the vault
@@ -279,10 +282,9 @@ contract scWETH is sc4626, IFlashLoanRecipient {
     //////////////////// INTERNAL METHODS //////////////////////////
 
     /// @param curveSwapPercentage: percentage of the amount of weth to swap on curve to stEth (the remaining to be staked to lido)
-    function _rebalancePosition(uint256 curveSwapPercentage) internal {
+    function _rebalancePosition(uint256 amount, uint256 curveSwapPercentage) internal {
         if (curveSwapPercentage > WAD) revert InvalidCurveSwapPercentage();
         // storage loads
-        uint256 amount = asset.balanceOf(address(this));
         uint256 ltv = targetLtv;
         uint256 debt = totalDebt();
         uint256 collateral = totalCollateralSupplied();

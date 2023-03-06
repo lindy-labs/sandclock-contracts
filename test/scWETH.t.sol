@@ -145,7 +145,7 @@ contract scWETHTest is Test {
         assertEq(vault.convertToAssets(vault.balanceOf(address(this))), amount);
         assertEq(weth.balanceOf(address(this)), preDepositBal - amount);
 
-        vault.depositIntoStrategy(0);
+        vault.depositIntoStrategy(weth.balanceOf(address(vault)), 0);
 
         // account for value loss if stETH worth less than ETH
         (, int256 price,,,) = vault.stEThToEthPriceFeed().latestRoundData();
@@ -174,7 +174,7 @@ contract scWETHTest is Test {
         uint256 shares1 = depositToVault(address(this), depositAmount1);
         uint256 shares2 = depositToVault(alice, depositAmount2);
 
-        vault.depositIntoStrategy(0);
+        vault.depositIntoStrategy(weth.balanceOf(address(vault)), 0);
 
         vault.redeem(shares1 / 2, address(this), address(this));
         assertRelApproxEq(weth.balanceOf(address(this)), (depositAmount1 / 2), 0.025e18);
@@ -194,7 +194,7 @@ contract scWETHTest is Test {
     function testLeverageUp(uint256 amount, uint256 newLtv) public {
         amount = bound(amount, 1e5, 1e20);
         depositToVault(address(this), amount);
-        vault.depositIntoStrategy(0);
+        vault.depositIntoStrategy(weth.balanceOf(address(vault)), 0);
         newLtv = bound(newLtv, vault.getLtv() + 1e15, ethWstEthMaxLtv - 0.001e18);
         vault.changeLeverage(newLtv, 0);
         assertApproxEqRel(vault.getLtv(), newLtv, 0.01e18, "leverage change failed");
@@ -203,7 +203,7 @@ contract scWETHTest is Test {
     function testLeverageDown(uint256 amount, uint256 newLtv) public {
         amount = bound(amount, 1e5, 1e21);
         depositToVault(address(this), amount);
-        vault.depositIntoStrategy(0);
+        vault.depositIntoStrategy(weth.balanceOf(address(vault)), 0);
         newLtv = bound(newLtv, 0.01e18, vault.getLtv() - 1e15);
         vault.changeLeverage(newLtv, 0);
         assertApproxEqRel(vault.getLtv(), newLtv, 0.011e18, "leverage change failed");
@@ -230,13 +230,13 @@ contract scWETHTest is Test {
         uint256 snapshot = vm.snapshot();
 
         // 100% deposit to lido
-        vault.depositIntoStrategy(0);
+        vault.depositIntoStrategy(weth.balanceOf(address(vault)), 0);
         uint256 fullLidoSwap = vault.totalCollateralSupplied();
 
         vm.revertTo(snapshot);
 
         // 100% curve swap eth=>stEth
-        vault.depositIntoStrategy(1e18);
+        vault.depositIntoStrategy(weth.balanceOf(address(vault)), 1e18);
         uint256 fullCurveSwap = vault.totalCollateralSupplied();
 
         if (amount > 9417e18) {
@@ -252,6 +252,22 @@ contract scWETHTest is Test {
                 "full curve swap should give better rate than full lido swap for small amounts"
             );
         }
+    }
+
+    function testDepositToStrategy(uint256 amount, uint256 depositPercent) public {
+        amount = bound(amount, 1e5, 10000 ether);
+        depositPercent = bound(depositPercent, 0.1e18, 1e18);
+        uint256 depositToStrategyAmount = amount.mulWadDown(depositPercent);
+
+        depositToVault(address(this), amount);
+
+        assertEq(vault.totalCollateralSupplied() - vault.totalDebt(), 0);
+        assertEq(weth.balanceOf(address(vault)), amount);
+
+        vault.depositIntoStrategy(depositToStrategyAmount, 0);
+
+        assertRelApproxEq(vault.totalCollateralSupplied() - vault.totalDebt(), depositToStrategyAmount, 0.01e18);
+        assertEq(weth.balanceOf(address(vault)), amount - depositToStrategyAmount, "vault amount error");
     }
 
     function depositToVault(address user, uint256 amount) public returns (uint256 shares) {
