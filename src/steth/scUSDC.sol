@@ -64,7 +64,7 @@ contract scUSDC is sc4626 {
     // USDC / WETH target LTV
     uint256 public targetLtv = 0.65e18;
     // max slippage for swapping WETH -> USDC
-    uint256 public slippageTolerance = 0.01e18; // 1% default
+    uint256 public slippageTolerance = 0.99e18; // 1% default
 
     // leveraged (w)eth vault
     ERC4626 public immutable scWETH;
