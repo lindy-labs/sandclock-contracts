@@ -14,9 +14,6 @@ import {IEulerEToken} from "../interfaces/euler/IEulerEToken.sol";
 import {ISwapRouter} from "../interfaces/uniswap/ISwapRouter.sol";
 import {sc4626} from "../sc4626.sol";
 
-import "forge-std/console2.sol";
-
-// TODOs: add tolerance when comapring ltv-s
 contract scUSDC is sc4626 {
     using SafeTransferLib for ERC20;
     using SafeTransferLib for WETH;
