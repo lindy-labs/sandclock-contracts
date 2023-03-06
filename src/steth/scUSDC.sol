@@ -114,15 +114,15 @@ contract scUSDC is sc4626 {
         }
 
         // second check ltv and see if we need to rebalance
-        uint256 currentDebt = totalDebt();
+        uint256 debt = totalDebt();
         uint256 targetDebt = getWethFromUsdc(totalCollateralSupplied().mulWadDown(targetLtv));
 
         // dont need to rebalance if the difference between current and target debt is relatevely small
-        uint256 delta = currentDebt > targetDebt ? currentDebt - targetDebt : targetDebt - currentDebt;
+        uint256 delta = debt > targetDebt ? debt - targetDebt : targetDebt - debt;
 
         if (delta <= DEBT_DELTA_THRESHOLD) return;
 
-        if (currentDebt > targetDebt) {
+        if (debt > targetDebt) {
             // we need to withdraw weth from scWETH and repay debt on euler
             _disinvest(delta);
             dToken.repay(0, delta);
