@@ -78,8 +78,6 @@ contract scUSDC is sc4626 {
         weth.safeApprove(address(swapRouter), type(uint256).max);
         weth.safeApprove(address(_scWETH), type(uint256).max);
 
-        eul.safeApprove(xrouter, type(uint256).max);
-
         markets.enterMarket(0, address(usdc));
     }
 
@@ -140,9 +138,12 @@ contract scUSDC is sc4626 {
 
     /// note: euler rewards can be claimed by another account, we only have to swap them here using 0xrouter
     function reinvestEulerRewards(bytes calldata _swapData) public onlyKeeper {
-        if (eul.balanceOf(address(this)) == 0) return;
+        uint256 eulBalance = eul.balanceOf(address(this));
+
+        if (eulBalance == 0) return;
 
         // swap EUL -> WETH
+        eul.safeApprove(xrouter, eulBalance);
         (bool success,) = xrouter.call{value: 0}(_swapData);
         if (!success) revert EULSwapFailed();
 
