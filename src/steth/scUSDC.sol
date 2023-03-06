@@ -41,12 +41,16 @@ contract scUSDC is sc4626 {
     uint256 constant DEBT_DELTA_THRESHOLD = 0.01e18;
 
     address public constant EULER = 0x27182842E098f60e3D576794A5bFFb0777E025d3;
+    
     // euler rewards token EUL
     ERC20 public eul = ERC20(0xd9Fcd98c322942075A5C3860693e9f4f03AAE07b);
+    
     // The Euler market contract
     IMarkets public constant markets = IMarkets(0x3520d5a913427E6F0D6A83E07ccD4A4da316e4d3);
+    
     // Euler supply token for USDC (eUSDC)
     IEulerEToken public constant eToken = IEulerEToken(0xEb91861f8A4e1C12333F42DCE8fB0Ecdc28dA716);
+    
     // Euler debt token for WETH (dWETH)
     IEulerDToken public constant dToken = IEulerDToken(0x62e28f054efc24b26A794F5C1249B6349454352C);
 
