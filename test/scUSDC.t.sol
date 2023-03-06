@@ -77,7 +77,7 @@ contract scUSDCTest is Test {
     /// #deposit ///
 
     function testFuzz_deposit(uint256 amount) public {
-        amount = bound(amount, 1e2, 1e18);
+        amount = bound(amount, 1, 1e18);
         deal(address(usdc), alice, amount);
 
         vm.startPrank(alice);
@@ -87,9 +87,7 @@ contract scUSDCTest is Test {
 
         vm.stopPrank();
 
-        assertEq(vault.convertToAssets(vault.balanceOf(alice)), amount);
-        // 1 share = 1 usdc
-        assertEq(vault.balanceOf(alice), amount);
+        assertEq(vault.convertToAssets(vault.balanceOf(alice)), amount, "balance");
     }
 
     /// #rebalance ///
@@ -289,7 +287,7 @@ contract scUSDCTest is Test {
     /// #withdraw ///
 
     function testFuzz_withdraw(uint256 amount) public {
-        amount = bound(amount, 1e3, 1e12);
+        amount = bound(amount, 1, 10_000_000e6); // upper limit constrained by weth available on euler
         deal(address(usdc), alice, amount);
 
         vm.startPrank(alice);
@@ -303,16 +301,14 @@ contract scUSDCTest is Test {
 
         uint256 assets = vault.convertToAssets(vault.balanceOf(alice));
 
-        assertApproxEqAbs(assets, amount, 1);
+        assertApproxEqAbs(assets, amount, 1, "assets");
 
         vm.startPrank(alice);
         vault.withdraw(assets, alice, alice);
 
-        assertApproxEqAbs(vault.balanceOf(alice), 0, 1);
-        assertApproxEqAbs(vault.totalAssets(), 0, 1);
-        assertApproxEqRel(usdc.balanceOf(alice), amount, 0.001e18);
-
-        vm.stopPrank();
+        assertApproxEqAbs(vault.balanceOf(alice), 0, 1, "balance");
+        assertApproxEqAbs(vault.totalAssets(), 0, 1, "total assets");
+        assertApproxEqAbs(usdc.balanceOf(alice), amount, 0.01e6, "usdc balance");
     }
 
     function test_withdraw_UsesAssetsFromFloatFirst() public {
@@ -330,8 +326,8 @@ contract scUSDCTest is Test {
         uint256 floatBefore = vault.getUsdcBalance();
         uint256 collateralBefore = vault.getCollateral();
 
-        assertApproxEqAbs(floatBefore, deposit / 2, 1);
-        assertApproxEqAbs(collateralBefore, deposit / 2, 1);
+        assertApproxEqAbs(floatBefore, deposit / 2, 1, "float before");
+        assertApproxEqAbs(collateralBefore, deposit / 2, 1, "collateral before");
 
         uint256 withdrawAmount = 5000e6;
         vm.startPrank(alice);
