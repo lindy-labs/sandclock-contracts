@@ -482,6 +482,12 @@ contract scUSDCTest is Test {
 
     /// #reinvestEulerRewards ///
 
+    function test_reinvestEulerRewards_FailsIfCallerIsNotKeeper() public {
+        vm.startPrank(alice);
+        vm.expectRevert(sc4626.CallerNotKeeper.selector);
+        vault.reinvestEulerRewards(bytes("0"));
+    }
+
     function test_reinvestEulerRewards_SwapsEulForUsdcAndRebalances() public {
         vm.rollFork(16744453);
         // redeploy vault
