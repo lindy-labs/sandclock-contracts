@@ -261,6 +261,7 @@ contract scWETHTest is Test {
 
         depositToVault(address(this), amount);
 
+        assertEq(vault.totalAssets(), amount);
         assertEq(vault.totalCollateralSupplied() - vault.totalDebt(), 0);
         assertEq(weth.balanceOf(address(vault)), amount);
 
@@ -268,6 +269,7 @@ contract scWETHTest is Test {
 
         assertRelApproxEq(vault.totalCollateralSupplied() - vault.totalDebt(), depositToStrategyAmount, 0.01e18);
         assertEq(weth.balanceOf(address(vault)), amount - depositToStrategyAmount, "vault amount error");
+        assertRelApproxEq(vault.totalAssets(), amount, 0.025e18);
     }
 
     function depositToVault(address user, uint256 amount) public returns (uint256 shares) {
