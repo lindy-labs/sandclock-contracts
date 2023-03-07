@@ -84,13 +84,13 @@ contract scWETH is sc4626, IFlashLoanRecipient {
         markets.enterMarket(0, address(wstETH));
     }
 
-    function setSlippageTolerance(uint256 newSlippageTolerance) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function setSlippageTolerance(uint256 newSlippageTolerance) external onlyAdmin {
         if (newSlippageTolerance > 1e18) revert InvalidSlippageTolerance();
         slippageTolerance = newSlippageTolerance;
         emit SlippageToleranceUpdated(msg.sender, newSlippageTolerance);
     }
 
-    function setMaxLtv(uint256 newMaxLtv) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function setMaxLtv(uint256 newMaxLtv) external {
         if (newMaxLtv > 1e18) revert InvalidMaxLtv();
         maxLtv = newMaxLtv;
         emit MaxLtvUpdated(msg.sender, newMaxLtv);
@@ -98,7 +98,7 @@ contract scWETH is sc4626, IFlashLoanRecipient {
 
     /////////////////// ADMIN/KEEPER METHODS //////////////////////////////////
 
-    function harvest() external onlyRole(KEEPER_ROLE) {
+    function harvest() external onlyKeeper {
         // store the old total
         uint256 oldTotalInvested = totalInvested;
 
@@ -117,7 +117,7 @@ contract scWETH is sc4626, IFlashLoanRecipient {
     }
 
     // increase/decrease the net leverage used by the strategy
-    function changeLeverage(uint256 newTargetLtv) public onlyRole(KEEPER_ROLE) {
+    function changeLeverage(uint256 newTargetLtv) public onlyKeeper {
         if (newTargetLtv >= maxLtv) revert InvalidTargetLtv();
 
         targetLtv = newTargetLtv;
@@ -127,12 +127,12 @@ contract scWETH is sc4626, IFlashLoanRecipient {
     }
 
     // separate to save gas for users depositing
-    function depositIntoStrategy() external onlyRole(KEEPER_ROLE) {
+    function depositIntoStrategy() external onlyKeeper {
         _rebalancePosition();
     }
 
     /// @param amount : amount of asset to withdraw into the vault
-    function withdrawToVault(uint256 amount) external onlyRole(KEEPER_ROLE) {
+    function withdrawToVault(uint256 amount) external onlyKeeper {
         _withdrawToVault(amount);
     }
 

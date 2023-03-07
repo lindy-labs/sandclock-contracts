@@ -39,19 +39,19 @@ abstract contract sc4626 is ERC4626, AccessControl {
         _;
     }
 
-    function setPerformanceFee(uint256 newPerformanceFee) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function setPerformanceFee(uint256 newPerformanceFee) external onlyAdmin {
         require(newPerformanceFee <= 1e18, "fee too high");
         performanceFee = newPerformanceFee;
         emit PerformanceFeeUpdated(msg.sender, newPerformanceFee);
     }
 
-    function setFloatPercentage(uint256 newFloatPercentage) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function setFloatPercentage(uint256 newFloatPercentage) external onlyAdmin {
         require(newFloatPercentage <= 1e18, "float percentage too high");
         floatPercentage = newFloatPercentage;
         emit FloatPercentageUpdated(msg.sender, newFloatPercentage);
     }
 
-    function setTreasury(address newTreasury) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function setTreasury(address newTreasury) external onlyAdmin {
         require(newTreasury != address(0), "treasury cannot be zero");
         treasury = newTreasury;
         emit TreasuryUpdated(msg.sender, newTreasury);
