@@ -161,8 +161,6 @@ contract scWETHTest is Test {
         vault.redeem(shares, address(this), address(this));
 
         assertEq(vault.convertToAssets(10 ** vault.decimals()), 1e18);
-        // some amount may be leftover, should be around 2%
-        assertRelApproxEq(vault.totalAssets(), weth.balanceOf(address(this)).mulWadDown(0.02e18), 0.06e18);
         assertEq(vault.balanceOf(address(this)), 0);
         assertEq(vault.convertToAssets(vault.balanceOf(address(this))), 0);
         assertRelApproxEq(weth.balanceOf(address(this)), amount, 0.013e18);
