@@ -175,6 +175,55 @@ contract scUSDCTest is Test {
         assertEq(vault.getDebt(), debtBefore);
     }
 
+    function test_rebalance_SellsProfitsAndConvertsToAdditionalCollateral() public {
+        uint256 initialBalance = 10000e6;
+        deal(address(usdc), address(vault), initialBalance);
+
+        vault.rebalance();
+
+        uint256 ltv = vault.getLtv();
+        uint256 collateralBefore = vault.getCollateral();
+        uint256 debtBefore = vault.getDebt();
+        uint256 floatBefore = vault.getUsdcBalance();
+        uint256 totalAssetsBefore = vault.totalAssets();
+
+        // add 100% profit to the weth vault
+        uint256 wethInvested = weth.balanceOf(address(wethVault));
+        deal(address(weth), address(wethVault), wethInvested * 2);
+
+        assertApproxEqRel(vault.totalAssets(), totalAssetsBefore.mulWadUp(1e18 + ltv), 0.01e18);
+
+        vault.rebalance();
+
+        assertApproxEqRel(vault.getCollateral(), collateralBefore.mulWadUp(1e18 + ltv), 0.01e18);
+        assertApproxEqRel(vault.getDebt(), debtBefore.mulWadUp(1e18 + ltv), 0.01e18);
+        assertApproxEqRel(vault.getUsdcBalance(), floatBefore.mulWadUp(1e18 + ltv), 0.01e18);
+    }
+
+    function test_rebalance_DoesntRebalanceForSmallProfit() public {
+        uint256 initialBalance = 10000e6;
+        deal(address(usdc), address(vault), initialBalance);
+
+        vault.rebalance();
+
+        uint256 collateralBefore = vault.getCollateral();
+        uint256 debtBefore = vault.getDebt();
+        uint256 floatBefore = vault.getUsdcBalance();
+        uint256 totalAssetsBefore = vault.totalAssets();
+
+        // add 1% profit to the weth vault
+        uint256 wethInvested = weth.balanceOf(address(wethVault));
+        deal(address(weth), address(wethVault), wethInvested.mulWadUp(1.01e18));
+
+        assertTrue(vault.totalAssets() > totalAssetsBefore);
+
+        vault.rebalance();
+
+        assertEq(vault.getCollateral(), collateralBefore);
+        assertEq(vault.getDebt(), debtBefore);
+        assertEq(vault.getUsdcBalance(), floatBefore);
+    }
+
     /// #applyNewTargetLtv ///
 
     function test_applyNewTargetLtv_FailsIfCallerIsNotKeeper() public {
