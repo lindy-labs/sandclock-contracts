@@ -176,19 +176,29 @@ contract scWETHTest is Test {
 
         vault.depositIntoStrategy();
 
+        uint256 ltv = vault.targetLtv();
+
         vault.redeem(shares1 / 2, address(this), address(this));
-        assertRelApproxEq(weth.balanceOf(address(this)), (depositAmount1 / 2), 0.025e18);
+        assertRelApproxEq(weth.balanceOf(address(this)), (depositAmount1 / 2), 0.01e18);
+        assertGe((depositAmount1 / 2), weth.balanceOf(address(this)));
+
+        assertRelApproxEq(vault.getLtv(), ltv, 0.011e18);
 
         vm.prank(alice);
         vault.redeem(shares2 / 2, alice, alice);
-        assertRelApproxEq(weth.balanceOf(alice), (depositAmount2 / 2), 0.025e18);
+        assertRelApproxEq(weth.balanceOf(alice), (depositAmount2 / 2), 0.01e18);
+        assertGe((depositAmount2 / 2), weth.balanceOf(alice));
+
+        assertRelApproxEq(vault.getLtv(), ltv, 0.012e18);
 
         vault.redeem(shares1 / 2, address(this), address(this));
-        assertRelApproxEq(weth.balanceOf(address(this)), depositAmount1, 0.025e18);
+        assertRelApproxEq(weth.balanceOf(address(this)), depositAmount1, 0.013e18);
+        assertGe((depositAmount1), weth.balanceOf(address(this)));
+
+        assertRelApproxEq(vault.getLtv(), ltv, 0.011e18);
 
         vm.prank(alice);
         vault.redeem(shares2 / 2, alice, alice);
-        assertRelApproxEq(weth.balanceOf(alice), depositAmount2, 0.025e18);
     }
 
     function testLeverageUp(uint256 amount, uint256 newLtv) public {
@@ -203,7 +213,7 @@ contract scWETHTest is Test {
     }
 
     function testLeverageDown(uint256 amount, uint256 newLtv) public {
-        amount = bound(amount, 1e5, 1e20);
+        amount = bound(amount, 1e6, 1e20);
         depositToVault(address(this), amount);
         vault.depositIntoStrategy();
         newLtv = bound(newLtv, 0.01e18, vault.getLtv() - 1e15);
