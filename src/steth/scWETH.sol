@@ -74,7 +74,7 @@ contract scWETH is sc4626, IFlashLoanRecipient {
     uint256 public totalProfit;
 
     // the target ltv ratio at which we actually borrow (<= maxLtv)
-    uint256 public targetLtv = 0.7e18;
+    uint256 public targetLtv = 0.5e18;
 
     // slippage for curve swaps
     uint256 public slippageTolerance = 0.999e18;
