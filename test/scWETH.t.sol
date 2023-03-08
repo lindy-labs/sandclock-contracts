@@ -167,8 +167,8 @@ contract scWETHTest is Test {
     }
 
     function testTwoDepositsInvestTwoRedeems(uint256 depositAmount1, uint256 depositAmount2) public {
-        depositAmount1 = bound(depositAmount1, 1e18, 1e20);
-        depositAmount2 = bound(depositAmount2, 1e18, 1e20);
+        depositAmount1 = bound(depositAmount1, 1e5, 10000 ether);
+        depositAmount2 = bound(depositAmount2, 1e5, 1000 ether);
         uint256 shares1 = depositToVault(address(this), depositAmount1);
         uint256 shares2 = depositToVault(alice, depositAmount2);
 
@@ -197,6 +197,7 @@ contract scWETHTest is Test {
 
         vm.prank(alice);
         vault.redeem(shares2 / 2, alice, alice);
+        assertRelApproxEq(weth.balanceOf(address(this)), depositAmount1, 0.013e18);
     }
 
     function testLeverageUp(uint256 amount, uint256 newLtv) public {
@@ -219,6 +220,27 @@ contract scWETHTest is Test {
         vault.changeLeverage(newLtv);
         console.log("vault.getLtv()", vault.getLtv());
         assertApproxEqRel(vault.getLtv(), newLtv, 0.011e18, "leverage change failed");
+    }
+
+    function testWithdrawToVault(uint256 amount) public {
+        amount = bound(amount, 1e5, 10000 ether);
+        depositToVault(address(this), amount);
+
+        vault.depositIntoStrategy();
+
+        uint256 assets = vault.totalAssets();
+
+        assertEq(weth.balanceOf(address(vault)), 0);
+
+        uint256 ltv = vault.getLtv();
+        uint256 lev = vault.getLeverage();
+
+        vault.withdrawToVault(assets / 2);
+
+        // net ltv and leverage must not change after withdraw
+        assertRelApproxEq(vault.getLtv(), ltv, 0.001e18);
+        assertRelApproxEq(vault.getLeverage(), lev, 0.001e18);
+        assertRelApproxEq(weth.balanceOf(address(vault)), assets / 2, 0.001e18);
     }
 
     function depositToVault(address user, uint256 amount) public returns (uint256 shares) {

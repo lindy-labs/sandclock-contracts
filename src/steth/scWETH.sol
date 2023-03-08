@@ -153,7 +153,8 @@ contract scWETH is sc4626, IFlashLoanRecipient {
 
     // returns the net leverage that the strategy is using right now (1e18 = 100%)
     function getLeverage() public view returns (uint256) {
-        return totalCollateralSupplied().divWadUp(totalAssets());
+        uint256 coll = totalCollateralSupplied();
+        return coll.divWadUp(coll - totalDebt());
     }
 
     // returns the net LTV at which we have borrowed till now (1e18 = 100%)
@@ -166,6 +167,63 @@ contract scWETH is sc4626, IFlashLoanRecipient {
     }
 
     //////////////////// EXTERNAL METHODS //////////////////////////
+
+    function redeem(uint256 shares, address receiver, address owner) public virtual override returns (uint256 assets) {
+        if (msg.sender != owner) {
+            uint256 allowed = allowance[owner][msg.sender]; // Saves gas for limited approvals.
+
+            if (allowed != type(uint256).max) allowance[owner][msg.sender] = allowed - shares;
+        }
+
+        // Check for rounding error since we round down in previewRedeem.
+        require((assets = previewRedeem(shares)) != 0, "ZERO_ASSETS");
+
+        beforeWithdraw(assets, shares);
+
+        _burn(owner, shares);
+
+        uint256 balance = asset.balanceOf(address(this));
+
+        // there might be fewer assets than expected after paying the flashloan specially
+        // for the last withdraw
+        if (assets > balance) {
+            assets = balance;
+        }
+
+        emit Withdraw(msg.sender, receiver, owner, assets, shares);
+
+        asset.safeTransfer(receiver, assets);
+    }
+
+    function withdraw(uint256 assets, address receiver, address owner)
+        public
+        virtual
+        override
+        returns (uint256 shares)
+    {
+        shares = previewWithdraw(assets); // No need to check for rounding error, previewWithdraw rounds up.
+
+        if (msg.sender != owner) {
+            uint256 allowed = allowance[owner][msg.sender]; // Saves gas for limited approvals.
+
+            if (allowed != type(uint256).max) allowance[owner][msg.sender] = allowed - shares;
+        }
+
+        beforeWithdraw(assets, shares);
+
+        _burn(owner, shares);
+
+        uint256 balance = asset.balanceOf(address(this));
+        // there might be fewer assets than expected after paying the flashloan specially
+        // for the last withdraw
+        if (assets > balance) {
+            assets = balance;
+        }
+
+        emit Withdraw(msg.sender, receiver, owner, assets, shares);
+
+        asset.safeTransfer(receiver, assets);
+    }
 
     // called after the flashLoan on _rebalancePosition
     function receiveFlashLoan(address[] memory, uint256[] memory amounts, uint256[] memory, bytes memory userData)
