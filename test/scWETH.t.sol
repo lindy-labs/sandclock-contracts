@@ -257,7 +257,7 @@ contract scWETHTest is Test {
 
         assertEq(vault.totalProfit(), 0);
 
-        vault.harvest();
+        vault.harvest("");
 
         uint256 minimumExpectedApy = 0.05e18;
 
