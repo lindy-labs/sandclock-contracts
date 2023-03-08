@@ -51,7 +51,7 @@ contract scWETHTest is Test {
         wstEth = vault.wstETH();
 
         slippageTolerance = vault.slippageTolerance();
-        ethWstEthMaxLtv = vault.maxLtv();
+        ethWstEthMaxLtv = vault.getMaxLtv();
         targetLtv = vault.targetLtv();
 
         eTokenWstEth = vault.eToken();
@@ -128,7 +128,7 @@ contract scWETHTest is Test {
     }
 
     function testAtomicDepositInvestRedeem(uint256 amount) public {
-        amount = bound(amount, 1e18, 1e21);
+        amount = bound(amount, 1e5, 1e21); //max ~$280m flashloan
         vm.deal(address(this), amount);
         weth.deposit{value: amount}();
         weth.approve(address(vault), amount);
