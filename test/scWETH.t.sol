@@ -203,6 +203,9 @@ contract scWETHTest is Test {
         if (vault.getLtv() != 0) {
             assertRelApproxEq(vault.getLtv(), ltv, 0.01e18);
         }
+
+        assertGt(weth.balanceOf(alice), depositAmount2.mulWadDown(slippageTolerance - 0.01e18));
+
         console.log("vault.totalCollateralSupplied()", vault.totalCollateralSupplied());
         console.log("vault.totalDebt()", vault.totalDebt());
         console.log("vault.totalSupply()", vault.totalSupply());
