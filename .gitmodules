@@ -11,3 +11,7 @@
 	path = lib/openzeppelin-contracts
 	url = https://github.com/openzeppelin/openzeppelin-contracts
 	branch = v4.8.1
+[submodule "lib/euler-interfaces"]
+	path = lib/euler-interfaces
+	url = https://github.com/euler-xyz/euler-interfaces
+
