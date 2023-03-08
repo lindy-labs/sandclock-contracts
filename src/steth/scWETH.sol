@@ -69,7 +69,7 @@ contract scWETH is sc4626, IFlashLoanRecipient {
     uint256 public targetLtv = 0.5e18;
 
     // slippage for curve swaps
-    uint256 public slippageTolerance = 0.99e18;
+    uint256 public slippageTolerance = 0.999e18;
 
     constructor(address _admin) sc4626(_admin, ERC20(address(weth)), "Sandclock WETH Vault", "scWETH") {
         if (_admin == address(0)) revert AdminZeroAddress();
@@ -134,11 +134,14 @@ contract scWETH is sc4626, IFlashLoanRecipient {
         // value of the supplied collateral in eth terms using chainlink oracle
         assets = totalCollateralSupplied();
 
-        // add float
-        assets += asset.balanceOf(address(this));
-
         // subtract the debt
         assets -= totalDebt();
+
+        // account for slippage
+        assets = assets.mulWadDown(slippageTolerance);
+
+        // add float
+        assets += asset.balanceOf(address(this));
     }
 
     // total wstETH supplied as collateral (in ETH terms)
@@ -153,7 +156,8 @@ contract scWETH is sc4626, IFlashLoanRecipient {
 
     // returns the net leverage that the strategy is using right now (1e18 = 100%)
     function getLeverage() public view returns (uint256) {
-        return totalCollateralSupplied().divWadUp(totalAssets());
+        uint256 coll = totalCollateralSupplied();
+        return coll.divWadUp(coll - totalDebt());
     }
 
     // returns the net LTV at which we have borrowed till now (1e18 = 100%)
@@ -268,6 +272,9 @@ contract scWETH is sc4626, IFlashLoanRecipient {
 
         uint256 flashLoanAmount = amount.mulDivDown(debt, collateral - debt);
 
+        // withdraw everything if close enough
+        if (flashLoanAmount.divWadDown(slippageTolerance) >= debt) flashLoanAmount = debt;
+
         address[] memory tokens = new address[](1);
         tokens[0] = address(weth);
 
@@ -307,7 +314,7 @@ contract scWETH is sc4626, IFlashLoanRecipient {
             return;
         }
 
-        uint256 missing = assets - float;
+        uint256 missing = (assets - float).divWadUp(slippageTolerance);
 
         // needed otherwise counted as loss during harvest
         totalInvested -= missing;
