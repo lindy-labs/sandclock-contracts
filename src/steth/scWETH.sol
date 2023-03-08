@@ -20,13 +20,16 @@ error InvalidTargetLtv();
 error InvalidMaxLtv();
 error InvalidFlashLoanCaller();
 error InvalidSlippageTolerance();
-error AdminZeroAddress();
+error ZeroAddress();
+
+error StrategyEULSwapFailed();
 
 contract scWETH is sc4626, IFlashLoanRecipient {
     using SafeTransferLib for ERC20;
     using FixedPointMathLib for uint256;
 
     event SlippageToleranceUpdated(address indexed user, uint256 newSlippageTolerance);
+    event ExchangeProxyAddressUpdated(address indexed user, address newAddress);
     event TargetLtvRatioUpdated(address indexed user, uint256 newTargetLtv);
     event Harvest(uint256 profitSinceLastHarvest, uint256 performanceFee);
 
@@ -46,6 +49,12 @@ contract scWETH is sc4626, IFlashLoanRecipient {
 
     // Lido staking contract (stETH)
     ILido public constant stEth = ILido(0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84);
+
+    // 0x swap router
+    address xrouter = 0xDef1C0ded9bec7F1a1670819833240f027b25EfF;
+
+    // EUL token
+    ERC20 eul = ERC20(0xd9Fcd98c322942075A5C3860693e9f4f03AAE07b);
 
     IwstETH public constant wstETH = IwstETH(0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0);
     WETH public constant weth = WETH(payable(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2));
@@ -73,7 +82,7 @@ contract scWETH is sc4626, IFlashLoanRecipient {
     uint256 public slippageTolerance = 0.99e18;
 
     constructor(address _admin) sc4626(_admin, ERC20(address(weth)), "Sandclock WETH Vault", "scWETH") {
-        if (_admin == address(0)) revert AdminZeroAddress();
+        if (_admin == address(0)) revert ZeroAddress();
 
         ERC20(address(stEth)).safeApprove(address(wstETH), type(uint256).max);
         ERC20(address(stEth)).safeApprove(address(curvePool), type(uint256).max);
@@ -89,11 +98,27 @@ contract scWETH is sc4626, IFlashLoanRecipient {
         emit SlippageToleranceUpdated(msg.sender, newSlippageTolerance);
     }
 
+    function setExchangeProxyAddress(address newAddress) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (newAddress == address(0)) revert ZeroAddress();
+        xrouter = newAddress;
+        emit ExchangeProxyAddressUpdated(msg.sender, newAddress);
+    }
+
     /////////////////// ADMIN/KEEPER METHODS //////////////////////////////////
 
-    function harvest() external onlyRole(KEEPER_ROLE) {
+    function harvest(bytes calldata _eulSwapData) external onlyRole(KEEPER_ROLE) {
         // store the old total
         uint256 oldTotalInvested = totalInvested;
+
+        // swap EUL -> WETH
+        if (_eulSwapData.length > 0) {
+            eul.safeApprove(xrouter, eul.balanceOf(address(this)));
+            (bool success,) = xrouter.call{value: 0}(_eulSwapData);
+            if (!success) revert StrategyEULSwapFailed();
+        }
+
+        // reinvest
+        _rebalancePosition();
 
         totalInvested = totalAssets();
 
