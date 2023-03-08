@@ -27,7 +27,6 @@ contract scWETH is sc4626, IFlashLoanRecipient {
     using FixedPointMathLib for uint256;
 
     event SlippageToleranceUpdated(address indexed user, uint256 newSlippageTolerance);
-    event MaxLtvUpdated(address indexed user, uint256 newMaxLtv);
     event TargetLtvRatioUpdated(address indexed user, uint256 newTargetLtv);
     event Harvest(uint256 profitSinceLastHarvest, uint256 performanceFee);
 
@@ -58,14 +57,14 @@ contract scWETH is sc4626, IFlashLoanRecipient {
     // Balancer vault for flashloans
     IVault public constant balancerVault = IVault(0xBA12222222228d8Ba445958a75a0704d566BF2C8);
 
+    // value used to scale the token's collateral/borrow factors from the euler market
+    uint32 constant CONFIG_FACTOR_SCALE = 4_000_000_000;
+
     // total invested during last harvest/rebalance
     uint256 public totalInvested;
 
     // total profit generated for this vault
     uint256 public totalProfit;
-
-    // The max loan to value(ltv) ratio for borrowing eth on euler with wsteth as collateral for the flashloan
-    uint256 public maxLtv = 0.7735e18;
 
     // the target ltv ratio at which we actually borrow (<= maxLtv)
     uint256 public targetLtv = 0.5e18;
@@ -90,12 +89,6 @@ contract scWETH is sc4626, IFlashLoanRecipient {
         emit SlippageToleranceUpdated(msg.sender, newSlippageTolerance);
     }
 
-    function setMaxLtv(uint256 newMaxLtv) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (newMaxLtv > 1e18) revert InvalidMaxLtv();
-        maxLtv = newMaxLtv;
-        emit MaxLtvUpdated(msg.sender, newMaxLtv);
-    }
-
     /////////////////// ADMIN/KEEPER METHODS //////////////////////////////////
 
     function harvest() external onlyRole(KEEPER_ROLE) {
@@ -118,7 +111,7 @@ contract scWETH is sc4626, IFlashLoanRecipient {
 
     // increase/decrease the net leverage used by the strategy
     function changeLeverage(uint256 newTargetLtv) public onlyRole(KEEPER_ROLE) {
-        if (newTargetLtv >= maxLtv) revert InvalidTargetLtv();
+        if (newTargetLtv >= getMaxLtv()) revert InvalidTargetLtv();
 
         targetLtv = newTargetLtv;
         emit TargetLtvRatioUpdated(msg.sender, newTargetLtv);
@@ -174,6 +167,17 @@ contract scWETH is sc4626, IFlashLoanRecipient {
             // totalDebt / totalSupplied
             ltv = totalDebt().divWadUp(collateral);
         }
+    }
+
+    // The max loan to value(ltv) ratio for borrowing eth on euler with wsteth as collateral for the flashloan
+    function getMaxLtv() public view returns (uint256) {
+        uint256 collateralFactor = markets.underlyingToAssetConfig(address(wstETH)).collateralFactor;
+        uint256 borrowFactor = markets.underlyingToAssetConfig(address(weth)).borrowFactor;
+
+        uint256 scaledCollateralFactor = collateralFactor.divWadDown(CONFIG_FACTOR_SCALE);
+        uint256 scaledBorrowFactor = borrowFactor.divWadDown(CONFIG_FACTOR_SCALE);
+
+        return scaledCollateralFactor.mulWadDown(scaledBorrowFactor);
     }
 
     //////////////////// EXTERNAL METHODS //////////////////////////

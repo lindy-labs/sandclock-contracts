@@ -53,7 +53,7 @@ contract scWETHTest is Test {
         wstEth = vault.wstETH();
 
         slippageTolerance = vault.slippageTolerance();
-        ethWstEthMaxLtv = vault.maxLtv();
+        ethWstEthMaxLtv = vault.getMaxLtv();
         targetLtv = vault.targetLtv();
 
         eTokenWstEth = vault.eToken();
