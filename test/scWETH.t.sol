@@ -275,7 +275,8 @@ contract scWETHTest is Test {
             amount.mulWadDown(minimumExpectedApy.mulDivDown(timePeriod, annualPeriod)),
             "atleast 5% APY after withdraw"
         );
-        
+    }
+      
     function testDepositEth(uint256 amount) public {
         amount = bound(amount, 1e5, 1e21);
         vm.deal(address(this), amount);
