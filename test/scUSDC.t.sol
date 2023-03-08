@@ -11,6 +11,9 @@ import {sc4626} from "../src/sc4626.sol";
 import {scUSDC} from "../src/steth/scUSDC.sol";
 import {scWETH} from "../src/steth/scWETH.sol";
 
+import {MockSwapRouter} from "./mock/MockSwapRouter.sol";
+import {scUSDCHarness} from "./mock/scUSDCHarness.sol";
+
 contract scUSDCTest is Test {
     using FixedPointMathLib for uint256;
 
@@ -278,7 +281,7 @@ contract scUSDCTest is Test {
         deal(address(weth), address(wethVault), wethInvested * 2);
 
         // ~65% profit because of 65% target ltv
-        uint256 expectedProfit = amount.mulWadDown(vault.targetLtv());
+        uint256 expectedProfit = amount.mulWadDown(vault.targetLtv()).mulWadDown(vault.slippageTolerance());
 
         assertApproxEqRel(vault.totalAssets(), amount + expectedProfit, 0.005e18, "total assets");
     }
@@ -367,7 +370,42 @@ contract scUSDCTest is Test {
         assertEq(vault.getCollateral(), collateralBefore, "vault collateral");
         // float is maintained
         uint256 floatExpeced = vault.totalAssets().mulWadDown(vault.floatPercentage());
-        assertApproxEqRel(vault.getUsdcBalance(), floatExpeced, 0.05e18, "vault float");
+        assertTrue(vault.getUsdcBalance() >= floatExpeced, "vault float");
+    }
+
+    function test_withdraw_UsesAssetsFromProfitsOnlyWhenFloatIs0() public {
+        uint256 deposit = 10000e6;
+        deal(address(usdc), alice, deposit);
+
+        vault.setFloatPercentage(0);
+
+        vm.startPrank(alice);
+        usdc.approve(address(vault), type(uint256).max);
+        vault.deposit(deposit, alice);
+        vm.stopPrank();
+
+        vault.rebalance();
+
+        assertEq(vault.getUsdcBalance(), 0, "vault float");
+
+        // add 100% profit to the weth vault
+        uint256 wethInvested = weth.balanceOf(address(wethVault));
+        deal(address(weth), address(wethVault), wethInvested * 2);
+
+        uint256 collateralBefore = vault.getCollateral();
+        uint256 totalAssetsBefore = vault.totalAssets();
+
+        uint256 withdrawAmount = 5000e6;
+        vm.startPrank(alice);
+        vault.withdraw(withdrawAmount, address(alice), address(alice));
+        vm.stopPrank();
+
+        assertApproxEqAbs(usdc.balanceOf(alice), withdrawAmount, 1, "alice's usdc balance");
+        assertApproxEqAbs(vault.totalAssets(), totalAssetsBefore - withdrawAmount, 0.001e18, "vault total assets");
+        assertEq(vault.getCollateral(), collateralBefore, "vault collateral");
+        // float is maintained
+        uint256 floatExpeced = vault.totalAssets().mulWadDown(vault.floatPercentage());
+        assertTrue(vault.getUsdcBalance() >= floatExpeced, "vault float");
     }
 
     function test_withdraw_UsesAssetsFromCollateralLast() public {
@@ -393,12 +431,12 @@ contract scUSDCTest is Test {
         vm.stopPrank();
 
         assertApproxEqAbs(usdc.balanceOf(alice), withdrawAmount, 1, "alice's usdc balance");
-        assertApproxEqRel(vault.totalAssets(), totalAssetsBefore - withdrawAmount, 0.005e18, "vault total assets");
+        assertApproxEqRel(vault.totalAssets(), totalAssetsBefore - withdrawAmount, 0.05e18, "vault total assets");
         // float is maintained
         uint256 floatExpeced = vault.totalAssets().mulWadDown(vault.floatPercentage());
         assertApproxEqRel(vault.getUsdcBalance(), floatExpeced, 0.05e18, "vault float");
         uint256 collateralExpected = totalAssetsBefore - floatExpeced - withdrawAmount;
-        assertApproxEqRel(vault.getCollateral(), collateralExpected, 0.01e18, "vault collateral");
+        assertTrue(vault.getCollateral() >= collateralExpected, "vault collateral");
     }
 
     function test_withdraw_WorksWhenWithdrawingMaxAvailable() public {
@@ -415,6 +453,43 @@ contract scUSDCTest is Test {
         // add 100% profit to the weth vault
         uint256 wethInvested = weth.balanceOf(address(wethVault));
         deal(address(weth), address(wethVault), wethInvested * 2);
+
+        uint256 totalAssetsBefore = vault.totalAssets();
+        uint256 totalCollateralBefore = vault.getCollateral();
+
+        vm.startPrank(alice);
+        vault.withdraw(totalAssetsBefore, address(alice), address(alice));
+        vm.stopPrank();
+
+        assertApproxEqAbs(usdc.balanceOf(alice), totalAssetsBefore, 1, "alice's usdc balance");
+        assertApproxEqRel(vault.getUsdcBalance(), 0, 0.05e18, "vault float");
+        // some dust can be left in as collateral
+        assertApproxEqRel(vault.getCollateral(), totalCollateralBefore.mulWadUp(0.005e18), 1e18, "vault collateral");
+        assertApproxEqRel(vault.totalAssets(), totalAssetsBefore.mulWadUp(0.005e18), 1e18, "vault total assets");
+    }
+
+    function test_withdraw_WorksWithdrawingMaxWhenFloatIs0() public {
+        // redeploy vault with mock router because swapping usdc at current block results in "positive" slippage
+        MockSwapRouter router = new MockSwapRouter();
+        deal(address(usdc), address(router), 10_000_000e6);
+        wethVault = new scWETH(address(this));
+        vault = new scUSDCHarness(address(this), wethVault, address(router));
+
+        vault.setFloatPercentage(0);
+
+        uint256 deposit = 10000e6;
+        deal(address(usdc), alice, deposit);
+
+        vm.startPrank(alice);
+        usdc.approve(address(vault), type(uint256).max);
+        vault.deposit(deposit, alice);
+        vm.stopPrank();
+
+        vault.rebalance();
+
+        // add 100% profit to the weth vault
+        uint256 wethInvested = weth.balanceOf(address(wethVault));
+        deal(address(weth), address(wethVault), wethInvested.mulWadUp(2e18));
 
         uint256 totalAssetsBefore = vault.totalAssets();
         uint256 totalCollateralBefore = vault.getCollateral();

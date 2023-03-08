@@ -50,7 +50,7 @@ contract scUSDC is sc4626 {
     IEulerDToken public constant dToken = IEulerDToken(0x62e28f054efc24b26A794F5C1249B6349454352C);
 
     // Uniswap V3 router
-    ISwapRouter public constant swapRouter = ISwapRouter(0xE592427A0AEce92De3Edee1F18E0157C05861564);
+    ISwapRouter public swapRouter = ISwapRouter(0xE592427A0AEce92De3Edee1F18E0157C05861564);
 
     // 0x swap router
     address public constant xrouter = 0xDef1C0ded9bec7F1a1670819833240f027b25EfF;
@@ -223,12 +223,12 @@ contract scUSDC is sc4626 {
 
         if (wethInvested > wethDebt) {
             uint256 wethProfit = wethInvested - wethDebt;
-            uint256 wethToWithdraw = getWethFromUsdc(usdcNeeded);
+            uint256 wethToSell = getWethFromUsdc(usdcNeeded).divWadDown(slippageTolerance); // account for slippage
 
-            if (wethProfit >= wethToWithdraw) {
+            if (wethProfit >= wethToSell) {
                 // we cover withdrawal amount from selling weth profit
-                _disinvest(wethToWithdraw);
-                _swapWethForUsdc(wethToWithdraw);
+                _disinvest(wethToSell);
+                _swapWethForUsdc(wethToSell);
 
                 return;
             }
@@ -237,24 +237,34 @@ contract scUSDC is sc4626 {
             // so we sell as much as we can and withdraw the rest from euler
             _disinvest(wethProfit);
             usdcNeeded -= _swapWethForUsdc(wethProfit);
+            wethInvested -= wethProfit;
         }
 
         // to keep the same ltv, weth debt to repay has to be proporitional to collateral withdrawn
         uint256 wethNeeded = usdcNeeded.mulDivUp(wethDebt, collateral);
 
-        _disinvest(wethNeeded);
-
-        // repay debt and take out collateral on euler
-        dToken.repay(0, wethNeeded);
-        eToken.withdraw(0, usdcNeeded);
+        if (wethNeeded > wethInvested) {
+            _disinvest(wethInvested);
+            dToken.repay(0, wethDebt);
+            eToken.withdraw(0, collateral);
+        } else {
+            _disinvest(wethNeeded);
+            dToken.repay(0, wethNeeded);
+            eToken.withdraw(0, usdcNeeded);
+        }
     }
 
     function _calculateTotalAssets(uint256 _float, uint256 _collateral, uint256 _wethInvested, uint256 _wethDebt)
         internal
         view
-        returns (uint256)
+        returns (uint256 total)
     {
-        return _float + _collateral + getUsdcFromWeth(_wethInvested - _wethDebt);
+        total = _float + _collateral + getUsdcFromWeth(_wethInvested) - getUsdcFromWeth(_wethDebt);
+
+        // account for slippage when selling weth profits
+        if (_wethInvested > _wethDebt) {
+            total -= getUsdcFromWeth(_wethInvested - _wethDebt).mulWadUp(ONE - slippageTolerance);
+        }
     }
 
     function _calculateLtv(uint256 collateral, uint256 debt) internal view returns (uint256) {
