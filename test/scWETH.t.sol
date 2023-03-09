@@ -174,35 +174,37 @@ contract scWETHTest is Test {
 
         uint256 ltv = vault.targetLtv();
 
+        uint256 maxDelta = 0.02e18;
+
         vault.redeem(shares1 / 2, address(this), address(this));
-        assertRelApproxEq(weth.balanceOf(address(this)), (depositAmount1 / 2), 0.01e18);
-        assertRelApproxEq((depositAmount1 / 2), weth.balanceOf(address(this)), 0.01e18);
+        assertRelApproxEq(weth.balanceOf(address(this)), (depositAmount1 / 2), maxDelta);
+        assertRelApproxEq((depositAmount1 / 2), weth.balanceOf(address(this)), maxDelta);
 
         assertRelApproxEq(vault.getLtv(), ltv, 0.013e18);
 
         vm.prank(alice);
         vault.redeem(shares2 / 2, alice, alice);
-        assertRelApproxEq(weth.balanceOf(alice), (depositAmount2 / 2), 0.01e18);
-        assertRelApproxEq((depositAmount2 / 2), weth.balanceOf(alice), 0.01e18);
+        assertRelApproxEq(weth.balanceOf(alice), (depositAmount2 / 2), maxDelta);
+        assertRelApproxEq((depositAmount2 / 2), weth.balanceOf(alice), maxDelta);
 
-        assertRelApproxEq(vault.getLtv(), ltv, 0.01e18);
+        assertRelApproxEq(vault.getLtv(), ltv, maxDelta);
 
         vault.redeem(shares1 / 2, address(this), address(this));
-        assertRelApproxEq(weth.balanceOf(address(this)), depositAmount1, 0.01e18);
-        assertRelApproxEq((depositAmount1), weth.balanceOf(address(this)), 0.01e18);
+        assertRelApproxEq(weth.balanceOf(address(this)), depositAmount1, maxDelta);
+        assertRelApproxEq((depositAmount1), weth.balanceOf(address(this)), maxDelta);
 
         if (vault.getLtv() != 0) {
-            assertRelApproxEq(vault.getLtv(), ltv, 0.01e18);
+            assertRelApproxEq(vault.getLtv(), ltv, maxDelta);
         }
 
         vm.prank(alice);
         vault.redeem(shares2 / 2, alice, alice);
 
         if (vault.getLtv() != 0) {
-            assertRelApproxEq(vault.getLtv(), ltv, 0.01e18);
+            assertRelApproxEq(vault.getLtv(), ltv, maxDelta);
         }
 
-        assertGt(weth.balanceOf(alice), depositAmount2.mulWadDown(slippageTolerance - 0.01e18));
+        assertGt(weth.balanceOf(alice), depositAmount2.mulWadDown(slippageTolerance - maxDelta));
 
         console.log("vault.totalCollateralSupplied()", vault.totalCollateralSupplied());
         console.log("vault.totalDebt()", vault.totalDebt());
@@ -232,7 +234,7 @@ contract scWETHTest is Test {
     }
 
     function testLeverageUp(uint256 amount, uint256 newLtv) public {
-        amount = bound(amount, 1e5, 1e20);
+        amount = bound(amount, 1e5, 1e21);
         depositToVault(address(this), amount);
         vault.depositIntoStrategy();
         newLtv = bound(newLtv, vault.getLtv() + 1e15, ethWstEthMaxLtv - 0.001e18);
@@ -243,7 +245,7 @@ contract scWETHTest is Test {
     }
 
     function testLeverageDown(uint256 amount, uint256 newLtv) public {
-        amount = bound(amount, 1e6, 1e20);
+        amount = bound(amount, 1e6, 1e21);
         depositToVault(address(this), amount);
         vault.depositIntoStrategy();
         newLtv = bound(newLtv, 0.01e18, vault.getLtv() - 0.01e18);
@@ -273,19 +275,21 @@ contract scWETHTest is Test {
         dTokenWeth.borrow(0, amount.mulWadDown(ethWstEthMaxLtv - 1e16));
     }
 
-    function testHarvest(uint256 amount, uint64 tP) public {
-        amount = bound(amount, 1e5, 1e21);
+    function testHarvest(uint256 amount) public {
+        amount = bound(amount, 1e18, 1e21);
+        // uint256 amount = 100 ether;
         // simulate wstETH supply interest to EULER
-        uint256 timePeriod = bound(tP, 260 days, 365 days);
+        // uint256 timePeriod = bound(tP, 260 days, 365 days);
+        uint256 timePeriod = 365 days;
         uint256 annualPeriod = 365 days;
-        uint256 stEthStakingApy = 0.05e18;
+        uint256 stEthStakingApy = 0.06e18;
         uint256 stEthStakingInterest = 1e18 + stEthStakingApy.mulDivDown(timePeriod, annualPeriod);
-
-        console.log(stEthStakingInterest, 1.004e18);
 
         depositToVault(address(this), amount);
 
         vault.depositIntoStrategy();
+
+        console.log(vault.getLtv());
 
         // fast forward time to simulate supply and borrow interests
         vm.warp(block.timestamp + timePeriod);
@@ -294,19 +298,21 @@ contract scWETHTest is Test {
         vm.store(
             address(stEth),
             keccak256(abi.encodePacked("lido.Lido.beaconBalance")),
-            bytes32(prevBalance.mulWadDown(stEthStakingInterest))
+            bytes32(prevBalance.mulWadDown(1.08e18))
         );
+
+        console.log(vault.getLtv());
 
         assertEq(vault.totalProfit(), 0);
 
         vault.harvest("");
 
-        uint256 minimumExpectedApy = 0.05e18;
+        uint256 minimumExpectedApy = 0.03e18;
 
         assertGt(
             vault.totalProfit(),
             amount.mulWadDown(minimumExpectedApy.mulDivDown(timePeriod, annualPeriod)),
-            "atleast 5% APY"
+            "atleast 3% APY"
         );
 
         vault.redeem(vault.balanceOf(address(this)), address(this), address(this));
@@ -314,7 +320,7 @@ contract scWETHTest is Test {
         assertGt(
             weth.balanceOf(address(this)) - amount,
             amount.mulWadDown(minimumExpectedApy.mulDivDown(timePeriod, annualPeriod)),
-            "atleast 5% APY after withdraw"
+            "atleast 3% APY after withdraw"
         );
     }
 

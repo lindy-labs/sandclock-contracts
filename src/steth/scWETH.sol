@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.13;
 
+import "forge-std/console.sol";
+
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
@@ -77,7 +79,7 @@ contract scWETH is sc4626, IFlashLoanRecipient {
     uint256 public targetLtv = 0.5e18;
 
     // slippage for curve swaps
-    uint256 public slippageTolerance = 0.999e18;
+    uint256 public slippageTolerance = 0.99e18;
 
     constructor(address _admin) sc4626(_admin, ERC20(address(weth)), "Sandclock WETH Vault", "scWETH") {
         if (_admin == address(0)) revert ZeroAddress();
@@ -120,16 +122,18 @@ contract scWETH is sc4626, IFlashLoanRecipient {
 
         totalInvested = totalAssets();
 
-        // profit since last harvest, zero if there was a loss
-        uint256 profit = totalInvested > oldTotalInvested ? totalInvested - oldTotalInvested : 0;
-        totalProfit += profit;
+        if (totalInvested > oldTotalInvested) {
+            // profit since last harvest, zero if there was a loss
+            uint256 profit = totalInvested - oldTotalInvested;
+            totalProfit += profit;
 
-        uint256 fee = profit.mulWadDown(performanceFee);
+            uint256 fee = profit.mulWadDown(performanceFee);
 
-        // mint equivalent amount of tokens to the performance fee beneficiary ie the treasury
-        _mint(treasury, fee.mulDivDown(1e18, convertToAssets(1e18)));
+            // mint equivalent amount of tokens to the performance fee beneficiary ie the treasury
+            _mint(treasury, fee.mulDivDown(1e18, convertToAssets(1e18)));
 
-        emit Harvest(profit, fee);
+            emit Harvest(profit, fee);
+        }
     }
 
     // increase/decrease the net leverage used by the strategy
@@ -237,6 +241,8 @@ contract scWETH is sc4626, IFlashLoanRecipient {
         // decode user data
         (bool isDeposit, uint256 amount) = abi.decode(userData, (bool, uint256));
 
+        console.log("isDeposit", isDeposit);
+
         amount += flashLoanAmount;
 
         // if flashloan received as part of a deposit
@@ -320,9 +326,9 @@ contract scWETH is sc4626, IFlashLoanRecipient {
 
     function _withdrawToVault(uint256 amount) internal {
         uint256 debt = totalDebt();
-        uint256 collateral = totalCollateralSupplied();
+        uint256 ltv = getLtv();
 
-        uint256 flashLoanAmount = amount.mulDivDown(debt, collateral - debt);
+        uint256 flashLoanAmount = amount.mulDivDown(ltv, 1e18 - ltv);
 
         // withdraw everything if close enough
         if (flashLoanAmount.divWadDown(slippageTolerance) >= debt) flashLoanAmount = debt;
@@ -366,10 +372,10 @@ contract scWETH is sc4626, IFlashLoanRecipient {
             return;
         }
 
-        uint256 missing = (assets - float).divWadUp(slippageTolerance);
+        uint256 missing = (assets - float).divWadDown(slippageTolerance);
 
         // needed otherwise counted as loss during harvest
-        totalInvested -= missing;
+        totalInvested = totalInvested > missing ? totalInvested - missing : 0;
 
         _withdrawToVault(missing);
     }
