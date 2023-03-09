@@ -152,16 +152,16 @@ contract scWETHTest is Test {
         // account for unrealized slippage loss
         amount = amount.mulWadDown(1e18 - slippageTolerance);
 
-        assertRelApproxEq(vault.totalAssets(), amount, 0.01e18);
+        assertApproxEqRel(vault.totalAssets(), amount, 0.01e18);
         assertEq(vault.balanceOf(address(this)), shares);
-        assertRelApproxEq(vault.convertToAssets(vault.balanceOf(address(this))), amount, 0.01e18);
+        assertApproxEqRel(vault.convertToAssets(vault.balanceOf(address(this))), amount, 0.01e18);
 
         vault.redeem(shares, address(this), address(this));
 
         assertEq(vault.convertToAssets(10 ** vault.decimals()), 1e18);
         assertEq(vault.balanceOf(address(this)), 0);
         assertEq(vault.convertToAssets(vault.balanceOf(address(this))), 0);
-        assertRelApproxEq(weth.balanceOf(address(this)), amount, 0.01e18);
+        assertApproxEqRel(weth.balanceOf(address(this)), amount, 0.01e18);
     }
 
     function testTwoDepositsInvestTwoRedeems(uint256 depositAmount1, uint256 depositAmount2) public {
@@ -175,34 +175,34 @@ contract scWETHTest is Test {
         uint256 ltv = vault.targetLtv();
 
         vault.redeem(shares1 / 2, address(this), address(this));
-        assertRelApproxEq(weth.balanceOf(address(this)), (depositAmount1 / 2), 0.01e18);
-        assertRelApproxEq((depositAmount1 / 2), weth.balanceOf(address(this)), 0.01e18);
+        assertApproxEqRel(weth.balanceOf(address(this)), (depositAmount1 / 2), 0.01e18);
+        assertApproxEqRel((depositAmount1 / 2), weth.balanceOf(address(this)), 0.01e18);
 
-        assertRelApproxEq(vault.getLtv(), ltv, 0.013e18);
+        assertApproxEqRel(vault.getLtv(), ltv, 0.013e18);
 
         vm.prank(alice);
         vault.redeem(shares2 / 2, alice, alice);
-        assertRelApproxEq(weth.balanceOf(alice), (depositAmount2 / 2), 0.01e18);
-        assertRelApproxEq((depositAmount2 / 2), weth.balanceOf(alice), 0.01e18);
+        assertApproxEqRel(weth.balanceOf(alice), (depositAmount2 / 2), 0.01e18);
+        assertApproxEqRel((depositAmount2 / 2), weth.balanceOf(alice), 0.01e18);
 
-        assertRelApproxEq(vault.getLtv(), ltv, 0.01e18);
+        assertApproxEqRel(vault.getLtv(), ltv, 0.01e18);
 
         vault.redeem(shares1 / 2, address(this), address(this));
-        assertRelApproxEq(weth.balanceOf(address(this)), depositAmount1, 0.01e18);
-        assertRelApproxEq((depositAmount1), weth.balanceOf(address(this)), 0.01e18);
+        assertApproxEqRel(weth.balanceOf(address(this)), depositAmount1, 0.01e18);
+        assertApproxEqRel((depositAmount1), weth.balanceOf(address(this)), 0.01e18);
 
         if (vault.getLtv() != 0) {
-            assertRelApproxEq(vault.getLtv(), ltv, 0.01e18);
+            assertApproxEqRel(vault.getLtv(), ltv, 0.01e18);
         }
 
         vm.prank(alice);
         vault.redeem(shares2 / 2, alice, alice);
 
         if (vault.getLtv() != 0) {
-            assertRelApproxEq(vault.getLtv(), ltv, 0.01e18);
+            assertApproxEqRel(vault.getLtv(), ltv, 0.01e18);
         }
 
-        assertGt(weth.balanceOf(alice), depositAmount2.mulWadDown(slippageTolerance - 0.01e18));
+        assertGt(weth.balanceOf(alice), depositAmount2.mulWadDown(1e18 - slippageTolerance));
 
         console.log("vault.totalCollateralSupplied()", vault.totalCollateralSupplied());
         console.log("vault.totalDebt()", vault.totalDebt());
@@ -226,9 +226,9 @@ contract scWETHTest is Test {
         vault.withdrawToVault(assets / 2);
 
         // net ltv and leverage must not change after withdraw
-        assertRelApproxEq(vault.getLtv(), ltv, 0.001e18);
-        assertRelApproxEq(vault.getLeverage(), lev, 0.001e18);
-        assertRelApproxEq(weth.balanceOf(address(vault)), assets / 2, 0.001e18);
+        assertApproxEqRel(vault.getLtv(), ltv, 0.001e18);
+        assertApproxEqRel(vault.getLeverage(), lev, 0.001e18);
+        assertApproxEqRel(weth.balanceOf(address(vault)), assets / 2, 0.001e18);
     }
 
     function testLeverageUp(uint256 amount, uint256 newLtv) public {
