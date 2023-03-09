@@ -10,7 +10,6 @@ import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 import {sc4626} from "../src/sc4626.sol";
 import {scUSDC} from "../src/steth/scUSDC.sol";
 import {scWETH} from "../src/steth/scWETH.sol";
-import {IMarkets} from "../src/interfaces/euler/IMarkets.sol";
 
 contract scUSDCTest is Test {
     using FixedPointMathLib for uint256;
