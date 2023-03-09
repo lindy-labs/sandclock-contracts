@@ -12,9 +12,10 @@ import {IEulerDToken, IEulerEToken, IEulerMarkets} from "euler/IEuler.sol";
 import {IVault} from "../interfaces/balancer/IVault.sol";
 import {ISwapRouter} from "../interfaces/uniswap/ISwapRouter.sol";
 import {AggregatorV3Interface} from "../interfaces/chainlink/AggregatorV3Interface.sol";
+import {IFlashLoanRecipient} from "../interfaces/balancer/IFlashLoanRecipient.sol";
 import {sc4626} from "../sc4626.sol";
 
-contract scUSDC is sc4626 {
+contract scUSDC is sc4626, IFlashLoanRecipient {
     using SafeTransferLib for ERC20;
     using SafeTransferLib for WETH;
     using FixedPointMathLib for uint256;
