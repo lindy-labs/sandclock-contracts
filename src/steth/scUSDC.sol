@@ -104,17 +104,28 @@ contract scUSDC is sc4626 {
     function rebalance() public {
         uint256 balance = getUsdcBalance();
         uint256 collateral = getCollateral();
+        uint256 invested = getWethInvested();
         uint256 debt = getDebt();
-        uint256 floatRequired =
-            _calculateTotalAssets(balance, collateral, getWethInvested(), debt).mulWadUp(floatPercentage);
 
-        // first deposit if there is anything to deposit
+        // 1. sell profits if any
+        if (invested > debt) {
+            uint256 profit = invested - debt;
+            if (profit > invested.mulWadDown(DEBT_DELTA_THRESHOLD)) {
+                _disinvest(profit);
+                balance += _swapWethForUsdc(profit);
+                invested -= profit;
+            }
+        }
+
+        uint256 floatRequired = _calculateTotalAssets(balance, collateral, invested, debt).mulWadUp(floatPercentage);
+
+        // 2. deposit excess usdc as collateral
         if (balance > floatRequired) {
             eToken.deposit(0, balance - floatRequired);
             collateral += balance - floatRequired;
         }
 
-        // second check ltv and see if we need to rebalance
+        // 3. rebalance to target ltv
         uint256 targetDebt = getWethFromUsdc(collateral.mulWadDown(targetLtv));
         uint256 delta = debt > targetDebt ? debt - targetDebt : targetDebt - debt;
 
