@@ -124,13 +124,35 @@ contract scUSDCTest is Test {
         vault.setFloatPercentage(0.02e18);
 
         uint256 floatExpected = vault.floatPercentage().mulWadDown(vault.totalAssets());
-        assertTrue(vault.getUsdcBalance() < floatExpected);
+        assertTrue(vault.getUsdcBalance() < floatExpected, "float requirement is not greater than balance");
 
         uint256 collateralBefore = vault.getCollateral();
 
         vault.rebalance();
 
-        assertEq(vault.getCollateral(), collateralBefore);
+        assertEq(vault.getCollateral(), collateralBefore, "collateral");
+    }
+
+    function test_rebalance_DoesntDepositIfAssetsLessThanMin() public {
+        deal(address(usdc), address(vault), vault.rebalanceMinimum() - 1);
+
+        vault.setFloatPercentage(0);
+
+        vault.rebalance();
+
+        assertEq(vault.getCollateral(), 0, "collateral");
+        assertApproxEqAbs(vault.getUsdcBalance(), vault.rebalanceMinimum(), 1, "float");
+    }
+
+    function test_rebalance_DoesntDepositIfAssetsLessThanMin2() public {
+        deal(address(usdc), address(vault), vault.rebalanceMinimum());
+
+        vault.setFloatPercentage(0);
+
+        vault.rebalance();
+
+        assertApproxEqAbs(vault.getCollateral(), vault.rebalanceMinimum(), 1, "collateral");
+        assertEq(vault.getUsdcBalance(), 0, "float");
     }
 
     function test_rebalance_RespectsRequiredFloatAmount() public {
@@ -225,6 +247,33 @@ contract scUSDCTest is Test {
         assertEq(vault.getCollateral(), collateralBefore);
         assertEq(vault.getDebt(), debtBefore);
         assertEq(vault.getUsdcBalance(), floatBefore);
+    }
+
+    function testFuzz_rebalance(uint256 amount) public {
+        vault.setFloatPercentage(0);
+        uint256 lowerBound = vault.rebalanceMinimum().divWadUp(1e18 - vault.floatPercentage());
+        amount = bound(amount, lowerBound, 10_000_000e6);
+        deal(address(usdc), address(vault), amount);
+
+        vault.rebalance();
+
+        uint256 collateralBefore = vault.getCollateral();
+        uint256 debtBefore = vault.getDebt();
+        uint256 floatBefore = vault.getUsdcBalance();
+        uint256 totalAssetsBefore = vault.totalAssets();
+
+        uint256 wethInvested = weth.balanceOf(address(wethVault));
+        // add enough profit to make total assets double
+        uint256 profit = wethInvested + wethInvested.mulDivUp(1e18, vault.getLtv());
+        assertTrue(wethInvested > 0, "wethInvested must be > 0");
+        deal(address(weth), address(wethVault), profit);
+
+        vault.rebalance();
+
+        assertApproxEqRel(vault.totalAssets(), totalAssetsBefore * 2, 0.01e18);
+        assertApproxEqRel(vault.getCollateral(), collateralBefore * 2, 0.01e18, "collateral");
+        assertApproxEqRel(vault.getDebt(), debtBefore * 2, 0.01e18, "debt");
+        assertApproxEqRel(vault.getUsdcBalance(), floatBefore * 2, 0.01e18, "float");
     }
 
     /// #applyNewTargetLtv ///
@@ -336,31 +385,6 @@ contract scUSDCTest is Test {
     }
 
     /// #withdraw ///
-
-    function testFuzz_withdraw(uint256 amount) public {
-        amount = bound(amount, 1, 10_000_000e6); // upper limit constrained by weth available on euler
-        deal(address(usdc), alice, amount);
-
-        vm.startPrank(alice);
-
-        usdc.approve(address(vault), type(uint256).max);
-        vault.deposit(amount, alice);
-
-        vm.stopPrank();
-
-        vault.rebalance();
-
-        uint256 assets = vault.convertToAssets(vault.balanceOf(alice));
-
-        assertApproxEqAbs(assets, amount, 1, "assets");
-
-        vm.startPrank(alice);
-        vault.withdraw(assets, alice, alice);
-
-        assertApproxEqAbs(vault.balanceOf(alice), 0, 1, "balance");
-        assertApproxEqAbs(vault.totalAssets(), 0, 1, "total assets");
-        assertApproxEqAbs(usdc.balanceOf(alice), amount, 0.01e6, "usdc balance");
-    }
 
     function test_withdraw_UsesAssetsFromFloatFirst() public {
         uint256 deposit = 10000e6;
@@ -578,6 +602,63 @@ contract scUSDCTest is Test {
         vm.stopPrank();
     }
 
+    function testFuzz_withdraw(uint256 amount) public {
+        amount = bound(amount, 1, 10_000_000e6); // upper limit constrained by weth available on euler
+        deal(address(usdc), alice, amount);
+
+        vm.startPrank(alice);
+
+        usdc.approve(address(vault), type(uint256).max);
+        vault.deposit(amount, alice);
+
+        vm.stopPrank();
+
+        vault.rebalance();
+
+        uint256 assets = vault.convertToAssets(vault.balanceOf(alice));
+
+        assertApproxEqAbs(assets, amount, 1, "assets");
+
+        vm.startPrank(alice);
+        vault.withdraw(assets, alice, alice);
+
+        assertApproxEqAbs(vault.balanceOf(alice), 0, 1, "balance");
+        assertApproxEqAbs(vault.totalAssets(), 0, 1, "total assets");
+        assertApproxEqAbs(usdc.balanceOf(alice), amount, 0.01e6, "usdc balance");
+    }
+
+    function testFuzz_withdraw_WhenInProfit(uint256 amount) public {
+        uint256 lowerBound = vault.rebalanceMinimum().divWadUp(1e18 - vault.floatPercentage());
+        amount = bound(amount, lowerBound, 10_000_000e6); // upper limit constrained by weth available on euler
+        deal(address(usdc), alice, amount);
+
+        vm.startPrank(alice);
+
+        usdc.approve(address(vault), type(uint256).max);
+        vault.deposit(amount, alice);
+
+        vm.stopPrank();
+
+        vault.rebalance();
+
+        // add 100% profit to the weth vault
+        uint256 wethInvested = weth.balanceOf(address(wethVault));
+        deal(address(weth), address(wethVault), wethInvested * 2);
+
+        uint256 assets = vault.convertToAssets(vault.balanceOf(alice));
+        // some assets can be left in the vault because of slippage when selling profits
+        uint256 toleratedLeftover = vault.totalAssets().mulWadUp(1e18 - vault.slippageTolerance());
+
+        assertApproxEqRel(assets, amount.mulWadDown(1e18 + vault.getLtv()), 0.01e18, "assets");
+
+        vm.startPrank(alice);
+        vault.withdraw(assets, alice, alice);
+
+        assertApproxEqAbs(vault.balanceOf(alice), 0, 1, "balance");
+        assertApproxEqRel(usdc.balanceOf(alice), amount.mulWadDown(1e18 + vault.targetLtv()), 0.01e18, "usdc balance");
+        assertTrue(vault.totalAssets() <= toleratedLeftover, "total assets");
+    }
+
     /// #setSlippageTolerance ///
 
     function test_setSlippageTolerance_FailsIfCallerIsNotAdmin() public {
@@ -627,6 +708,6 @@ contract scUSDCTest is Test {
 
         assertEq(vault.eul().balanceOf(address(vault)), 0, "vault eul balance");
         assertEq(vault.totalAssets(), 7883_963201, "vault total assets");
-        assertEq(vault.getUsdcBalance(), 78_839633, "vault usdc balance");
+        assertEq(vault.getUsdcBalance(), 78_839632, "vault usdc balance");
     }
 }

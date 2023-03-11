@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.13;
 
+import "forge-std/console2.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {WETH} from "solmate/tokens/WETH.sol";
 import {ERC4626} from "solmate/mixins/ERC4626.sol";
@@ -63,6 +64,7 @@ contract scUSDC is sc4626 {
     uint256 public targetLtv = 0.65e18;
     // max slippage for swapping WETH -> USDC
     uint256 public slippageTolerance = 0.99e18; // 1% default
+    uint256 public rebalanceMinimum = 10e6; // 10 USDC
 
     // leveraged (w)eth vault
     ERC4626 public immutable scWETH;
@@ -117,10 +119,10 @@ contract scUSDC is sc4626 {
             }
         }
 
-        uint256 floatRequired = _calculateTotalAssets(balance, collateral, invested, debt).mulWadUp(floatPercentage);
+        uint256 floatRequired = _calculateTotalAssets(balance, collateral, invested, debt).mulWadDown(floatPercentage);
 
         // 2. deposit excess usdc as collateral
-        if (balance > floatRequired) {
+        if (balance > floatRequired && balance - floatRequired >= rebalanceMinimum) {
             eToken.deposit(0, balance - floatRequired);
             collateral += balance - floatRequired;
         }
