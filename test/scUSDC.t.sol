@@ -270,7 +270,7 @@ contract scUSDCTest is Test {
         assertApproxEqAbs(vault.totalAssets(), amount, 1, "total assets after ltv change");
     }
 
-    function test_totalAssets_AccountsProfitsMade() public {
+    function test_totalAssets_AccountProfitsMade() public {
         uint256 amount = 10000e6;
         deal(address(usdc), address(vault), amount);
 
@@ -281,9 +281,36 @@ contract scUSDCTest is Test {
         deal(address(weth), address(wethVault), wethInvested * 2);
 
         // ~65% profit because of 65% target ltv
-        uint256 expectedProfit = amount.mulWadDown(vault.targetLtv()).mulWadDown(vault.slippageTolerance());
+        uint256 expectedProfit = amount.mulWadDown(vault.getLtv()).mulWadDown(vault.slippageTolerance());
 
         assertApproxEqRel(vault.totalAssets(), amount + expectedProfit, 0.005e18, "total assets");
+    }
+
+    function test_totalAssets_AccountSlippageOnProfitsMade() public {
+        uint256 amount = 10000e6;
+        deal(address(usdc), address(vault), amount);
+
+        vault.rebalance();
+
+        // add 100% profit to the weth vault
+        uint256 wethInvested = weth.balanceOf(address(wethVault));
+        deal(address(weth), address(wethVault), wethInvested * 2);
+
+        uint256 totalBefore = vault.totalAssets();
+        uint256 profit = totalBefore - amount;
+
+        // decrease slippage tolerance by 1%
+        uint256 newSlippageTolerance = vault.slippageTolerance() - 0.01e18;
+        vault.setSlippageTolerance(newSlippageTolerance);
+
+        assertTrue(vault.totalAssets() < totalBefore, "total assets should be less than before");
+
+        assertApproxEqRel(
+            vault.totalAssets(),
+            totalBefore - profit.mulWadDown(1e18 - vault.slippageTolerance()),
+            0.001e18,
+            "total assets"
+        );
     }
 
     /// #withdraw ///
