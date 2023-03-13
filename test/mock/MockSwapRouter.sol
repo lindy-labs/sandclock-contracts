@@ -40,4 +40,13 @@ contract MockSwapRouter is ISwapRouter {
 
         return params.amountOutMinimum;
     }
+
+    function exactOutputSingle(ExactOutputSingleParams calldata /* params */ )
+        external
+        payable
+        override
+        returns (uint256 /* amountIn */ )
+    {
+        revert("MockSwapRouter: NOT_IMPLEMENTED");
+    }
 }
