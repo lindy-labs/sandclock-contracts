@@ -257,9 +257,11 @@ contract scUSDC is sc4626 {
         uint256 wethNeeded = usdcNeeded.mulDivUp(wethDebt, collateral);
 
         if (wethNeeded > wethInvested) {
+            uint256 usdcToWithdraw = wethInvested.mulDivUp(collateral, wethDebt);
+
             _disinvest(wethInvested);
-            dToken.repay(0, wethDebt);
-            eToken.withdraw(0, collateral);
+            dToken.repay(0, wethInvested);
+            eToken.withdraw(0, usdcToWithdraw);
         } else {
             _disinvest(wethNeeded);
             dToken.repay(0, wethNeeded);

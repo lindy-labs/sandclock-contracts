@@ -605,7 +605,7 @@ contract scUSDCTest is Test {
         assertApproxEqRel(vault.totalAssets(), totalAssetsBefore.mulWadUp(0.0005e18), 1e18, "vault total assets");
     }
 
-    function test_withdraw_FailsIfAmountOutIsLessThanMinWhenSwappingWETHtoUSDC() public {
+    function test_withdraw_FailsIfAmountOutIsLessThanMinWhenSellingProfits() public {
         uint256 deposit = 1_000_000e6;
         deal(address(usdc), alice, deposit);
 
@@ -627,6 +627,59 @@ contract scUSDCTest is Test {
         vm.expectRevert("Too little received");
         vault.withdraw(withdrawAmount, address(alice), address(alice));
         vm.stopPrank();
+    }
+
+    function test_withdraw_WorksWhenVaultIsUnderwater() public {
+        uint256 deposit = 10000e6;
+        deal(address(usdc), alice, deposit);
+
+        vm.startPrank(alice);
+        usdc.approve(address(vault), type(uint256).max);
+        vault.deposit(deposit, alice);
+        vm.stopPrank();
+
+        vault.rebalance();
+
+        // 50% loss to the weth vault
+        uint256 wethInvested = weth.balanceOf(address(wethVault));
+        deal(address(weth), address(wethVault), wethInvested / 2);
+
+        uint256 totalBefore = vault.totalAssets();
+        uint256 ltvBefore = vault.getLtv();
+
+        // we should be able to withdraw half of the deposit
+        uint256 withdrawAmount = deposit / 2;
+        vm.startPrank(alice);
+        vault.withdraw(withdrawAmount, address(alice), address(alice));
+        vm.stopPrank();
+
+        assertApproxEqAbs(usdc.balanceOf(alice), withdrawAmount, 1, "alice's usdc balance");
+        assertApproxEqRel(vault.totalAssets(), totalBefore - withdrawAmount, 0.005e18, "vault total assets");
+        assertApproxEqRel(vault.getCollateral(), deposit - withdrawAmount, 0.01e18, "vault collateral");
+        // ltv should not change
+        assertApproxEqRel(vault.getLtv(), ltvBefore, 0.001e18, "vault ltv");
+    }
+
+    function test_withdraw_FailsIfWithdrawingMoreWhenVaultIsUnderwater() public {
+        uint256 deposit = 10000e6;
+        deal(address(usdc), alice, deposit);
+
+        vm.startPrank(alice);
+        usdc.approve(address(vault), type(uint256).max);
+        vault.deposit(deposit, alice);
+        vm.stopPrank();
+
+        vault.rebalance();
+
+        // 50% loss to the weth vault
+        uint256 wethInvested = weth.balanceOf(address(wethVault));
+        deal(address(weth), address(wethVault), wethInvested / 2);
+
+        // we cannot withdraw evertying because we don't have enough to repay the debt
+        uint256 withdrawAmount = vault.totalAssets();
+        vm.startPrank(alice);
+        vm.expectRevert("TRANSFER_FAILED");
+        vault.withdraw(withdrawAmount, address(alice), address(alice));
     }
 
     function testFuzz_withdraw(uint256 amount) public {
