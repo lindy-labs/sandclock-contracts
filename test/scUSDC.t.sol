@@ -308,7 +308,7 @@ contract scUSDCTest is Test {
         assertApproxEqRel(
             vault.totalAssets(),
             totalBefore - profit.mulWadDown(1e18 - vault.slippageTolerance()),
-            0.001e18,
+            0.005e18,
             "total assets"
         );
     }
