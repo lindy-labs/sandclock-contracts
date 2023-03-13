@@ -790,4 +790,61 @@ contract scUSDCTest is Test {
         assertEq(vault.totalAssets(), 7883_963201, "vault total assets");
         assertEq(vault.getUsdcBalance(), 78_839632, "vault usdc balance");
     }
+
+    /// #exitAllPositions ///
+    function test_exitAllPositions_FailsIfCallerIsNotAdmin() public {
+        vm.startPrank(alice);
+        vm.expectRevert(sc4626.CallerNotAdmin.selector);
+        vault.exitAllPositions();
+    }
+
+    function test_exitAllPositions_FailsIfVaultIsNotUnderawater() public {
+        uint256 deposit = 1_000_000e6;
+        deal(address(usdc), alice, deposit);
+
+        vm.startPrank(alice);
+        usdc.approve(address(vault), type(uint256).max);
+        vault.deposit(deposit, alice);
+        vm.stopPrank();
+
+        vault.rebalance();
+
+        vm.expectRevert(scUSDC.VaultNotUnderwater.selector);
+        vault.exitAllPositions();
+    }
+
+    function test_exitAllPositions_RepaysDebtAndReleasesCollateral() public {
+        uint256 deposit = 1_000_000e6;
+        deal(address(usdc), alice, deposit);
+
+        vm.startPrank(alice);
+        usdc.approve(address(vault), type(uint256).max);
+        vault.deposit(deposit, alice);
+        vm.stopPrank();
+
+        vault.rebalance();
+
+        // simulate 50% loss
+        uint256 wethInvested = weth.balanceOf(address(wethVault));
+        deal(address(weth), address(wethVault), wethInvested / 2);
+
+        uint256 totalBefore = vault.totalAssets();
+
+        vault.exitAllPositions();
+
+        assertApproxEqRel(vault.getUsdcBalance(), totalBefore, 0.01e18, "vault usdc balance");
+        assertEq(vault.getCollateral(), 0, "vault collateral");
+        assertEq(vault.getDebt(), 0, "vault debt");
+    }
+
+    /// #receiveFlashLoan ///
+    function test_receiveFlashLoan_FailsIfCallerIsNotFlashLoaner() public {
+        vm.startPrank(alice);
+        vm.expectRevert(scUSDC.InvalidFlashLoanCaller.selector);
+        address[] memory tokens = new address[](1);
+        uint256[] memory amounts = new uint256[](1);
+        uint256[] memory feeAmounts = new uint256[](1);
+
+        vault.receiveFlashLoan(tokens, amounts, feeAmounts, bytes("0"));
+    }
 }

@@ -9,11 +9,13 @@ import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 import {ERC4626} from "solmate/mixins/ERC4626.sol";
 import {IEulerDToken, IEulerEToken, IEulerMarkets} from "euler/IEuler.sol";
+import {IVault} from "../interfaces/balancer/IVault.sol";
 import {ISwapRouter} from "../interfaces/uniswap/ISwapRouter.sol";
 import {AggregatorV3Interface} from "../interfaces/chainlink/AggregatorV3Interface.sol";
+import {IFlashLoanRecipient} from "../interfaces/balancer/IFlashLoanRecipient.sol";
 import {sc4626} from "../sc4626.sol";
 
-contract scUSDC is sc4626 {
+contract scUSDC is sc4626, IFlashLoanRecipient {
     using SafeTransferLib for ERC20;
     using SafeTransferLib for WETH;
     using FixedPointMathLib for uint256;
@@ -21,6 +23,8 @@ contract scUSDC is sc4626 {
     error InvalidTargetLtv();
     error EULSwapFailed();
     error InvalidSlippageTolerance();
+    error InvalidFlashLoanCaller();
+    error VaultNotUnderwater();
 
     event NewTargetLtvApplied(uint256 newtargetLtv);
     event SlippageToleranceUpdated(uint256 newSlippageTolerance);
@@ -59,6 +63,9 @@ contract scUSDC is sc4626 {
     // Chainlink pricefeed (USDC -> WETH)
     AggregatorV3Interface public constant usdcToEthPriceFeed =
         AggregatorV3Interface(0x986b5E1e1755e3C2440e960477f25201B0a8bbD4);
+
+    // Balancer vault for flashloans
+    IVault public constant balancerVault = IVault(0xBA12222222228d8Ba445958a75a0704d566BF2C8);
 
     // USDC / WETH target LTV
     uint256 public targetLtv = 0.65e18;
@@ -148,7 +155,7 @@ contract scUSDC is sc4626 {
     }
 
     /// note: euler rewards can be claimed by another account, we only have to swap them here using 0xrouter
-    function reinvestEulerRewards(bytes calldata _swapData) public onlyKeeper {
+    function reinvestEulerRewards(bytes calldata _swapData) external onlyKeeper {
         uint256 eulBalance = eul.balanceOf(address(this));
 
         if (eulBalance == 0) return;
@@ -159,6 +166,60 @@ contract scUSDC is sc4626 {
         if (!success) revert EULSwapFailed();
 
         rebalance();
+    }
+
+    // note: to be called as emergency exit to release collateral if the vault is underwater
+    function exitAllPositions() external onlyAdmin {
+        uint256 wethInvested = getWethInvested();
+        uint256 wethDebt = getDebt();
+
+        if (wethInvested >= wethDebt) {
+            revert VaultNotUnderwater();
+        }
+
+        scWETH.withdraw(wethInvested, address(this), address(this));
+        uint256 collateral = getCollateral();
+
+        address[] memory tokens = new address[](1);
+        tokens[0] = address(weth);
+
+        uint256[] memory amounts = new uint256[](1);
+        amounts[0] = wethDebt - wethInvested;
+
+        balancerVault.flashLoan(address(this), tokens, amounts, abi.encode(collateral, wethDebt));
+    }
+
+    function receiveFlashLoan(address[] memory, uint256[] memory amounts, uint256[] memory, bytes memory userData)
+        external
+    {
+        if (msg.sender != address(balancerVault)) {
+            revert InvalidFlashLoanCaller();
+        }
+
+        uint256 flashLoanAmount = amounts[0];
+        (uint256 collateral, uint256 wethDebt) = abi.decode(userData, (uint256, uint256));
+
+        dToken.repay(0, wethDebt);
+        eToken.withdraw(0, collateral);
+
+        asset.approve(address(swapRouter), type(uint256).max);
+
+        ISwapRouter.ExactOutputSingleParams memory params = ISwapRouter.ExactOutputSingleParams({
+            tokenIn: address(asset),
+            tokenOut: address(weth),
+            fee: 500,
+            recipient: address(this),
+            deadline: block.timestamp,
+            amountOut: flashLoanAmount,
+            amountInMaximum: type(uint256).max, // ignore slippage
+            sqrtPriceLimitX96: 0
+        });
+
+        swapRouter.exactOutputSingle(params);
+
+        asset.approve(address(swapRouter), 0);
+
+        weth.safeTransfer(address(balancerVault), flashLoanAmount);
     }
 
     function totalAssets() public view override returns (uint256) {
