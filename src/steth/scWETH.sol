@@ -6,7 +6,6 @@ import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 import {WETH} from "solmate/tokens/WETH.sol";
 import {sc4626} from "../sc4626.sol";
-import {IEulerDToken, IEulerEToken, IEulerMarkets} from "euler/IEuler.sol";
 import {ICurvePool} from "../interfaces/curve/ICurvePool.sol";
 import {ILido} from "../interfaces/lido/ILido.sol";
 import {IwstETH} from "../interfaces/lido/IwstETH.sol";
@@ -20,8 +19,6 @@ error InvalidFlashLoanCaller();
 error InvalidSlippageTolerance();
 error ZeroAddress();
 
-error StrategyEULSwapFailed();
-
 contract scWETH is sc4626, IFlashLoanRecipient {
     using SafeTransferLib for ERC20;
     using FixedPointMathLib for uint256;
@@ -31,17 +28,6 @@ contract scWETH is sc4626, IFlashLoanRecipient {
     event TargetLtvRatioUpdated(address indexed user, uint256 newTargetLtv);
     event Harvest(uint256 profitSinceLastHarvest, uint256 performanceFee);
 
-    address public constant EULER = 0x27182842E098f60e3D576794A5bFFb0777E025d3;
-
-    // The Euler market contract
-    IEulerMarkets public constant markets = IEulerMarkets(0x3520d5a913427E6F0D6A83E07ccD4A4da316e4d3);
-
-    // Euler supply token for wstETH (ewstETH)
-    IEulerEToken public constant eToken = IEulerEToken(0xbd1bd5C956684f7EB79DA40f582cbE1373A1D593);
-
-    // Euler debt token for WETH (dWETH)
-    IEulerDToken public constant dToken = IEulerDToken(0x62e28f054efc24b26A794F5C1249B6349454352C);
-
     // Curve pool for ETH-stETH
     ICurvePool public constant curvePool = ICurvePool(0xDC24316b9AE028F1497c275EB9192a3Ea0f67022);
 
@@ -50,9 +36,6 @@ contract scWETH is sc4626, IFlashLoanRecipient {
 
     // 0x swap router
     address xrouter = 0xDef1C0ded9bec7F1a1670819833240f027b25EfF;
-
-    // EUL token
-    ERC20 eul = ERC20(0xd9Fcd98c322942075A5C3860693e9f4f03AAE07b);
 
     IwstETH public constant wstETH = IwstETH(0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0);
     WETH public constant weth = WETH(payable(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2));
@@ -104,16 +87,9 @@ contract scWETH is sc4626, IFlashLoanRecipient {
 
     /////////////////// ADMIN/KEEPER METHODS //////////////////////////////////
 
-    function harvest(bytes calldata _eulSwapData) external onlyRole(KEEPER_ROLE) {
+    function harvest() external onlyRole(KEEPER_ROLE) {
         // store the old total
         uint256 oldTotalInvested = totalInvested;
-
-        // swap EUL -> WETH
-        if (_eulSwapData.length > 0) {
-            eul.safeApprove(xrouter, eul.balanceOf(address(this)));
-            (bool success,) = xrouter.call{value: 0}(_eulSwapData);
-            if (!success) revert StrategyEULSwapFailed();
-        }
 
         // reinvest
         _rebalancePosition();
