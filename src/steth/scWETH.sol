@@ -5,6 +5,10 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 import {WETH} from "solmate/tokens/WETH.sol";
+import {IPool} from "lib/aave-v3-core/contracts/interfaces/IPool.sol";
+import {IAToken} from "lib/aave-v3-core/contracts/interfaces/IAToken.sol";
+import {IVariableDebtToken} from "lib/aave-v3-core/contracts/interfaces/IVariableDebtToken.sol";
+
 import {sc4626} from "../sc4626.sol";
 import {ICurvePool} from "../interfaces/curve/ICurvePool.sol";
 import {ILido} from "../interfaces/lido/ILido.sol";
@@ -27,6 +31,15 @@ contract scWETH is sc4626, IFlashLoanRecipient {
     event ExchangeProxyAddressUpdated(address indexed user, address newAddress);
     event TargetLtvRatioUpdated(address indexed user, uint256 newTargetLtv);
     event Harvest(uint256 profitSinceLastHarvest, uint256 performanceFee);
+
+    // interest rate mode at which to borrow or repay
+    uint256 public constant INTEREST_RATE_MODE = 2;
+    uint8 public constant EMODE_ID = 1;
+
+    IPool public constant aavePool = IPool(0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2);
+    // aToken is a rebasing token and pegged 1:1 to the underlying
+    IAToken public constant aToken = IAToken(0x0B925eD163218f6662a35e0f0371Ac234f9E9371);
+    ERC20 public constant variableDebtToken = ERC20(0xeA51d7853EEFb32b6ee06b1C12E6dcCA88Be0fFE);
 
     // Curve pool for ETH-stETH
     ICurvePool public constant curvePool = ICurvePool(0xDC24316b9AE028F1497c275EB9192a3Ea0f67022);
@@ -67,10 +80,12 @@ contract scWETH is sc4626, IFlashLoanRecipient {
 
         ERC20(address(stEth)).safeApprove(address(wstETH), type(uint256).max);
         ERC20(address(stEth)).safeApprove(address(curvePool), type(uint256).max);
-        ERC20(address(wstETH)).safeApprove(EULER, type(uint256).max);
-        ERC20(address(weth)).safeApprove(EULER, type(uint256).max);
-        // Enter the euler collateral market (collateral's address, *not* the eToken address) ,
-        markets.enterMarket(0, address(wstETH));
+        ERC20(address(wstETH)).safeApprove(address(aavePool), type(uint256).max);
+        ERC20(address(weth)).safeApprove(address(aavePool), type(uint256).max);
+
+        // set e-mode on aave-v3 for increased borrowing capacity
+        aavePool.setUserEMode(EMODE_ID);
+        // todo: test e-mode is set to 1
     }
 
     function setSlippageTolerance(uint256 newSlippageTolerance) external onlyRole(DEFAULT_ADMIN_ROLE) {
@@ -146,12 +161,12 @@ contract scWETH is sc4626, IFlashLoanRecipient {
 
     // total wstETH supplied as collateral (in ETH terms)
     function totalCollateralSupplied() public view returns (uint256) {
-        return wstEthToEth(eToken.balanceOfUnderlying(address(this)));
+        return _wstEthToEth(aToken.balanceOf(address(this)));
     }
 
     // total eth borrowed
     function totalDebt() public view returns (uint256) {
-        return dToken.balanceOf(address(this));
+        return variableDebtToken.balanceOf(address(this));
     }
 
     // returns the net leverage that the strategy is using right now (1e18 = 100%)
@@ -162,22 +177,13 @@ contract scWETH is sc4626, IFlashLoanRecipient {
 
     // returns the net LTV at which we have borrowed till now (1e18 = 100%)
     function getLtv() public view returns (uint256 ltv) {
-        uint256 collateral = totalCollateralSupplied();
-        if (collateral > 0) {
-            // totalDebt / totalSupplied
-            ltv = totalDebt().divWadUp(collateral);
-        }
+        (,,,, ltv,) = aavePool.getUserAccountData(address(this));
+        ltv *= 1e14;
     }
 
-    // The max loan to value(ltv) ratio for borrowing eth on euler with wsteth as collateral for the flashloan
+    // The max loan to value(ltv) ratio for borrowing eth on euler with wsteth as collateral for the flashloan (1e18 = 100%)
     function getMaxLtv() public view returns (uint256) {
-        uint256 collateralFactor = markets.underlyingToAssetConfig(address(wstETH)).collateralFactor;
-        uint256 borrowFactor = markets.underlyingToAssetConfig(address(weth)).borrowFactor;
-
-        uint256 scaledCollateralFactor = collateralFactor.divWadDown(CONFIG_FACTOR_SCALE);
-        uint256 scaledBorrowFactor = borrowFactor.divWadDown(CONFIG_FACTOR_SCALE);
-
-        return scaledCollateralFactor.mulWadDown(scaledBorrowFactor);
+        return uint256(aavePool.getEModeCategoryData(EMODE_ID).ltv) * 1e14;
     }
 
     //////////////////// EXTERNAL METHODS //////////////////////////
@@ -226,21 +232,22 @@ contract scWETH is sc4626, IFlashLoanRecipient {
             // wrap stETH
             wstETH.wrap(stEth.balanceOf(address(this)));
 
-            // add wstETH liquidity on Euler
-            eToken.deposit(0, type(uint256).max);
+            //add wstETH liquidity on aave-v3
+            aavePool.supply(address(wstETH), wstETH.balanceOf(address(this)), address(this), 0);
 
-            // borrow enough weth from Euler to payback flashloan
-            dToken.borrow(0, flashLoanAmount);
+            //borrow enough weth from aave-v3 to payback flashloan
+            // todo: figure out the interest rate mode
+            aavePool.borrow(address(weth), flashLoanAmount, INTEREST_RATE_MODE, 0, address(this));
         }
         // if flashloan received as part of a withdrawal
         else {
             // repay debt + withdraw collateral
             if (flashLoanAmount >= totalDebt()) {
-                dToken.repay(0, type(uint256).max);
-                eToken.withdraw(0, type(uint256).max);
+                aavePool.repay(address(wstETH), type(uint256).max, INTEREST_RATE_MODE, address(this));
+                aavePool.withdraw(address(weth), type(uint256).max, address(this));
             } else {
-                dToken.repay(0, flashLoanAmount);
-                eToken.withdraw(0, _ethToWstEth(amount));
+                aavePool.repay(address(wstETH), flashLoanAmount, INTEREST_RATE_MODE, address(this));
+                aavePool.withdraw(address(weth), _ethToWstEth(amount), address(this));
             }
 
             // unwrap wstETH
@@ -313,7 +320,7 @@ contract scWETH is sc4626, IFlashLoanRecipient {
         balancerVault.flashLoan(address(this), tokens, amounts, abi.encode(false, amount));
     }
 
-    function wstEthToEth(uint256 wstEthAmount) public view returns (uint256 ethAmount) {
+    function _wstEthToEth(uint256 wstEthAmount) internal view returns (uint256 ethAmount) {
         if (wstEthAmount > 0) {
             // wstETh to stEth using exchangeRate
             uint256 stEthAmount = wstETH.getStETHByWstETH(wstEthAmount);
