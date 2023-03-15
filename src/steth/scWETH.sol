@@ -7,10 +7,9 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 import {WETH} from "solmate/tokens/WETH.sol";
-import {IPool} from "lib/aave-v3-core/contracts/interfaces/IPool.sol";
-import {IAToken} from "lib/aave-v3-core/contracts/interfaces/IAToken.sol";
-import {IVariableDebtToken} from "lib/aave-v3-core/contracts/interfaces/IVariableDebtToken.sol";
-
+import {IPool} from "aave-v3/interfaces/IPool.sol";
+import {IAToken} from "aave-v3/interfaces/IAToken.sol";
+import {IVariableDebtToken} from "aave-v3/interfaces/IVariableDebtToken.sol";
 import {sc4626} from "../sc4626.sol";
 import {ICurvePool} from "../interfaces/curve/ICurvePool.sol";
 import {ILido} from "../interfaces/lido/ILido.sol";
@@ -85,9 +84,8 @@ contract scWETH is sc4626, IFlashLoanRecipient {
         ERC20(address(wstETH)).safeApprove(address(aavePool), type(uint256).max);
         ERC20(address(weth)).safeApprove(address(aavePool), type(uint256).max);
 
-        // set e-mode on aave-v3 for increased borrowing capacity
+        // set e-mode on aave-v3 for increased borrowing capacity to 90% of collateral
         aavePool.setUserEMode(EMODE_ID);
-        // todo: test e-mode is set to 1
     }
 
     function setSlippageTolerance(uint256 newSlippageTolerance) external onlyRole(DEFAULT_ADMIN_ROLE) {

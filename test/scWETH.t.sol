@@ -11,9 +11,11 @@ import {WETH} from "solmate/tokens/WETH.sol";
 import {ILido} from "../src/interfaces/lido/ILido.sol";
 import {IwstETH} from "../src/interfaces/lido/IwstETH.sol";
 import {ICurvePool} from "../src/interfaces/curve/ICurvePool.sol";
-import {IAToken} from "lib/aave-v3-core/contracts/interfaces/IAToken.sol";
-import {IVariableDebtToken} from "lib/aave-v3-core/contracts/interfaces/IVariableDebtToken.sol";
-import {IPool} from "lib/aave-v3-core/contracts/interfaces/IPool.sol";
+import {IPool} from "aave-v3/interfaces/IPool.sol";
+import {IAToken} from "aave-v3/interfaces/IAToken.sol";
+import {IVariableDebtToken} from "aave-v3/interfaces/IVariableDebtToken.sol";
+import {Errors} from "aave-v3/protocol/libraries/helpers/Errors.sol";
+
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
 contract scWETHTest is Test {
@@ -23,6 +25,7 @@ contract scWETHTest is Test {
 
     // dummy users
     address constant alice = address(0x06);
+    uint256 boundMinimum = 1e10; // below this amount, aave doesn't count it as collateral
 
     Vault vault;
     uint256 initAmount = 100e18;
@@ -60,13 +63,14 @@ contract scWETHTest is Test {
         debtToken = vault.variableDebtToken();
         aavePool = vault.aavePool();
         curvePool = vault.curvePool();
+    }
 
-        // wstEth.approve(EULER, type(uint256).max);
-        // weth.approve(EULER, type(uint256).max);
+    function testEMode() public {
+        assertEq(aavePool.getUserEMode(address(vault)), vault.EMODE_ID(), "E mode not same");
     }
 
     function testAtomicDepositWithdraw(uint256 amount) public {
-        amount = bound(amount, 1e5, 1e27);
+        amount = bound(amount, boundMinimum, 1e27);
         vm.deal(address(this), amount);
         weth.deposit{value: amount}();
         weth.approve(address(vault), amount);
@@ -127,7 +131,7 @@ contract scWETHTest is Test {
     }
 
     function testAtomicDepositInvestRedeem(uint256 amount) public {
-        amount = bound(amount, 1e5, 1e21); //max ~$280m flashloan
+        amount = bound(amount, boundMinimum, 1e21); //max ~$280m flashloan
         vm.deal(address(this), amount);
         weth.deposit{value: amount}();
         weth.approve(address(vault), amount);
@@ -164,8 +168,8 @@ contract scWETHTest is Test {
     }
 
     function testTwoDepositsInvestTwoRedeems(uint256 depositAmount1, uint256 depositAmount2) public {
-        depositAmount1 = bound(depositAmount1, 1e5, 1e21);
-        depositAmount2 = bound(depositAmount2, 1e5, 1e21);
+        depositAmount1 = bound(depositAmount1, boundMinimum, 1e21);
+        depositAmount2 = bound(depositAmount2, boundMinimum, 1e21);
         uint256 shares1 = depositToVault(address(this), depositAmount1);
         uint256 shares2 = depositToVault(alice, depositAmount2);
 
@@ -210,7 +214,7 @@ contract scWETHTest is Test {
     }
 
     function testWithdrawToVault(uint256 amount) public {
-        amount = bound(amount, 1e5, 10000 ether);
+        amount = bound(amount, boundMinimum, 10000 ether);
         depositToVault(address(this), amount);
 
         vault.depositIntoStrategy();
@@ -231,7 +235,7 @@ contract scWETHTest is Test {
     }
 
     function testLeverageUp(uint256 amount, uint256 newLtv) public {
-        amount = bound(amount, 1e10, 1e20);
+        amount = bound(amount, boundMinimum, 1e20);
         depositToVault(address(this), amount);
         vault.depositIntoStrategy();
         newLtv = bound(newLtv, vault.getLtv() + 1e15, maxLtv - 0.001e18);
@@ -242,7 +246,7 @@ contract scWETHTest is Test {
     }
 
     function testLeverageDown(uint256 amount, uint256 newLtv) public {
-        amount = bound(amount, 1e10, 1e20);
+        amount = bound(amount, boundMinimum, 1e20);
         depositToVault(address(this), amount);
         vault.depositIntoStrategy();
         newLtv = bound(newLtv, 0.01e18, vault.getLtv() - 0.01e18);
@@ -252,28 +256,30 @@ contract scWETHTest is Test {
         assertApproxEqRel(vault.getLtv(), newLtv, 0.01e18, "leverage change failed");
     }
 
-    // function testBorrowOverMaxLtvFail(uint256 amount) public {
-    //     amount = bound(amount, 1e5, 1e21);
-    //     vm.deal(address(this), amount);
+    function testBorrowOverMaxLtvFail(uint256 amount) public {
+        amount = bound(amount, boundMinimum, 1e21);
+        vm.deal(address(this), amount);
 
-    //     stEth.approve(address(wstEth), type(uint256).max);
-    //     stEth.approve(address(curvePool), type(uint256).max);
-    //     wstEth.approve(EULER, type(uint256).max);
-    //     weth.approve(EULER, type(uint256).max);
-    //     stEth.submit{value: amount}(address(0));
-    //     wstEth.wrap(stEth.balanceOf(address(this)));
-    //     eTokenWstEth.deposit(0, wstEth.balanceOf(address(this)));
+        aavePool.setUserEMode(1);
 
-    //     // borrow at max ltv should fail
-    //     vm.expectRevert("e/collateral-violation");
-    //     dTokenWeth.borrow(0, amount.mulWadDown(maxLtv));
+        stEth.approve(address(wstEth), type(uint256).max);
+        stEth.approve(address(curvePool), type(uint256).max);
+        wstEth.approve(address(aavePool), type(uint256).max);
+        weth.approve(address(aavePool), type(uint256).max);
+        stEth.submit{value: amount}(address(0));
+        wstEth.wrap(stEth.balanceOf(address(this)));
+        aavePool.supply(address(wstEth), wstEth.balanceOf(address(this)), address(this), 0);
 
-    //     // borrow at a little less than maxLtv should pass without errors
-    //     dTokenWeth.borrow(0, amount.mulWadDown(maxLtv - 1e16));
-    // }
+        // borrow at max ltv should fail
+        vm.expectRevert(bytes(Errors.COLLATERAL_CANNOT_COVER_NEW_BORROW));
+        aavePool.borrow(address(weth), amount.mulWadDown(maxLtv), 2, 0, address(this));
+
+        // borrow at a little less than maxLtv should pass without errors
+        aavePool.borrow(address(weth), amount.mulWadDown(maxLtv - 1e16), 2, 0, address(this));
+    }
 
     function testHarvest(uint256 amount, uint64 tP) public {
-        amount = bound(amount, 1e5, 1e21);
+        amount = bound(amount, boundMinimum, 1e21);
         // simulate wstETH supply interest to EULER
         uint256 timePeriod = bound(tP, 260 days, 365 days);
         uint256 annualPeriod = 365 days;
@@ -318,7 +324,7 @@ contract scWETHTest is Test {
     }
 
     function testDepositEth(uint256 amount) public {
-        amount = bound(amount, 1e5, 1e21);
+        amount = bound(amount, boundMinimum, 1e21);
         vm.deal(address(this), amount);
 
         assertEq(weth.balanceOf(address(this)), 0);
