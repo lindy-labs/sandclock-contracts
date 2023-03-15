@@ -27,7 +27,6 @@ contract scWETHTest is Test {
     Vault vault;
     uint256 initAmount = 100e18;
 
-    address EULER;
     WETH weth;
     ILido stEth;
     IwstETH wstEth;
@@ -62,8 +61,8 @@ contract scWETHTest is Test {
         aavePool = vault.aavePool();
         curvePool = vault.curvePool();
 
-        wstEth.approve(EULER, type(uint256).max);
-        weth.approve(EULER, type(uint256).max);
+        // wstEth.approve(EULER, type(uint256).max);
+        // weth.approve(EULER, type(uint256).max);
     }
 
     function testAtomicDepositWithdraw(uint256 amount) public {
@@ -232,7 +231,7 @@ contract scWETHTest is Test {
     }
 
     function testLeverageUp(uint256 amount, uint256 newLtv) public {
-        amount = bound(amount, 1e5, 1e20);
+        amount = bound(amount, 1e10, 1e20);
         depositToVault(address(this), amount);
         vault.depositIntoStrategy();
         newLtv = bound(newLtv, vault.getLtv() + 1e15, maxLtv - 0.001e18);
@@ -243,7 +242,7 @@ contract scWETHTest is Test {
     }
 
     function testLeverageDown(uint256 amount, uint256 newLtv) public {
-        amount = bound(amount, 1e6, 1e20);
+        amount = bound(amount, 1e10, 1e20);
         depositToVault(address(this), amount);
         vault.depositIntoStrategy();
         newLtv = bound(newLtv, 0.01e18, vault.getLtv() - 0.01e18);

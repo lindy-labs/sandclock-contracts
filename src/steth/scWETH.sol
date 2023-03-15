@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.13;
 
+import "forge-std/console.sol";
+
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
@@ -177,8 +179,11 @@ contract scWETH is sc4626, IFlashLoanRecipient {
 
     // returns the net LTV at which we have borrowed till now (1e18 = 100%)
     function getLtv() public view returns (uint256 ltv) {
-        (,,,, ltv,) = aavePool.getUserAccountData(address(this));
-        ltv *= 1e14;
+        uint256 collateral = totalCollateralSupplied();
+        if (collateral > 0) {
+            // totalDebt / totalSupplied
+            ltv = totalDebt().divWadUp(collateral);
+        }
     }
 
     // The max loan to value(ltv) ratio for borrowing eth on euler with wsteth as collateral for the flashloan (1e18 = 100%)
@@ -236,18 +241,17 @@ contract scWETH is sc4626, IFlashLoanRecipient {
             aavePool.supply(address(wstETH), wstETH.balanceOf(address(this)), address(this), 0);
 
             //borrow enough weth from aave-v3 to payback flashloan
-            // todo: figure out the interest rate mode
             aavePool.borrow(address(weth), flashLoanAmount, INTEREST_RATE_MODE, 0, address(this));
         }
         // if flashloan received as part of a withdrawal
         else {
             // repay debt + withdraw collateral
             if (flashLoanAmount >= totalDebt()) {
-                aavePool.repay(address(wstETH), type(uint256).max, INTEREST_RATE_MODE, address(this));
-                aavePool.withdraw(address(weth), type(uint256).max, address(this));
+                aavePool.repay(address(weth), type(uint256).max, INTEREST_RATE_MODE, address(this));
+                aavePool.withdraw(address(wstETH), type(uint256).max, address(this));
             } else {
-                aavePool.repay(address(wstETH), flashLoanAmount, INTEREST_RATE_MODE, address(this));
-                aavePool.withdraw(address(weth), _ethToWstEth(amount), address(this));
+                aavePool.repay(address(weth), flashLoanAmount, INTEREST_RATE_MODE, address(this));
+                aavePool.withdraw(address(wstETH), _ethToWstEth(amount), address(this));
             }
 
             // unwrap wstETH
