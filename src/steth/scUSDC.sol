@@ -10,6 +10,7 @@ import {ERC4626} from "solmate/mixins/ERC4626.sol";
 import {IPool} from "aave-v3/interfaces/IPool.sol";
 import {IAToken} from "aave-v3/interfaces/IAToken.sol";
 import {IVariableDebtToken} from "aave-v3/interfaces/IVariableDebtToken.sol";
+import {IPoolDataProvider} from "aave-v3/interfaces/IPoolDataProvider.sol";
 
 import {IVault} from "../interfaces/balancer/IVault.sol";
 import {ISwapRouter} from "../interfaces/uniswap/ISwapRouter.sol";
@@ -41,7 +42,10 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
     uint256 constant DEBT_DELTA_THRESHOLD = 0.01e18;
     uint256 constant AAVE_VAR_INTEREST_RATE_MODE = 2;
 
+    // main aave contract for interaction with the protocol
     IPool public constant aavePool = IPool(0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2);
+    // aave protocol data provider
+    IPoolDataProvider aavePoolDataProvider = IPoolDataProvider(0x7B4EB56E7CD4b454BA8ff71E4518426369a138a3);
 
     // aave "aEthUSDC" token
     IAToken aUsdc = IAToken(0x98C23E9d8f34FEFb1B7BD6a91B7FF122F4e16F5c);
@@ -119,7 +123,7 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
 
         // 2. deposit excess usdc as collateral
         uint256 excessUsdc = balance > floatRequired ? balance - floatRequired : 0;
-        if (excessUsdc > 0) {
+        if (excessUsdc != 0 && excessUsdc >= rebalanceMinimum) {
             aavePool.supply(address(usdc), excessUsdc, address(this), 0);
             collateral += excessUsdc;
         }
@@ -246,8 +250,9 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
 
     // gets the current max LTV for USDC / WETH loans on aave
     function getMaxLtv() public view returns (uint256) {
-        // TODO: fix this
-        return 0.81e18;
+        (, uint256 ltv,,,,,,,,) = aavePoolDataProvider.getReserveConfigurationData(address(usdc));
+
+        return ltv * 1e14;
     }
 
     /*//////////////////////////////////////////////////////////////

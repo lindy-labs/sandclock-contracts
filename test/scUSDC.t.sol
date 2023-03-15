@@ -1,10 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.13;
 
-import {IPool} from "aave-v3/interfaces/IPool.sol";
-import {IAToken} from "aave-v3/interfaces/IAToken.sol";
-import {IVariableDebtToken} from "aave-v3/interfaces/IVariableDebtToken.sol";
-import {DataTypes} from "aave-v3//protocol/libraries/types/DataTypes.sol";
 import "forge-std/console2.sol";
 import "forge-std/Test.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
@@ -73,10 +69,9 @@ contract scUSDCTest is Test {
 
     /// #getMaxLtv ///
 
-    function test_maxLtv() public {
-        // at the current fork block, usdc collateral factor = 0.9 & weth borrow factor = 0.91
-        // maxLtv = 0.9 * 0.91 = 0.819
-        assertEq(vault.getMaxLtv(), 0.81e18);
+    function test_getMaxLtv() public {
+        // max ltv for usdc reserve asset on aave is 0.74 at forked block
+        assertEq(vault.getMaxLtv(), 0.74e18);
     }
 
     /// #deposit ///
