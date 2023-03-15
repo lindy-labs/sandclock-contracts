@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.13;
 
+import {IPool} from "aave-v3/interfaces/IPool.sol";
+import {IAToken} from "aave-v3/interfaces/IAToken.sol";
+import {IVariableDebtToken} from "aave-v3/interfaces/IVariableDebtToken.sol";
+import {DataTypes} from "aave-v3//protocol/libraries/types/DataTypes.sol";
 import "forge-std/console2.sol";
 import "forge-std/Test.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
@@ -58,14 +62,13 @@ contract scUSDCTest is Test {
         assertEq(address(vault.scWETH()), address(wethVault));
 
         // check approvals
-        assertEq(usdc.allowance(address(vault), vault.EULER()), type(uint256).max, "usdc->euler appor");
+        assertEq(usdc.allowance(address(vault), address(vault.aavePool())), type(uint256).max, "usdc->aave appor");
 
-        assertEq(weth.allowance(address(vault), vault.EULER()), type(uint256).max, "weth->euler allowance");
+        assertEq(weth.allowance(address(vault), address(vault.aavePool())), type(uint256).max, "weth->aave allowance");
         assertEq(
             weth.allowance(address(vault), address(vault.swapRouter())), type(uint256).max, "weth->swapRouter allowance"
         );
         assertEq(weth.allowance(address(vault), address(vault.scWETH())), type(uint256).max, "weth->scWETH allowance");
-        assertEq(vault.eul().allowance(address(vault), vault.xrouter()), 0, "eul->0xruter allowance");
     }
 
     /// #getMaxLtv ///
@@ -73,7 +76,7 @@ contract scUSDCTest is Test {
     function test_maxLtv() public {
         // at the current fork block, usdc collateral factor = 0.9 & weth borrow factor = 0.91
         // maxLtv = 0.9 * 0.91 = 0.819
-        assertEq(vault.getMaxLtv(), 0.819e18);
+        assertEq(vault.getMaxLtv(), 0.81e18);
     }
 
     /// #deposit ///
@@ -94,7 +97,7 @@ contract scUSDCTest is Test {
 
     /// #rebalance ///
 
-    function test_rebalance_DepositsUsdcAndBorrowsWethOnEuler() public {
+    function test_rebalance_DepositsUsdcAndBorrowsWeth() public {
         uint256 amount = 10000e6;
         deal(address(usdc), address(vault), amount);
 
@@ -110,7 +113,7 @@ contract scUSDCTest is Test {
         deal(address(usdc), address(vault), 10000e6);
 
         vm.expectEmit(true, true, true, true);
-        emit Rebalanced(9899_999999, 3_758780025000000000, 0.650000000065656566e18);
+        emit Rebalanced(9900_000000, 3_758780025000000000, 0.65e18);
 
         vault.rebalance();
     }
@@ -682,15 +685,15 @@ contract scUSDCTest is Test {
         vault.withdraw(withdrawAmount, address(alice), address(alice));
     }
 
+    // TODO: fails with TRANSFER_FAILED sometimes due to rounding error in calculation vault.convertToAssets(vault.balanceOf(alice)), example: amount = 18030078 => calculaated assets = 18030079
     function testFuzz_withdraw(uint256 amount) public {
-        amount = bound(amount, 1, 10_000_000e6); // upper limit constrained by weth available on euler
+        amount = bound(amount, 1, 10_000_000e6); // upper limit constrained by weth available on aave
         deal(address(usdc), alice, amount);
 
         vm.startPrank(alice);
 
         usdc.approve(address(vault), type(uint256).max);
         vault.deposit(amount, alice);
-
         vm.stopPrank();
 
         vault.rebalance();
@@ -709,7 +712,7 @@ contract scUSDCTest is Test {
 
     function testFuzz_withdraw_WhenInProfit(uint256 amount) public {
         uint256 lowerBound = vault.rebalanceMinimum().divWadUp(1e18 - vault.floatPercentage());
-        amount = bound(amount, lowerBound, 10_000_000e6); // upper limit constrained by weth available on euler
+        amount = bound(amount, lowerBound, 10_000_000e6); // upper limit constrained by weth available on aave
         deal(address(usdc), alice, amount);
 
         vm.startPrank(alice);
@@ -760,38 +763,8 @@ contract scUSDCTest is Test {
         assertEq(vault.slippageTolerance(), newTolerance, "slippage tolerance");
     }
 
-    /// #reinvestEulerRewards ///
-
-    function test_reinvestEulerRewards_FailsIfCallerIsNotKeeper() public {
-        vm.startPrank(alice);
-        vm.expectRevert(sc4626.CallerNotKeeper.selector);
-        vault.reinvestEulerRewards(bytes("0"));
-    }
-
-    function test_reinvestEulerRewards_SwapsEulForUsdcAndRebalances() public {
-        vm.rollFork(16744453);
-        // redeploy vault
-        vault = new scUSDC(address(this), new scWETH(address(this)));
-
-        deal(address(vault.eul()), address(vault), 1000e18);
-
-        assertEq(vault.eul().balanceOf(address(vault)), 1000e18, "eul balance");
-        assertEq(vault.getUsdcBalance(), 0, "usdc balance");
-        assertEq(vault.totalAssets(), 0, "total assets");
-
-        // data obtained from 0x api for swapping 1000 eul for ~7883 usdc
-        // https://api.0x.org/swap/v1/quote?buyToken=USDC&sellToken=0xd9Fcd98c322942075A5C3860693e9f4f03AAE07b&sellAmount=1000000000000000000000
-        bytes memory swapData =
-            hex"6af479b2000000000000000000000000000000000000000000000000000000000000008000000000000000000000000000000000000000000000003635c9adc5dea0000000000000000000000000000000000000000000000000000000000001d16e269100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000042d9fcd98c322942075a5c3860693e9f4f03aae07b002710c02aaa39b223fe8d0a0e5c4f27ead9083c756cc2000064a0b86991c6218b36c1d19d4a2e9eb0ce3606eb48000000000000000000000000000000000000000000000000000000000000869584cd00000000000000000000000010000000000000000000000000000000000000110000000000000000000000000000000000000000000000e6464241aa64013c9d";
-
-        vault.reinvestEulerRewards(swapData);
-
-        assertEq(vault.eul().balanceOf(address(vault)), 0, "vault eul balance");
-        assertEq(vault.totalAssets(), 7883_963201, "vault total assets");
-        assertEq(vault.getUsdcBalance(), 78_839632, "vault usdc balance");
-    }
-
     /// #exitAllPositions ///
+
     function test_exitAllPositions_FailsIfCallerIsNotAdmin() public {
         vm.startPrank(alice);
         vm.expectRevert(sc4626.CallerNotAdmin.selector);

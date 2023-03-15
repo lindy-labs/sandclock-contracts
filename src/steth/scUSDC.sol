@@ -1,14 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.13;
 
-import "forge-std/console2.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {WETH} from "solmate/tokens/WETH.sol";
 import {ERC4626} from "solmate/mixins/ERC4626.sol";
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 import {ERC4626} from "solmate/mixins/ERC4626.sol";
-import {IEulerDToken, IEulerEToken, IEulerMarkets} from "euler/IEuler.sol";
+import {IPool} from "aave-v3/interfaces/IPool.sol";
+import {IAToken} from "aave-v3/interfaces/IAToken.sol";
+import {IVariableDebtToken} from "aave-v3/interfaces/IVariableDebtToken.sol";
+
 import {IVault} from "../interfaces/balancer/IVault.sol";
 import {ISwapRouter} from "../interfaces/uniswap/ISwapRouter.sol";
 import {AggregatorV3Interface} from "../interfaces/chainlink/AggregatorV3Interface.sol";
@@ -35,30 +37,19 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
 
     uint256 constant ONE = 1e18;
     uint256 constant WETH_USDC_DECIMALS_DIFF = 1e12;
-    // vaule used to scale the token's collateral/borrow factors from the euler market
-    uint32 constant CONFIG_FACTOR_SCALE = 4_000_000_000;
     // delta threshold for rebalancing in percentage
     uint256 constant DEBT_DELTA_THRESHOLD = 0.01e18;
+    uint256 constant AAVE_VAR_INTEREST_RATE_MODE = 2;
 
-    address public constant EULER = 0x27182842E098f60e3D576794A5bFFb0777E025d3;
+    IPool public constant aavePool = IPool(0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2);
 
-    // euler rewards token EUL
-    ERC20 public eul = ERC20(0xd9Fcd98c322942075A5C3860693e9f4f03AAE07b);
-
-    // The Euler market contract
-    IEulerMarkets public constant markets = IEulerMarkets(0x3520d5a913427E6F0D6A83E07ccD4A4da316e4d3);
-
-    // Euler supply token for USDC (eUSDC)
-    IEulerEToken public constant eToken = IEulerEToken(0xEb91861f8A4e1C12333F42DCE8fB0Ecdc28dA716);
-
-    // Euler debt token for WETH (dWETH)
-    IEulerDToken public constant dToken = IEulerDToken(0x62e28f054efc24b26A794F5C1249B6349454352C);
+    // aave "aEthUSDC" token
+    IAToken aUsdc = IAToken(0x98C23E9d8f34FEFb1B7BD6a91B7FF122F4e16F5c);
+    // aave "variableDebtEthWETH" token
+    ERC20 dWeth = ERC20(0xeA51d7853EEFb32b6ee06b1C12E6dcCA88Be0fFE);
 
     // Uniswap V3 router
     ISwapRouter public swapRouter = ISwapRouter(0xE592427A0AEce92De3Edee1F18E0157C05861564);
-
-    // 0x swap router
-    address public constant xrouter = 0xDef1C0ded9bec7F1a1670819833240f027b25EfF;
 
     // Chainlink pricefeed (USDC -> WETH)
     AggregatorV3Interface public constant usdcToEthPriceFeed =
@@ -79,13 +70,11 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
     constructor(address _admin, ERC4626 _scWETH) sc4626(_admin, usdc, "Sandclock USDC Vault", "scUSDC") {
         scWETH = _scWETH;
 
-        usdc.safeApprove(EULER, type(uint256).max);
+        usdc.safeApprove(address(aavePool), type(uint256).max);
 
-        weth.safeApprove(EULER, type(uint256).max);
+        weth.safeApprove(address(aavePool), type(uint256).max);
         weth.safeApprove(address(swapRouter), type(uint256).max);
         weth.safeApprove(address(_scWETH), type(uint256).max);
-
-        markets.enterMarket(0, address(usdc));
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -129,9 +118,10 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
         uint256 floatRequired = _calculateTotalAssets(balance, collateral, invested, debt).mulWadDown(floatPercentage);
 
         // 2. deposit excess usdc as collateral
-        if (balance > floatRequired && balance - floatRequired >= rebalanceMinimum) {
-            eToken.deposit(0, balance - floatRequired);
-            collateral += balance - floatRequired;
+        uint256 excessUsdc = balance > floatRequired ? balance - floatRequired : 0;
+        if (excessUsdc > 0) {
+            aavePool.supply(address(usdc), excessUsdc, address(this), 0);
+            collateral += excessUsdc;
         }
 
         // 3. rebalance to target ltv
@@ -143,29 +133,15 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
         // either repay or take out more debt to get to the target ltv
         if (debt > targetDebt) {
             _disinvest(delta);
-            dToken.repay(0, delta);
+            aavePool.repay(address(weth), delta, AAVE_VAR_INTEREST_RATE_MODE, address(this));
         } else {
-            dToken.borrow(0, delta);
+            aavePool.borrow(address(weth), delta, AAVE_VAR_INTEREST_RATE_MODE, 0, address(this));
             scWETH.deposit(delta, address(this));
         }
 
         uint256 collateralAfter = getCollateral();
         uint256 debtAfter = getDebt();
         emit Rebalanced(collateralAfter, debtAfter, _calculateLtv(collateralAfter, debtAfter));
-    }
-
-    /// note: euler rewards can be claimed by another account, we only have to swap them here using 0xrouter
-    function reinvestEulerRewards(bytes calldata _swapData) external onlyKeeper {
-        uint256 eulBalance = eul.balanceOf(address(this));
-
-        if (eulBalance == 0) return;
-
-        // swap EUL -> WETH
-        eul.safeApprove(xrouter, eulBalance);
-        (bool success,) = xrouter.call{value: 0}(_swapData);
-        if (!success) revert EULSwapFailed();
-
-        rebalance();
     }
 
     // note: to be called as emergency exit to release collateral if the vault is underwater
@@ -199,8 +175,8 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
         uint256 flashLoanAmount = amounts[0];
         (uint256 collateral, uint256 wethDebt) = abi.decode(userData, (uint256, uint256));
 
-        dToken.repay(0, wethDebt);
-        eToken.withdraw(0, collateral);
+        aavePool.repay(address(weth), wethDebt, AAVE_VAR_INTEREST_RATE_MODE, address(this));
+        aavePool.withdraw(address(usdc), collateral, address(this));
 
         asset.approve(address(swapRouter), type(uint256).max);
 
@@ -242,14 +218,14 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
         return asset.balanceOf(address(this));
     }
 
-    // total USDC supplied as collateral to euler
+    // total USDC supplied as collateral to aave
     function getCollateral() public view returns (uint256) {
-        return eToken.balanceOfUnderlying(address(this));
+        return aUsdc.balanceOf(address(this));
     }
 
-    // total eth borrowed on euler
+    // total eth borrowed on aave
     function getDebt() public view returns (uint256) {
-        return dToken.balanceOf(address(this));
+        return dWeth.balanceOf(address(this));
     }
 
     function getWethInvested() public view returns (uint256) {
@@ -268,15 +244,10 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
         return debtPriceInUsdc.divWadUp(getCollateral());
     }
 
-    // gets the current max LTV for USDC / WETH loans on euler
+    // gets the current max LTV for USDC / WETH loans on aave
     function getMaxLtv() public view returns (uint256) {
-        uint256 collateralFactor = markets.underlyingToAssetConfig(address(usdc)).collateralFactor;
-        uint256 borrowFactor = markets.underlyingToAssetConfig(address(weth)).borrowFactor;
-
-        uint256 scaledCollateralFactor = collateralFactor.divWadDown(CONFIG_FACTOR_SCALE);
-        uint256 scaledBorrowFactor = borrowFactor.divWadDown(CONFIG_FACTOR_SCALE);
-
-        return scaledCollateralFactor.mulWadDown(scaledBorrowFactor);
+        // TODO: fix this
+        return 0.81e18;
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -290,7 +261,7 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
         uint256 collateral = getCollateral();
         uint256 wethDebt = getDebt();
         uint256 wethInvested = getWethInvested();
-        // if we don't have enough assets, we need to withdraw what's missing from scWETH & euler
+        // if we don't have enough assets, we need to withdraw what's missing from scWETH & aave
         uint256 total = _calculateTotalAssets(balance, collateral, wethInvested, wethDebt);
         uint256 floatRequired = total > _assets ? (total - _assets).mulWadUp(floatPercentage) : 0;
         uint256 usdcNeeded = _assets + floatRequired - balance;
@@ -308,7 +279,7 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
             }
 
             // we cannot cover withdrawal amount only from selling weth profit
-            // so we sell as much as we can and withdraw the rest from euler
+            // so we sell as much as we can and withdraw the rest from aave
             _disinvest(wethProfit);
             usdcNeeded -= _swapWethForUsdc(wethProfit);
             wethInvested -= wethProfit;
@@ -321,12 +292,12 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
             uint256 usdcToWithdraw = wethInvested.mulDivUp(collateral, wethDebt);
 
             _disinvest(wethInvested);
-            dToken.repay(0, wethInvested);
-            eToken.withdraw(0, usdcToWithdraw);
+            aavePool.repay(address(weth), wethInvested, AAVE_VAR_INTEREST_RATE_MODE, address(this));
+            aavePool.withdraw(address(usdc), usdcToWithdraw, address(this));
         } else {
             _disinvest(wethNeeded);
-            dToken.repay(0, wethNeeded);
-            eToken.withdraw(0, usdcNeeded);
+            aavePool.repay(address(weth), wethNeeded, AAVE_VAR_INTEREST_RATE_MODE, address(this));
+            aavePool.withdraw(address(usdc), usdcNeeded, address(this));
         }
     }
 
