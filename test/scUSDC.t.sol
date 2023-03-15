@@ -680,7 +680,6 @@ contract scUSDCTest is Test {
         vault.withdraw(withdrawAmount, address(alice), address(alice));
     }
 
-    // TODO: fails with TRANSFER_FAILED sometimes due to rounding error in calculation vault.convertToAssets(vault.balanceOf(alice)), example: amount = 18030078 => calculaated assets = 18030079
     function testFuzz_withdraw(uint256 amount) public {
         amount = bound(amount, 1, 10_000_000e6); // upper limit constrained by weth available on aave
         deal(address(usdc), alice, amount);
@@ -694,11 +693,13 @@ contract scUSDCTest is Test {
         vault.rebalance();
 
         uint256 assets = vault.convertToAssets(vault.balanceOf(alice));
-
+        // due to rounding errors, we can't assert exact equality
         assertApproxEqAbs(assets, amount, 1, "assets");
 
         vm.startPrank(alice);
-        vault.withdraw(assets, alice, alice);
+        // use "amount" to withdraw instead of "assets" because of rounding errors "assets" can be greater than "amount" we depsited
+        // this happens because when we borrow X amount of weth on aave and querying the debt later sometimes returns X - 1 wei
+        vault.withdraw(amount, alice, alice);
 
         assertApproxEqAbs(vault.balanceOf(alice), 0, 1, "balance");
         assertApproxEqAbs(vault.totalAssets(), 0, 1, "total assets");
