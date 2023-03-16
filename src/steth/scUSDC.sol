@@ -18,6 +18,11 @@ import {AggregatorV3Interface} from "../interfaces/chainlink/AggregatorV3Interfa
 import {IFlashLoanRecipient} from "../interfaces/balancer/IFlashLoanRecipient.sol";
 import {sc4626} from "../sc4626.sol";
 
+/**
+ * @title Sandclock USDC Vault
+ * @notice A vault that allows users to earn interest on their USDC deposits from leveraged WETH staking.
+ * @dev This vault uses Sanclodk's leveraged WETH staking vault - scWETH.
+ */
 contract scUSDC is sc4626, IFlashLoanRecipient {
     using SafeTransferLib for ERC20;
     using SafeTransferLib for WETH;
@@ -88,14 +93,22 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
                             PUBLIC API
     //////////////////////////////////////////////////////////////*/
 
-    function setSlippageTolerance(uint256 _slippageTolerance) external onlyAdmin {
-        if (_slippageTolerance > ONE) revert InvalidSlippageTolerance();
+    /**
+     * @notice Set the slippage tolerance for swapping WETH to USDC on Uniswap.
+     * @param _newSlippageTolerance The new slippage tolerance value.
+     */
+    function setSlippageTolerance(uint256 _newSlippageTolerance) external onlyAdmin {
+        if (_newSlippageTolerance > ONE) revert InvalidSlippageTolerance();
 
-        slippageTolerance = _slippageTolerance;
+        slippageTolerance = _newSlippageTolerance;
 
-        emit SlippageToleranceUpdated(msg.sender, _slippageTolerance);
+        emit SlippageToleranceUpdated(msg.sender, _newSlippageTolerance);
     }
 
+    /**
+     * @notice Apply a new target LTV and trigger a rebalance.
+     * @param _newTargetLtv The new target LTV value.
+     */
     function applyNewTargetLtv(uint256 _newTargetLtv) external onlyKeeper {
         if (_newTargetLtv > getMaxLtv()) revert InvalidTargetLtv();
 
@@ -106,6 +119,10 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
         emit NewTargetLtvApplied(msg.sender, _newTargetLtv);
     }
 
+    /**
+     * @notice Rebalance the vault's positions.
+     * @dev Called to increase or decrease the WETH debt to match the target LTV.
+     */
     function rebalance() public {
         uint256 balance = getUsdcBalance();
         uint256 collateral = getCollateral();
@@ -151,7 +168,9 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
         emit Rebalanced(collateralAfter, debtAfter, _calculateLtv(collateralAfter, debtAfter));
     }
 
-    // note: to be called as emergency exit to release collateral if the vault is underwater
+    /**
+     * @notice Emergency exit to release collateral if the vault is underwater.
+     */
     function exitAllPositions() external onlyAdmin {
         uint256 wethInvested = getWethInvested();
         uint256 wethDebt = getDebt();
@@ -174,6 +193,10 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
         emit EmergencyExitExecuted(msg.sender, wethInvested, wethDebt, collateral);
     }
 
+    /**
+     * @notice Handles the repayment and collateral release logic for flash loans.
+     * @param userData Data passed to the callback function.
+     */
     function receiveFlashLoan(address[] memory, uint256[] memory amounts, uint256[] memory, bytes memory userData)
         external
     {
@@ -223,25 +246,42 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
         return (_usdcAmount * WETH_USDC_DECIMALS_DIFF).mulWadDown(uint256(usdcPriceInWeth));
     }
 
+    /**
+     * @notice Returns the USDC balance of the vault.
+     * @return The USDC balance.
+     */
     function getUsdcBalance() public view returns (uint256) {
         return asset.balanceOf(address(this));
     }
 
-    // total USDC supplied as collateral to aave
+    /**
+     * @notice Returns the total USDC supplied as collateral to Aave.
+     * @return The USDC collateral amount.
+     */
     function getCollateral() public view returns (uint256) {
         return aUsdc.balanceOf(address(this));
     }
 
-    // total eth borrowed on aave
+    /**
+     * @notice Returns the total WETH borrowed on Aave.
+     * @return The borrowed WETH amount.
+     */
     function getDebt() public view returns (uint256) {
         return dWeth.balanceOf(address(this));
     }
 
+    /**
+     * @notice Returns the amount of WETH invested in the leveraged WETH vault.
+     * @return The WETH invested amount.
+     */
     function getWethInvested() public view returns (uint256) {
         return scWETH.convertToAssets(scWETH.balanceOf(address(this)));
     }
 
-    // returns the net LTV at which we have borrowed untill now (1e18 = 100%)
+    /**
+     * @notice Returns the net LTV at which the vault has borrowed until now.
+     * @return The current LTV (1e18 = 100%).
+     */
     function getLtv() public view returns (uint256) {
         uint256 debt = getDebt();
 
@@ -253,7 +293,10 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
         return debtPriceInUsdc.divWadUp(getCollateral());
     }
 
-    // gets the current max LTV for USDC / WETH loans on aave
+    /**
+     * @notice Returns the current max LTV for USDC / WETH loans on Aave.
+     * @return The max LTV (1e18 = 100%).
+     */
     function getMaxLtv() public view returns (uint256) {
         (, uint256 ltv,,,,,,,,) = aavePoolDataProvider.getReserveConfigurationData(address(usdc));
 
