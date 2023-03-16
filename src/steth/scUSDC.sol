@@ -29,8 +29,11 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
     error InvalidFlashLoanCaller();
     error VaultNotUnderwater();
 
-    event NewTargetLtvApplied(uint256 newtargetLtv);
-    event SlippageToleranceUpdated(uint256 newSlippageTolerance);
+    event NewTargetLtvApplied(address indexed admin, uint256 newTargetLtv);
+    event SlippageToleranceUpdated(address indexed admin, uint256 newSlippageTolerance);
+    event EmergencyExitExecuted(
+        address indexed admin, uint256 wethWithdrawn, uint256 debtRepaid, uint256 collateralReleased
+    );
     event Rebalanced(uint256 collateral, uint256 debt, uint256 ltv);
 
     WETH public constant weth = WETH(payable(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2));
@@ -90,7 +93,7 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
 
         slippageTolerance = _slippageTolerance;
 
-        emit SlippageToleranceUpdated(_slippageTolerance);
+        emit SlippageToleranceUpdated(msg.sender, _slippageTolerance);
     }
 
     function applyNewTargetLtv(uint256 _newTargetLtv) external onlyKeeper {
@@ -100,7 +103,7 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
 
         rebalance();
 
-        emit NewTargetLtvApplied(_newTargetLtv);
+        emit NewTargetLtvApplied(msg.sender, _newTargetLtv);
     }
 
     function rebalance() public {
@@ -167,6 +170,8 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
         amounts[0] = wethDebt - wethInvested;
 
         balancerVault.flashLoan(address(this), tokens, amounts, abi.encode(collateral, wethDebt));
+
+        emit EmergencyExitExecuted(msg.sender, wethInvested, wethDebt, collateral);
     }
 
     function receiveFlashLoan(address[] memory, uint256[] memory amounts, uint256[] memory, bytes memory userData)

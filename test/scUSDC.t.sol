@@ -17,8 +17,11 @@ import {scUSDCHarness} from "./mock/scUSDCHarness.sol";
 contract scUSDCTest is Test {
     using FixedPointMathLib for uint256;
 
-    event NewTargetLtvApplied(uint256 newtargetLtv);
-    event SlippageToleranceUpdated(uint256 newSlippageTolerance);
+    event NewTargetLtvApplied(address indexed admin, uint256 newTargetLtv);
+    event SlippageToleranceUpdated(address indexed admin, uint256 newSlippageTolerance);
+    event EmergencyExitExecuted(
+        address indexed admin, uint256 wethWithdrawn, uint256 debtRepaid, uint256 collateralReleased
+    );
     event Rebalanced(uint256 collateral, uint256 debt, uint256 ltv);
 
     uint256 mainnetFork;
@@ -288,7 +291,7 @@ contract scUSDCTest is Test {
         uint256 newTargetLtv = vault.targetLtv() / 2;
 
         vm.expectEmit(true, true, true, true);
-        emit NewTargetLtvApplied(newTargetLtv);
+        emit NewTargetLtvApplied(address(this), newTargetLtv);
 
         vault.applyNewTargetLtv(newTargetLtv);
     }
@@ -752,7 +755,7 @@ contract scUSDCTest is Test {
         uint256 newTolerance = 0.01e18;
 
         vm.expectEmit(true, true, true, true);
-        emit SlippageToleranceUpdated(newTolerance);
+        emit SlippageToleranceUpdated(address(this), newTolerance);
 
         vault.setSlippageTolerance(newTolerance);
 
@@ -804,6 +807,30 @@ contract scUSDCTest is Test {
         assertApproxEqRel(vault.getUsdcBalance(), totalBefore, 0.01e18, "vault usdc balance");
         assertEq(vault.getCollateral(), 0, "vault collateral");
         assertEq(vault.getDebt(), 0, "vault debt");
+    }
+
+    function test_exitAllPositions_EmitsEventOnSuccess() public {
+        uint256 deposit = 1_000_000e6;
+        deal(address(usdc), alice, deposit);
+
+        vm.startPrank(alice);
+        usdc.approve(address(vault), type(uint256).max);
+        vault.deposit(deposit, alice);
+        vm.stopPrank();
+
+        vault.rebalance();
+
+        // simulate 50% loss
+        uint256 wethInvested = weth.balanceOf(address(wethVault));
+        deal(address(weth), address(wethVault), wethInvested / 2);
+
+        uint256 invested = vault.getWethInvested();
+        uint256 debt = vault.getDebt();
+        uint256 collateral = vault.getCollateral();
+
+        vm.expectEmit(true, true, true, true);
+        emit EmergencyExitExecuted(address(this), invested, debt, collateral);
+        vault.exitAllPositions();
     }
 
     /// #receiveFlashLoan ///
