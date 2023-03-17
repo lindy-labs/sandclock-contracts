@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.13;
 
+import "forge-std/console.sol";
+
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
@@ -72,7 +74,7 @@ contract scWETH is sc4626, IFlashLoanRecipient {
     uint256 public targetLtv = 0.5e18;
 
     // slippage for curve swaps
-    uint256 public slippageTolerance = 0.999e18;
+    uint256 public slippageTolerance = 0.99e18;
 
     constructor(address _admin) sc4626(_admin, ERC20(address(weth)), "Sandclock WETH Vault", "scWETH") {
         if (_admin == address(0)) revert ZeroAddress();
@@ -151,7 +153,7 @@ contract scWETH is sc4626, IFlashLoanRecipient {
         assets -= totalDebt();
 
         // account for slippage
-        assets = assets.mulWadDown(slippageTolerance);
+        // assets = assets.mulWadDown(slippageTolerance);
 
         // add float
         assets += asset.balanceOf(address(this));
@@ -271,6 +273,34 @@ contract scWETH is sc4626, IFlashLoanRecipient {
     // need to be able to receive eth
     receive() external payable {}
 
+    function redeem(uint256 shares, address receiver, address owner) public override returns (uint256 assets) {
+        if (msg.sender != owner) {
+            uint256 allowed = allowance[owner][msg.sender]; // Saves gas for limited approvals.
+
+            if (allowed != type(uint256).max) allowance[owner][msg.sender] = allowed - shares;
+        }
+
+        // Check for rounding error since we round down in previewRedeem.
+        require((assets = previewRedeem(shares)) != 0, "ZERO_ASSETS");
+
+        // console.log("assets", assets);
+        beforeWithdraw(assets, shares);
+        // console.log("vault balance", asset.balanceOf(address(this)));
+        // console.log("totalCollateral", totalCollateralSupplied());
+        // console.log("totalDebt", totalDebt());
+        _burn(owner, shares);
+
+        uint256 balance = asset.balanceOf(address(this));
+        if (assets > balance) {
+            console.log("ASSETS LESS THAN BALANCE TRIGGERED");
+            assets = balance;
+        }
+
+        emit Withdraw(msg.sender, receiver, owner, assets, shares);
+
+        asset.safeTransfer(receiver, assets);
+    }
+
     //////////////////// INTERNAL METHODS //////////////////////////
 
     function _rebalancePosition() internal {
@@ -349,7 +379,7 @@ contract scWETH is sc4626, IFlashLoanRecipient {
             return;
         }
 
-        uint256 missing = (assets - float).divWadUp(slippageTolerance);
+        uint256 missing = (assets - float);
 
         // needed otherwise counted as loss during harvest
         totalInvested -= missing;
