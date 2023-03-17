@@ -23,6 +23,7 @@ error InvalidMaxLtv();
 error InvalidFlashLoanCaller();
 error InvalidSlippageTolerance();
 error ZeroAddress();
+error PleaseUseRedeemMethod();
 
 contract scWETH is sc4626, IFlashLoanRecipient {
     using SafeTransferLib for ERC20;
@@ -205,6 +206,40 @@ contract scWETH is sc4626, IFlashLoanRecipient {
         afterDeposit(assets, shares);
     }
 
+    function redeem(uint256 shares, address receiver, address owner) public override returns (uint256 assets) {
+        if (msg.sender != owner) {
+            uint256 allowed = allowance[owner][msg.sender]; // Saves gas for limited approvals.
+
+            if (allowed != type(uint256).max) allowance[owner][msg.sender] = allowed - shares;
+        }
+
+        // Check for rounding error since we round down in previewRedeem.
+        require((assets = previewRedeem(shares)) != 0, "ZERO_ASSETS");
+
+        beforeWithdraw(assets, shares);
+
+        _burn(owner, shares);
+
+        uint256 balance = asset.balanceOf(address(this));
+
+        if (assets > balance) {
+            assets = balance;
+        }
+
+        emit Withdraw(msg.sender, receiver, owner, assets, shares);
+
+        asset.safeTransfer(receiver, assets);
+    }
+
+    function withdraw(uint256 assets, address receiver, address owner)
+        public
+        virtual
+        override
+        returns (uint256 shares)
+    {
+        revert PleaseUseRedeemMethod();
+    }
+
     // called after the flashLoan on _rebalancePosition
     function receiveFlashLoan(address[] memory, uint256[] memory amounts, uint256[] memory, bytes memory userData)
         external
@@ -269,31 +304,6 @@ contract scWETH is sc4626, IFlashLoanRecipient {
 
     // need to be able to receive eth
     receive() external payable {}
-
-    function redeem(uint256 shares, address receiver, address owner) public override returns (uint256 assets) {
-        if (msg.sender != owner) {
-            uint256 allowed = allowance[owner][msg.sender]; // Saves gas for limited approvals.
-
-            if (allowed != type(uint256).max) allowance[owner][msg.sender] = allowed - shares;
-        }
-
-        // Check for rounding error since we round down in previewRedeem.
-        require((assets = previewRedeem(shares)) != 0, "ZERO_ASSETS");
-
-        beforeWithdraw(assets, shares);
-
-        _burn(owner, shares);
-
-        uint256 balance = asset.balanceOf(address(this));
-
-        if (assets > balance) {
-            assets = balance;
-        }
-
-        emit Withdraw(msg.sender, receiver, owner, assets, shares);
-
-        asset.safeTransfer(receiver, assets);
-    }
 
     //////////////////// INTERNAL METHODS //////////////////////////
 
