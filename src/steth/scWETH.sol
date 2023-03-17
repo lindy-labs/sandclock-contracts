@@ -152,9 +152,6 @@ contract scWETH is sc4626, IFlashLoanRecipient {
         // subtract the debt
         assets -= totalDebt();
 
-        // account for slippage
-        // assets = assets.mulWadDown(slippageTolerance);
-
         // add float
         assets += asset.balanceOf(address(this));
     }
@@ -172,7 +169,7 @@ contract scWETH is sc4626, IFlashLoanRecipient {
     // returns the net leverage that the strategy is using right now (1e18 = 100%)
     function getLeverage() public view returns (uint256) {
         uint256 coll = totalCollateralSupplied();
-        return coll.divWadUp(coll - totalDebt());
+        return coll > 0 ? coll.divWadUp(coll - totalDebt()) : 0;
     }
 
     // returns the net LTV at which we have borrowed till now (1e18 = 100%)
@@ -283,16 +280,13 @@ contract scWETH is sc4626, IFlashLoanRecipient {
         // Check for rounding error since we round down in previewRedeem.
         require((assets = previewRedeem(shares)) != 0, "ZERO_ASSETS");
 
-        // console.log("assets", assets);
         beforeWithdraw(assets, shares);
-        // console.log("vault balance", asset.balanceOf(address(this)));
-        // console.log("totalCollateral", totalCollateralSupplied());
-        // console.log("totalDebt", totalDebt());
+
         _burn(owner, shares);
 
         uint256 balance = asset.balanceOf(address(this));
+
         if (assets > balance) {
-            console.log("ASSETS LESS THAN BALANCE TRIGGERED");
             assets = balance;
         }
 
@@ -336,9 +330,6 @@ contract scWETH is sc4626, IFlashLoanRecipient {
         uint256 collateral = totalCollateralSupplied();
 
         uint256 flashLoanAmount = amount.mulDivDown(debt, collateral - debt);
-
-        // withdraw everything if close enough
-        if (flashLoanAmount.divWadDown(slippageTolerance) >= debt) flashLoanAmount = debt;
 
         address[] memory tokens = new address[](1);
         tokens[0] = address(weth);
