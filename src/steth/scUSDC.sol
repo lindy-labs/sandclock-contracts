@@ -39,7 +39,15 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
     event EmergencyExitExecuted(
         address indexed admin, uint256 wethWithdrawn, uint256 debtRepaid, uint256 collateralReleased
     );
-    event Rebalanced(uint256 collateral, uint256 debt, uint256 ltv);
+    event Rebalanced(
+        uint256 targetLtv,
+        uint256 initialDebt,
+        uint256 finalDebt,
+        uint256 initialCollateral,
+        uint256 finalCollateral,
+        uint256 initialUsdcBalance,
+        uint256 finalUsdcBalance
+    );
 
     WETH public constant weth = WETH(payable(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2));
     ERC20 public constant usdc = ERC20(0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48);
@@ -124,28 +132,29 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
      * @dev Called to increase or decrease the WETH debt to match the target LTV.
      */
     function rebalance() public {
-        uint256 balance = getUsdcBalance();
+        uint256 initialBalance = getUsdcBalance();
+        uint256 currentBalance = initialBalance;
         uint256 collateral = getCollateral();
-        uint256 invested = getWethInvested();
+        uint256 invested = getInvested();
         uint256 debt = getDebt();
+        uint256 profit = _calculateWethProfit(invested, debt);
 
-        // 1. sell profits if any
-        if (invested > debt) {
-            uint256 profit = invested - debt;
-            if (profit > invested.mulWadDown(DEBT_DELTA_THRESHOLD)) {
-                _disinvest(profit);
-                balance += _swapWethForUsdc(profit);
-                invested -= profit;
-            }
+        // 1. sell profits
+        if (profit > invested.mulWadDown(DEBT_DELTA_THRESHOLD)) {
+            _disinvest(profit);
+            currentBalance += _swapWethForUsdc(profit);
+            invested -= profit;
         }
 
-        uint256 floatRequired = _calculateTotalAssets(balance, collateral, invested, debt).mulWadDown(floatPercentage);
+        uint256 floatRequired =
+            _calculateTotalAssets(currentBalance, collateral, invested, debt).mulWadDown(floatPercentage);
+        uint256 excessUsdc = currentBalance > floatRequired ? currentBalance - floatRequired : 0;
 
         // 2. deposit excess usdc as collateral
-        uint256 excessUsdc = balance > floatRequired ? balance - floatRequired : 0;
         if (excessUsdc != 0 && excessUsdc >= rebalanceMinimum) {
             aavePool.supply(address(usdc), excessUsdc, address(this), 0);
             collateral += excessUsdc;
+            currentBalance -= excessUsdc;
         }
 
         // 3. rebalance to target ltv
@@ -154,7 +163,6 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
 
         if (delta <= targetDebt.mulWadDown(DEBT_DELTA_THRESHOLD)) return;
 
-        // either repay or take out more debt to get to the target ltv
         if (debt > targetDebt) {
             _disinvest(delta);
             aavePool.repay(address(weth), delta, AAVE_VAR_INTEREST_RATE_MODE, address(this));
@@ -163,34 +171,34 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
             scWETH.deposit(delta, address(this));
         }
 
-        uint256 collateralAfter = getCollateral();
-        uint256 debtAfter = getDebt();
-        emit Rebalanced(collateralAfter, debtAfter, _calculateLtv(collateralAfter, debtAfter));
+        emit Rebalanced(
+            targetLtv, debt, targetDebt, collateral - excessUsdc, collateral, initialBalance, currentBalance
+        );
     }
 
     /**
      * @notice Emergency exit to release collateral if the vault is underwater.
      */
     function exitAllPositions() external onlyAdmin {
-        uint256 wethInvested = getWethInvested();
-        uint256 wethDebt = getDebt();
+        uint256 invested = getInvested();
+        uint256 debt = getDebt();
 
-        if (wethInvested >= wethDebt) {
+        if (invested >= debt) {
             revert VaultNotUnderwater();
         }
 
-        scWETH.withdraw(wethInvested, address(this), address(this));
+        scWETH.withdraw(invested, address(this), address(this));
         uint256 collateral = getCollateral();
 
         address[] memory tokens = new address[](1);
         tokens[0] = address(weth);
 
         uint256[] memory amounts = new uint256[](1);
-        amounts[0] = wethDebt - wethInvested;
+        amounts[0] = debt - invested;
 
-        balancerVault.flashLoan(address(this), tokens, amounts, abi.encode(collateral, wethDebt));
+        balancerVault.flashLoan(address(this), tokens, amounts, abi.encode(collateral, debt));
 
-        emit EmergencyExitExecuted(msg.sender, wethInvested, wethDebt, collateral);
+        emit EmergencyExitExecuted(msg.sender, invested, debt, collateral);
     }
 
     /**
@@ -205,9 +213,9 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
         }
 
         uint256 flashLoanAmount = amounts[0];
-        (uint256 collateral, uint256 wethDebt) = abi.decode(userData, (uint256, uint256));
+        (uint256 collateral, uint256 debt) = abi.decode(userData, (uint256, uint256));
 
-        aavePool.repay(address(weth), wethDebt, AAVE_VAR_INTEREST_RATE_MODE, address(this));
+        aavePool.repay(address(weth), debt, AAVE_VAR_INTEREST_RATE_MODE, address(this));
         aavePool.withdraw(address(usdc), collateral, address(this));
 
         asset.approve(address(swapRouter), type(uint256).max);
@@ -231,7 +239,7 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
     }
 
     function totalAssets() public view override returns (uint256) {
-        return _calculateTotalAssets(getUsdcBalance(), getCollateral(), getWethInvested(), getDebt());
+        return _calculateTotalAssets(getUsdcBalance(), getCollateral(), getInvested(), getDebt());
     }
 
     function getUsdcFromWeth(uint256 _wethAmount) public view returns (uint256) {
@@ -274,7 +282,7 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
      * @notice Returns the amount of WETH invested in the leveraged WETH vault.
      * @return The WETH invested amount.
      */
-    function getWethInvested() public view returns (uint256) {
+    function getInvested() public view returns (uint256) {
         return scWETH.convertToAssets(scWETH.balanceOf(address(this)));
     }
 
@@ -308,63 +316,55 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
     //////////////////////////////////////////////////////////////*/
 
     function beforeWithdraw(uint256 _assets, uint256) internal override {
-        uint256 balance = getUsdcBalance();
-        if (_assets <= balance) return;
+        uint256 initialBalance = getUsdcBalance();
+        if (initialBalance >= _assets) return;
 
         uint256 collateral = getCollateral();
-        uint256 wethDebt = getDebt();
-        uint256 wethInvested = getWethInvested();
-        // if we don't have enough assets, we need to withdraw what's missing from scWETH & aave
-        uint256 total = _calculateTotalAssets(balance, collateral, wethInvested, wethDebt);
+        uint256 debt = getDebt();
+        uint256 invested = getInvested();
+        uint256 total = _calculateTotalAssets(initialBalance, collateral, invested, debt);
+        uint256 profit = _calculateWethProfit(invested, debt);
         uint256 floatRequired = total > _assets ? (total - _assets).mulWadUp(floatPercentage) : 0;
-        uint256 usdcNeeded = _assets + floatRequired - balance;
+        uint256 usdcNeeded = _assets + floatRequired - initialBalance;
 
-        if (wethInvested > wethDebt) {
-            uint256 wethProfit = wethInvested - wethDebt;
-            uint256 wethToSell = getWethFromUsdc(usdcNeeded).divWadDown(slippageTolerance); // account for slippage
+        // first try to sell profits to cover withdrawal amount
+        if (profit != 0) {
+            _disinvest(profit);
+            uint256 usdcReceived = _swapWethForUsdc(profit);
 
-            if (wethProfit >= wethToSell) {
-                // we cover withdrawal amount from selling weth profit
-                _disinvest(wethToSell);
-                _swapWethForUsdc(wethToSell);
+            if (initialBalance + usdcReceived >= _assets) return;
 
-                return;
-            }
-
-            // we cannot cover withdrawal amount only from selling weth profit
-            // so we sell as much as we can and withdraw the rest from aave
-            _disinvest(wethProfit);
-            usdcNeeded -= _swapWethForUsdc(wethProfit);
-            wethInvested -= wethProfit;
+            usdcNeeded -= usdcReceived;
         }
 
-        // to keep the same ltv, weth debt to repay has to be proporitional to collateral withdrawn
-        uint256 wethNeeded = usdcNeeded.mulDivUp(wethDebt, collateral);
-
-        if (wethNeeded > wethInvested) {
-            uint256 usdcToWithdraw = wethInvested.mulDivUp(collateral, wethDebt);
-
-            _disinvest(wethInvested);
-            aavePool.repay(address(weth), wethInvested, AAVE_VAR_INTEREST_RATE_MODE, address(this));
-            aavePool.withdraw(address(usdc), usdcToWithdraw, address(this));
-        } else {
-            _disinvest(wethNeeded);
-            aavePool.repay(address(weth), wethNeeded, AAVE_VAR_INTEREST_RATE_MODE, address(this));
-            aavePool.withdraw(address(usdc), usdcNeeded, address(this));
-        }
+        // if we still need more usdc, we need to repay debt and withdraw collateral
+        _repayDebtAndReleaseCollateral(debt, collateral, usdcNeeded);
     }
 
-    function _calculateTotalAssets(uint256 _float, uint256 _collateral, uint256 _wethInvested, uint256 _wethDebt)
+    function _repayDebtAndReleaseCollateral(uint256 _debt, uint256 _collateral, uint256 _usdcNeeded) internal {
+        // to keep the same ltv, weth debt to repay has to be proporitional to collateral withdrawn
+        uint256 wethNeeded = _usdcNeeded.mulDivUp(_debt, _collateral);
+
+        _disinvest(wethNeeded);
+        aavePool.repay(address(weth), wethNeeded, AAVE_VAR_INTEREST_RATE_MODE, address(this));
+        aavePool.withdraw(address(usdc), _usdcNeeded, address(this));
+    }
+
+    function _calculateTotalAssets(uint256 _float, uint256 _collateral, uint256 _invested, uint256 _debt)
         internal
         view
         returns (uint256 total)
     {
-        total = _float + _collateral + getUsdcFromWeth(_wethInvested) - getUsdcFromWeth(_wethDebt);
+        total = _float + _collateral + getUsdcFromWeth(_invested) - getUsdcFromWeth(_debt);
 
         // account for slippage when selling weth profits
-        if (_wethInvested > _wethDebt) {
-            total -= getUsdcFromWeth(_wethInvested - _wethDebt).mulWadUp(ONE - slippageTolerance);
+        if (_invested > _debt) {
+            total -= getUsdcFromWeth(_invested - _debt).mulWadUp(ONE - slippageTolerance);
         }
+    }
+
+    function _calculateWethProfit(uint256 _invested, uint256 _debt) internal pure returns (uint256) {
+        return _invested > _debt ? _invested - _debt : 0;
     }
 
     function _calculateLtv(uint256 collateral, uint256 debt) internal view returns (uint256) {

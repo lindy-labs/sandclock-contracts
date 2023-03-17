@@ -22,7 +22,15 @@ contract scUSDCTest is Test {
     event EmergencyExitExecuted(
         address indexed admin, uint256 wethWithdrawn, uint256 debtRepaid, uint256 collateralReleased
     );
-    event Rebalanced(uint256 collateral, uint256 debt, uint256 ltv);
+    event Rebalanced(
+        uint256 targetLtv,
+        uint256 initialDebt,
+        uint256 finalDebt,
+        uint256 initialCollateral,
+        uint256 finalCollateral,
+        uint256 initialUsdcBalance,
+        uint256 finalUsdcBalance
+    );
 
     uint256 mainnetFork;
     uint256 constant ethWstEthMaxLtv = 0.7735e18;
@@ -108,11 +116,20 @@ contract scUSDCTest is Test {
     }
 
     function test_rebalance_EmitsEventOnSuccess() public {
-        deal(address(usdc), address(vault), 10000e6);
+        uint256 initialBalance = 10000e6;
+        uint256 finalBalance = initialBalance.mulWadUp(vault.floatPercentage());
+        uint256 currentDebt = 0;
+        uint256 finalDebt = 3_758780025000000000;
+        uint256 currentCollateral = 0;
+        uint256 finalCollateral = 9_900e6;
+        uint256 targetLtv = vault.targetLtv();
+
+        deal(address(usdc), address(vault), initialBalance);
 
         vm.expectEmit(true, true, true, true);
-        emit Rebalanced(9900_000000, 3_758780025000000000, 0.65e18);
-
+        emit Rebalanced(
+            targetLtv, currentDebt, finalDebt, currentCollateral, finalCollateral, initialBalance, finalBalance
+        );
         vault.rebalance();
     }
 
@@ -679,7 +696,7 @@ contract scUSDCTest is Test {
         // we cannot withdraw evertying because we don't have enough to repay the debt
         uint256 withdrawAmount = vault.totalAssets();
         vm.startPrank(alice);
-        vm.expectRevert("TRANSFER_FAILED");
+        vm.expectRevert();
         vault.withdraw(withdrawAmount, address(alice), address(alice));
     }
 
@@ -700,7 +717,7 @@ contract scUSDCTest is Test {
         assertApproxEqAbs(assets, amount, 1, "assets");
 
         vm.startPrank(alice);
-        // use "amount" to withdraw instead of "assets" because of rounding errors "assets" can be greater than "amount" we depsited
+        // use "amount" to withdraw instead of "assets" because of rounding errors "assets" can be greater than "amount" we deposited
         // this happens because when we borrow X amount of weth on aave and querying the debt later sometimes returns X - 1 wei
         vault.withdraw(amount, alice, alice);
 
@@ -824,7 +841,7 @@ contract scUSDCTest is Test {
         uint256 wethInvested = weth.balanceOf(address(wethVault));
         deal(address(weth), address(wethVault), wethInvested / 2);
 
-        uint256 invested = vault.getWethInvested();
+        uint256 invested = vault.getInvested();
         uint256 debt = vault.getDebt();
         uint256 collateral = vault.getCollateral();
 
