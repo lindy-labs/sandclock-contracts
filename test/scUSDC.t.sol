@@ -717,9 +717,7 @@ contract scUSDCTest is Test {
         assertApproxEqAbs(assets, amount, 1, "assets");
 
         vm.startPrank(alice);
-        // use "amount" to withdraw instead of "assets" because of rounding errors "assets" can be greater than "amount" we deposited
-        // this happens because when we borrow X amount of weth on aave and querying the debt later sometimes returns X - 1 wei
-        vault.withdraw(amount, alice, alice);
+        vault.withdraw(assets, alice, alice);
 
         assertApproxEqAbs(vault.balanceOf(alice), 0, 1, "balance");
         assertApproxEqAbs(vault.totalAssets(), 0, 1, "total assets");

@@ -245,7 +245,7 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
     function getUsdcFromWeth(uint256 _wethAmount) public view returns (uint256) {
         (, int256 usdcPriceInWeth,,,) = usdcToEthPriceFeed.latestRoundData();
 
-        return _wethAmount.divWadDown(uint256(usdcPriceInWeth)) / WETH_USDC_DECIMALS_DIFF;
+        return (_wethAmount / WETH_USDC_DECIMALS_DIFF).divWadDown(uint256(usdcPriceInWeth));
     }
 
     function getWethFromUsdc(uint256 _usdcAmount) public view returns (uint256) {
@@ -338,12 +338,17 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
         }
 
         // if we still need more usdc, we need to repay debt and withdraw collateral
-        _repayDebtAndReleaseCollateral(debt, collateral, usdcNeeded);
+        _repayDebtAndReleaseCollateral(debt, collateral, invested, usdcNeeded);
     }
 
-    function _repayDebtAndReleaseCollateral(uint256 _debt, uint256 _collateral, uint256 _usdcNeeded) internal {
+    function _repayDebtAndReleaseCollateral(uint256 _debt, uint256 _collateral, uint256 _invested, uint256 _usdcNeeded)
+        internal
+    {
+        // handle rounding errors when withdrawing everything
+        _usdcNeeded = _usdcNeeded > _collateral ? _collateral : _usdcNeeded;
         // to keep the same ltv, weth debt to repay has to be proporitional to collateral withdrawn
         uint256 wethNeeded = _usdcNeeded.mulDivUp(_debt, _collateral);
+        wethNeeded = wethNeeded > _invested ? _invested : wethNeeded;
 
         _disinvest(wethNeeded);
         aavePool.repay(address(weth), wethNeeded, AAVE_VAR_INTEREST_RATE_MODE, address(this));
