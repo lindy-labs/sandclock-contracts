@@ -362,9 +362,11 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
     {
         total = _float + _collateral;
 
-        if (_invested > _debt) {
+        uint256 profit = _calculateWethProfit(_invested, _debt);
+
+        if (profit != 0) {
             // account for slippage when selling weth profits
-            total += getUsdcFromWeth(_invested - _debt).mulWadDown(slippageTolerance);
+            total += getUsdcFromWeth(profit).mulWadDown(slippageTolerance);
         } else {
             total -= getUsdcFromWeth(_debt - _invested);
         }
