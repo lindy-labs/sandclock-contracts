@@ -229,11 +229,11 @@ contract scWETH is sc4626, IFlashLoanRecipient {
         asset.safeTransfer(receiver, assets);
     }
 
-    function withdraw(uint256 assets, address receiver, address owner)
+    function withdraw(uint256, address, address)
         public
         virtual
         override
-        returns (uint256 shares)
+        returns (uint256)
     {
         revert PleaseUseRedeemMethod();
     }
