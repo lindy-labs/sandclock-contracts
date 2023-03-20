@@ -15,13 +15,7 @@ import {IwstETH} from "../interfaces/lido/IwstETH.sol";
 import {AggregatorV3Interface} from "../interfaces/chainlink/AggregatorV3Interface.sol";
 import {IVault} from "../interfaces/balancer/IVault.sol";
 import {IFlashLoanRecipient} from "../interfaces/balancer/IFlashLoanRecipient.sol";
-
-error InvalidTargetLtv();
-error InvalidMaxLtv();
-error InvalidFlashLoanCaller();
-error InvalidSlippageTolerance();
-error ZeroAddress();
-error PleaseUseRedeemMethod();
+import "../errors/scWETHErrors.sol";
 
 contract scWETH is sc4626, IFlashLoanRecipient {
     using SafeTransferLib for ERC20;
@@ -33,23 +27,19 @@ contract scWETH is sc4626, IFlashLoanRecipient {
     event Harvest(uint256 profitSinceLastHarvest, uint256 performanceFee);
 
     // interest rate mode at which to borrow or repay
+    uint256 public constant WAD = 1e18;
     uint256 public constant INTEREST_RATE_MODE = 2;
     uint8 public constant EMODE_ID = 1;
-
     IPool public constant aavePool = IPool(0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2);
     // aToken is a rebasing token and pegged 1:1 to the underlying
     IAToken public constant aToken = IAToken(0x0B925eD163218f6662a35e0f0371Ac234f9E9371);
     ERC20 public constant variableDebtToken = ERC20(0xeA51d7853EEFb32b6ee06b1C12E6dcCA88Be0fFE);
-
     // Curve pool for ETH-stETH
     ICurvePool public constant curvePool = ICurvePool(0xDC24316b9AE028F1497c275EB9192a3Ea0f67022);
-
     // Lido staking contract (stETH)
     ILido public constant stEth = ILido(0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84);
-
     // 0x swap router
-    address xrouter = 0xDef1C0ded9bec7F1a1670819833240f027b25EfF;
-
+    address public xrouter = 0xDef1C0ded9bec7F1a1670819833240f027b25EfF;
     IwstETH public constant wstETH = IwstETH(0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0);
     WETH public constant weth = WETH(payable(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2));
 
@@ -85,7 +75,7 @@ contract scWETH is sc4626, IFlashLoanRecipient {
     }
 
     function setSlippageTolerance(uint256 newSlippageTolerance) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (newSlippageTolerance > 1e18) revert InvalidSlippageTolerance();
+        if (newSlippageTolerance > WAD) revert InvalidSlippageTolerance();
         slippageTolerance = newSlippageTolerance;
         emit SlippageToleranceUpdated(msg.sender, newSlippageTolerance);
     }
@@ -114,7 +104,7 @@ contract scWETH is sc4626, IFlashLoanRecipient {
         uint256 fee = profit.mulWadDown(performanceFee);
 
         // mint equivalent amount of tokens to the performance fee beneficiary ie the treasury
-        _mint(treasury, fee.mulDivDown(1e18, convertToAssets(1e18)));
+        _mint(treasury, fee.mulDivDown(WAD, convertToAssets(WAD)));
 
         emit Harvest(profit, fee);
     }
@@ -310,7 +300,7 @@ contract scWETH is sc4626, IFlashLoanRecipient {
         bool isDeposit = target > debt;
 
         // calculate the flashloan amount needed
-        uint256 flashLoanAmount = (isDeposit ? target - debt : debt - target).divWadDown(1e18 - ltv);
+        uint256 flashLoanAmount = (isDeposit ? target - debt : debt - target).divWadDown(WAD - ltv);
 
         address[] memory tokens = new address[](1);
         tokens[0] = address(weth);

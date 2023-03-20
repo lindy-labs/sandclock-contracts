@@ -15,6 +15,7 @@ import {IPool} from "aave-v3/interfaces/IPool.sol";
 import {IAToken} from "aave-v3/interfaces/IAToken.sol";
 import {IVariableDebtToken} from "aave-v3/interfaces/IVariableDebtToken.sol";
 import {Errors} from "aave-v3/protocol/libraries/helpers/Errors.sol";
+import "../src/errors/scWETHErrors.sol";
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
@@ -27,6 +28,7 @@ contract scWETHTest is Test {
     address constant alice = address(0x06);
     uint256 boundMinimum = 1e10; // below this amount, aave doesn't count it as collateral
 
+    address admin = address(this);
     Vault vault;
     uint256 initAmount = 100e18;
 
@@ -46,7 +48,7 @@ contract scWETHTest is Test {
         vm.selectFork(mainnetFork);
         vm.rollFork(16784444);
 
-        vault = new Vault(address(this));
+        vault = new Vault(admin);
 
         // set vault eth balance to zero
         vm.deal(address(vault), 0);
@@ -65,11 +67,85 @@ contract scWETHTest is Test {
         curvePool = vault.curvePool();
     }
 
-    function testEMode() public {
-        assertEq(aavePool.getUserEMode(address(vault)), vault.EMODE_ID(), "E mode not same");
+    function test_constructor() public {
+        assertEq(aavePool.getUserEMode(address(vault)), vault.EMODE_ID(), "E mode not set");
+        assertEq(vault.treasury(), admin, "treasury not set");
+        assertEq(vault.hasRole(vault.DEFAULT_ADMIN_ROLE(), admin), true, "admin role not set");
+        assertEq(vault.hasRole(vault.KEEPER_ROLE(), admin), true, "keeper role not set");
     }
 
-    function testAtomicDepositWithdraw(uint256 amount) public {
+    function test_setPerformanceFee() public {
+        uint256 fee = 1000;
+        vault.setPerformanceFee(fee);
+        assertEq(vault.performanceFee(), fee);
+
+        // revert if called by another user
+        vm.expectRevert(
+            bytes(
+                "AccessControl: account 0x0000000000000000000000000000000000000006 is missing role 0x0000000000000000000000000000000000000000000000000000000000000000"
+            )
+        );
+        vm.prank(alice);
+        vault.setPerformanceFee(fee);
+
+        vm.expectRevert(bytes4(keccak256("FeesTooHigh()")));
+        vault.setPerformanceFee(1.1e18);
+    }
+
+    function test_setTreasury() public {
+        address newTreasury = alice;
+        vault.setTreasury(newTreasury);
+        assertEq(vault.treasury(), newTreasury);
+
+        // revert if called by another user
+        vm.expectRevert(
+            bytes(
+                "AccessControl: account 0x0000000000000000000000000000000000000006 is missing role 0x0000000000000000000000000000000000000000000000000000000000000000"
+            )
+        );
+        vm.prank(alice);
+        vault.setTreasury(address(this));
+
+        vm.expectRevert(bytes4(keccak256("TreasuryCannotBeZero()")));
+        vault.setTreasury(address(0x00));
+    }
+
+    function test_setSlippageTolerance() public {
+        vault.setSlippageTolerance(0.5e18);
+        assertEq(vault.slippageTolerance(), 0.5e18, "slippageTolerance not set");
+
+        // revert if called by another user
+        vm.expectRevert(
+            bytes(
+                "AccessControl: account 0x0000000000000000000000000000000000000006 is missing role 0x0000000000000000000000000000000000000000000000000000000000000000"
+            )
+        );
+        vm.prank(alice);
+        vault.setSlippageTolerance(0.5e18);
+
+        vm.expectRevert(bytes4(keccak256("InvalidSlippageTolerance()")));
+        vault.setSlippageTolerance(1.1e18);
+    }
+
+    function test_setExchangeProxyAddress() public {
+        address newExchangeProxy = alice;
+        vault.setExchangeProxyAddress(newExchangeProxy);
+        assertEq(vault.xrouter(), newExchangeProxy);
+
+        // revert if called by another user
+        vm.expectRevert(
+            bytes(
+                "AccessControl: account 0x0000000000000000000000000000000000000006 is missing role 0x0000000000000000000000000000000000000000000000000000000000000000"
+            )
+        );
+        vm.prank(alice);
+        vault.setExchangeProxyAddress(alice);
+
+        vm.expectRevert(bytes4(keccak256("ZeroAddress()")));
+        vault.setExchangeProxyAddress(address(0x00));
+    }
+
+    function testFuzz_AtomicDepositWithdraw(uint256 amount) public {
         amount = bound(amount, boundMinimum, 1e27);
         vm.deal(address(this), amount);
         weth.deposit{value: amount}();
@@ -94,14 +170,14 @@ contract scWETHTest is Test {
         assertEq(weth.balanceOf(address(this)), preDepositBal);
     }
 
-    function testFailDepositWithInsufficientApproval(uint256 amount) public {
+    function testFail_Deposit_WithInsufficientApproval(uint256 amount) public {
         vm.deal(address(this), amount / 2);
         weth.deposit{value: amount / 2}();
         weth.approve(address(vault), amount / 2);
         vault.deposit(amount, address(this));
     }
 
-    function testFailWithdrawWithInsufficientBalance(uint256 amount) public {
+    function testFail_Withdraw(uint256 amount) public {
         vm.deal(address(this), amount / 2);
         weth.deposit{value: amount / 2}();
         weth.approve(address(vault), amount / 2);
@@ -109,7 +185,7 @@ contract scWETHTest is Test {
         vault.withdraw(amount, address(this), address(this));
     }
 
-    function testFailRedeemWithInsufficientBalance(uint256 amount) public {
+    function testFail_Redeem_WithInsufficientBalance(uint256 amount) public {
         vm.deal(address(this), amount / 2);
         weth.deposit{value: amount / 2}();
         weth.approve(address(vault), amount / 2);
@@ -117,20 +193,20 @@ contract scWETHTest is Test {
         vault.redeem(amount, address(this), address(this));
     }
 
-    function testFailWithdrawWithNoBalance(uint256 amount) public {
+    function testFail_Withdraw_WithNoBalance(uint256 amount) public {
         if (amount == 0) amount = 1;
         vault.withdraw(amount, address(this), address(this));
     }
 
-    function testFailRedeemWithNoBalance(uint256 amount) public {
+    function testFail_Redeem_WithNoBalance(uint256 amount) public {
         vault.redeem(amount, address(this), address(this));
     }
 
-    function testFailDepositWithNoApproval(uint256 amount) public {
+    function testFail_Deposit_WithNoApproval(uint256 amount) public {
         vault.deposit(amount, address(this));
     }
 
-    function testAtomicDepositInvestRedeem(uint256 amount) public {
+    function test_AtomicDepositInvestRedeem(uint256 amount) public {
         amount = bound(amount, boundMinimum, 1e22); //max ~$280m flashloan
         vm.deal(address(this), amount);
         weth.deposit{value: amount}();
@@ -167,7 +243,7 @@ contract scWETHTest is Test {
         assertRelApproxEq(weth.balanceOf(address(this)), amount, 0.01e18);
     }
 
-    function testTwoDepositsInvestTwoRedeems(uint256 depositAmount1, uint256 depositAmount2) public {
+    function test_TwoDeposits_Invest_TwoRedeems(uint256 depositAmount1, uint256 depositAmount2) public {
         depositAmount1 = bound(depositAmount1, boundMinimum, 1e22);
         depositAmount2 = bound(depositAmount2, boundMinimum, 1e22);
 
@@ -208,36 +284,10 @@ contract scWETHTest is Test {
         vm.prank(alice);
         vault.redeem(remainingShares, alice, alice);
 
-        // if (vault.getLtv() != 0) {
-        //     assertRelApproxEq(vault.getLtv(), ltv, 0.01e18, "ltv");
-        // }
-
         assertRelApproxEq(weth.balanceOf(alice) - initBalance, expectedRedeem, 0.01e18, "redeem4");
-        // assertGe(weth.balanceOf(alice) - initBalance, expectedRedeem);
     }
 
-    function testWithdrawToVault(uint256 amount) public {
-        amount = bound(amount, boundMinimum, 10000 ether);
-        depositToVault(address(this), amount);
-
-        vault.depositIntoStrategy();
-
-        uint256 assets = vault.totalAssets();
-
-        assertEq(weth.balanceOf(address(vault)), 0);
-
-        uint256 ltv = vault.getLtv();
-        uint256 lev = vault.getLeverage();
-
-        vault.withdrawToVault(assets / 2);
-
-        // net ltv and leverage must not change after withdraw
-        assertRelApproxEq(vault.getLtv(), ltv, 0.001e18);
-        assertRelApproxEq(vault.getLeverage(), lev, 0.001e18);
-        assertRelApproxEq(weth.balanceOf(address(vault)), assets / 2, 0.001e18);
-    }
-
-    function testLeverageUp(uint256 amount, uint256 newLtv) public {
+    function test_LeverageUp(uint256 amount, uint256 newLtv) public {
         amount = bound(amount, boundMinimum, 1e20);
         depositToVault(address(this), amount);
         vault.depositIntoStrategy();
@@ -248,7 +298,7 @@ contract scWETHTest is Test {
         assertApproxEqRel(vault.getLtv(), newLtv, 0.01e18, "leverage change failed");
     }
 
-    function testLeverageDown(uint256 amount, uint256 newLtv) public {
+    function test_LeverageDown(uint256 amount, uint256 newLtv) public {
         amount = bound(amount, boundMinimum, 1e20);
         depositToVault(address(this), amount);
         vault.depositIntoStrategy();
@@ -259,7 +309,7 @@ contract scWETHTest is Test {
         assertApproxEqRel(vault.getLtv(), newLtv, 0.01e18, "leverage change failed");
     }
 
-    function testBorrowOverMaxLtvFail(uint256 amount) public {
+    function test_BorrowOverMaxLtv_Fail(uint256 amount) public {
         amount = bound(amount, boundMinimum, 1e21);
         vm.deal(address(this), amount);
 
@@ -281,7 +331,12 @@ contract scWETHTest is Test {
         aavePool.borrow(address(weth), amount.mulWadDown(maxLtv - 1e16), 2, 0, address(this));
     }
 
-    function testHarvest(uint256 amount, uint64 tP) public {
+    function test_withdraw_revert() public {
+        vm.expectRevert(bytes4(keccak256("PleaseUseRedeemMethod()")));
+        vault.withdraw(1e18, address(this), address(this));
+    }
+
+    function test_harvest(uint256 amount, uint64 tP) public {
         amount = bound(amount, boundMinimum, 1e21);
         // simulate wstETH supply interest to EULER
         uint256 timePeriod = bound(tP, 260 days, 365 days);
@@ -295,26 +350,18 @@ contract scWETHTest is Test {
 
         vault.depositIntoStrategy();
 
-        // fast forward time to simulate supply and borrow interests
-        vm.warp(block.timestamp + timePeriod);
-        // 5% increase in stETH contract eth balance to simulate profits from Lido staking
-        uint256 prevBalance = stEth.getTotalPooledEther();
-        vm.store(
-            address(stEth),
-            keccak256(abi.encodePacked("lido.Lido.beaconBalance")),
-            bytes32(prevBalance.mulWadDown(stEthStakingInterest))
-        );
+        _simulate_stEthStakingInterest(timePeriod, stEthStakingInterest);
 
         assertEq(vault.totalProfit(), 0);
 
         vault.harvest();
 
-        uint256 minimumExpectedApy = 0.05e18;
+        uint256 minimumExpectedApy = 0.07e18;
 
         assertGt(
             vault.totalProfit(),
             amount.mulWadDown(minimumExpectedApy.mulDivDown(timePeriod, annualPeriod)),
-            "atleast 5% APY"
+            "atleast 7% APY"
         );
 
         vault.redeem(vault.balanceOf(address(this)), address(this), address(this));
@@ -322,11 +369,56 @@ contract scWETHTest is Test {
         assertGt(
             weth.balanceOf(address(this)) - amount,
             amount.mulWadDown(minimumExpectedApy.mulDivDown(timePeriod, annualPeriod)),
+            "atleast 7% APY after withdraw"
+        );
+    }
+
+    function test_withdrawToVault(uint256 amount) public {
+        amount = bound(amount, boundMinimum, 10000 ether);
+        depositToVault(address(this), amount);
+
+        vault.depositIntoStrategy();
+
+        _withdrawToVaultChecks(0.005e18);
+    }
+
+    function test_harvest_withdrawToVault(uint256 amount) public {
+        amount = bound(amount, boundMinimum, 10000 ether);
+        depositToVault(address(this), amount);
+
+        vault.depositIntoStrategy();
+
+        _simulate_stEthStakingInterest(365 days, 1.071e18);
+
+        vault.harvest();
+
+        _withdrawToVaultChecks(0.01e18);
+
+        uint256 minimumExpectedApy = 0.07e18;
+
+        assertGt(vault.totalProfit(), amount.mulWadDown(minimumExpectedApy), "atleast 5% APY");
+
+        vault.redeem(vault.balanceOf(address(this)), address(this), address(this));
+
+        assertGt(
+            weth.balanceOf(address(this)) - amount,
+            amount.mulWadDown(minimumExpectedApy),
             "atleast 5% APY after withdraw"
         );
     }
 
-    function testDepositEth(uint256 amount) public {
+    function test_harvest_performanceFees(uint256 amount) public {
+        amount = bound(amount, boundMinimum, 10000 ether);
+        depositToVault(address(this), amount);
+
+        vault.depositIntoStrategy();
+
+        _simulate_stEthStakingInterest(365 days, 1.071e18);
+
+        vault.harvest();
+    }
+
+    function test_DepositEth(uint256 amount) public {
         amount = bound(amount, boundMinimum, 1e21);
         vm.deal(address(this), amount);
 
@@ -340,13 +432,49 @@ contract scWETHTest is Test {
         assertEq(weth.balanceOf(address(vault)), amount, "weth not transferred to vault");
     }
 
-    function depositToVault(address user, uint256 amount) public returns (uint256 shares) {
+    function depositToVault(address user, uint256 amount) internal returns (uint256 shares) {
         vm.deal(user, amount);
         vm.startPrank(user);
         weth.deposit{value: amount}();
         weth.approve(address(vault), amount);
         shares = vault.deposit(amount, user);
         vm.stopPrank();
+    }
+
+    function _withdrawToVaultChecks(uint256 maxAssetsDelta) internal {
+        uint256 assets = vault.totalAssets();
+
+        assertEq(weth.balanceOf(address(vault)), 0);
+
+        uint256 ltv = vault.getLtv();
+        uint256 lev = vault.getLeverage();
+
+        vault.withdrawToVault(assets / 2);
+
+        // net ltv and leverage must not change after withdraw
+        assertRelApproxEq(vault.getLtv(), ltv, 0.001e18);
+        assertRelApproxEq(vault.getLeverage(), lev, 0.001e18);
+        assertRelApproxEq(weth.balanceOf(address(vault)), assets / 2, maxAssetsDelta);
+
+        // withdraw the remaining assets
+        vault.withdrawToVault(assets / 2);
+
+        uint256 dust = 100;
+        assertLt(vault.totalDebt(), dust, "test_withdrawToVault totalDebt error");
+        assertLt(vault.totalCollateralSupplied(), dust, "test_withdrawToVault totalCollateralSupplied error");
+        assertRelApproxEq(weth.balanceOf(address(vault)), assets, maxAssetsDelta, "test_withdrawToVault asset balance");
+    }
+
+    function _simulate_stEthStakingInterest(uint256 timePeriod, uint256 stEthStakingInterest) internal {
+        // fast forward time to simulate supply and borrow interests
+        vm.warp(block.timestamp + timePeriod);
+        // 5% increase in stETH contract eth balance to simulate profits from Lido staking
+        uint256 prevBalance = stEth.getTotalPooledEther();
+        vm.store(
+            address(stEth),
+            keccak256(abi.encodePacked("lido.Lido.beaconBalance")),
+            bytes32(prevBalance.mulWadDown(stEthStakingInterest))
+        );
     }
 
     function assertRelApproxEq(

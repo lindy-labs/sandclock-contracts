@@ -4,6 +4,7 @@ pragma solidity ^0.8.10;
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {ERC4626} from "solmate/mixins/ERC4626.sol";
 import {AccessControl} from "openzeppelin-contracts/access/AccessControl.sol";
+import "./errors/scWETHErrors.sol";
 
 abstract contract sc4626 is ERC4626, AccessControl {
     constructor(address _admin, ERC20 _asset, string memory _name, string memory _symbol)
@@ -23,23 +24,16 @@ abstract contract sc4626 is ERC4626, AccessControl {
     bytes32 public constant KEEPER_ROLE = keccak256("KEEPER_ROLE");
 
     event PerformanceFeeUpdated(address indexed user, uint256 newPerformanceFee);
-    event FloatPercentageUpdated(address indexed user, uint256 newFloatPercentage);
     event TreasuryUpdated(address indexed user, address newTreasury);
 
     function setPerformanceFee(uint256 newPerformanceFee) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        require(newPerformanceFee <= 1e18, "fee too high");
+        if (newPerformanceFee > 1e18) revert FeesTooHigh();
         performanceFee = newPerformanceFee;
         emit PerformanceFeeUpdated(msg.sender, newPerformanceFee);
     }
 
-    function setFloatPercentage(uint256 newFloatPercentage) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        require(newFloatPercentage <= 1e18, "float percentage too high");
-        floatPercentage = newFloatPercentage;
-        emit FloatPercentageUpdated(msg.sender, newFloatPercentage);
-    }
-
     function setTreasury(address newTreasury) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        require(newTreasury != address(0), "treasury cannot be zero");
+        if (newTreasury == address(0)) revert TreasuryCannotBeZero();
         treasury = newTreasury;
         emit TreasuryUpdated(msg.sender, newTreasury);
     }
