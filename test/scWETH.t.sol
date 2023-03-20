@@ -85,7 +85,7 @@ contract scWETHTest is Test {
         assertEq(vault.convertToAssets(vault.balanceOf(address(this))), amount);
         assertEq(weth.balanceOf(address(this)), preDepositBal - amount);
 
-        vault.withdraw(amount, address(this), address(this));
+        vault.redeem(vault.balanceOf(address(this)), address(this), address(this));
 
         assertEq(vault.convertToAssets(10 ** vault.decimals()), 1e18);
         assertEq(vault.totalAssets(), 0);
@@ -195,7 +195,7 @@ contract scWETHTest is Test {
 
         uint256 initBalance = weth.balanceOf(address(this));
         expectedRedeem = vault.previewRedeem(shares1 / 2);
-        vault.redeem(shares1 / 2, address(this), address(this));
+        vault.redeem(vault.balanceOf(address(this)), address(this), address(this));
         assertRelApproxEq(weth.balanceOf(address(this)) - initBalance, expectedRedeem, minDelta, "redeem3");
 
         if (vault.getLtv() != 0) {
@@ -204,8 +204,9 @@ contract scWETHTest is Test {
 
         initBalance = weth.balanceOf(alice);
         expectedRedeem = vault.previewRedeem(shares2 / 2);
+        uint256 remainingShares = vault.balanceOf(alice);
         vm.prank(alice);
-        vault.redeem(shares2 / 2, alice, alice);
+        vault.redeem(remainingShares, alice, alice);
 
         // if (vault.getLtv() != 0) {
         //     assertRelApproxEq(vault.getLtv(), ltv, 0.01e18, "ltv");

@@ -73,7 +73,7 @@ contract scWETH is sc4626, IFlashLoanRecipient {
     uint256 public targetLtv = 0.5e18;
 
     // slippage for curve swaps
-    uint256 public slippageTolerance = 0.99e18;
+    uint256 public slippageTolerance = 0.995e18;
 
     constructor(address _admin) sc4626(_admin, ERC20(address(weth)), "Sandclock WETH Vault", "scWETH") {
         if (_admin == address(0)) revert ZeroAddress();
@@ -229,12 +229,7 @@ contract scWETH is sc4626, IFlashLoanRecipient {
         asset.safeTransfer(receiver, assets);
     }
 
-    function withdraw(uint256, address, address)
-        public
-        virtual
-        override
-        returns (uint256)
-    {
+    function withdraw(uint256, address, address) public virtual override returns (uint256) {
         revert PleaseUseRedeemMethod();
     }
 
