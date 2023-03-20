@@ -281,7 +281,7 @@ contract scWETHTest is Test {
     }
 
     function testHarvest(uint256 amount, uint64 tP) public {
-        amount = bound(amount, 1e18, 1e21);
+        amount = bound(amount, boundMinimum, 1e21);
         // simulate wstETH supply interest to EULER
         uint256 timePeriod = bound(tP, 260 days, 365 days);
         uint256 annualPeriod = 365 days;
