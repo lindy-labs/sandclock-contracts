@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.13;
 
-import "forge-std/console.sol";
-
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
@@ -231,11 +229,11 @@ contract scWETH is sc4626, IFlashLoanRecipient {
         asset.safeTransfer(receiver, assets);
     }
 
-    function withdraw(uint256 assets, address receiver, address owner)
+    function withdraw(uint256, address, address)
         public
         virtual
         override
-        returns (uint256 shares)
+        returns (uint256)
     {
         revert PleaseUseRedeemMethod();
     }
