@@ -97,16 +97,18 @@ contract scWETH is sc4626, IFlashLoanRecipient {
 
         totalInvested = totalAssets();
 
-        // profit since last harvest, zero if there was a loss
-        uint256 profit = totalInvested > oldTotalInvested ? totalInvested - oldTotalInvested : 0;
-        totalProfit += profit;
+        if (totalInvested > oldTotalInvested) {
+            // profit since last harvest, zero if there was a loss
+            uint256 profit = totalInvested - oldTotalInvested;
+            totalProfit += profit;
 
-        uint256 fee = profit.mulWadDown(performanceFee);
+            uint256 fee = profit.mulWadDown(performanceFee);
 
-        // mint equivalent amount of tokens to the performance fee beneficiary ie the treasury
-        _mint(treasury, fee.mulDivDown(WAD, convertToAssets(WAD)));
+            // mint equivalent amount of tokens to the performance fee beneficiary ie the treasury
+            _mint(treasury, fee.mulDivDown(WAD, convertToAssets(WAD)));
 
-        emit Harvest(profit, fee);
+            emit Harvest(profit, fee);
+        }
     }
 
     // increase/decrease the net leverage used by the strategy

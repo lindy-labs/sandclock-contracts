@@ -206,7 +206,7 @@ contract scWETHTest is Test {
         vault.deposit(amount, address(this));
     }
 
-    function test_AtomicDepositInvestRedeem(uint256 amount) public {
+    function test_atomic_deposit_invest_redeem(uint256 amount) public {
         amount = bound(amount, boundMinimum, 1e22); //max ~$280m flashloan
         vm.deal(address(this), amount);
         weth.deposit{value: amount}();
@@ -243,14 +243,14 @@ contract scWETHTest is Test {
         assertRelApproxEq(weth.balanceOf(address(this)), amount, 0.01e18);
     }
 
-    function test_TwoDeposits_Invest_TwoRedeems(uint256 depositAmount1, uint256 depositAmount2) public {
+    function test_twoDeposits_invest_twoRedeems(uint256 depositAmount1, uint256 depositAmount2) public {
         depositAmount1 = bound(depositAmount1, boundMinimum, 1e22);
         depositAmount2 = bound(depositAmount2, boundMinimum, 1e22);
 
         uint256 minDelta = 0.007e18;
 
-        uint256 shares1 = depositToVault(address(this), depositAmount1);
-        uint256 shares2 = depositToVault(alice, depositAmount2);
+        uint256 shares1 = _depositToVault(address(this), depositAmount1);
+        uint256 shares2 = _depositToVault(alice, depositAmount2);
 
         vault.depositIntoStrategy();
 
@@ -287,9 +287,9 @@ contract scWETHTest is Test {
         assertRelApproxEq(weth.balanceOf(alice) - initBalance, expectedRedeem, 0.01e18, "redeem4");
     }
 
-    function test_LeverageUp(uint256 amount, uint256 newLtv) public {
+    function test_leverageUp(uint256 amount, uint256 newLtv) public {
         amount = bound(amount, boundMinimum, 1e20);
-        depositToVault(address(this), amount);
+        _depositToVault(address(this), amount);
         vault.depositIntoStrategy();
         newLtv = bound(newLtv, vault.getLtv() + 1e15, maxLtv - 0.001e18);
         console.log("vault.getLtv()", vault.getLtv());
@@ -298,9 +298,9 @@ contract scWETHTest is Test {
         assertApproxEqRel(vault.getLtv(), newLtv, 0.01e18, "leverage change failed");
     }
 
-    function test_LeverageDown(uint256 amount, uint256 newLtv) public {
+    function test_leverageDown(uint256 amount, uint256 newLtv) public {
         amount = bound(amount, boundMinimum, 1e20);
-        depositToVault(address(this), amount);
+        _depositToVault(address(this), amount);
         vault.depositIntoStrategy();
         newLtv = bound(newLtv, 0.01e18, vault.getLtv() - 0.01e18);
         console.log("vault.getLtv()", vault.getLtv());
@@ -309,7 +309,7 @@ contract scWETHTest is Test {
         assertApproxEqRel(vault.getLtv(), newLtv, 0.01e18, "leverage change failed");
     }
 
-    function test_BorrowOverMaxLtv_Fail(uint256 amount) public {
+    function test_maxLtv(uint256 amount) public {
         amount = bound(amount, boundMinimum, 1e21);
         vm.deal(address(this), amount);
 
@@ -346,7 +346,7 @@ contract scWETHTest is Test {
 
         console.log(stEthStakingInterest, 1.004e18);
 
-        depositToVault(address(this), amount);
+        _depositToVault(address(this), amount);
 
         vault.depositIntoStrategy();
 
@@ -375,7 +375,7 @@ contract scWETHTest is Test {
 
     function test_withdrawToVault(uint256 amount) public {
         amount = bound(amount, boundMinimum, 10000 ether);
-        depositToVault(address(this), amount);
+        _depositToVault(address(this), amount);
 
         vault.depositIntoStrategy();
 
@@ -384,7 +384,7 @@ contract scWETHTest is Test {
 
     function test_harvest_withdrawToVault(uint256 amount) public {
         amount = bound(amount, boundMinimum, 10000 ether);
-        depositToVault(address(this), amount);
+        _depositToVault(address(this), amount);
 
         vault.depositIntoStrategy();
 
@@ -409,7 +409,7 @@ contract scWETHTest is Test {
 
     function test_harvest_performanceFees(uint256 amount) public {
         amount = bound(amount, boundMinimum, 10000 ether);
-        depositToVault(address(this), amount);
+        _depositToVault(address(this), amount);
 
         vault.depositIntoStrategy();
 
@@ -418,7 +418,23 @@ contract scWETHTest is Test {
         vault.harvest();
     }
 
-    function test_DepositEth(uint256 amount) public {
+    function test_harvest_leverageUp(uint256 amount) public {
+        // ltv should decrease after harvest
+        // and then test leveraging up to the target Ltv
+    }
+
+    function test_harvest_leverageDown(uint256 amount) public {
+        // simulate losses after the harvest which should increase the getLtv
+        // and then test leveraging down to the target ltv
+    }
+
+    function test_mint_redeem() public {}
+
+    function test_mint_invest_redeem() public {}
+
+    function test_mint_invest_harvest_redeem() public {}
+
+    function test_deposit_eth(uint256 amount) public {
         amount = bound(amount, boundMinimum, 1e21);
         vm.deal(address(this), amount);
 
@@ -432,7 +448,9 @@ contract scWETHTest is Test {
         assertEq(weth.balanceOf(address(vault)), amount, "weth not transferred to vault");
     }
 
-    function depositToVault(address user, uint256 amount) internal returns (uint256 shares) {
+    //////////////////////////// INTERNAL METHODS ////////////////////////////////////////
+
+    function _depositToVault(address user, uint256 amount) internal returns (uint256 shares) {
         vm.deal(user, amount);
         vm.startPrank(user);
         weth.deposit{value: amount}();

@@ -37,12 +37,4 @@ abstract contract sc4626 is ERC4626, AccessControl {
         treasury = newTreasury;
         emit TreasuryUpdated(msg.sender, newTreasury);
     }
-
-    function depositWithPermit(uint256 amount, uint256 deadline, uint8 v, bytes32 r, bytes32 s) external {
-        // Approve via permit.
-        asset.permit(msg.sender, address(this), amount, deadline, v, r, s);
-
-        // Deposit
-        deposit(amount, msg.sender);
-    }
 }
