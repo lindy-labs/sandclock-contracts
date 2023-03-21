@@ -74,12 +74,17 @@ contract scWETH is sc4626, IFlashLoanRecipient {
         aavePool.setUserEMode(EMODE_ID);
     }
 
+    /// @notice set the slippage tolerance for curve swaps
+    /// @param newSlippageTolerance the new slippage tolerance
+    /// @dev slippage tolerance is a number between 0 and 1e18
     function setSlippageTolerance(uint256 newSlippageTolerance) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (newSlippageTolerance > WAD) revert InvalidSlippageTolerance();
         slippageTolerance = newSlippageTolerance;
         emit SlippageToleranceUpdated(msg.sender, newSlippageTolerance);
     }
 
+    /// @notice set the address of the exchange proxy for the 0x router
+    /// @param newAddress the new address of the 0x router
     function setExchangeProxyAddress(address newAddress) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (newAddress == address(0)) revert ZeroAddress();
         xrouter = newAddress;
@@ -88,6 +93,9 @@ contract scWETH is sc4626, IFlashLoanRecipient {
 
     /////////////////// ADMIN/KEEPER METHODS //////////////////////////////////
 
+    /// @notice harvest profits and rebalance the position by investing profits back into the strategy
+    /// @dev reduces the getLtv() back to the target ltv
+    /// @dev also mints performance fee tokens to the treasury
     function harvest() external onlyRole(KEEPER_ROLE) {
         // store the old total
         uint256 oldTotalInvested = totalInvested;
@@ -111,7 +119,9 @@ contract scWETH is sc4626, IFlashLoanRecipient {
         }
     }
 
-    // increase/decrease the net leverage used by the strategy
+    /// @notice increase/decrease the target ltv used on borrows
+    /// @param newTargetLtv the new target ltv
+    /// @dev the new target ltv must be less than the max ltv allowed on aave
     function changeLeverage(uint256 newTargetLtv) public onlyRole(KEEPER_ROLE) {
         if (newTargetLtv >= getMaxLtv()) revert InvalidTargetLtv();
 
@@ -121,18 +131,21 @@ contract scWETH is sc4626, IFlashLoanRecipient {
         _rebalancePosition();
     }
 
-    // separate to save gas for users depositing
+    /// @notice deposit all available funds into the strategy
+    /// @dev separate to save gas for users depositing
     function depositIntoStrategy() external onlyRole(KEEPER_ROLE) {
         _rebalancePosition();
     }
 
-    /// @param amount : amount of asset to withdraw into the vault
+    /// @notice withdraw funds from the strategy into the vault
+    /// @param amount : amount of assets to withdraw into the vault
     function withdrawToVault(uint256 amount) external onlyRole(KEEPER_ROLE) {
         _withdrawToVault(amount);
     }
 
     //////////////////// VIEW METHODS //////////////////////////
 
+    /// @notice returns the total assets (WETH) held by the strategy
     function totalAssets() public view override returns (uint256 assets) {
         // value of the supplied collateral in eth terms using chainlink oracle
         assets = totalCollateralSupplied();
@@ -144,23 +157,23 @@ contract scWETH is sc4626, IFlashLoanRecipient {
         assets += asset.balanceOf(address(this));
     }
 
-    // total wstETH supplied as collateral (in ETH terms)
+    /// @notice returns the total wstETH supplied as collateral (in ETH)
     function totalCollateralSupplied() public view returns (uint256) {
         return _wstEthToEth(aToken.balanceOf(address(this)));
     }
 
-    // total eth borrowed
+    /// @notice returns the total ETH borrowed
     function totalDebt() public view returns (uint256) {
         return variableDebtToken.balanceOf(address(this));
     }
 
-    // returns the net leverage that the strategy is using right now (1e18 = 100%)
+    /// @notice returns the net leverage that the strategy is using right now (1e18 = 100%)
     function getLeverage() public view returns (uint256) {
         uint256 coll = totalCollateralSupplied();
         return coll > 0 ? coll.divWadUp(coll - totalDebt()) : 0;
     }
 
-    // returns the net LTV at which we have borrowed till now (1e18 = 100%)
+    /// @notice returns the net LTV at which we have borrowed till now (1e18 = 100%)
     function getLtv() public view returns (uint256 ltv) {
         uint256 collateral = totalCollateralSupplied();
         if (collateral > 0) {
@@ -169,14 +182,14 @@ contract scWETH is sc4626, IFlashLoanRecipient {
         }
     }
 
-    // The max loan to value(ltv) ratio for borrowing eth on euler with wsteth as collateral for the flashloan (1e18 = 100%)
+    /// @notice returns the max loan to value(ltv) ratio for borrowing eth on Aavev3 with wsteth as collateral for the flashloan (1e18 = 100%)
     function getMaxLtv() public view returns (uint256) {
         return uint256(aavePool.getEModeCategoryData(EMODE_ID).ltv) * 1e14;
     }
 
     //////////////////// EXTERNAL METHODS //////////////////////////
 
-    // helper method to directly deposit ETH instead of weth
+    /// @notice helper method to directly deposit ETH instead of weth
     function deposit(address receiver) external payable returns (uint256 shares) {
         uint256 assets = msg.value;
 
@@ -222,7 +235,7 @@ contract scWETH is sc4626, IFlashLoanRecipient {
         revert PleaseUseRedeemMethod();
     }
 
-    // called after the flashLoan on _rebalancePosition
+    /// @dev called after the flashLoan on _rebalancePosition
     function receiveFlashLoan(address[] memory, uint256[] memory amounts, uint256[] memory, bytes memory userData)
         external
     {
