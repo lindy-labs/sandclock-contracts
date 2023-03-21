@@ -145,6 +145,24 @@ contract scWETHTest is Test {
         vault.setExchangeProxyAddress(address(0x00));
     }
 
+    function test_setStEThToEthPriceFeed() public {
+        address newStEthPriceFeed = alice;
+        vault.setStEThToEthPriceFeed(newStEthPriceFeed);
+        assertEq(address(vault.stEThToEthPriceFeed()), newStEthPriceFeed);
+
+        // revert if called by another user
+        vm.expectRevert(
+            bytes(
+                "AccessControl: account 0x0000000000000000000000000000000000000006 is missing role 0x0000000000000000000000000000000000000000000000000000000000000000"
+            )
+        );
+        vm.prank(alice);
+        vault.setStEThToEthPriceFeed(newStEthPriceFeed);
+
+        vm.expectRevert(bytes4(keccak256("ZeroAddress()")));
+        vault.setStEThToEthPriceFeed(address(0x00));
+    }
+
     function test_deposit_redeem(uint256 amount) public {
         amount = bound(amount, boundMinimum, 1e27);
         vm.deal(address(this), amount);

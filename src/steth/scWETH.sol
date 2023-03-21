@@ -38,17 +38,16 @@ contract scWETH is sc4626, IFlashLoanRecipient {
     ICurvePool public constant curvePool = ICurvePool(0xDC24316b9AE028F1497c275EB9192a3Ea0f67022);
     // Lido staking contract (stETH)
     ILido public constant stEth = ILido(0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84);
-    // 0x swap router
-    address public xrouter = 0xDef1C0ded9bec7F1a1670819833240f027b25EfF;
     IwstETH public constant wstETH = IwstETH(0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0);
     WETH public constant weth = WETH(payable(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2));
-
-    // Chainlink pricefeed (stETH -> ETH)
-    AggregatorV3Interface public constant stEThToEthPriceFeed =
-        AggregatorV3Interface(0x86392dC19c0b719886221c78AB11eb8Cf5c52812);
-
     // Balancer vault for flashloans
     IVault public constant balancerVault = IVault(0xBA12222222228d8Ba445958a75a0704d566BF2C8);
+
+    // Chainlink pricefeed (stETH -> ETH)
+    AggregatorV3Interface public stEThToEthPriceFeed = AggregatorV3Interface(0x86392dC19c0b719886221c78AB11eb8Cf5c52812);
+
+    // 0x swap router
+    address public xrouter = 0xDef1C0ded9bec7F1a1670819833240f027b25EfF;
 
     // total invested during last harvest/rebalance
     uint256 public totalInvested;
@@ -89,6 +88,13 @@ contract scWETH is sc4626, IFlashLoanRecipient {
         if (newAddress == address(0)) revert ZeroAddress();
         xrouter = newAddress;
         emit ExchangeProxyAddressUpdated(msg.sender, newAddress);
+    }
+
+    /// @notice set stEThToEthPriceFeed address
+    /// @param newAddress the new address of the stEThToEthPriceFeed
+    function setStEThToEthPriceFeed(address newAddress) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (newAddress == address(0)) revert ZeroAddress();
+        stEThToEthPriceFeed = AggregatorV3Interface(newAddress);
     }
 
     /////////////////// ADMIN/KEEPER METHODS //////////////////////////////////
