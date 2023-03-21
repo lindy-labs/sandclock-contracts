@@ -145,7 +145,7 @@ contract scWETHTest is Test {
         vault.setExchangeProxyAddress(address(0x00));
     }
 
-    function testFuzz_AtomicDepositWithdraw(uint256 amount) public {
+    function test_deposit_redeem(uint256 amount) public {
         amount = bound(amount, boundMinimum, 1e27);
         vm.deal(address(this), amount);
         weth.deposit{value: amount}();
@@ -155,19 +155,11 @@ contract scWETHTest is Test {
 
         vault.deposit(amount, address(this));
 
-        assertEq(vault.convertToAssets(10 ** vault.decimals()), 1e18);
-        assertEq(vault.totalAssets(), amount);
-        assertEq(vault.balanceOf(address(this)), amount);
-        assertEq(vault.convertToAssets(vault.balanceOf(address(this))), amount);
-        assertEq(weth.balanceOf(address(this)), preDepositBal - amount);
+        _depositChecks(amount, preDepositBal);
 
         vault.redeem(vault.balanceOf(address(this)), address(this), address(this));
 
-        assertEq(vault.convertToAssets(10 ** vault.decimals()), 1e18);
-        assertEq(vault.totalAssets(), 0);
-        assertEq(vault.balanceOf(address(this)), 0);
-        assertEq(vault.convertToAssets(vault.balanceOf(address(this))), 0);
-        assertEq(weth.balanceOf(address(this)), preDepositBal);
+        _redeemChecks(preDepositBal);
     }
 
     function testFail_Deposit_WithInsufficientApproval(uint256 amount) public {
@@ -216,11 +208,7 @@ contract scWETHTest is Test {
 
         uint256 shares = vault.deposit(amount, address(this));
 
-        assertEq(vault.convertToAssets(10 ** vault.decimals()), 1e18);
-        assertEq(vault.totalAssets(), amount);
-        assertEq(vault.balanceOf(address(this)), amount);
-        assertEq(vault.convertToAssets(vault.balanceOf(address(this))), amount);
-        assertEq(weth.balanceOf(address(this)), preDepositBal - amount);
+        _depositChecks(amount, preDepositBal);
 
         vault.depositIntoStrategy();
 
@@ -392,6 +380,9 @@ contract scWETHTest is Test {
 
         vault.harvest();
 
+        // harvest must automatically rebalance
+        assertRelApproxEq(vault.getLtv(), vault.targetLtv(), 0.0001e18, "ltv not rebalanced");
+
         _withdrawToVaultChecks(0.01e18);
 
         uint256 minimumExpectedApy = 0.07e18;
@@ -414,25 +405,81 @@ contract scWETHTest is Test {
         vault.depositIntoStrategy();
 
         _simulate_stEthStakingInterest(365 days, 1.071e18);
-
         vault.harvest();
     }
 
-    function test_harvest_leverageUp(uint256 amount) public {
-        // ltv should decrease after harvest
-        // and then test leveraging up to the target Ltv
+    function test_mint_redeem(uint256 amount) public {
+        amount = bound(amount, boundMinimum, 1e27);
+        vm.deal(address(this), amount);
+        weth.deposit{value: amount}();
+        weth.approve(address(vault), amount);
+
+        uint256 preDepositBal = weth.balanceOf(address(this));
+
+        uint256 shares = vault.previewMint(amount);
+        vault.mint(shares, address(this));
+
+        _depositChecks(amount, preDepositBal);
+
+        vault.redeem(vault.balanceOf(address(this)), address(this), address(this));
+
+        _redeemChecks(preDepositBal);
     }
 
-    function test_harvest_leverageDown(uint256 amount) public {
-        // simulate losses after the harvest which should increase the getLtv
-        // and then test leveraging down to the target ltv
+    function test_mint_invest_redeem(uint256 amount) public {
+        amount = bound(amount, boundMinimum, 1e22); //max ~$280m flashloan
+        vm.deal(address(this), amount);
+        weth.deposit{value: amount}();
+        weth.approve(address(vault), amount);
+
+        uint256 shares = vault.previewMint(amount);
+        vault.mint(shares, address(this));
+
+        vault.depositIntoStrategy();
+
+        // account for value loss if stETH worth less than ETH
+        (, int256 price,,,) = vault.stEThToEthPriceFeed().latestRoundData();
+        amount = amount.mulWadDown(uint256(price));
+
+        // account for unrealized slippage loss
+        amount = amount.mulWadDown(slippageTolerance);
+
+        assertRelApproxEq(vault.totalAssets(), amount, 0.01e18);
+        assertEq(vault.balanceOf(address(this)), shares);
+        assertRelApproxEq(vault.convertToAssets(vault.balanceOf(address(this))), amount, 0.01e18);
+
+        vault.redeem(shares, address(this), address(this));
+
+        assertEq(vault.convertToAssets(10 ** vault.decimals()), 1e18);
+        assertEq(vault.balanceOf(address(this)), 0);
+        assertEq(vault.convertToAssets(vault.balanceOf(address(this))), 0);
+        assertRelApproxEq(weth.balanceOf(address(this)), amount, 0.01e18);
     }
 
-    function test_mint_redeem() public {}
+    function test_mint_invest_harvest_redeem(uint256 amount) public {
+        vm.startPrank(alice);
+        amount = bound(amount, boundMinimum, 1e22); //max ~$280m flashloan
+        vm.deal(alice, amount);
+        weth.deposit{value: amount}();
+        weth.approve(address(vault), amount);
 
-    function test_mint_invest_redeem() public {}
+        uint256 shares = vault.previewMint(amount);
+        vault.mint(shares, alice);
+        vm.stopPrank();
 
-    function test_mint_invest_harvest_redeem() public {}
+        vault.depositIntoStrategy();
+
+        uint256 interest = 1.071e18;
+        _simulate_stEthStakingInterest(365 days, interest);
+        vault.harvest();
+
+        vm.prank(alice);
+        vault.redeem(shares, alice, alice);
+
+        assertEq(vault.balanceOf(alice), 0);
+        assertEq(vault.convertToAssets(vault.balanceOf(alice)), 0);
+        assertGt(weth.balanceOf(alice), amount, "no profits after harvest");
+    }
 
     function test_deposit_eth(uint256 amount) public {
         amount = bound(amount, boundMinimum, 1e21);
@@ -457,6 +504,22 @@ contract scWETHTest is Test {
         weth.approve(address(vault), amount);
         shares = vault.deposit(amount, user);
         vm.stopPrank();
+    }
+
+    function _depositChecks(uint256 amount, uint256 preDepositBal) internal {
+        assertEq(vault.convertToAssets(10 ** vault.decimals()), 1e18);
+        assertEq(vault.totalAssets(), amount);
+        assertEq(vault.balanceOf(address(this)), amount);
+        assertEq(vault.convertToAssets(vault.balanceOf(address(this))), amount);
+        assertEq(weth.balanceOf(address(this)), preDepositBal - amount);
+    }
+
+    function _redeemChecks(uint256 preDepositBal) internal {
+        assertEq(vault.convertToAssets(10 ** vault.decimals()), 1e18);
+        assertEq(vault.totalAssets(), 0);
+        assertEq(vault.balanceOf(address(this)), 0);
+        assertEq(vault.convertToAssets(vault.balanceOf(address(this))), 0);
+        assertEq(weth.balanceOf(address(this)), preDepositBal);
     }
 
     function _withdrawToVaultChecks(uint256 maxAssetsDelta) internal {
