@@ -21,6 +21,7 @@ error InvalidMaxLtv();
 error InvalidFlashLoanCaller();
 error InvalidSlippageTolerance();
 error ZeroAddress();
+error PleaseUseRedeemMethod();
 
 contract scWETH is sc4626, IFlashLoanRecipient {
     using SafeTransferLib for ERC20;
@@ -59,9 +60,6 @@ contract scWETH is sc4626, IFlashLoanRecipient {
     // Balancer vault for flashloans
     IVault public constant balancerVault = IVault(0xBA12222222228d8Ba445958a75a0704d566BF2C8);
 
-    // value used to scale the token's collateral/borrow factors from the euler market
-    uint32 constant CONFIG_FACTOR_SCALE = 4_000_000_000;
-
     // total invested during last harvest/rebalance
     uint256 public totalInvested;
 
@@ -72,7 +70,7 @@ contract scWETH is sc4626, IFlashLoanRecipient {
     uint256 public targetLtv = 0.5e18;
 
     // slippage for curve swaps
-    uint256 public slippageTolerance = 0.999e18;
+    uint256 public slippageTolerance = 0.995e18;
 
     constructor(address _admin) sc4626(_admin, ERC20(address(weth)), "Sandclock WETH Vault", "scWETH") {
         if (_admin == address(0)) revert ZeroAddress();
@@ -150,9 +148,6 @@ contract scWETH is sc4626, IFlashLoanRecipient {
         // subtract the debt
         assets -= totalDebt();
 
-        // account for slippage
-        assets = assets.mulWadDown(slippageTolerance);
-
         // add float
         assets += asset.balanceOf(address(this));
     }
@@ -170,7 +165,7 @@ contract scWETH is sc4626, IFlashLoanRecipient {
     // returns the net leverage that the strategy is using right now (1e18 = 100%)
     function getLeverage() public view returns (uint256) {
         uint256 coll = totalCollateralSupplied();
-        return coll.divWadUp(coll - totalDebt());
+        return coll > 0 ? coll.divWadUp(coll - totalDebt()) : 0;
     }
 
     // returns the net LTV at which we have borrowed till now (1e18 = 100%)
@@ -204,6 +199,35 @@ contract scWETH is sc4626, IFlashLoanRecipient {
         emit Deposit(msg.sender, receiver, assets, shares);
 
         afterDeposit(assets, shares);
+    }
+
+    function redeem(uint256 shares, address receiver, address owner) public override returns (uint256 assets) {
+        if (msg.sender != owner) {
+            uint256 allowed = allowance[owner][msg.sender]; // Saves gas for limited approvals.
+
+            if (allowed != type(uint256).max) allowance[owner][msg.sender] = allowed - shares;
+        }
+
+        // Check for rounding error since we round down in previewRedeem.
+        require((assets = previewRedeem(shares)) != 0, "ZERO_ASSETS");
+
+        beforeWithdraw(assets, shares);
+
+        _burn(owner, shares);
+
+        uint256 balance = asset.balanceOf(address(this));
+
+        if (assets > balance) {
+            assets = balance;
+        }
+
+        emit Withdraw(msg.sender, receiver, owner, assets, shares);
+
+        asset.safeTransfer(receiver, assets);
+    }
+
+    function withdraw(uint256, address, address) public virtual override returns (uint256) {
+        revert PleaseUseRedeemMethod();
     }
 
     // called after the flashLoan on _rebalancePosition
@@ -307,9 +331,6 @@ contract scWETH is sc4626, IFlashLoanRecipient {
 
         uint256 flashLoanAmount = amount.mulDivDown(debt, collateral - debt);
 
-        // withdraw everything if close enough
-        if (flashLoanAmount.divWadDown(slippageTolerance) >= debt) flashLoanAmount = debt;
-
         address[] memory tokens = new address[](1);
         tokens[0] = address(weth);
 
@@ -349,7 +370,7 @@ contract scWETH is sc4626, IFlashLoanRecipient {
             return;
         }
 
-        uint256 missing = (assets - float).divWadUp(slippageTolerance);
+        uint256 missing = (assets - float);
 
         // needed otherwise counted as loss during harvest
         totalInvested -= missing;

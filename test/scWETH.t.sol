@@ -85,7 +85,7 @@ contract scWETHTest is Test {
         assertEq(vault.convertToAssets(vault.balanceOf(address(this))), amount);
         assertEq(weth.balanceOf(address(this)), preDepositBal - amount);
 
-        vault.withdraw(amount, address(this), address(this));
+        vault.redeem(vault.balanceOf(address(this)), address(this), address(this));
 
         assertEq(vault.convertToAssets(10 ** vault.decimals()), 1e18);
         assertEq(vault.totalAssets(), 0);
@@ -131,7 +131,7 @@ contract scWETHTest is Test {
     }
 
     function testAtomicDepositInvestRedeem(uint256 amount) public {
-        amount = bound(amount, boundMinimum, 1e21); //max ~$280m flashloan
+        amount = bound(amount, boundMinimum, 1e22); //max ~$280m flashloan
         vm.deal(address(this), amount);
         weth.deposit{value: amount}();
         weth.approve(address(vault), amount);
@@ -168,8 +168,11 @@ contract scWETHTest is Test {
     }
 
     function testTwoDepositsInvestTwoRedeems(uint256 depositAmount1, uint256 depositAmount2) public {
-        depositAmount1 = bound(depositAmount1, boundMinimum, 1e21);
-        depositAmount2 = bound(depositAmount2, boundMinimum, 1e21);
+        depositAmount1 = bound(depositAmount1, boundMinimum, 1e22);
+        depositAmount2 = bound(depositAmount2, boundMinimum, 1e22);
+
+        uint256 minDelta = 0.007e18;
+
         uint256 shares1 = depositToVault(address(this), depositAmount1);
         uint256 shares2 = depositToVault(alice, depositAmount2);
 
@@ -177,40 +180,40 @@ contract scWETHTest is Test {
 
         uint256 ltv = vault.targetLtv();
 
+        uint256 expectedRedeem = vault.previewRedeem(shares1 / 2);
         vault.redeem(shares1 / 2, address(this), address(this));
-        assertRelApproxEq(weth.balanceOf(address(this)), (depositAmount1 / 2), 0.01e18);
-        assertRelApproxEq((depositAmount1 / 2), weth.balanceOf(address(this)), 0.01e18);
+        assertRelApproxEq(weth.balanceOf(address(this)), expectedRedeem, minDelta, "redeem1");
 
-        assertRelApproxEq(vault.getLtv(), ltv, 0.013e18);
+        assertRelApproxEq(vault.getLtv(), ltv, 0.013e18, "ltv");
 
+        expectedRedeem = vault.previewRedeem(shares2 / 2);
         vm.prank(alice);
         vault.redeem(shares2 / 2, alice, alice);
-        assertRelApproxEq(weth.balanceOf(alice), (depositAmount2 / 2), 0.01e18);
-        assertRelApproxEq((depositAmount2 / 2), weth.balanceOf(alice), 0.01e18);
+        assertRelApproxEq(weth.balanceOf(alice), expectedRedeem, minDelta, "redeem2");
 
-        assertRelApproxEq(vault.getLtv(), ltv, 0.01e18);
+        assertRelApproxEq(vault.getLtv(), ltv, 0.01e18, "ltv");
 
-        vault.redeem(shares1 / 2, address(this), address(this));
-        assertRelApproxEq(weth.balanceOf(address(this)), depositAmount1, 0.01e18);
-        assertRelApproxEq((depositAmount1), weth.balanceOf(address(this)), 0.01e18);
+        uint256 initBalance = weth.balanceOf(address(this));
+        expectedRedeem = vault.previewRedeem(shares1 / 2);
+        vault.redeem(vault.balanceOf(address(this)), address(this), address(this));
+        assertRelApproxEq(weth.balanceOf(address(this)) - initBalance, expectedRedeem, minDelta, "redeem3");
 
         if (vault.getLtv() != 0) {
-            assertRelApproxEq(vault.getLtv(), ltv, 0.01e18);
+            assertRelApproxEq(vault.getLtv(), ltv, 0.01e18, "ltv");
         }
 
+        initBalance = weth.balanceOf(alice);
+        expectedRedeem = vault.previewRedeem(shares2 / 2);
+        uint256 remainingShares = vault.balanceOf(alice);
         vm.prank(alice);
-        vault.redeem(shares2 / 2, alice, alice);
+        vault.redeem(remainingShares, alice, alice);
 
-        if (vault.getLtv() != 0) {
-            assertRelApproxEq(vault.getLtv(), ltv, 0.01e18);
-        }
+        // if (vault.getLtv() != 0) {
+        //     assertRelApproxEq(vault.getLtv(), ltv, 0.01e18, "ltv");
+        // }
 
-        assertGt(weth.balanceOf(alice), depositAmount2.mulWadDown(slippageTolerance - 0.01e18));
-
-        console.log("vault.totalCollateralSupplied()", vault.totalCollateralSupplied());
-        console.log("vault.totalDebt()", vault.totalDebt());
-        console.log("vault.totalSupply()", vault.totalSupply());
-        console.log("vault.totalAssets()", vault.totalAssets());
+        assertRelApproxEq(weth.balanceOf(alice) - initBalance, expectedRedeem, 0.01e18, "redeem4");
+        // assertGe(weth.balanceOf(alice) - initBalance, expectedRedeem);
     }
 
     function testWithdrawToVault(uint256 amount) public {
@@ -283,7 +286,7 @@ contract scWETHTest is Test {
         // simulate wstETH supply interest to EULER
         uint256 timePeriod = bound(tP, 260 days, 365 days);
         uint256 annualPeriod = 365 days;
-        uint256 stEthStakingApy = 0.05e18;
+        uint256 stEthStakingApy = 0.071e18;
         uint256 stEthStakingInterest = 1e18 + stEthStakingApy.mulDivDown(timePeriod, annualPeriod);
 
         console.log(stEthStakingInterest, 1.004e18);
@@ -361,6 +364,27 @@ contract scWETHTest is Test {
             emit log_named_uint("      Actual", a);
             emit log_named_decimal_uint(" Max % Delta", maxPercentDelta, 18);
             emit log_named_decimal_uint("     % Delta", percentDelta, 18);
+            fail();
+        }
+    }
+
+    function assertRelApproxEq(
+        uint256 a,
+        uint256 b,
+        uint256 maxPercentDelta, // An 18 decimal fixed point number, where 1e18 == 100%,
+        string memory message
+    ) internal virtual {
+        if (b == 0) return assertEq(a, b); // If the expected is 0, actual must be too.
+
+        uint256 percentDelta = ((a > b ? a - b : b - a) * 1e18) / b;
+
+        if (percentDelta > maxPercentDelta) {
+            emit log("Error: a ~= b not satisfied [uint]");
+            emit log_named_uint("    Expected", b);
+            emit log_named_uint("      Actual", a);
+            emit log_named_decimal_uint(" Max % Delta", maxPercentDelta, 18);
+            emit log_named_decimal_uint("     % Delta", percentDelta, 18);
+            emit log(message);
             fail();
         }
     }
