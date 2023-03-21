@@ -269,12 +269,8 @@ contract scWETH is sc4626, IFlashLoanRecipient {
             // unwrap wstETH
             uint256 stEthAmount = wstETH.unwrap(wstETH.balanceOf(address(this)));
 
-            // stEth to eth
-            (, int256 price,,,) = stEThToEthPriceFeed.latestRoundData();
-            uint256 expected = stEthAmount.mulWadDown(uint256(price));
-
             // stETH to eth
-            curvePool.exchange(1, 0, stEthAmount, expected.mulWadDown(slippageTolerance));
+            curvePool.exchange(1, 0, stEthAmount, _stEthToEth(stEthAmount).mulWadDown(slippageTolerance));
 
             // wrap eth
             weth.deposit{value: address(this).balance}();
@@ -333,15 +329,18 @@ contract scWETH is sc4626, IFlashLoanRecipient {
         balancerVault.flashLoan(address(this), tokens, amounts, abi.encode(false, amount));
     }
 
-    function _wstEthToEth(uint256 wstEthAmount) internal view returns (uint256 ethAmount) {
-        if (wstEthAmount > 0) {
-            // wstETh to stEth using exchangeRate
-            uint256 stEthAmount = wstETH.getStETHByWstETH(wstEthAmount);
-
+    function _stEthToEth(uint256 stEthAmount) internal view returns (uint256 ethAmount) {
+        if (stEthAmount > 0) {
             // stEth to eth
             (, int256 price,,,) = stEThToEthPriceFeed.latestRoundData();
             ethAmount = stEthAmount.mulWadDown(uint256(price));
         }
+    }
+
+    function _wstEthToEth(uint256 wstEthAmount) internal view returns (uint256 ethAmount) {
+        // wstETh to stEth using exchangeRate
+        uint256 stEthAmount = wstETH.getStETHByWstETH(wstEthAmount);
+        ethAmount = _stEthToEth(stEthAmount);
     }
 
     function _ethToWstEth(uint256 ethAmount) internal view returns (uint256 wstEthAmount) {
