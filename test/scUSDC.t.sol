@@ -749,9 +749,41 @@ contract scUSDCTest is Test {
         assertApproxEqRel(assets, amount.mulWadDown(1e18 + vault.getLtv()), 0.01e18, "assets");
 
         vm.startPrank(alice);
-        vault.withdraw(assets - 1, alice, alice);
+        vault.withdraw(assets, alice, alice);
 
         assertApproxEqAbs(vault.balanceOf(alice), 0, 1, "balance");
+        assertApproxEqRel(usdc.balanceOf(alice), amount.mulWadDown(1e18 + vault.targetLtv()), 0.01e18, "usdc balance");
+        assertTrue(vault.totalAssets() <= toleratedLeftover, "total assets");
+    }
+
+    /// #redeem ///
+
+    function testFuzz_redeem_WhenInProfit(uint256 amount) public {
+        uint256 lowerBound = vault.rebalanceMinimum().divWadUp(1e18 - vault.floatPercentage());
+        amount = bound(amount, lowerBound, 10_000_000e6); // upper limit constrained by weth available on aave
+        deal(address(usdc), alice, amount);
+
+        vm.startPrank(alice);
+
+        usdc.approve(address(vault), type(uint256).max);
+        vault.deposit(amount, alice);
+
+        vm.stopPrank();
+
+        vault.rebalance();
+
+        // add 100% profit to the weth vault
+        uint256 wethInvested = weth.balanceOf(address(wethVault));
+        deal(address(weth), address(wethVault), wethInvested * 2);
+
+        uint256 shares = vault.balanceOf(alice);
+        // some assets can be left in the vault because of slippage when selling profits
+        uint256 toleratedLeftover = vault.totalAssets().mulWadUp(1e18 - vault.slippageTolerance());
+
+        vm.startPrank(alice);
+        vault.redeem(shares, alice, alice);
+
+        assertEq(vault.balanceOf(alice), 0, "balance");
         assertApproxEqRel(usdc.balanceOf(alice), amount.mulWadDown(1e18 + vault.targetLtv()), 0.01e18, "usdc balance");
         assertTrue(vault.totalAssets() <= toleratedLeftover, "total assets");
     }
