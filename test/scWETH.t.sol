@@ -567,13 +567,16 @@ contract scWETHTest is Test {
     function _simulate_stEthStakingInterest(uint256 timePeriod, uint256 stEthStakingInterest) internal {
         // fast forward time to simulate supply and borrow interests
         vm.warp(block.timestamp + timePeriod);
-        // 5% increase in stETH contract eth balance to simulate profits from Lido staking
-        uint256 prevBalance = stEth.getTotalPooledEther();
+        uint256 prevBalance = read_storage_uint(address(stEth), keccak256(abi.encodePacked("lido.Lido.beaconBalance")));
         vm.store(
             address(stEth),
             keccak256(abi.encodePacked("lido.Lido.beaconBalance")),
             bytes32(prevBalance.mulWadDown(stEthStakingInterest))
         );
+    }
+
+    function read_storage_uint(address addr, bytes32 key) internal view returns (uint256) {
+        return abi.decode(abi.encode(vm.load(addr, key)), (uint256));
     }
 
     function assertRelApproxEq(
