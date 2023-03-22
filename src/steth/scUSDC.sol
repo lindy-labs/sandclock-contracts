@@ -141,9 +141,9 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
 
         // 1. sell profits
         if (profit > invested.mulWadDown(DEBT_DELTA_THRESHOLD)) {
-            _disinvest(profit);
-            currentBalance += _swapWethForUsdc(profit);
-            invested -= profit;
+            uint256 withdrawn = _disinvest(profit);
+            currentBalance += _swapWethForUsdc(withdrawn);
+            invested -= withdrawn;
         }
 
         uint256 floatRequired =
@@ -180,25 +180,24 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
      * @notice Emergency exit to release collateral if the vault is underwater.
      */
     function exitAllPositions() external onlyAdmin {
-        uint256 invested = getInvested();
         uint256 debt = getDebt();
 
-        if (invested >= debt) {
+        if (getInvested() >= debt) {
             revert VaultNotUnderwater();
         }
 
-        scWETH.withdraw(invested, address(this), address(this));
+        uint256 wethBalance = scWETH.redeem(scWETH.balanceOf(address(this)), address(this), address(this));
         uint256 collateral = getCollateral();
 
         address[] memory tokens = new address[](1);
         tokens[0] = address(weth);
 
         uint256[] memory amounts = new uint256[](1);
-        amounts[0] = debt - invested;
+        amounts[0] = debt - wethBalance;
 
         balancerVault.flashLoan(address(this), tokens, amounts, abi.encode(collateral, debt));
 
-        emit EmergencyExitExecuted(msg.sender, invested, debt, collateral);
+        emit EmergencyExitExecuted(msg.sender, wethBalance, debt, collateral);
     }
 
     /**
@@ -329,8 +328,8 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
 
         // first try to sell profits to cover withdrawal amount
         if (profit != 0) {
-            _disinvest(profit);
-            uint256 usdcReceived = _swapWethForUsdc(profit);
+            uint256 withdrawn = _disinvest(profit);
+            uint256 usdcReceived = _swapWethForUsdc(withdrawn);
 
             if (initialBalance + usdcReceived >= _assets) return;
 
@@ -350,8 +349,8 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
         uint256 wethNeeded = _usdcNeeded.mulDivUp(_debt, _collateral);
         wethNeeded = wethNeeded > _invested ? _invested : wethNeeded;
 
-        _disinvest(wethNeeded);
-        aavePool.repay(address(weth), wethNeeded, AAVE_VAR_INTEREST_RATE_MODE, address(this));
+        uint256 withdrawn = _disinvest(wethNeeded);
+        aavePool.repay(address(weth), withdrawn, AAVE_VAR_INTEREST_RATE_MODE, address(this));
         aavePool.withdraw(address(usdc), _usdcNeeded, address(this));
     }
 
@@ -380,8 +379,10 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
         return getUsdcFromWeth(debt).divWadUp(collateral);
     }
 
-    function _disinvest(uint256 _wethAmount) internal {
-        scWETH.withdraw(_wethAmount, address(this), address(this));
+    function _disinvest(uint256 _wethAmount) internal returns (uint256 amountWithdrawn) {
+        uint256 shares = scWETH.convertToShares(_wethAmount);
+
+        amountWithdrawn = scWETH.redeem(shares, address(this), address(this));
     }
 
     function _swapWethForUsdc(uint256 _wethAmount) internal returns (uint256) {

@@ -749,7 +749,7 @@ contract scUSDCTest is Test {
         assertApproxEqRel(assets, amount.mulWadDown(1e18 + vault.getLtv()), 0.01e18, "assets");
 
         vm.startPrank(alice);
-        vault.withdraw(assets, alice, alice);
+        vault.withdraw(assets - 1, alice, alice);
 
         assertApproxEqAbs(vault.balanceOf(alice), 0, 1, "balance");
         assertApproxEqRel(usdc.balanceOf(alice), amount.mulWadDown(1e18 + vault.targetLtv()), 0.01e18, "usdc balance");
