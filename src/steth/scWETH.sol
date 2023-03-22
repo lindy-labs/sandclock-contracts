@@ -5,8 +5,10 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 import {WETH} from "solmate/tokens/WETH.sol";
+import {IPool} from "aave-v3/interfaces/IPool.sol";
+import {IAToken} from "aave-v3/interfaces/IAToken.sol";
+import {IVariableDebtToken} from "aave-v3/interfaces/IVariableDebtToken.sol";
 import {sc4626} from "../sc4626.sol";
-import {IEulerDToken, IEulerEToken, IEulerMarkets} from "euler/IEuler.sol";
 import {ICurvePool} from "../interfaces/curve/ICurvePool.sol";
 import {ILido} from "../interfaces/lido/ILido.sol";
 import {IwstETH} from "../interfaces/lido/IwstETH.sol";
@@ -19,8 +21,7 @@ error InvalidMaxLtv();
 error InvalidFlashLoanCaller();
 error InvalidSlippageTolerance();
 error ZeroAddress();
-
-error StrategyEULSwapFailed();
+error PleaseUseRedeemMethod();
 
 contract scWETH is sc4626, IFlashLoanRecipient {
     using SafeTransferLib for ERC20;
@@ -31,16 +32,14 @@ contract scWETH is sc4626, IFlashLoanRecipient {
     event TargetLtvRatioUpdated(address indexed user, uint256 newTargetLtv);
     event Harvest(uint256 profitSinceLastHarvest, uint256 performanceFee);
 
-    address public constant EULER = 0x27182842E098f60e3D576794A5bFFb0777E025d3;
+    // interest rate mode at which to borrow or repay
+    uint256 public constant INTEREST_RATE_MODE = 2;
+    uint8 public constant EMODE_ID = 1;
 
-    // The Euler market contract
-    IEulerMarkets public constant markets = IEulerMarkets(0x3520d5a913427E6F0D6A83E07ccD4A4da316e4d3);
-
-    // Euler supply token for wstETH (ewstETH)
-    IEulerEToken public constant eToken = IEulerEToken(0xbd1bd5C956684f7EB79DA40f582cbE1373A1D593);
-
-    // Euler debt token for WETH (dWETH)
-    IEulerDToken public constant dToken = IEulerDToken(0x62e28f054efc24b26A794F5C1249B6349454352C);
+    IPool public constant aavePool = IPool(0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2);
+    // aToken is a rebasing token and pegged 1:1 to the underlying
+    IAToken public constant aToken = IAToken(0x0B925eD163218f6662a35e0f0371Ac234f9E9371);
+    ERC20 public constant variableDebtToken = ERC20(0xeA51d7853EEFb32b6ee06b1C12E6dcCA88Be0fFE);
 
     // Curve pool for ETH-stETH
     ICurvePool public constant curvePool = ICurvePool(0xDC24316b9AE028F1497c275EB9192a3Ea0f67022);
@@ -50,9 +49,6 @@ contract scWETH is sc4626, IFlashLoanRecipient {
 
     // 0x swap router
     address xrouter = 0xDef1C0ded9bec7F1a1670819833240f027b25EfF;
-
-    // EUL token
-    ERC20 eul = ERC20(0xd9Fcd98c322942075A5C3860693e9f4f03AAE07b);
 
     IwstETH public constant wstETH = IwstETH(0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0);
     WETH public constant weth = WETH(payable(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2));
@@ -64,9 +60,6 @@ contract scWETH is sc4626, IFlashLoanRecipient {
     // Balancer vault for flashloans
     IVault public constant balancerVault = IVault(0xBA12222222228d8Ba445958a75a0704d566BF2C8);
 
-    // value used to scale the token's collateral/borrow factors from the euler market
-    uint32 constant CONFIG_FACTOR_SCALE = 4_000_000_000;
-
     // total invested during last harvest/rebalance
     uint256 public totalInvested;
 
@@ -77,17 +70,18 @@ contract scWETH is sc4626, IFlashLoanRecipient {
     uint256 public targetLtv = 0.5e18;
 
     // slippage for curve swaps
-    uint256 public slippageTolerance = 0.999e18;
+    uint256 public slippageTolerance = 0.995e18;
 
     constructor(address _admin) sc4626(_admin, ERC20(address(weth)), "Sandclock WETH Vault", "scWETH") {
         if (_admin == address(0)) revert ZeroAddress();
 
         ERC20(address(stEth)).safeApprove(address(wstETH), type(uint256).max);
         ERC20(address(stEth)).safeApprove(address(curvePool), type(uint256).max);
-        ERC20(address(wstETH)).safeApprove(EULER, type(uint256).max);
-        ERC20(address(weth)).safeApprove(EULER, type(uint256).max);
-        // Enter the euler collateral market (collateral's address, *not* the eToken address) ,
-        markets.enterMarket(0, address(wstETH));
+        ERC20(address(wstETH)).safeApprove(address(aavePool), type(uint256).max);
+        ERC20(address(weth)).safeApprove(address(aavePool), type(uint256).max);
+
+        // set e-mode on aave-v3 for increased borrowing capacity to 90% of collateral
+        aavePool.setUserEMode(EMODE_ID);
     }
 
     function setSlippageTolerance(uint256 newSlippageTolerance) external onlyAdmin {
@@ -104,16 +98,9 @@ contract scWETH is sc4626, IFlashLoanRecipient {
 
     /////////////////// ADMIN/KEEPER METHODS //////////////////////////////////
 
-    function harvest(bytes calldata _eulSwapData) external onlyRole(KEEPER_ROLE) {
+    function harvest() external onlyRole(KEEPER_ROLE) {
         // store the old total
         uint256 oldTotalInvested = totalInvested;
-
-        // swap EUL -> WETH
-        if (_eulSwapData.length > 0) {
-            eul.safeApprove(xrouter, eul.balanceOf(address(this)));
-            (bool success,) = xrouter.call{value: 0}(_eulSwapData);
-            if (!success) revert StrategyEULSwapFailed();
-        }
 
         // reinvest
         _rebalancePosition();
@@ -161,27 +148,24 @@ contract scWETH is sc4626, IFlashLoanRecipient {
         // subtract the debt
         assets -= totalDebt();
 
-        // account for slippage
-        assets = assets.mulWadDown(slippageTolerance);
-
         // add float
         assets += asset.balanceOf(address(this));
     }
 
     // total wstETH supplied as collateral (in ETH terms)
     function totalCollateralSupplied() public view returns (uint256) {
-        return wstEthToEth(eToken.balanceOfUnderlying(address(this)));
+        return _wstEthToEth(aToken.balanceOf(address(this)));
     }
 
     // total eth borrowed
     function totalDebt() public view returns (uint256) {
-        return dToken.balanceOf(address(this));
+        return variableDebtToken.balanceOf(address(this));
     }
 
     // returns the net leverage that the strategy is using right now (1e18 = 100%)
     function getLeverage() public view returns (uint256) {
         uint256 coll = totalCollateralSupplied();
-        return coll.divWadUp(coll - totalDebt());
+        return coll > 0 ? coll.divWadUp(coll - totalDebt()) : 0;
     }
 
     // returns the net LTV at which we have borrowed till now (1e18 = 100%)
@@ -193,15 +177,9 @@ contract scWETH is sc4626, IFlashLoanRecipient {
         }
     }
 
-    // The max loan to value(ltv) ratio for borrowing eth on euler with wsteth as collateral for the flashloan
+    // The max loan to value(ltv) ratio for borrowing eth on euler with wsteth as collateral for the flashloan (1e18 = 100%)
     function getMaxLtv() public view returns (uint256) {
-        uint256 collateralFactor = markets.underlyingToAssetConfig(address(wstETH)).collateralFactor;
-        uint256 borrowFactor = markets.underlyingToAssetConfig(address(weth)).borrowFactor;
-
-        uint256 scaledCollateralFactor = collateralFactor.divWadDown(CONFIG_FACTOR_SCALE);
-        uint256 scaledBorrowFactor = borrowFactor.divWadDown(CONFIG_FACTOR_SCALE);
-
-        return scaledCollateralFactor.mulWadDown(scaledBorrowFactor);
+        return uint256(aavePool.getEModeCategoryData(EMODE_ID).ltv) * 1e14;
     }
 
     //////////////////// EXTERNAL METHODS //////////////////////////
@@ -221,6 +199,35 @@ contract scWETH is sc4626, IFlashLoanRecipient {
         emit Deposit(msg.sender, receiver, assets, shares);
 
         afterDeposit(assets, shares);
+    }
+
+    function redeem(uint256 shares, address receiver, address owner) public override returns (uint256 assets) {
+        if (msg.sender != owner) {
+            uint256 allowed = allowance[owner][msg.sender]; // Saves gas for limited approvals.
+
+            if (allowed != type(uint256).max) allowance[owner][msg.sender] = allowed - shares;
+        }
+
+        // Check for rounding error since we round down in previewRedeem.
+        require((assets = previewRedeem(shares)) != 0, "ZERO_ASSETS");
+
+        beforeWithdraw(assets, shares);
+
+        _burn(owner, shares);
+
+        uint256 balance = asset.balanceOf(address(this));
+
+        if (assets > balance) {
+            assets = balance;
+        }
+
+        emit Withdraw(msg.sender, receiver, owner, assets, shares);
+
+        asset.safeTransfer(receiver, assets);
+    }
+
+    function withdraw(uint256, address, address) public virtual override returns (uint256) {
+        revert PleaseUseRedeemMethod();
     }
 
     // called after the flashLoan on _rebalancePosition
@@ -250,21 +257,21 @@ contract scWETH is sc4626, IFlashLoanRecipient {
             // wrap stETH
             wstETH.wrap(stEth.balanceOf(address(this)));
 
-            // add wstETH liquidity on Euler
-            eToken.deposit(0, type(uint256).max);
+            //add wstETH liquidity on aave-v3
+            aavePool.supply(address(wstETH), wstETH.balanceOf(address(this)), address(this), 0);
 
-            // borrow enough weth from Euler to payback flashloan
-            dToken.borrow(0, flashLoanAmount);
+            //borrow enough weth from aave-v3 to payback flashloan
+            aavePool.borrow(address(weth), flashLoanAmount, INTEREST_RATE_MODE, 0, address(this));
         }
         // if flashloan received as part of a withdrawal
         else {
             // repay debt + withdraw collateral
             if (flashLoanAmount >= totalDebt()) {
-                dToken.repay(0, type(uint256).max);
-                eToken.withdraw(0, type(uint256).max);
+                aavePool.repay(address(weth), type(uint256).max, INTEREST_RATE_MODE, address(this));
+                aavePool.withdraw(address(wstETH), type(uint256).max, address(this));
             } else {
-                dToken.repay(0, flashLoanAmount);
-                eToken.withdraw(0, _ethToWstEth(amount));
+                aavePool.repay(address(weth), flashLoanAmount, INTEREST_RATE_MODE, address(this));
+                aavePool.withdraw(address(wstETH), _ethToWstEth(amount), address(this));
             }
 
             // unwrap wstETH
@@ -324,9 +331,6 @@ contract scWETH is sc4626, IFlashLoanRecipient {
 
         uint256 flashLoanAmount = amount.mulDivDown(debt, collateral - debt);
 
-        // withdraw everything if close enough
-        if (flashLoanAmount.divWadDown(slippageTolerance) >= debt) flashLoanAmount = debt;
-
         address[] memory tokens = new address[](1);
         tokens[0] = address(weth);
 
@@ -337,7 +341,7 @@ contract scWETH is sc4626, IFlashLoanRecipient {
         balancerVault.flashLoan(address(this), tokens, amounts, abi.encode(false, amount));
     }
 
-    function wstEthToEth(uint256 wstEthAmount) public view returns (uint256 ethAmount) {
+    function _wstEthToEth(uint256 wstEthAmount) internal view returns (uint256 ethAmount) {
         if (wstEthAmount > 0) {
             // wstETh to stEth using exchangeRate
             uint256 stEthAmount = wstETH.getStETHByWstETH(wstEthAmount);
@@ -366,7 +370,7 @@ contract scWETH is sc4626, IFlashLoanRecipient {
             return;
         }
 
-        uint256 missing = (assets - float).divWadUp(slippageTolerance);
+        uint256 missing = (assets - float);
 
         // needed otherwise counted as loss during harvest
         totalInvested -= missing;
