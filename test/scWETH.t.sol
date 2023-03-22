@@ -155,16 +155,16 @@ contract scWETHTest is Test {
         // account for unrealized slippage loss
         amount = amount.mulWadDown(slippageTolerance);
 
-        assertRelApproxEq(vault.totalAssets(), amount, 0.01e18);
+        assertApproxEqRel(vault.totalAssets(), amount, 0.01e18);
         assertEq(vault.balanceOf(address(this)), shares);
-        assertRelApproxEq(vault.convertToAssets(vault.balanceOf(address(this))), amount, 0.01e18);
+        assertApproxEqRel(vault.convertToAssets(vault.balanceOf(address(this))), amount, 0.01e18);
 
         vault.redeem(shares, address(this), address(this));
 
         assertEq(vault.convertToAssets(10 ** vault.decimals()), 1e18);
         assertEq(vault.balanceOf(address(this)), 0);
         assertEq(vault.convertToAssets(vault.balanceOf(address(this))), 0);
-        assertRelApproxEq(weth.balanceOf(address(this)), amount, 0.01e18);
+        assertApproxEqRel(weth.balanceOf(address(this)), amount, 0.01e18);
     }
 
     function testTwoDepositsInvestTwoRedeems(uint256 depositAmount1, uint256 depositAmount2) public {
@@ -182,24 +182,24 @@ contract scWETHTest is Test {
 
         uint256 expectedRedeem = vault.previewRedeem(shares1 / 2);
         vault.redeem(shares1 / 2, address(this), address(this));
-        assertRelApproxEq(weth.balanceOf(address(this)), expectedRedeem, minDelta, "redeem1");
+        assertApproxEqRel(weth.balanceOf(address(this)), expectedRedeem, minDelta, "redeem1");
 
-        assertRelApproxEq(vault.getLtv(), ltv, 0.013e18, "ltv");
+        assertApproxEqRel(vault.getLtv(), ltv, 0.013e18, "ltv");
 
         expectedRedeem = vault.previewRedeem(shares2 / 2);
         vm.prank(alice);
         vault.redeem(shares2 / 2, alice, alice);
-        assertRelApproxEq(weth.balanceOf(alice), expectedRedeem, minDelta, "redeem2");
+        assertApproxEqRel(weth.balanceOf(alice), expectedRedeem, minDelta, "redeem2");
 
-        assertRelApproxEq(vault.getLtv(), ltv, 0.01e18, "ltv");
+        assertApproxEqRel(vault.getLtv(), ltv, 0.01e18, "ltv");
 
         uint256 initBalance = weth.balanceOf(address(this));
         expectedRedeem = vault.previewRedeem(shares1 / 2);
         vault.redeem(vault.balanceOf(address(this)), address(this), address(this));
-        assertRelApproxEq(weth.balanceOf(address(this)) - initBalance, expectedRedeem, minDelta, "redeem3");
+        assertApproxEqRel(weth.balanceOf(address(this)) - initBalance, expectedRedeem, minDelta, "redeem3");
 
         if (vault.getLtv() != 0) {
-            assertRelApproxEq(vault.getLtv(), ltv, 0.01e18, "ltv");
+            assertApproxEqRel(vault.getLtv(), ltv, 0.01e18, "ltv");
         }
 
         initBalance = weth.balanceOf(alice);
@@ -209,10 +209,10 @@ contract scWETHTest is Test {
         vault.redeem(remainingShares, alice, alice);
 
         // if (vault.getLtv() != 0) {
-        //     assertRelApproxEq(vault.getLtv(), ltv, 0.01e18, "ltv");
+        //     assertApproxEqRel(vault.getLtv(), ltv, 0.01e18, "ltv");
         // }
 
-        assertRelApproxEq(weth.balanceOf(alice) - initBalance, expectedRedeem, 0.01e18, "redeem4");
+        assertApproxEqRel(weth.balanceOf(alice) - initBalance, expectedRedeem, 0.01e18, "redeem4");
         // assertGe(weth.balanceOf(alice) - initBalance, expectedRedeem);
     }
 
@@ -232,9 +232,9 @@ contract scWETHTest is Test {
         vault.withdrawToVault(assets / 2);
 
         // net ltv and leverage must not change after withdraw
-        assertRelApproxEq(vault.getLtv(), ltv, 0.001e18);
-        assertRelApproxEq(vault.getLeverage(), lev, 0.001e18);
-        assertRelApproxEq(weth.balanceOf(address(vault)), assets / 2, 0.001e18);
+        assertApproxEqRel(vault.getLtv(), ltv, 0.001e18);
+        assertApproxEqRel(vault.getLeverage(), lev, 0.001e18);
+        assertApproxEqRel(weth.balanceOf(address(vault)), assets / 2, 0.001e18);
     }
 
     function testLeverageUp(uint256 amount, uint256 newLtv) public {
@@ -347,46 +347,6 @@ contract scWETHTest is Test {
         weth.approve(address(vault), amount);
         shares = vault.deposit(amount, user);
         vm.stopPrank();
-    }
-
-    function assertRelApproxEq(
-        uint256 a,
-        uint256 b,
-        uint256 maxPercentDelta // An 18 decimal fixed point number, where 1e18 == 100%
-    ) internal virtual {
-        if (b == 0) return assertEq(a, b); // If the expected is 0, actual must be too.
-
-        uint256 percentDelta = ((a > b ? a - b : b - a) * 1e18) / b;
-
-        if (percentDelta > maxPercentDelta) {
-            emit log("Error: a ~= b not satisfied [uint]");
-            emit log_named_uint("    Expected", b);
-            emit log_named_uint("      Actual", a);
-            emit log_named_decimal_uint(" Max % Delta", maxPercentDelta, 18);
-            emit log_named_decimal_uint("     % Delta", percentDelta, 18);
-            fail();
-        }
-    }
-
-    function assertRelApproxEq(
-        uint256 a,
-        uint256 b,
-        uint256 maxPercentDelta, // An 18 decimal fixed point number, where 1e18 == 100%,
-        string memory message
-    ) internal virtual {
-        if (b == 0) return assertEq(a, b); // If the expected is 0, actual must be too.
-
-        uint256 percentDelta = ((a > b ? a - b : b - a) * 1e18) / b;
-
-        if (percentDelta > maxPercentDelta) {
-            emit log("Error: a ~= b not satisfied [uint]");
-            emit log_named_uint("    Expected", b);
-            emit log_named_uint("      Actual", a);
-            emit log_named_decimal_uint(" Max % Delta", maxPercentDelta, 18);
-            emit log_named_decimal_uint("     % Delta", percentDelta, 18);
-            emit log(message);
-            fail();
-        }
     }
 
     receive() external payable {}
