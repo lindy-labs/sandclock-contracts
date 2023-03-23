@@ -150,7 +150,7 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
         uint256 excessUsdc = currentBalance > floatRequired ? currentBalance - floatRequired : 0;
 
         // 2. deposit excess usdc as collateral
-        if (excessUsdc != 0 && excessUsdc >= rebalanceMinimum) {
+        if (excessUsdc >= rebalanceMinimum) {
             aavePool.supply(address(usdc), excessUsdc, address(this), 0);
             collateral += excessUsdc;
             currentBalance -= excessUsdc;
