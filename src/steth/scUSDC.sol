@@ -344,7 +344,7 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
     {
         // handle rounding errors when withdrawing everything
         _usdcNeeded = _usdcNeeded > _collateral ? _collateral : _usdcNeeded;
-        // to keep the same ltv, weth debt to repay has to be proporitional to collateral withdrawn
+        // to keep the same ltv, weth debt to repay has to be proportional to collateral withdrawn
         uint256 wethNeeded = _usdcNeeded.mulDivUp(_debt, _collateral);
         wethNeeded = wethNeeded > _invested ? _invested : wethNeeded;
 
