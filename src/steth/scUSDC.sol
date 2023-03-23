@@ -374,9 +374,6 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
         return _invested > _debt ? _invested - _debt : 0;
     }
 
-    function _calculateLtv(uint256 collateral, uint256 debt) internal view returns (uint256) {
-        return getUsdcFromWeth(debt).divWadUp(collateral);
-    }
 
     function _disinvest(uint256 _wethAmount) internal returns (uint256 amountWithdrawn) {
         uint256 shares = scWETH.convertToShares(_wethAmount);
