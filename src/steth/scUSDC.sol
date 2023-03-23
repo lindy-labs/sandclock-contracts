@@ -63,7 +63,7 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
     IPoolDataProvider public constant aavePoolDataProvider = IPoolDataProvider(0x7B4EB56E7CD4b454BA8ff71E4518426369a138a3);
 
     // aave "aEthUSDC" token
-    IAToken aUsdc = IAToken(0x98C23E9d8f34FEFb1B7BD6a91B7FF122F4e16F5c);
+    IAToken public constant aUsdc = IAToken(0x98C23E9d8f34FEFb1B7BD6a91B7FF122F4e16F5c);
     // aave "variableDebtEthWETH" token
     ERC20 dWeth = ERC20(0xeA51d7853EEFb32b6ee06b1C12E6dcCA88Be0fFE);
 
