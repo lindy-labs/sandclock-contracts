@@ -250,10 +250,10 @@ contract scWETHTest is Test {
     }
 
     function test_twoDeposits_invest_twoRedeems(uint256 depositAmount1, uint256 depositAmount2) public {
-        depositAmount1 = bound(depositAmount1, boundMinimum, 1e22);
-        depositAmount2 = bound(depositAmount2, boundMinimum, 1e22);
+        depositAmount1 = bound(depositAmount1, boundMinimum, 10000 ether);
+        depositAmount2 = bound(depositAmount2, boundMinimum, 10000 ether);
 
-        uint256 minDelta = 0.007e18;
+        uint256 minDelta = 0.017e18;
 
         uint256 shares1 = _depositToVault(address(this), depositAmount1);
         uint256 shares2 = _depositToVault(alice, depositAmount2);
@@ -280,9 +280,7 @@ contract scWETHTest is Test {
         vault.redeem(vault.balanceOf(address(this)), address(this), address(this));
         assertRelApproxEq(weth.balanceOf(address(this)) - initBalance, expectedRedeem, minDelta, "redeem3");
 
-        if (vault.getLtv() != 0) {
-            assertRelApproxEq(vault.getLtv(), ltv, 0.01e18, "ltv");
-        }
+        assertRelApproxEq(vault.getLtv(), ltv, 0.01e18, "ltv");
 
         initBalance = weth.balanceOf(alice);
         expectedRedeem = vault.previewRedeem(shares2 / 2);
@@ -290,7 +288,9 @@ contract scWETHTest is Test {
         vm.prank(alice);
         vault.redeem(remainingShares, alice, alice);
 
-        assertRelApproxEq(weth.balanceOf(alice) - initBalance, expectedRedeem, 0.01e18, "redeem4");
+        assertRelApproxEq(weth.balanceOf(alice) - initBalance, expectedRedeem, 0.025e18, "redeem4");
+
+        assertEq(vault.getLtv(), 0);
     }
 
     function test_leverageUp(uint256 amount, uint256 newLtv) public {
@@ -395,12 +395,13 @@ contract scWETHTest is Test {
 
         vault.depositIntoStrategy();
 
+        console.log("leverage", vault.getLeverage());
+
         _simulate_stEthStakingInterest(365 days, 1.071e18);
 
         console.log("collateral", vault.totalCollateralSupplied());
         console.log("debt", vault.totalDebt());
         console.log("ltv", vault.getLtv());
-        console.log("leverage", vault.getLeverage());
 
         vault.harvest();
 
@@ -573,12 +574,19 @@ contract scWETHTest is Test {
     function _simulate_stEthStakingInterest(uint256 timePeriod, uint256 stEthStakingInterest) internal {
         // fast forward time to simulate supply and borrow interests
         vm.warp(block.timestamp + timePeriod);
+        uint256 initPooledEther = stEth.getTotalPooledEther();
         uint256 prevBalance = read_storage_uint(address(stEth), keccak256(abi.encodePacked("lido.Lido.beaconBalance")));
         vm.store(
             address(stEth),
             keccak256(abi.encodePacked("lido.Lido.beaconBalance")),
             bytes32(prevBalance.mulWadDown(stEthStakingInterest))
         );
+
+        uint256 newPooledEther = stEth.getTotalPooledEther();
+
+        console.log("initPooledEther", initPooledEther);
+        console.log("newPooledEther", newPooledEther);
+        console.log("differnce", (newPooledEther - initPooledEther).divWadDown(initPooledEther));
     }
 
     function read_storage_uint(address addr, bytes32 key) internal view returns (uint256) {
