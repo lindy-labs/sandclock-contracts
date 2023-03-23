@@ -21,7 +21,7 @@ import {sc4626} from "../sc4626.sol";
 /**
  * @title Sandclock USDC Vault
  * @notice A vault that allows users to earn interest on their USDC deposits from leveraged WETH staking.
- * @dev This vault uses Sanclodk's leveraged WETH staking vault - scWETH.
+ * @dev This vault uses Sandclock's leveraged WETH staking vault - scWETH.
  */
 contract scUSDC is sc4626, IFlashLoanRecipient {
     using SafeTransferLib for ERC20;
