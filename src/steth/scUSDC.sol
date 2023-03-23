@@ -29,7 +29,6 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
     using FixedPointMathLib for uint256;
 
     error InvalidTargetLtv();
-    error EULSwapFailed();
     error InvalidSlippageTolerance();
     error InvalidFlashLoanCaller();
     error VaultNotUnderwater();
