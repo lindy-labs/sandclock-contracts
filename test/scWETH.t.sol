@@ -237,16 +237,16 @@ contract scWETHTest is Test {
         // account for unrealized slippage loss
         amount = amount.mulWadDown(slippageTolerance);
 
-        assertRelApproxEq(vault.totalAssets(), amount, 0.01e18);
+        assertApproxEqRel(vault.totalAssets(), amount, 0.01e18);
         assertEq(vault.balanceOf(address(this)), shares);
-        assertRelApproxEq(vault.convertToAssets(vault.balanceOf(address(this))), amount, 0.01e18);
+        assertApproxEqRel(vault.convertToAssets(vault.balanceOf(address(this))), amount, 0.01e18);
 
         vault.redeem(shares, address(this), address(this));
 
         assertEq(vault.convertToAssets(10 ** vault.decimals()), 1e18);
         assertEq(vault.balanceOf(address(this)), 0);
         assertEq(vault.convertToAssets(vault.balanceOf(address(this))), 0);
-        assertRelApproxEq(weth.balanceOf(address(this)), amount, 0.01e18);
+        assertApproxEqRel(weth.balanceOf(address(this)), amount, 0.01e18);
     }
 
     function test_twoDeposits_invest_twoRedeems(uint256 depositAmount1, uint256 depositAmount2) public {
@@ -264,22 +264,21 @@ contract scWETHTest is Test {
 
         uint256 expectedRedeem = vault.previewRedeem(shares1 / 2);
         vault.redeem(shares1 / 2, address(this), address(this));
-        assertRelApproxEq(weth.balanceOf(address(this)), expectedRedeem, minDelta, "redeem1");
+        assertApproxEqRel(weth.balanceOf(address(this)), expectedRedeem, minDelta, "redeem1");
 
-        assertRelApproxEq(vault.getLtv(), ltv, 0.013e18, "ltv");
+        assertApproxEqRel(vault.getLtv(), ltv, 0.013e18, "ltv");
 
         expectedRedeem = vault.previewRedeem(shares2 / 2);
         vm.prank(alice);
         vault.redeem(shares2 / 2, alice, alice);
-        assertRelApproxEq(weth.balanceOf(alice), expectedRedeem, minDelta, "redeem2");
+        assertApproxEqRel(weth.balanceOf(alice), expectedRedeem, minDelta, "redeem2");
 
-        assertRelApproxEq(vault.getLtv(), ltv, 0.01e18, "ltv");
+        assertApproxEqRel(vault.getLtv(), ltv, 0.01e18, "ltv");
 
         uint256 initBalance = weth.balanceOf(address(this));
         expectedRedeem = vault.previewRedeem(shares1 / 2);
         vault.redeem(vault.balanceOf(address(this)), address(this), address(this));
-        assertRelApproxEq(weth.balanceOf(address(this)) - initBalance, expectedRedeem, minDelta, "redeem3");
-
+        assertApproxEqRel(weth.balanceOf(address(this)) - initBalance, expectedRedeem, minDelta, "redeem3");
         assertRelApproxEq(vault.getLtv(), ltv, 0.01e18, "ltv");
 
         initBalance = weth.balanceOf(alice);
