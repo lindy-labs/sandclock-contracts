@@ -84,7 +84,7 @@ contract scWETH is sc4626, IFlashLoanRecipient {
         aavePool.setUserEMode(EMODE_ID);
     }
 
-    function setSlippageTolerance(uint256 newSlippageTolerance) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function setSlippageTolerance(uint256 newSlippageTolerance) external onlyAdmin {
         if (newSlippageTolerance > 1e18) revert InvalidSlippageTolerance();
         slippageTolerance = newSlippageTolerance;
         emit SlippageToleranceUpdated(msg.sender, newSlippageTolerance);
@@ -130,12 +130,12 @@ contract scWETH is sc4626, IFlashLoanRecipient {
     }
 
     // separate to save gas for users depositing
-    function depositIntoStrategy() external onlyRole(KEEPER_ROLE) {
+    function depositIntoStrategy() external onlyKeeper {
         _rebalancePosition();
     }
 
     /// @param amount : amount of asset to withdraw into the vault
-    function withdrawToVault(uint256 amount) external onlyRole(KEEPER_ROLE) {
+    function withdrawToVault(uint256 amount) external onlyKeeper {
         _withdrawToVault(amount);
     }
 
