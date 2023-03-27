@@ -20,7 +20,7 @@ jobs:
         python-version: '3.x'
 
     - name: Run Slither
-      uses: crytic/slither-action@v0.2.0
+      uses: crytic/slither-action@v0.3.0
       continue-on-error: true
       id: slither
       with:
