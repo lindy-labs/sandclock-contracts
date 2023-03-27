@@ -27,8 +27,8 @@ abstract contract sc4626 is ERC4626, AccessControl {
     error CallerNotKeeper();
 
     event PerformanceFeeUpdated(address indexed user, uint256 newPerformanceFee);
+    event FloatPercentageUpdated(address indexed user, uint256 newFloatPercentage);
     event TreasuryUpdated(address indexed user, address newTreasury);
-
 
     modifier onlyAdmin() {
         if (!hasRole(DEFAULT_ADMIN_ROLE, msg.sender)) revert CallerNotAdmin();

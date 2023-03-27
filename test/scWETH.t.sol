@@ -95,11 +95,7 @@ contract scWETHTest is Test {
         assertEq(vault.performanceFee(), fee);
 
         // revert if called by another user
-        vm.expectRevert(
-            bytes(
-                "AccessControl: account 0x0000000000000000000000000000000000000006 is missing role 0x0000000000000000000000000000000000000000000000000000000000000000"
-            )
-        );
+        vm.expectRevert(0x06d919f2);
         vm.prank(alice);
         vault.setPerformanceFee(fee);
 
@@ -113,11 +109,7 @@ contract scWETHTest is Test {
         assertEq(vault.treasury(), newTreasury);
 
         // revert if called by another user
-        vm.expectRevert(
-            bytes(
-                "AccessControl: account 0x0000000000000000000000000000000000000006 is missing role 0x0000000000000000000000000000000000000000000000000000000000000000"
-            )
-        );
+        vm.expectRevert(0x06d919f2);
         vm.prank(alice);
         vault.setTreasury(address(this));
 
