@@ -2,25 +2,20 @@
 pragma solidity ^0.8.13;
 
 import {CREATE3Script} from "./base/CREATE3Script.sol";
-import {Contract} from "../src/Contract.sol";
+import {scWETH} from "../src/steth/scWETH.sol";
+import {scUSDC} from "../src/steth/scUSDC.sol";
 
 contract DeployScript is CREATE3Script {
     constructor() CREATE3Script(vm.envString("VERSION")) {}
 
-    function run() external returns (Contract c) {
+    function run() external returns (scWETH scWeth, scUSDC scUsdc) {
         uint256 deployerPrivateKey = uint256(vm.envBytes32("PRIVATE_KEY"));
-
-        uint256 param = 123;
+        uint256 targetLtv = 0.7e18;
+        uint256 slippageTolerance = 0.99e18;
 
         vm.startBroadcast(deployerPrivateKey);
-
-        c = Contract(
-            create3.deploy(
-                getCreate3ContractSalt("Contract"),
-                bytes.concat(type(Contract).creationCode, abi.encode(param))
-            )
-        );
-
+        scWeth = new scWETH(address(this), targetLtv, slippageTolerance);
+        scUsdc = new scUSDC(address(this), scWeth);
         vm.stopBroadcast();
     }
 }
