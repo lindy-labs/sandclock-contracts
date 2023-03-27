@@ -47,7 +47,7 @@ contract scWETH is sc4626, IFlashLoanRecipient {
     AggregatorV3Interface public stEThToEthPriceFeed = AggregatorV3Interface(0x86392dC19c0b719886221c78AB11eb8Cf5c52812);
 
     // 0x swap router
-    address public xrouter = 0xDef1C0ded9bec7F1a1670819833240f027b25EfF;
+    address public xrouter;
 
     // total invested during last harvest/rebalance
     uint256 public totalInvested;
@@ -61,10 +61,11 @@ contract scWETH is sc4626, IFlashLoanRecipient {
     // slippage for curve swaps
     uint256 public slippageTolerance;
 
-    constructor(address _admin, uint256 _targetLtv, uint256 _slippageTolerance)
+    constructor(address _admin, uint256 _targetLtv, uint256 _slippageTolerance, address _0xrouter)
         sc4626(_admin, ERC20(address(weth)), "Sandclock WETH Vault", "scWETH")
     {
         if (_admin == address(0)) revert ZeroAddress();
+        if (_0xrouter == address(0)) revert ZeroAddress();
         if (_slippageTolerance > WAD) revert InvalidSlippageTolerance();
 
         ERC20(address(stEth)).safeApprove(address(wstETH), type(uint256).max);
@@ -79,6 +80,7 @@ contract scWETH is sc4626, IFlashLoanRecipient {
 
         targetLtv = _targetLtv;
         slippageTolerance = _slippageTolerance;
+        xrouter = _0xrouter;
     }
 
     /// @notice set the slippage tolerance for curve swaps
@@ -110,12 +112,12 @@ contract scWETH is sc4626, IFlashLoanRecipient {
     /// @notice harvest profits and rebalance the position by investing profits back into the strategy
     /// @dev reduces the getLtv() back to the target ltv
     /// @dev also mints performance fee tokens to the treasury
-    function harvest() external onlyRole(KEEPER_ROLE) {
+    function harvest(bytes memory swapData) external onlyRole(KEEPER_ROLE) {
         // store the old total
         uint256 oldTotalInvested = totalInvested;
 
         // reinvest
-        _rebalancePosition();
+        _rebalancePosition(swapData);
 
         totalInvested = totalAssets();
 
@@ -136,19 +138,19 @@ contract scWETH is sc4626, IFlashLoanRecipient {
     /// @notice increase/decrease the target ltv used on borrows
     /// @param newTargetLtv the new target ltv
     /// @dev the new target ltv must be less than the max ltv allowed on aave
-    function changeLeverage(uint256 newTargetLtv) public onlyRole(KEEPER_ROLE) {
+    function changeLeverage(uint256 newTargetLtv, bytes memory swapData) public onlyRole(KEEPER_ROLE) {
         if (newTargetLtv >= getMaxLtv()) revert InvalidTargetLtv();
 
         targetLtv = newTargetLtv;
         emit TargetLtvRatioUpdated(msg.sender, newTargetLtv);
 
-        _rebalancePosition();
+        _rebalancePosition(swapData);
     }
 
     /// @notice deposit all available funds into the strategy
     /// @dev separate to save gas for users depositing
-    function depositIntoStrategy() external onlyRole(KEEPER_ROLE) {
-        _rebalancePosition();
+    function depositIntoStrategy(bytes memory swapData) external onlyRole(KEEPER_ROLE) {
+        _rebalancePosition(swapData);
     }
 
     /// @notice withdraw funds from the strategy into the vault
@@ -261,17 +263,16 @@ contract scWETH is sc4626, IFlashLoanRecipient {
         uint256 flashLoanAmount = amounts[0];
 
         // decode user data
-        (bool isDeposit, uint256 amount) = abi.decode(userData, (bool, uint256));
+        (bytes memory swapData, uint256 amount) = abi.decode(userData, (bytes, uint256));
 
         amount += flashLoanAmount;
 
         // if flashloan received as part of a deposit
-        if (isDeposit) {
-            // unwrap eth
-            weth.withdraw(amount);
-
-            // stake to lido / eth => stETH
-            stEth.submit{value: amount}(address(0x00));
+        if (swapData.length > 0) {
+            // weth => stETH
+            weth.approve(xrouter, amount);
+            (bool success,) = xrouter.call{value: 0}(swapData);
+            if (!success) revert WethToStEthSwapFailed();
 
             // wrap stETH
             wstETH.wrap(stEth.balanceOf(address(this)));
@@ -312,7 +313,7 @@ contract scWETH is sc4626, IFlashLoanRecipient {
 
     //////////////////// INTERNAL METHODS //////////////////////////
 
-    function _rebalancePosition() internal {
+    function _rebalancePosition(bytes memory swapData) internal {
         // storage loads
         uint256 amount = asset.balanceOf(address(this));
         uint256 ltv = targetLtv;
@@ -336,8 +337,9 @@ contract scWETH is sc4626, IFlashLoanRecipient {
         // needed otherwise counted as profit during harvest
         totalInvested += amount;
 
+        bytes memory empty;
         // take flashloan
-        balancerVault.flashLoan(address(this), tokens, amounts, abi.encode(isDeposit, amount));
+        balancerVault.flashLoan(address(this), tokens, amounts, abi.encode(isDeposit ? swapData : empty, amount));
     }
 
     function _withdrawToVault(uint256 amount) internal {

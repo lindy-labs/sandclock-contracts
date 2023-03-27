@@ -13,7 +13,7 @@ contract DeployScript is CREATE3Script {
         uint256 slippageTolerance = 0.99e18;
 
         vm.startBroadcast(deployerPrivateKey);
-        v = new Vault(address(this), targetLtv, slippageTolerance);
+        // v = new Vault(address(this), targetLtv, slippageTolerance);
         vm.stopBroadcast();
     }
 }

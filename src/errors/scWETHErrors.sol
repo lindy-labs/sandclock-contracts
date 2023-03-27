@@ -9,3 +9,4 @@ error ZeroAddress();
 error PleaseUseRedeemMethod();
 error FeesTooHigh();
 error TreasuryCannotBeZero();
+error WethToStEthSwapFailed();

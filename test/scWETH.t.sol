@@ -15,6 +15,7 @@ import {IPool} from "aave-v3/interfaces/IPool.sol";
 import {IAToken} from "aave-v3/interfaces/IAToken.sol";
 import {IVariableDebtToken} from "aave-v3/interfaces/IVariableDebtToken.sol";
 import {Errors} from "aave-v3/protocol/libraries/helpers/Errors.sol";
+import {ZeroExMock} from "./mocks/ZeroExMock.sol";
 import "../src/errors/scWETHErrors.sol";
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
@@ -30,6 +31,7 @@ contract scWETHTest is Test {
 
     address admin = address(this);
     Vault vault;
+    address zeroEx;
     uint256 initAmount = 100e18;
 
     WETH weth;
@@ -48,7 +50,11 @@ contract scWETHTest is Test {
         vm.selectFork(mainnetFork);
         vm.rollFork(16784444);
 
-        vault = new Vault(admin,  targetLtv, slippageTolerance);
+        zeroEx = address(
+            new ZeroExMock(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2, 0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84)
+        );
+
+        vault = new Vault(admin,  targetLtv, slippageTolerance, zeroEx);
 
         // set vault eth balance to zero
         vm.deal(address(vault), 0);
@@ -65,6 +71,18 @@ contract scWETHTest is Test {
         curvePool = vault.curvePool();
     }
 
+    function test_swap_zeroExMock() public {
+        assertEq(stEth.balanceOf(address(this)), 0);
+        uint256 amount = 6e18;
+        weth.deposit{value: amount}();
+        weth.approve(address(zeroEx), amount);
+        assertEq(weth.balanceOf(address(this)), amount, " 0 weth");
+        (bool success,) = zeroEx.call{value: 0}(getMockSwapData(amount));
+        assertEq(weth.balanceOf(address(this)), 0, "weth not transferred");
+        assert(success);
+        assertApproxEqRel(stEth.balanceOf(address(this)), amount, 1);
+    }
+
     function test_constructor() public {
         assertEq(aavePool.getUserEMode(address(vault)), vault.EMODE_ID(), "E mode not set");
         assertEq(vault.treasury(), admin, "treasury not set");
@@ -76,17 +94,17 @@ contract scWETHTest is Test {
 
     function test_constructor_invalidAdmin() public {
         vm.expectRevert(bytes4(keccak256("ZeroAddress()")));
-        vault = new Vault(address(0x00),  targetLtv, slippageTolerance);
+        vault = new Vault(address(0x00),  targetLtv, slippageTolerance, zeroEx);
     }
 
     function test_constructor_invalidTargetLtv() public {
         vm.expectRevert(bytes4(keccak256("InvalidTargetLtv()")));
-        vault = new Vault(admin,  0.9e18, slippageTolerance);
+        vault = new Vault(admin,  0.9e18, slippageTolerance, zeroEx);
     }
 
     function test_constructor_invalidSlippageTolerance() public {
         vm.expectRevert(bytes4(keccak256("InvalidSlippageTolerance()")));
-        vault = new Vault(admin,  targetLtv, 1.01e18);
+        vault = new Vault(admin,  targetLtv, 1.01e18, zeroEx);
     }
 
     function test_setPerformanceFee() public {
@@ -231,8 +249,18 @@ contract scWETHTest is Test {
         vault.deposit(amount, address(this));
     }
 
+    function estimateFlashLoanAmount(uint256 amount) internal view returns (uint256) {
+        uint256 debt = vault.totalDebt();
+        uint256 collateral = vault.totalCollateralSupplied();
+        uint256 target = targetLtv.mulWadDown(amount + collateral);
+
+        return (target - debt).divWadDown(1e18 - targetLtv);
+    }
+
     function test_atomic_deposit_invest_redeem(uint256 amount) public {
         amount = bound(amount, boundMinimum, 1e22); //max ~$280m flashloan
+        bytes memory swapData = getMockSwapData(amount + estimateFlashLoanAmount(amount));
+
         vm.deal(address(this), amount);
         weth.deposit{value: amount}();
         weth.approve(address(vault), amount);
@@ -243,7 +271,7 @@ contract scWETHTest is Test {
 
         _depositChecks(amount, preDepositBal);
 
-        vault.depositIntoStrategy();
+        vault.depositIntoStrategy(swapData);
 
         // account for value loss if stETH worth less than ETH
         (, int256 price,,,) = vault.stEThToEthPriceFeed().latestRoundData();
@@ -273,7 +301,10 @@ contract scWETHTest is Test {
         uint256 shares1 = _depositToVault(address(this), depositAmount1);
         uint256 shares2 = _depositToVault(alice, depositAmount2);
 
-        vault.depositIntoStrategy();
+        uint256 amount = weth.balanceOf(address(vault));
+        bytes memory swapData = getMockSwapData(amount + estimateFlashLoanAmount(amount));
+
+        vault.depositIntoStrategy(swapData);
 
         uint256 ltv = vault.targetLtv();
 
@@ -310,18 +341,26 @@ contract scWETHTest is Test {
     function test_leverageUp(uint256 amount, uint256 newLtv) public {
         amount = bound(amount, boundMinimum, 1e20);
         _depositToVault(address(this), amount);
-        vault.depositIntoStrategy();
+        bytes memory swapData = getMockSwapData(amount + estimateFlashLoanAmount(amount));
+        vault.depositIntoStrategy(swapData);
         newLtv = bound(newLtv, vault.getLtv() + 1e15, maxLtv - 0.001e18);
-        vault.changeLeverage(newLtv);
+
+        amount = weth.balanceOf(address(vault));
+        swapData = getMockSwapData(amount + estimateFlashLoanAmount(amount));
+        vault.changeLeverage(newLtv, swapData);
         assertApproxEqRel(vault.getLtv(), newLtv, 0.01e18, "leverage change failed");
     }
 
     function test_leverageDown(uint256 amount, uint256 newLtv) public {
         amount = bound(amount, boundMinimum, 1e20);
         _depositToVault(address(this), amount);
-        vault.depositIntoStrategy();
+        bytes memory swapData = getMockSwapData(amount + estimateFlashLoanAmount(amount));
+        vault.depositIntoStrategy(swapData);
         newLtv = bound(newLtv, 0.01e18, vault.getLtv() - 0.01e18);
-        vault.changeLeverage(newLtv);
+
+        amount = weth.balanceOf(address(vault));
+        swapData = getMockSwapData(amount + estimateFlashLoanAmount(amount));
+        vault.changeLeverage(newLtv, swapData);
         assertApproxEqRel(vault.getLtv(), newLtv, 0.01e18, "leverage change failed");
     }
 
@@ -362,13 +401,16 @@ contract scWETHTest is Test {
 
         _depositToVault(address(this), amount);
 
-        vault.depositIntoStrategy();
+        bytes memory swapData = getMockSwapData(amount + estimateFlashLoanAmount(amount));
+        vault.depositIntoStrategy(swapData);
 
         _simulate_stEthStakingInterest(timePeriod, stEthStakingInterest);
 
         assertEq(vault.totalProfit(), 0);
 
-        vault.harvest();
+        amount = weth.balanceOf(address(vault));
+        swapData = getMockSwapData(amount + estimateFlashLoanAmount(amount));
+        vault.harvest(swapData);
 
         uint256 minimumExpectedApy = 0.07e18;
 
@@ -391,7 +433,8 @@ contract scWETHTest is Test {
         amount = bound(amount, boundMinimum, 10000 ether);
         _depositToVault(address(this), amount);
 
-        vault.depositIntoStrategy();
+        bytes memory swapData = getMockSwapData(amount + estimateFlashLoanAmount(amount));
+        vault.depositIntoStrategy(swapData);
 
         _withdrawToVaultChecks(0.018e18);
     }
@@ -401,11 +444,14 @@ contract scWETHTest is Test {
         uint256 amount = 10000 ether;
         _depositToVault(address(this), amount);
 
-        vault.depositIntoStrategy();
+        bytes memory swapData = getMockSwapData(amount + estimateFlashLoanAmount(amount));
+        vault.depositIntoStrategy(swapData);
 
         _simulate_stEthStakingInterest(365 days, 1.071e18);
 
-        vault.harvest();
+        amount = weth.balanceOf(address(vault));
+        getMockSwapData(amount + estimateFlashLoanAmount(amount));
+        vault.harvest(swapData);
 
         // harvest must automatically rebalance
         assertApproxEqRel(vault.getLtv(), vault.targetLtv(), 0.001e18, "ltv not rebalanced");
@@ -429,10 +475,13 @@ contract scWETHTest is Test {
         amount = bound(amount, boundMinimum, 10000 ether);
         _depositToVault(address(this), amount);
 
-        vault.depositIntoStrategy();
+        bytes memory swapData = getMockSwapData(amount + estimateFlashLoanAmount(amount));
+        vault.depositIntoStrategy(swapData);
 
         _simulate_stEthStakingInterest(365 days, 1.071e18);
-        vault.harvest();
+        uint256 amount = weth.balanceOf(address(vault));
+        swapData = getMockSwapData(amount + estimateFlashLoanAmount(amount));
+        vault.harvest(swapData);
     }
 
     function test_mint_redeem(uint256 amount) public {
@@ -462,7 +511,8 @@ contract scWETHTest is Test {
         uint256 shares = vault.previewMint(amount);
         vault.mint(shares, address(this));
 
-        vault.depositIntoStrategy();
+        bytes memory swapData = getMockSwapData(amount + estimateFlashLoanAmount(amount));
+        vault.depositIntoStrategy(swapData);
 
         // account for value loss if stETH worth less than ETH
         (, int256 price,,,) = vault.stEThToEthPriceFeed().latestRoundData();
@@ -494,11 +544,14 @@ contract scWETHTest is Test {
         vault.mint(shares, alice);
         vm.stopPrank();
 
-        vault.depositIntoStrategy();
+        bytes memory swapData = getMockSwapData(amount + estimateFlashLoanAmount(amount));
+        vault.depositIntoStrategy(swapData);
 
         uint256 interest = 1.071e18;
         _simulate_stEthStakingInterest(365 days, interest);
-        vault.harvest();
+        amount = weth.balanceOf(address(vault));
+        swapData = getMockSwapData(amount + estimateFlashLoanAmount(amount));
+        vault.harvest(swapData);
 
         vm.prank(alice);
         vault.redeem(shares, alice, alice);
@@ -586,6 +639,10 @@ contract scWETHTest is Test {
 
     function read_storage_uint(address addr, bytes32 key) internal view returns (uint256) {
         return abi.decode(abi.encode(vm.load(addr, key)), (uint256));
+    }
+
+    function getMockSwapData(uint256 amount) internal pure returns (bytes memory) {
+        return abi.encodeWithSignature("swap(uint256)", amount);
     }
 
     receive() external payable {}
