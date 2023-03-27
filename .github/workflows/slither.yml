@@ -1,0 +1,33 @@
+name: Slither Analysis
+
+on:
+  pull_request:
+    branches: [ main ]
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions/setup-python@v2
+      with:
+        python-version: '3.x'
+
+    - name: Run Slither
+      uses: crytic/slither-action@v0.2.0
+      continue-on-error: true
+      id: slither
+      with:
+        sarif: results.sarif
+
+    - name: Upload SARIF file
+      uses: github/codeql-action/upload-sarif@v1
+      with:
+        sarif_file: ${{ steps.slither.outputs.sarif }}

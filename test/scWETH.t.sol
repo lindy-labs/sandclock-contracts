@@ -6,7 +6,7 @@ import "forge-std/console2.sol";
 
 import {DSTestPlus} from "solmate/test/utils/DSTestPlus.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
-import {scWETH as Vault} from "../src/steth/scWETH.sol";
+import {scWETH} from "../src/steth/scWETH.sol";
 import {WETH} from "solmate/tokens/WETH.sol";
 import {ILido} from "../src/interfaces/lido/ILido.sol";
 import {IwstETH} from "../src/interfaces/lido/IwstETH.sol";
@@ -29,7 +29,7 @@ contract scWETHTest is Test {
     uint256 boundMinimum = 1e10; // below this amount, aave doesn't count it as collateral
 
     address admin = address(this);
-    Vault vault;
+    scWETH vault;
     uint256 initAmount = 100e18;
 
     WETH weth;
@@ -48,7 +48,7 @@ contract scWETHTest is Test {
         vm.selectFork(mainnetFork);
         vm.rollFork(16784444);
 
-        vault = new Vault(admin,  targetLtv, slippageTolerance);
+        vault = new scWETH(admin,  targetLtv, slippageTolerance);
 
         // set vault eth balance to zero
         vm.deal(address(vault), 0);
@@ -76,17 +76,17 @@ contract scWETHTest is Test {
 
     function test_constructor_invalidAdmin() public {
         vm.expectRevert(bytes4(keccak256("ZeroAddress()")));
-        vault = new Vault(address(0x00),  targetLtv, slippageTolerance);
+        vault = new scWETH(address(0x00),  targetLtv, slippageTolerance);
     }
 
     function test_constructor_invalidTargetLtv() public {
         vm.expectRevert(bytes4(keccak256("InvalidTargetLtv()")));
-        vault = new Vault(admin,  0.9e18, slippageTolerance);
+        vault = new scWETH(admin,  0.9e18, slippageTolerance);
     }
 
     function test_constructor_invalidSlippageTolerance() public {
         vm.expectRevert(bytes4(keccak256("InvalidSlippageTolerance()")));
-        vault = new Vault(admin,  targetLtv, 1.01e18);
+        vault = new scWETH(admin,  targetLtv, 1.01e18);
     }
 
     function test_setPerformanceFee() public {
