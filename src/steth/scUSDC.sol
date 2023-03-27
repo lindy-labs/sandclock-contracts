@@ -173,7 +173,7 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
 
         emit Rebalanced(
             targetLtv, debt, targetDebt, collateral - excessUsdc, collateral, initialBalance, currentBalance
-            );
+        );
     }
 
     /**
