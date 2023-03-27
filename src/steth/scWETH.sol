@@ -56,13 +56,16 @@ contract scWETH is sc4626, IFlashLoanRecipient {
     uint256 public totalProfit;
 
     // the target ltv ratio at which we actually borrow (<= maxLtv)
-    uint256 public targetLtv = 0.7e18;
+    uint256 public targetLtv;
 
     // slippage for curve swaps
-    uint256 public slippageTolerance = 0.99e18;
+    uint256 public slippageTolerance;
 
-    constructor(address _admin) sc4626(_admin, ERC20(address(weth)), "Sandclock WETH Vault", "scWETH") {
+    constructor(address _admin, uint256 _targetLtv, uint256 _slippageTolerance)
+        sc4626(_admin, ERC20(address(weth)), "Sandclock WETH Vault", "scWETH")
+    {
         if (_admin == address(0)) revert ZeroAddress();
+        if (_slippageTolerance > WAD) revert InvalidSlippageTolerance();
 
         ERC20(address(stEth)).safeApprove(address(wstETH), type(uint256).max);
         ERC20(address(stEth)).safeApprove(address(curvePool), type(uint256).max);
@@ -71,6 +74,11 @@ contract scWETH is sc4626, IFlashLoanRecipient {
 
         // set e-mode on aave-v3 for increased borrowing capacity to 90% of collateral
         aavePool.setUserEMode(EMODE_ID);
+
+        if (_targetLtv >= getMaxLtv()) revert InvalidTargetLtv();
+
+        targetLtv = _targetLtv;
+        slippageTolerance = _slippageTolerance;
     }
 
     /// @notice set the slippage tolerance for curve swaps

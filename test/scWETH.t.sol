@@ -39,16 +39,16 @@ contract scWETHTest is Test {
     ERC20 debtToken;
     IPool aavePool;
     ICurvePool curvePool;
-    uint256 slippageTolerance;
+    uint256 slippageTolerance = 0.99e18;
     uint256 maxLtv;
-    uint256 targetLtv;
+    uint256 targetLtv = 0.7e18;
 
     function setUp() public {
         vm.createFork(vm.envString("RPC_URL_MAINNET"));
         vm.selectFork(mainnetFork);
         vm.rollFork(16784444);
 
-        vault = new Vault(admin);
+        vault = new Vault(admin,  targetLtv, slippageTolerance);
 
         // set vault eth balance to zero
         vm.deal(address(vault), 0);
@@ -57,9 +57,7 @@ contract scWETHTest is Test {
         stEth = vault.stEth();
         wstEth = vault.wstETH();
 
-        slippageTolerance = vault.slippageTolerance();
         maxLtv = vault.getMaxLtv();
-        targetLtv = vault.targetLtv();
 
         aToken = vault.aToken();
         debtToken = vault.variableDebtToken();
@@ -72,6 +70,23 @@ contract scWETHTest is Test {
         assertEq(vault.treasury(), admin, "treasury not set");
         assertEq(vault.hasRole(vault.DEFAULT_ADMIN_ROLE(), admin), true, "admin role not set");
         assertEq(vault.hasRole(vault.KEEPER_ROLE(), admin), true, "keeper role not set");
+        assertEq(vault.targetLtv(), targetLtv, "targetLtv not set");
+        assertEq(vault.slippageTolerance(), slippageTolerance, "slippageTolerance not set");
+    }
+
+    function test_constructor_invalidAdmin() public {
+        vm.expectRevert(bytes4(keccak256("ZeroAddress()")));
+        vault = new Vault(address(0x00),  targetLtv, slippageTolerance);
+    }
+
+    function test_constructor_invalidTargetLtv() public {
+        vm.expectRevert(bytes4(keccak256("InvalidTargetLtv()")));
+        vault = new Vault(admin,  0.9e18, slippageTolerance);
+    }
+
+    function test_constructor_invalidSlippageTolerance() public {
+        vm.expectRevert(bytes4(keccak256("InvalidSlippageTolerance()")));
+        vault = new Vault(admin,  targetLtv, 1.01e18);
     }
 
     function test_setPerformanceFee() public {
