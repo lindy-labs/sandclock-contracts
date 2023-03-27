@@ -6,13 +6,22 @@ import "forge-std/Test.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {WETH} from "solmate/tokens/WETH.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
+import {IPool} from "aave-v3/interfaces/IPool.sol";
+import {IAToken} from "aave-v3/interfaces/IAToken.sol";
+import {IVariableDebtToken} from "aave-v3/interfaces/IVariableDebtToken.sol";
+import {IPoolDataProvider} from "aave-v3/interfaces/IPoolDataProvider.sol";
 
+import {Constants as C} from "../src/lib/Constants.sol";
 import {sc4626} from "../src/sc4626.sol";
 import {scUSDC} from "../src/steth/scUSDC.sol";
 import {scWETH} from "../src/steth/scWETH.sol";
-
+import {ISwapRouter} from "../src/interfaces/uniswap/ISwapRouter.sol";
+import {AggregatorV3Interface} from "../src/interfaces/chainlink/AggregatorV3Interface.sol";
+import {IVault} from "../src/interfaces/balancer/IVault.sol";
+import {ICurvePool} from "../src/interfaces/curve/ICurvePool.sol";
+import {ILido} from "../src/interfaces/lido/ILido.sol";
+import {IwstETH} from "../src/interfaces/lido/IwstETH.sol";
 import {MockSwapRouter} from "./mock/MockSwapRouter.sol";
-import {scUSDCHarness} from "./mock/scUSDCHarness.sol";
 
 contract scUSDCTest is Test {
     using FixedPointMathLib for uint256;
@@ -51,12 +60,30 @@ contract scUSDCTest is Test {
         vm.selectFork(mainnetFork);
         vm.rollFork(16643381);
 
-        usdc = ERC20(0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48);
-        weth = WETH(payable(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2));
+        usdc = ERC20(C.USDC);
+        weth = WETH(payable(C.WETH));
 
-        wethVault = new scWETH(address(this), 0.7e18, 0.99e18);
+        scWETH.ConstructorParams memory scWethParams = scWETH.ConstructorParams({
+            admin: address(this),
+            targetLtv: 0.7e18,
+            slippageTolerance: 0.99e18,
+            aavePool: IPool(C.AAVE_POOL),
+            aaveAwstEth: IAToken(C.AAVE_AWSTETH_TOKEN),
+            aaveVarDWeth: ERC20(C.AAVAAVE_VAR_DEBT_WETH_TOKEN),
+            curveEthStEthPool: ICurvePool(C.CURVE_ETH_STETH_POOL),
+            stEth: ILido(C.STETH),
+            xrouter: C.ZEROX_ROUTER,
+            wstEth: IwstETH(C.WSTETH),
+            weth: WETH(payable(C.WETH)),
+            stEthToEthPriceFeed: AggregatorV3Interface(C.CHAINLINK_STETH_ETH_PRICE_FEED),
+            balancerVault: IVault(C.BALANCER_VAULT)
+        });
 
-        vault = new scUSDC(address(this), wethVault);
+        wethVault = new scWETH(scWethParams);
+
+        scUSDC.ConstructorParams memory params = createDefaultUsdcVaultConstructorParams(wethVault);
+
+        vault = new scUSDC(params);
 
         // set vault eth balance to zero
         vm.deal(address(vault), 0);
@@ -588,10 +615,13 @@ contract scUSDCTest is Test {
 
     function test_withdraw_WorksWithdrawingMaxWhenFloatIs0() public {
         // redeploy vault with mock router because swapping usdc at current block results in "positive" slippage
-        MockSwapRouter router = new MockSwapRouter();
-        deal(address(usdc), address(router), 10_000_000e6);
-        wethVault = new scWETH(address(this), 0.7e18, 0.99e18);
-        vault = new scUSDCHarness(address(this), wethVault, address(router));
+        MockSwapRouter mockRouter = new MockSwapRouter();
+        deal(address(usdc), address(mockRouter), 10_000_000e6);
+
+        scUSDC.ConstructorParams memory params = createDefaultUsdcVaultConstructorParams(wethVault);
+        params.uniswapSwapRouter = mockRouter;
+
+        vault = new scUSDC(params);
 
         vault.setFloatPercentage(0);
 
@@ -881,6 +911,7 @@ contract scUSDCTest is Test {
     }
 
     /// #receiveFlashLoan ///
+
     function test_receiveFlashLoan_FailsIfCallerIsNotFlashLoaner() public {
         vm.startPrank(alice);
         vm.expectRevert(scUSDC.InvalidFlashLoanCaller.selector);
@@ -889,5 +920,27 @@ contract scUSDCTest is Test {
         uint256[] memory feeAmounts = new uint256[](1);
 
         vault.receiveFlashLoan(tokens, amounts, feeAmounts, bytes("0"));
+    }
+
+    /// internal helper functions ///
+
+    function createDefaultUsdcVaultConstructorParams(scWETH scWeth)
+        internal
+        view
+        returns (scUSDC.ConstructorParams memory)
+    {
+        return scUSDC.ConstructorParams({
+            admin: address(this),
+            scWETH: scWeth,
+            usdc: ERC20(C.USDC),
+            weth: WETH(payable(C.WETH)),
+            aavePool: IPool(C.AAVE_POOL),
+            aavePoolDataProvider: IPoolDataProvider(C.AAVE_POOL_DATA_PROVIDER),
+            aaveAUsdc: IAToken(C.AAVE_AUSDC_TOKEN),
+            aaveVarDWeth: ERC20(C.AAVAAVE_VAR_DEBT_WETH_TOKEN),
+            uniswapSwapRouter: ISwapRouter(C.UNISWAP_V3_SWAP_ROUTER),
+            chainlinkUsdcToEthPriceFeed: AggregatorV3Interface(C.CHAINLINK_USDC_ETH_PRICE_FEED),
+            balancerVault: IVault(C.BALANCER_VAULT)
+        });
     }
 }
