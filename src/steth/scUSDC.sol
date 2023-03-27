@@ -12,6 +12,7 @@ import {IAToken} from "aave-v3/interfaces/IAToken.sol";
 import {IVariableDebtToken} from "aave-v3/interfaces/IVariableDebtToken.sol";
 import {IPoolDataProvider} from "aave-v3/interfaces/IPoolDataProvider.sol";
 
+import {Constants as C} from "../lib/Constants.sol";
 import {IVault} from "../interfaces/balancer/IVault.sol";
 import {ISwapRouter} from "../interfaces/uniswap/ISwapRouter.sol";
 import {AggregatorV3Interface} from "../interfaces/chainlink/AggregatorV3Interface.sol";
@@ -48,34 +49,29 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
         uint256 finalUsdcBalance
     );
 
-    WETH public constant weth = WETH(payable(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2));
-    ERC20 public constant usdc = ERC20(0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48);
+    WETH public constant weth = WETH(payable(C.WETH));
 
-    uint256 constant ONE = 1e18;
-    uint256 constant WETH_USDC_DECIMALS_DIFF = 1e12;
     // delta threshold for rebalancing in percentage
     uint256 constant DEBT_DELTA_THRESHOLD = 0.01e18;
-    uint256 constant AAVE_VAR_INTEREST_RATE_MODE = 2;
 
     // main aave contract for interaction with the protocol
-    IPool public constant aavePool = IPool(0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2);
+    IPool public constant aavePool = IPool(C.AAVE_POOL);
     // aave protocol data provider
-    IPoolDataProvider public constant aavePoolDataProvider = IPoolDataProvider(0x7B4EB56E7CD4b454BA8ff71E4518426369a138a3);
+    IPoolDataProvider public constant aavePoolDataProvider = IPoolDataProvider(C.AAVE_POOL_DATA_PROVIDER);
 
     // aave "aEthUSDC" token
-    IAToken public constant aUsdc = IAToken(0x98C23E9d8f34FEFb1B7BD6a91B7FF122F4e16F5c);
+    IAToken public constant aUsdc = IAToken(C.AAVE_AUSDC_TOKEN);
     // aave "variableDebtEthWETH" token
-    ERC20 public constant dWeth = ERC20(0xeA51d7853EEFb32b6ee06b1C12E6dcCA88Be0fFE);
+    ERC20 public constant dWeth = ERC20(C.AAVAAVE_VAR_DEBT_WETH_TOKEN);
 
     // Uniswap V3 router
-    ISwapRouter public swapRouter = ISwapRouter(0xE592427A0AEce92De3Edee1F18E0157C05861564);
+    ISwapRouter public swapRouter = ISwapRouter(C.UNISWAP_V3_SWAP_ROUTER);
 
     // Chainlink pricefeed (USDC -> WETH)
-    AggregatorV3Interface public constant usdcToEthPriceFeed =
-        AggregatorV3Interface(0x986b5E1e1755e3C2440e960477f25201B0a8bbD4);
+    AggregatorV3Interface public constant usdcToEthPriceFeed = AggregatorV3Interface(C.CHAINLINK_USDC_ETH_PRICE_FEED);
 
     // Balancer vault for flashloans
-    IVault public constant balancerVault = IVault(0xBA12222222228d8Ba445958a75a0704d566BF2C8);
+    IVault public constant balancerVault = IVault(C.BALANCER_VAULT);
 
     // USDC / WETH target LTV
     uint256 public targetLtv = 0.65e18;
@@ -86,10 +82,10 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
     // leveraged (w)eth vault
     ERC4626 public immutable scWETH;
 
-    constructor(address _admin, ERC4626 _scWETH) sc4626(_admin, usdc, "Sandclock USDC Vault", "scUSDC") {
+    constructor(address _admin, ERC4626 _scWETH) sc4626(_admin, ERC20(C.USDC), "Sandclock USDC Vault", "scUSDC") {
         scWETH = _scWETH;
 
-        usdc.safeApprove(address(aavePool), type(uint256).max);
+        asset.safeApprove(address(aavePool), type(uint256).max);
 
         weth.safeApprove(address(aavePool), type(uint256).max);
         weth.safeApprove(address(swapRouter), type(uint256).max);
@@ -105,7 +101,7 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
      * @param _newSlippageTolerance The new slippage tolerance value.
      */
     function setSlippageTolerance(uint256 _newSlippageTolerance) external onlyAdmin {
-        if (_newSlippageTolerance > ONE) revert InvalidSlippageTolerance();
+        if (_newSlippageTolerance > C.ONE) revert InvalidSlippageTolerance();
 
         slippageTolerance = _newSlippageTolerance;
 
@@ -151,7 +147,7 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
 
         // 2. deposit excess usdc as collateral
         if (excessUsdc >= rebalanceMinimum) {
-            aavePool.supply(address(usdc), excessUsdc, address(this), 0);
+            aavePool.supply(address(asset), excessUsdc, address(this), 0);
             collateral += excessUsdc;
             currentBalance -= excessUsdc;
         }
@@ -164,9 +160,9 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
 
         if (debt > targetDebt) {
             _disinvest(delta);
-            aavePool.repay(address(weth), delta, AAVE_VAR_INTEREST_RATE_MODE, address(this));
+            aavePool.repay(address(weth), delta, C.AAVE_VAR_INTEREST_RATE_MODE, address(this));
         } else {
-            aavePool.borrow(address(weth), delta, AAVE_VAR_INTEREST_RATE_MODE, 0, address(this));
+            aavePool.borrow(address(weth), delta, C.AAVE_VAR_INTEREST_RATE_MODE, 0, address(this));
             scWETH.deposit(delta, address(this));
         }
 
@@ -213,8 +209,8 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
         uint256 flashLoanAmount = amounts[0];
         (uint256 collateral, uint256 debt) = abi.decode(userData, (uint256, uint256));
 
-        aavePool.repay(address(weth), debt, AAVE_VAR_INTEREST_RATE_MODE, address(this));
-        aavePool.withdraw(address(usdc), collateral, address(this));
+        aavePool.repay(address(weth), debt, C.AAVE_VAR_INTEREST_RATE_MODE, address(this));
+        aavePool.withdraw(address(asset), collateral, address(this));
 
         asset.approve(address(swapRouter), type(uint256).max);
 
@@ -243,13 +239,13 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
     function getUsdcFromWeth(uint256 _wethAmount) public view returns (uint256) {
         (, int256 usdcPriceInWeth,,,) = usdcToEthPriceFeed.latestRoundData();
 
-        return (_wethAmount / WETH_USDC_DECIMALS_DIFF).divWadDown(uint256(usdcPriceInWeth));
+        return (_wethAmount / C.WETH_USDC_DECIMALS_DIFF).divWadDown(uint256(usdcPriceInWeth));
     }
 
     function getWethFromUsdc(uint256 _usdcAmount) public view returns (uint256) {
         (, int256 usdcPriceInWeth,,,) = usdcToEthPriceFeed.latestRoundData();
 
-        return (_usdcAmount * WETH_USDC_DECIMALS_DIFF).mulWadDown(uint256(usdcPriceInWeth));
+        return (_usdcAmount * C.WETH_USDC_DECIMALS_DIFF).mulWadDown(uint256(usdcPriceInWeth));
     }
 
     /**
@@ -304,8 +300,9 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
      * @return The max LTV (1e18 = 100%).
      */
     function getMaxLtv() public view returns (uint256) {
-        (, uint256 ltv,,,,,,,,) = aavePoolDataProvider.getReserveConfigurationData(address(usdc));
+        (, uint256 ltv,,,,,,,,) = aavePoolDataProvider.getReserveConfigurationData(address(asset));
 
+        // ltv is returned as a percentage with 2 decimals (e.g. 80% = 8000) so we need to multiply by 1e14
         return ltv * 1e14;
     }
 
@@ -349,8 +346,8 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
         wethNeeded = wethNeeded > _invested ? _invested : wethNeeded;
 
         uint256 withdrawn = _disinvest(wethNeeded);
-        aavePool.repay(address(weth), withdrawn, AAVE_VAR_INTEREST_RATE_MODE, address(this));
-        aavePool.withdraw(address(usdc), _usdcNeeded, address(this));
+        aavePool.repay(address(weth), withdrawn, C.AAVE_VAR_INTEREST_RATE_MODE, address(this));
+        aavePool.withdraw(address(asset), _usdcNeeded, address(this));
     }
 
     function _calculateTotalAssets(uint256 _float, uint256 _collateral, uint256 _invested, uint256 _debt)
@@ -373,7 +370,6 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
     function _calculateWethProfit(uint256 _invested, uint256 _debt) internal pure returns (uint256) {
         return _invested > _debt ? _invested - _debt : 0;
     }
-
 
     function _disinvest(uint256 _wethAmount) internal returns (uint256 amountWithdrawn) {
         uint256 shares = scWETH.convertToShares(_wethAmount);

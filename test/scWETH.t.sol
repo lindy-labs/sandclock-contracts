@@ -66,7 +66,7 @@ contract scWETHTest is Test {
     }
 
     function test_constructor() public {
-        assertEq(aavePool.getUserEMode(address(vault)), vault.EMODE_ID(), "E mode not set");
+        assertEq(aavePool.getUserEMode(address(vault)), 1, "Efficiency mode not 1");
         assertEq(vault.treasury(), admin, "treasury not set");
         assertEq(vault.hasRole(vault.DEFAULT_ADMIN_ROLE(), admin), true, "admin role not set");
         assertEq(vault.hasRole(vault.KEEPER_ROLE(), admin), true, "keeper role not set");
