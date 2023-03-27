@@ -129,7 +129,7 @@ contract scUSDCTest is Test {
         vm.expectEmit(true, true, true, true);
         emit Rebalanced(
             targetLtv, currentDebt, finalDebt, currentCollateral, finalCollateral, initialBalance, finalBalance
-        );
+            );
         vault.rebalance();
     }
 
