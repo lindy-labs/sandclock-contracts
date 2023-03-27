@@ -10,12 +10,12 @@ contract DeployScript is CREATE3Script {
 
     function run() external returns (scWETH scWeth, scUSDC scUsdc) {
         uint256 deployerPrivateKey = uint256(vm.envBytes32("PRIVATE_KEY"));
+        uint256 targetLtv = 0.7e18;
+        uint256 slippageTolerance = 0.99e18;
 
         vm.startBroadcast(deployerPrivateKey);
-
-        scWeth = new scWETH(address(this));
+        scWeth = new scWETH(address(this), targetLtv, slippageTolerance);
         scUsdc = new scUSDC(address(this), scWeth);
-
         vm.stopBroadcast();
     }
 }
