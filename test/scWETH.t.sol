@@ -26,6 +26,7 @@ contract scWETHTest is Test {
 
     // dummy users
     address constant alice = address(0x06);
+    address constant treasury = address(0x07);
     uint256 boundMinimum = 1e10; // below this amount, aave doesn't count it as collateral
 
     address admin = address(this);
@@ -418,6 +419,7 @@ contract scWETHTest is Test {
     }
 
     function test_harvest_performanceFees(uint256 amount) public {
+        vault.setTreasury(treasury);
         amount = bound(amount, boundMinimum, 10000 ether);
         _depositToVault(address(this), amount);
 
@@ -425,6 +427,10 @@ contract scWETHTest is Test {
 
         _simulate_stEthStakingInterest(365 days, 1.071e18);
         vault.harvest();
+
+        uint256 balance = vault.convertToAssets(vault.balanceOf(treasury));
+        uint256 profit = vault.totalProfit();
+        assertApproxEqRel(balance, profit.mulWadDown(vault.performanceFee()), 0.015e18);
     }
 
     function test_mint_redeem(uint256 amount) public {
