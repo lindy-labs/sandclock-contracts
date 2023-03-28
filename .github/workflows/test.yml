@@ -1,4 +1,4 @@
-name: test
+name: Tests + Coverage
 
 on:
   pull_request:
@@ -52,3 +52,13 @@ jobs:
         run: |
           FOUNDRY_PROFILE=ci forge fmt --check
         id: fmt
+
+      - name: Run Forge Coverage
+        run: |
+          FOUNDRY_PROFILE=ci forge coverage --report lcov
+        id: coverage
+
+      - name: Coveralls GitHub Action
+        uses: coverallsapp/github-action@v2.0.0
+        with:
+          path-to-lcov: lcov.info
