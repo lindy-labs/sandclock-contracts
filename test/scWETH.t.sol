@@ -15,6 +15,7 @@ import {IPool} from "aave-v3/interfaces/IPool.sol";
 import {IAToken} from "aave-v3/interfaces/IAToken.sol";
 import {IVariableDebtToken} from "aave-v3/interfaces/IVariableDebtToken.sol";
 import {Errors} from "aave-v3/protocol/libraries/helpers/Errors.sol";
+import {sc4626} from "../src/sc4626.sol";
 import "../src/errors/scWETHErrors.sol";
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
@@ -122,11 +123,7 @@ contract scWETHTest is Test {
         assertEq(vault.slippageTolerance(), 0.5e18, "slippageTolerance not set");
 
         // revert if called by another user
-        vm.expectRevert(
-            bytes(
-                "AccessControl: account 0x0000000000000000000000000000000000000006 is missing role 0x0000000000000000000000000000000000000000000000000000000000000000"
-            )
-        );
+        vm.expectRevert(sc4626.CallerNotAdmin.selector);
         vm.prank(alice);
         vault.setSlippageTolerance(0.5e18);
 
@@ -140,11 +137,7 @@ contract scWETHTest is Test {
         assertEq(vault.xrouter(), newExchangeProxy);
 
         // revert if called by another user
-        vm.expectRevert(
-            bytes(
-                "AccessControl: account 0x0000000000000000000000000000000000000006 is missing role 0x0000000000000000000000000000000000000000000000000000000000000000"
-            )
-        );
+        vm.expectRevert(sc4626.CallerNotAdmin.selector);
         vm.prank(alice);
         vault.setExchangeProxyAddress(alice);
 
@@ -158,11 +151,7 @@ contract scWETHTest is Test {
         assertEq(address(vault.stEThToEthPriceFeed()), newStEthPriceFeed);
 
         // revert if called by another user
-        vm.expectRevert(
-            bytes(
-                "AccessControl: account 0x0000000000000000000000000000000000000006 is missing role 0x0000000000000000000000000000000000000000000000000000000000000000"
-            )
-        );
+        vm.expectRevert(sc4626.CallerNotAdmin.selector);
         vm.prank(alice);
         vault.setStEThToEthPriceFeed(newStEthPriceFeed);
 
