@@ -1,6 +1,10 @@
 name: test
 
-on: workflow_dispatch
+on:
+  pull_request:
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
 
 env:
   FOUNDRY_PROFILE: ci
@@ -12,6 +16,11 @@ jobs:
 
     name: Foundry project
     runs-on: ubuntu-latest
+
+    env:
+      RPC_URL_MAINNET: ${{ secrets.RPC_URL_MAINNET }}
+      RPC_URL_GOERLI: ${{ secrets.RPC_URL_GOERLI }}
+
     steps:
       - uses: actions/checkout@v3
         with:
@@ -21,6 +30,12 @@ jobs:
         uses: foundry-rs/foundry-toolchain@v1
         with:
           version: nightly
+
+      - name: Install Dependencies
+        run: |
+          forge --version
+          FOUNDRY_PROFILE=ci forge install
+        id: dependencies
 
       - name: Run Forge build
         run: |
@@ -32,3 +47,8 @@ jobs:
         run: |
           FOUNDRY_PROFILE=ci forge test -vvv
         id: test
+
+      - name: Run Forge Formatting Check
+        run: |
+          FOUNDRY_PROFILE=ci forge fmt --check
+        id: fmt

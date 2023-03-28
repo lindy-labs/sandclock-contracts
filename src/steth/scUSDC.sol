@@ -60,7 +60,8 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
     // main aave contract for interaction with the protocol
     IPool public constant aavePool = IPool(0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2);
     // aave protocol data provider
-    IPoolDataProvider public constant aavePoolDataProvider = IPoolDataProvider(0x7B4EB56E7CD4b454BA8ff71E4518426369a138a3);
+    IPoolDataProvider public constant aavePoolDataProvider =
+        IPoolDataProvider(0x7B4EB56E7CD4b454BA8ff71E4518426369a138a3);
 
     // aave "aEthUSDC" token
     IAToken public constant aUsdc = IAToken(0x98C23E9d8f34FEFb1B7BD6a91B7FF122F4e16F5c);
@@ -373,7 +374,6 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
     function _calculateWethProfit(uint256 _invested, uint256 _debt) internal pure returns (uint256) {
         return _invested > _debt ? _invested - _debt : 0;
     }
-
 
     function _disinvest(uint256 _wethAmount) internal returns (uint256 amountWithdrawn) {
         uint256 shares = scWETH.convertToShares(_wethAmount);
