@@ -28,28 +28,28 @@ contract scWETH is sc4626, IFlashLoanRecipient {
     event TargetLtvRatioUpdated(address indexed user, uint256 newTargetLtv);
     event Harvest(uint256 profitSinceLastHarvest, uint256 performanceFee);
 
-    IPool public constant aavePool = IPool(C.AAVE_POOL);
+    IPool public immutable aavePool;
     // aToken is a rebasing token and pegged 1:1 to the underlying
-    IAToken public constant aToken = IAToken(C.AAVE_AWSTETH_TOKEN);
-    ERC20 public constant variableDebtToken = ERC20(C.AAVAAVE_VAR_DEBT_WETH_TOKEN);
+    IAToken public immutable aToken;
+    ERC20 public immutable variableDebtToken;
 
     // Curve pool for ETH-stETH
-    ICurvePool public constant curvePool = ICurvePool(C.CURVE_ETH_STETH_POOL);
+    ICurvePool public immutable curvePool;
 
     // Lido staking contract (stETH)
-    ILido public constant stEth = ILido(C.STETH);
+    ILido public immutable stEth;
 
-    IwstETH public constant wstETH = IwstETH(C.WSTETH);
-    WETH public constant weth = WETH(payable(C.WETH));
+    IwstETH public immutable wstETH;
+    WETH public immutable weth;
 
     // 0x swap router
-    address public xrouter = C.ZEROX_ROUTER;
+    address public xrouter;
 
     // Chainlink pricefeed (stETH -> ETH)
-    AggregatorV3Interface public stEThToEthPriceFeed = AggregatorV3Interface(C.CHAINLINK_STETH_ETH_PRICE_FEED);
+    AggregatorV3Interface public stEThToEthPriceFeed;
 
     // Balancer vault for flashloans
-    IVault public constant balancerVault = IVault(C.BALANCER_VAULT);
+    IVault public immutable balancerVault;
 
     // total invested during last harvest/rebalance
     uint256 public totalInvested;
@@ -63,11 +63,38 @@ contract scWETH is sc4626, IFlashLoanRecipient {
     // slippage for curve swaps
     uint256 public slippageTolerance;
 
-    constructor(address _admin, uint256 _targetLtv, uint256 _slippageTolerance)
-        sc4626(_admin, ERC20(address(weth)), "Sandclock WETH Vault", "scWETH")
+    struct ConstructorParams {
+        address admin;
+        uint256 targetLtv;
+        uint256 slippageTolerance;
+        IPool aavePool;
+        IAToken aaveAwstEth;
+        ERC20 aaveVarDWeth;
+        ICurvePool curveEthStEthPool;
+        ILido stEth;
+        address xrouter;
+        IwstETH wstEth;
+        WETH weth;
+        AggregatorV3Interface stEthToEthPriceFeed;
+        IVault balancerVault;
+    }
+
+    constructor(ConstructorParams memory _params)
+        sc4626(_params.admin, _params.weth, "Sandclock WETH Vault", "scWETH")
     {
-        if (_admin == address(0)) revert ZeroAddress();
-        if (_slippageTolerance > C.ONE) revert InvalidSlippageTolerance();
+        if (_params.admin == address(0)) revert ZeroAddress();
+        if (_params.slippageTolerance > C.ONE) revert InvalidSlippageTolerance();
+
+        aavePool = _params.aavePool;
+        aToken = _params.aaveAwstEth;
+        variableDebtToken = _params.aaveVarDWeth;
+        curvePool = _params.curveEthStEthPool;
+        stEth = _params.stEth;
+        xrouter = _params.xrouter;
+        wstETH = _params.wstEth;
+        weth = _params.weth;
+        stEThToEthPriceFeed = _params.stEthToEthPriceFeed;
+        balancerVault = _params.balancerVault;
 
         ERC20(address(stEth)).safeApprove(address(wstETH), type(uint256).max);
         ERC20(address(stEth)).safeApprove(address(curvePool), type(uint256).max);
@@ -77,10 +104,10 @@ contract scWETH is sc4626, IFlashLoanRecipient {
         // set e-mode on aave-v3 for increased borrowing capacity to 90% of collateral
         aavePool.setUserEMode(C.AAVE_EMODE_ID);
 
-        if (_targetLtv >= getMaxLtv()) revert InvalidTargetLtv();
+        if (_params.targetLtv >= getMaxLtv()) revert InvalidTargetLtv();
 
-        targetLtv = _targetLtv;
-        slippageTolerance = _slippageTolerance;
+        targetLtv = _params.targetLtv;
+        slippageTolerance = _params.slippageTolerance;
     }
 
     /// @notice set the slippage tolerance for curve swaps

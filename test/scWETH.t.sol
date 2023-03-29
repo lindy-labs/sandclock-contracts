@@ -6,19 +6,22 @@ import "forge-std/console2.sol";
 
 import {DSTestPlus} from "solmate/test/utils/DSTestPlus.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
+import {IPool} from "aave-v3/interfaces/IPool.sol";
+import {IAToken} from "aave-v3/interfaces/IAToken.sol";
+import {IVariableDebtToken} from "aave-v3/interfaces/IVariableDebtToken.sol";
+import {Errors} from "aave-v3/protocol/libraries/helpers/Errors.sol";
+import {ERC20} from "solmate/tokens/ERC20.sol";
+
+import {Constants as C} from "../src/lib/Constants.sol";
 import {scWETH} from "../src/steth/scWETH.sol";
 import {WETH} from "solmate/tokens/WETH.sol";
 import {ILido} from "../src/interfaces/lido/ILido.sol";
 import {IwstETH} from "../src/interfaces/lido/IwstETH.sol";
 import {ICurvePool} from "../src/interfaces/curve/ICurvePool.sol";
-import {IPool} from "aave-v3/interfaces/IPool.sol";
-import {IAToken} from "aave-v3/interfaces/IAToken.sol";
-import {IVariableDebtToken} from "aave-v3/interfaces/IVariableDebtToken.sol";
-import {Errors} from "aave-v3/protocol/libraries/helpers/Errors.sol";
+import {IVault} from "../src/interfaces/balancer/IVault.sol";
+import {AggregatorV3Interface} from "../src/interfaces/chainlink/AggregatorV3Interface.sol";
 import {sc4626} from "../src/sc4626.sol";
 import "../src/errors/scWETHErrors.sol";
-
-import {ERC20} from "solmate/tokens/ERC20.sol";
 
 contract scWETHTest is Test {
     using FixedPointMathLib for uint256;
@@ -50,7 +53,9 @@ contract scWETHTest is Test {
         vm.selectFork(mainnetFork);
         vm.rollFork(16784444);
 
-        vault = new scWETH(admin,  targetLtv, slippageTolerance);
+        scWETH.ConstructorParams memory params = createDefaultWethVaultConstructorParams();
+
+        vault = new scWETH(params);
 
         // set vault eth balance to zero
         vm.deal(address(vault), 0);
@@ -77,18 +82,27 @@ contract scWETHTest is Test {
     }
 
     function test_constructor_invalidAdmin() public {
+        scWETH.ConstructorParams memory params = createDefaultWethVaultConstructorParams();
+        params.admin = address(0x00); // invalid address
+
         vm.expectRevert(bytes4(keccak256("ZeroAddress()")));
-        vault = new scWETH(address(0x00),  targetLtv, slippageTolerance);
+        vault = new scWETH(params);
     }
 
     function test_constructor_invalidTargetLtv() public {
+        scWETH.ConstructorParams memory params = createDefaultWethVaultConstructorParams();
+        params.targetLtv = 0.9e18; // invalid target ltv
+
         vm.expectRevert(bytes4(keccak256("InvalidTargetLtv()")));
-        vault = new scWETH(admin,  0.9e18, slippageTolerance);
+        vault = new scWETH(params);
     }
 
     function test_constructor_invalidSlippageTolerance() public {
+        scWETH.ConstructorParams memory params = createDefaultWethVaultConstructorParams();
+        params.slippageTolerance = 1.01e18; // invalid slippage tolerance
+
         vm.expectRevert(bytes4(keccak256("InvalidSlippageTolerance()")));
-        vault = new scWETH(admin,  targetLtv, 1.01e18);
+        vault = new scWETH(params);
     }
 
     function test_setPerformanceFee() public {
@@ -510,6 +524,24 @@ contract scWETHTest is Test {
     }
 
     //////////////////////////// INTERNAL METHODS ////////////////////////////////////////
+
+    function createDefaultWethVaultConstructorParams() internal view returns (scWETH.ConstructorParams memory) {
+        return scWETH.ConstructorParams({
+            admin: admin,
+            targetLtv: targetLtv,
+            slippageTolerance: slippageTolerance,
+            aavePool: IPool(C.AAVE_POOL),
+            aaveAwstEth: IAToken(C.AAVE_AWSTETH_TOKEN),
+            aaveVarDWeth: ERC20(C.AAVAAVE_VAR_DEBT_WETH_TOKEN),
+            curveEthStEthPool: ICurvePool(C.CURVE_ETH_STETH_POOL),
+            stEth: ILido(C.STETH),
+            xrouter: C.ZEROX_ROUTER,
+            wstEth: IwstETH(C.WSTETH),
+            weth: WETH(payable(C.WETH)),
+            stEthToEthPriceFeed: AggregatorV3Interface(C.CHAINLINK_STETH_ETH_PRICE_FEED),
+            balancerVault: IVault(C.BALANCER_VAULT)
+        });
+    }
 
     function _depositToVault(address user, uint256 amount) internal returns (uint256 shares) {
         vm.deal(user, amount);
