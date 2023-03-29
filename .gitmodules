@@ -19,3 +19,6 @@
 [submodule "lib/euler-interfaces"] 
   path = lib/euler-interfaces 
   url = https://github.com/euler-xyz/euler-interfaces.git
+[submodule "lib/properties"]
+	path = lib/properties
+	url = https://github.com/crytic/properties
