@@ -1,6 +1,6 @@
 # Sandclock V2
 
-Sandclock yield strategies and staking contracts
+Sandclock yield strategies
 
 ## Installation
 
