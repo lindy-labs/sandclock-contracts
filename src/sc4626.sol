@@ -7,11 +7,11 @@ import {AccessControl} from "openzeppelin-contracts/access/AccessControl.sol";
 import "./errors/scWETHErrors.sol";
 
 abstract contract sc4626 is ERC4626, AccessControl {
-    constructor(address _admin, ERC20 _asset, string memory _name, string memory _symbol)
+    constructor(address _admin, address _keeper, ERC20 _asset, string memory _name, string memory _symbol)
         ERC4626(_asset, _name, _symbol)
     {
         _grantRole(DEFAULT_ADMIN_ROLE, _admin);
-        _grantRole(KEEPER_ROLE, _admin);
+        _grantRole(KEEPER_ROLE, _keeper);
 
         treasury = _admin;
     }

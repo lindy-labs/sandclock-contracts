@@ -23,11 +23,13 @@ contract DeployScript is CREATE3Script {
 
     function run() external returns (scWETH scWeth, scUSDC scUsdc) {
         uint256 deployerPrivateKey = uint256(vm.envBytes32("PRIVATE_KEY"));
+        address keeper = vm.envAddress("KEEPER");
 
         vm.startBroadcast(deployerPrivateKey);
 
         scWETH.ConstructorParams memory scWethParams = scWETH.ConstructorParams({
             admin: address(this),
+            keeper: keeper,
             targetLtv: 0.7e18,
             slippageTolerance: 0.99e18,
             aavePool: IPool(C.AAVE_POOL),
@@ -46,6 +48,7 @@ contract DeployScript is CREATE3Script {
 
         scUSDC.ConstructorParams memory scUsdcParams = scUSDC.ConstructorParams({
             admin: address(this),
+            keeper: keeper,
             scWETH: scWeth,
             usdc: ERC20(C.USDC),
             weth: WETH(payable(C.WETH)),
