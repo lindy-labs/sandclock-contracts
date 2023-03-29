@@ -21,7 +21,7 @@ import {ICurvePool} from "../src/interfaces/curve/ICurvePool.sol";
 import {IVault} from "../src/interfaces/balancer/IVault.sol";
 import {AggregatorV3Interface} from "../src/interfaces/chainlink/AggregatorV3Interface.sol";
 import {sc4626} from "../src/sc4626.sol";
-import "../src/errors/scWETHErrors.sol";
+import "../src/errors/scErrors.sol";
 
 contract scWETHTest is Test {
     using FixedPointMathLib for uint256;
@@ -84,7 +84,7 @@ contract scWETHTest is Test {
         scWETH.ConstructorParams memory params = createDefaultWethVaultConstructorParams();
         params.admin = address(0x00); // invalid address
 
-        vm.expectRevert(bytes4(keccak256("ZeroAddress()")));
+        vm.expectRevert(ZeroAddress.selector);
         vault = new scWETH(params);
     }
 
@@ -92,7 +92,7 @@ contract scWETHTest is Test {
         scWETH.ConstructorParams memory params = createDefaultWethVaultConstructorParams();
         params.targetLtv = 0.9e18; // invalid target ltv
 
-        vm.expectRevert(bytes4(keccak256("InvalidTargetLtv()")));
+        vm.expectRevert(InvalidTargetLtv.selector);
         vault = new scWETH(params);
     }
 
@@ -100,7 +100,7 @@ contract scWETHTest is Test {
         scWETH.ConstructorParams memory params = createDefaultWethVaultConstructorParams();
         params.slippageTolerance = 1.01e18; // invalid slippage tolerance
 
-        vm.expectRevert(bytes4(keccak256("InvalidSlippageTolerance()")));
+        vm.expectRevert(InvalidSlippageTolerance.selector);
         vault = new scWETH(params);
     }
 
@@ -114,7 +114,7 @@ contract scWETHTest is Test {
         vm.prank(alice);
         vault.setPerformanceFee(fee);
 
-        vm.expectRevert(bytes4(keccak256("FeesTooHigh()")));
+        vm.expectRevert(FeesTooHigh.selector);
         vault.setPerformanceFee(1.1e18);
     }
 
@@ -128,7 +128,7 @@ contract scWETHTest is Test {
         vm.prank(alice);
         vault.setTreasury(address(this));
 
-        vm.expectRevert(bytes4(keccak256("TreasuryCannotBeZero()")));
+        vm.expectRevert(TreasuryCannotBeZero.selector);
         vault.setTreasury(address(0x00));
     }
 
@@ -137,11 +137,11 @@ contract scWETHTest is Test {
         assertEq(vault.slippageTolerance(), 0.5e18, "slippageTolerance not set");
 
         // revert if called by another user
-        vm.expectRevert(sc4626.CallerNotAdmin.selector);
+        vm.expectRevert(CallerNotAdmin.selector);
         vm.prank(alice);
         vault.setSlippageTolerance(0.5e18);
 
-        vm.expectRevert(bytes4(keccak256("InvalidSlippageTolerance()")));
+        vm.expectRevert(InvalidSlippageTolerance.selector);
         vault.setSlippageTolerance(1.1e18);
     }
 
@@ -151,11 +151,11 @@ contract scWETHTest is Test {
         assertEq(address(vault.stEThToEthPriceFeed()), newStEthPriceFeed);
 
         // revert if called by another user
-        vm.expectRevert(sc4626.CallerNotAdmin.selector);
+        vm.expectRevert(CallerNotAdmin.selector);
         vm.prank(alice);
         vault.setStEThToEthPriceFeed(newStEthPriceFeed);
 
-        vm.expectRevert(bytes4(keccak256("ZeroAddress()")));
+        vm.expectRevert(ZeroAddress.selector);
         vault.setStEThToEthPriceFeed(address(0x00));
     }
 
@@ -329,7 +329,7 @@ contract scWETHTest is Test {
     }
 
     function test_withdraw_revert() public {
-        vm.expectRevert(bytes4(keccak256("PleaseUseRedeemMethod()")));
+        vm.expectRevert(PleaseUseRedeemMethod.selector);
         vault.withdraw(1e18, address(this), address(this));
     }
 
