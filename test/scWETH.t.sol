@@ -15,6 +15,7 @@ import {IPool} from "aave-v3/interfaces/IPool.sol";
 import {IAToken} from "aave-v3/interfaces/IAToken.sol";
 import {IVariableDebtToken} from "aave-v3/interfaces/IVariableDebtToken.sol";
 import {Errors} from "aave-v3/protocol/libraries/helpers/Errors.sol";
+import {Constants as C} from "../src/lib/Constants.sol";
 import {sc4626} from "../src/sc4626.sol";
 import "../src/errors/scWETHErrors.sol";
 
@@ -49,7 +50,7 @@ contract scWETHTest is Test {
         vm.selectFork(mainnetFork);
         vm.rollFork(16784444);
 
-        vault = new scWETH(admin,  targetLtv, slippageTolerance);
+        vault = new scWETH(address(C.WETH), admin,  targetLtv, slippageTolerance);
 
         // set vault eth balance to zero
         vm.deal(address(vault), 0);
@@ -77,17 +78,17 @@ contract scWETHTest is Test {
 
     function test_constructor_invalidAdmin() public {
         vm.expectRevert(bytes4(keccak256("ZeroAddress()")));
-        vault = new scWETH(address(0x00),  targetLtv, slippageTolerance);
+        vault = new scWETH(address(weth), address(0x00),  targetLtv, slippageTolerance);
     }
 
     function test_constructor_invalidTargetLtv() public {
         vm.expectRevert(bytes4(keccak256("InvalidTargetLtv()")));
-        vault = new scWETH(admin,  0.9e18, slippageTolerance);
+        vault = new scWETH(address(weth), admin,  0.9e18, slippageTolerance);
     }
 
     function test_constructor_invalidSlippageTolerance() public {
         vm.expectRevert(bytes4(keccak256("InvalidSlippageTolerance()")));
-        vault = new scWETH(admin,  targetLtv, 1.01e18);
+        vault = new scWETH(address(weth), admin,  targetLtv, 1.01e18);
     }
 
     function test_setPerformanceFee() public {

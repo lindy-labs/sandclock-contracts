@@ -63,8 +63,8 @@ contract scWETH is sc4626, IFlashLoanRecipient {
     // slippage for curve swaps
     uint256 public slippageTolerance;
 
-    constructor(address _admin, uint256 _targetLtv, uint256 _slippageTolerance)
-        sc4626(_admin, ERC20(address(weth)), "Sandclock WETH Vault", "scWETH")
+    constructor(address _asset, address _admin, uint256 _targetLtv, uint256 _slippageTolerance)
+        sc4626(_admin, ERC20(address(_asset)), "Sandclock WETH Vault", "scWETH")
     {
         if (_admin == address(0)) revert ZeroAddress();
         if (_slippageTolerance > C.ONE) revert InvalidSlippageTolerance();

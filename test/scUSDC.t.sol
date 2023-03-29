@@ -54,7 +54,7 @@ contract scUSDCTest is Test {
         usdc = ERC20(0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48);
         weth = WETH(payable(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2));
 
-        wethVault = new scWETH(address(this), 0.7e18, 0.99e18);
+        wethVault = new scWETH(address(weth), address(this), 0.7e18, 0.99e18);
 
         vault = new scUSDC(address(this), wethVault);
 
@@ -590,7 +590,7 @@ contract scUSDCTest is Test {
         // redeploy vault with mock router because swapping usdc at current block results in "positive" slippage
         MockSwapRouter router = new MockSwapRouter();
         deal(address(usdc), address(router), 10_000_000e6);
-        wethVault = new scWETH(address(this), 0.7e18, 0.99e18);
+        wethVault = new scWETH(address(weth), address(this), 0.7e18, 0.99e18);
         vault = new scUSDCHarness(address(this), wethVault, address(router));
 
         vault.setFloatPercentage(0);

@@ -34,6 +34,14 @@ forge build
 forge test
 ```
 
+### Echidna
+
+Install [echidna](https://github.com/crytic/echidna/releases).
+
+```
+echidna . --contract CryticERC4626InternalHarness --config echidna.yaml
+```
+
 ### Contract deployment
 
 Please create a `.env` file before deployment. An example can be found in `.env.example`.

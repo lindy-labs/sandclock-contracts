@@ -2,6 +2,7 @@
 pragma solidity ^0.8.13;
 
 import {CREATE3Script} from "./base/CREATE3Script.sol";
+import {Constants as C} from "../src/lib/Constants.sol";
 import {scWETH} from "../src/steth/scWETH.sol";
 import {scUSDC} from "../src/steth/scUSDC.sol";
 
@@ -14,7 +15,7 @@ contract DeployScript is CREATE3Script {
         uint256 slippageTolerance = 0.99e18;
 
         vm.startBroadcast(deployerPrivateKey);
-        scWeth = new scWETH(address(this), targetLtv, slippageTolerance);
+        scWeth = new scWETH(C.WETH, address(this), targetLtv, slippageTolerance);
         scUsdc = new scUSDC(address(this), scWeth);
         vm.stopBroadcast();
     }
