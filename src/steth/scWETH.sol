@@ -8,6 +8,8 @@ import {WETH} from "solmate/tokens/WETH.sol";
 import {IPool} from "aave-v3/interfaces/IPool.sol";
 import {IAToken} from "aave-v3/interfaces/IAToken.sol";
 import {IVariableDebtToken} from "aave-v3/interfaces/IVariableDebtToken.sol";
+
+import {Constants as C} from "../lib/Constants.sol";
 import {sc4626} from "../sc4626.sol";
 import {ICurvePool} from "../interfaces/curve/ICurvePool.sol";
 import {ILido} from "../interfaces/lido/ILido.sol";
@@ -26,28 +28,28 @@ contract scWETH is sc4626, IFlashLoanRecipient {
     event TargetLtvRatioUpdated(address indexed user, uint256 newTargetLtv);
     event Harvest(uint256 profitSinceLastHarvest, uint256 performanceFee);
 
-    // interest rate mode at which to borrow or repay
-    uint256 public constant WAD = 1e18;
-    uint256 public constant INTEREST_RATE_MODE = 2;
-    uint8 public constant EMODE_ID = 1;
-    IPool public constant aavePool = IPool(0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2);
+    IPool public constant aavePool = IPool(C.AAVE_POOL);
     // aToken is a rebasing token and pegged 1:1 to the underlying
-    IAToken public constant aToken = IAToken(0x0B925eD163218f6662a35e0f0371Ac234f9E9371);
-    ERC20 public constant variableDebtToken = ERC20(0xeA51d7853EEFb32b6ee06b1C12E6dcCA88Be0fFE);
-    // Curve pool for ETH-stETH
-    ICurvePool public constant curvePool = ICurvePool(0xDC24316b9AE028F1497c275EB9192a3Ea0f67022);
-    // Lido staking contract (stETH)
-    ILido public constant stEth = ILido(0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84);
-    IwstETH public constant wstETH = IwstETH(0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0);
-    WETH public constant weth = WETH(payable(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2));
-    // Balancer vault for flashloans
-    IVault public constant balancerVault = IVault(0xBA12222222228d8Ba445958a75a0704d566BF2C8);
+    IAToken public constant aToken = IAToken(C.AAVE_AWSTETH_TOKEN);
+    ERC20 public constant variableDebtToken = ERC20(C.AAVAAVE_VAR_DEBT_WETH_TOKEN);
 
-    // Chainlink pricefeed (stETH -> ETH)
-    AggregatorV3Interface public stEThToEthPriceFeed = AggregatorV3Interface(0x86392dC19c0b719886221c78AB11eb8Cf5c52812);
+    // Curve pool for ETH-stETH
+    ICurvePool public constant curvePool = ICurvePool(C.CURVE_ETH_STETH_POOL);
+
+    // Lido staking contract (stETH)
+    ILido public constant stEth = ILido(C.STETH);
+
+    IwstETH public constant wstETH = IwstETH(C.WSTETH);
+    WETH public constant weth = WETH(payable(C.WETH));
 
     // 0x swap router
-    address public xrouter = 0xDef1C0ded9bec7F1a1670819833240f027b25EfF;
+    address public xrouter = C.ZEROX_ROUTER;
+
+    // Chainlink pricefeed (stETH -> ETH)
+    AggregatorV3Interface public stEThToEthPriceFeed = AggregatorV3Interface(C.CHAINLINK_STETH_ETH_PRICE_FEED);
+
+    // Balancer vault for flashloans
+    IVault public constant balancerVault = IVault(C.BALANCER_VAULT);
 
     // total invested during last harvest/rebalance
     uint256 public totalInvested;
@@ -65,7 +67,7 @@ contract scWETH is sc4626, IFlashLoanRecipient {
         sc4626(_admin, ERC20(address(weth)), "Sandclock WETH Vault", "scWETH")
     {
         if (_admin == address(0)) revert ZeroAddress();
-        if (_slippageTolerance > WAD) revert InvalidSlippageTolerance();
+        if (_slippageTolerance > C.ONE) revert InvalidSlippageTolerance();
 
         ERC20(address(stEth)).safeApprove(address(wstETH), type(uint256).max);
         ERC20(address(stEth)).safeApprove(address(curvePool), type(uint256).max);
@@ -73,7 +75,7 @@ contract scWETH is sc4626, IFlashLoanRecipient {
         ERC20(address(weth)).safeApprove(address(aavePool), type(uint256).max);
 
         // set e-mode on aave-v3 for increased borrowing capacity to 90% of collateral
-        aavePool.setUserEMode(EMODE_ID);
+        aavePool.setUserEMode(C.AAVE_EMODE_ID);
 
         if (_targetLtv >= getMaxLtv()) revert InvalidTargetLtv();
 
@@ -85,7 +87,7 @@ contract scWETH is sc4626, IFlashLoanRecipient {
     /// @param newSlippageTolerance the new slippage tolerance
     /// @dev slippage tolerance is a number between 0 and 1e18
     function setSlippageTolerance(uint256 newSlippageTolerance) external onlyAdmin {
-        if (newSlippageTolerance > WAD) revert InvalidSlippageTolerance();
+        if (newSlippageTolerance > C.ONE) revert InvalidSlippageTolerance();
         slippageTolerance = newSlippageTolerance;
         emit SlippageToleranceUpdated(msg.sender, newSlippageTolerance);
     }
@@ -127,7 +129,7 @@ contract scWETH is sc4626, IFlashLoanRecipient {
             uint256 fee = profit.mulWadDown(performanceFee);
 
             // mint equivalent amount of tokens to the performance fee beneficiary ie the treasury
-            _mint(treasury, fee.mulDivDown(WAD, convertToAssets(WAD)));
+            _mint(treasury, fee.mulDivDown(C.ONE, convertToAssets(C.ONE)));
 
             emit Harvest(profit, fee);
         }
@@ -198,7 +200,7 @@ contract scWETH is sc4626, IFlashLoanRecipient {
 
     /// @notice returns the max loan to value(ltv) ratio for borrowing eth on Aavev3 with wsteth as collateral for the flashloan (1e18 = 100%)
     function getMaxLtv() public view returns (uint256) {
-        return uint256(aavePool.getEModeCategoryData(EMODE_ID).ltv) * 1e14;
+        return uint256(aavePool.getEModeCategoryData(C.AAVE_EMODE_ID).ltv) * 1e14;
     }
 
     //////////////////// EXTERNAL METHODS //////////////////////////
@@ -280,16 +282,16 @@ contract scWETH is sc4626, IFlashLoanRecipient {
             aavePool.supply(address(wstETH), wstETH.balanceOf(address(this)), address(this), 0);
 
             //borrow enough weth from aave-v3 to payback flashloan
-            aavePool.borrow(address(weth), flashLoanAmount, INTEREST_RATE_MODE, 0, address(this));
+            aavePool.borrow(address(weth), flashLoanAmount, C.AAVE_VAR_INTEREST_RATE_MODE, 0, address(this));
         }
         // if flashloan received as part of a withdrawal
         else {
             // repay debt + withdraw collateral
             if (flashLoanAmount >= totalDebt()) {
-                aavePool.repay(address(weth), type(uint256).max, INTEREST_RATE_MODE, address(this));
+                aavePool.repay(address(weth), type(uint256).max, C.AAVE_VAR_INTEREST_RATE_MODE, address(this));
                 aavePool.withdraw(address(wstETH), type(uint256).max, address(this));
             } else {
-                aavePool.repay(address(weth), flashLoanAmount, INTEREST_RATE_MODE, address(this));
+                aavePool.repay(address(weth), flashLoanAmount, C.AAVE_VAR_INTEREST_RATE_MODE, address(this));
                 aavePool.withdraw(address(wstETH), _ethToWstEth(amount), address(this));
             }
 
@@ -325,7 +327,7 @@ contract scWETH is sc4626, IFlashLoanRecipient {
         bool isDeposit = target > debt;
 
         // calculate the flashloan amount needed
-        uint256 flashLoanAmount = (isDeposit ? target - debt : debt - target).divWadDown(WAD - ltv);
+        uint256 flashLoanAmount = (isDeposit ? target - debt : debt - target).divWadDown(C.ONE - ltv);
 
         address[] memory tokens = new address[](1);
         tokens[0] = address(weth);
