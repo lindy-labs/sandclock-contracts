@@ -72,7 +72,6 @@ contract scUSDCTest is Test {
             aaveVarDWeth: ERC20(C.AAVAAVE_VAR_DEBT_WETH_TOKEN),
             curveEthStEthPool: ICurvePool(C.CURVE_ETH_STETH_POOL),
             stEth: ILido(C.STETH),
-            xrouter: C.ZEROX_ROUTER,
             wstEth: IwstETH(C.WSTETH),
             weth: WETH(payable(C.WETH)),
             stEthToEthPriceFeed: AggregatorV3Interface(C.CHAINLINK_STETH_ETH_PRICE_FEED),

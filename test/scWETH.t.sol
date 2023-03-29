@@ -145,20 +145,6 @@ contract scWETHTest is Test {
         vault.setSlippageTolerance(1.1e18);
     }
 
-    function test_setExchangeProxyAddress() public {
-        address newExchangeProxy = alice;
-        vault.setExchangeProxyAddress(newExchangeProxy);
-        assertEq(vault.xrouter(), newExchangeProxy);
-
-        // revert if called by another user
-        vm.expectRevert(sc4626.CallerNotAdmin.selector);
-        vm.prank(alice);
-        vault.setExchangeProxyAddress(alice);
-
-        vm.expectRevert(bytes4(keccak256("ZeroAddress()")));
-        vault.setExchangeProxyAddress(address(0x00));
-    }
-
     function test_setStEThToEthPriceFeed() public {
         address newStEthPriceFeed = alice;
         vault.setStEThToEthPriceFeed(newStEthPriceFeed);
@@ -307,7 +293,7 @@ contract scWETHTest is Test {
         _depositToVault(address(this), amount);
         vault.depositIntoStrategy();
         newLtv = bound(newLtv, vault.getLtv() + 1e15, maxLtv - 0.001e18);
-        vault.changeLeverage(newLtv);
+        vault.applyNewTargetLtv(newLtv);
         assertApproxEqRel(vault.getLtv(), newLtv, 0.01e18, "leverage change failed");
     }
 
@@ -316,7 +302,7 @@ contract scWETHTest is Test {
         _depositToVault(address(this), amount);
         vault.depositIntoStrategy();
         newLtv = bound(newLtv, 0.01e18, vault.getLtv() - 0.01e18);
-        vault.changeLeverage(newLtv);
+        vault.applyNewTargetLtv(newLtv);
         assertApproxEqRel(vault.getLtv(), newLtv, 0.01e18, "leverage change failed");
     }
 
@@ -529,7 +515,6 @@ contract scWETHTest is Test {
             aaveVarDWeth: ERC20(C.AAVAAVE_VAR_DEBT_WETH_TOKEN),
             curveEthStEthPool: ICurvePool(C.CURVE_ETH_STETH_POOL),
             stEth: ILido(C.STETH),
-            xrouter: C.ZEROX_ROUTER,
             wstEth: IwstETH(C.WSTETH),
             weth: WETH(payable(C.WETH)),
             stEthToEthPriceFeed: AggregatorV3Interface(C.CHAINLINK_STETH_ETH_PRICE_FEED),
@@ -581,8 +566,8 @@ contract scWETHTest is Test {
         vault.withdrawToVault(assets / 2);
 
         uint256 dust = 100;
-        assertLt(vault.totalDebt(), dust, "test_withdrawToVault totalDebt error");
-        assertLt(vault.totalCollateralSupplied(), dust, "test_withdrawToVault totalCollateralSupplied error");
+        assertLt(vault.getDebt(), dust, "test_withdrawToVault getDebt error");
+        assertLt(vault.getCollateral(), dust, "test_withdrawToVault getCollateral error");
         assertApproxEqRel(weth.balanceOf(address(vault)), assets, maxAssetsDelta, "test_withdrawToVault asset balance");
     }
 
