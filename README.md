@@ -1,6 +1,8 @@
-# Sandclock V2
+# Sandclock V2 
 
 Sandclock yield strategies
+
+[![Coverage Status](https://coveralls.io/repos/github/lindy-labs/sandclock-contracts/badge.svg)](https://coveralls.io/github/lindy-labs/sandclock-contracts)
 
 ## Installation
 
