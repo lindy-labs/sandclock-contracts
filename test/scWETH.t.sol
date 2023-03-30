@@ -320,7 +320,10 @@ contract scWETHTest is Test {
     function test_applyNewTargetLtv_invalidMaxLtv() public {
         uint256 amount = 100 ether;
         _depositToVault(address(this), amount);
+
+        vm.startPrank(keeper);
         vault.depositIntoStrategy();
+
         vm.expectRevert(InvalidTargetLtv.selector);
         vault.applyNewTargetLtv(maxLtv + 1);
         vm.expectRevert(InvalidTargetLtv.selector);

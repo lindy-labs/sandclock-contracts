@@ -133,7 +133,7 @@ contract scUSDCTest is Test {
 
     function test_rebalance_FailsIfCallerIsNotKeeper() public {
         vm.startPrank(alice);
-        vm.expectRevert(sc4626.CallerNotKeeper.selector);
+        vm.expectRevert(CallerNotKeeper.selector);
         vault.rebalance();
     }
 
