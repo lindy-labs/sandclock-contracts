@@ -289,7 +289,7 @@ contract scWETHTest is Test {
         assertEq(vault.getLtv(), 0);
     }
 
-    function test_leverageUp(uint256 amount, uint256 newLtv) public {
+    function test_applyNewTargetLtv_higherLtv(uint256 amount, uint256 newLtv) public {
         amount = bound(amount, boundMinimum, 1e20);
         _depositToVault(address(this), amount);
         vault.depositIntoStrategy();
@@ -298,13 +298,31 @@ contract scWETHTest is Test {
         assertApproxEqRel(vault.getLtv(), newLtv, 0.01e18, "leverage change failed");
     }
 
-    function test_leverageDown(uint256 amount, uint256 newLtv) public {
+    function test_applyNewTargetLtv_lowerLtv(uint256 amount, uint256 newLtv) public {
         amount = bound(amount, boundMinimum, 1e20);
         _depositToVault(address(this), amount);
         vault.depositIntoStrategy();
         newLtv = bound(newLtv, 0.01e18, vault.getLtv() - 0.01e18);
         vault.applyNewTargetLtv(newLtv);
         assertApproxEqRel(vault.getLtv(), newLtv, 0.01e18, "leverage change failed");
+    }
+
+    function test_applyNewTargetLtv_invalidMaxLtv() public {
+        uint256 amount = 100 ether;
+        _depositToVault(address(this), amount);
+        vault.depositIntoStrategy();
+        vm.expectRevert(InvalidTargetLtv.selector);
+        vault.applyNewTargetLtv(maxLtv + 1);
+        vm.expectRevert(InvalidTargetLtv.selector);
+        vault.applyNewTargetLtv(maxLtv);
+    }
+
+    function test_receiveFlashLoan_InvalidFlashLoanCaller() public {
+        address[] memory empty;
+        uint256[] memory amounts = new uint[](1);
+        amounts[0] = 1;
+        vm.expectRevert(InvalidFlashLoanCaller.selector);
+        vault.receiveFlashLoan(empty, amounts, amounts, abi.encode(1));
     }
 
     function test_maxLtv(uint256 amount) public {
