@@ -22,6 +22,7 @@ import {ICurvePool} from "../src/interfaces/curve/ICurvePool.sol";
 import {ILido} from "../src/interfaces/lido/ILido.sol";
 import {IwstETH} from "../src/interfaces/lido/IwstETH.sol";
 import {MockSwapRouter} from "./mock/MockSwapRouter.sol";
+import "../src/errors/scErrors.sol";
 
 contract scUSDCTest is Test {
     using FixedPointMathLib for uint256;
@@ -72,7 +73,6 @@ contract scUSDCTest is Test {
             aaveVarDWeth: ERC20(C.AAVAAVE_VAR_DEBT_WETH_TOKEN),
             curveEthStEthPool: ICurvePool(C.CURVE_ETH_STETH_POOL),
             stEth: ILido(C.STETH),
-            xrouter: C.ZEROX_ROUTER,
             wstEth: IwstETH(C.WSTETH),
             weth: WETH(payable(C.WETH)),
             stEthToEthPriceFeed: AggregatorV3Interface(C.CHAINLINK_STETH_ETH_PRICE_FEED),
@@ -327,7 +327,7 @@ contract scUSDCTest is Test {
         uint256 newTargetLtv = vault.targetLtv() / 2;
 
         vm.startPrank(alice);
-        vm.expectRevert(sc4626.CallerNotKeeper.selector);
+        vm.expectRevert(CallerNotKeeper.selector);
         vault.applyNewTargetLtv(newTargetLtv);
     }
 
@@ -379,7 +379,7 @@ contract scUSDCTest is Test {
 
         uint256 tooHighLtv = vault.getMaxLtv() + 1;
 
-        vm.expectRevert(scUSDC.InvalidTargetLtv.selector);
+        vm.expectRevert(InvalidTargetLtv.selector);
         vault.applyNewTargetLtv(tooHighLtv);
     }
 
@@ -824,7 +824,7 @@ contract scUSDCTest is Test {
         uint256 tolerance = 0.01e18;
 
         vm.startPrank(alice);
-        vm.expectRevert(sc4626.CallerNotAdmin.selector);
+        vm.expectRevert(CallerNotAdmin.selector);
         vault.setSlippageTolerance(tolerance);
     }
 
@@ -843,7 +843,7 @@ contract scUSDCTest is Test {
 
     function test_exitAllPositions_FailsIfCallerIsNotAdmin() public {
         vm.startPrank(alice);
-        vm.expectRevert(sc4626.CallerNotAdmin.selector);
+        vm.expectRevert(CallerNotAdmin.selector);
         vault.exitAllPositions();
     }
 
@@ -858,7 +858,7 @@ contract scUSDCTest is Test {
 
         vault.rebalance();
 
-        vm.expectRevert(scUSDC.VaultNotUnderwater.selector);
+        vm.expectRevert(VaultNotUnderwater.selector);
         vault.exitAllPositions();
     }
 
@@ -914,7 +914,7 @@ contract scUSDCTest is Test {
 
     function test_receiveFlashLoan_FailsIfCallerIsNotFlashLoaner() public {
         vm.startPrank(alice);
-        vm.expectRevert(scUSDC.InvalidFlashLoanCaller.selector);
+        vm.expectRevert(InvalidFlashLoanCaller.selector);
         address[] memory tokens = new address[](1);
         uint256[] memory amounts = new uint256[](1);
         uint256[] memory feeAmounts = new uint256[](1);
