@@ -47,7 +47,7 @@ contract scUSDCTest is Test {
     uint256 constant slippageTolerance = 0.999e18;
     uint256 constant flashLoanLtv = 0.5e18;
 
-    // dummy users
+    address constant keeper = address(0x05);
     address constant alice = address(0x06);
 
     scUSDC vault;
@@ -66,6 +66,7 @@ contract scUSDCTest is Test {
 
         scWETH.ConstructorParams memory scWethParams = scWETH.ConstructorParams({
             admin: address(this),
+            keeper: keeper,
             targetLtv: 0.7e18,
             slippageTolerance: 0.99e18,
             aavePool: IPool(C.AAVE_POOL),
@@ -81,7 +82,7 @@ contract scUSDCTest is Test {
 
         wethVault = new scWETH(scWethParams);
 
-        scUSDC.ConstructorParams memory params = createDefaultUsdcVaultConstructorParams(wethVault);
+        scUSDC.ConstructorParams memory params = _createDefaultUsdcVaultConstructorParams(wethVault);
 
         vault = new scUSDC(params);
 
@@ -130,10 +131,17 @@ contract scUSDCTest is Test {
 
     /// #rebalance ///
 
+    function test_rebalance_FailsIfCallerIsNotKeeper() public {
+        vm.startPrank(alice);
+        vm.expectRevert(CallerNotKeeper.selector);
+        vault.rebalance();
+    }
+
     function test_rebalance_DepositsUsdcAndBorrowsWeth() public {
         uint256 amount = 10000e6;
         deal(address(usdc), address(vault), amount);
 
+        vm.prank(keeper);
         vault.rebalance();
 
         assertApproxEqAbs(vault.getCollateral(), amount.mulWadDown(0.99e18), 1, "collateral"); // - float
@@ -157,12 +165,14 @@ contract scUSDCTest is Test {
         emit Rebalanced(
             targetLtv, currentDebt, finalDebt, currentCollateral, finalCollateral, initialBalance, finalBalance
         );
+        vm.prank(keeper);
         vault.rebalance();
     }
 
     function test_rebalance_DoesntDepositIfFloatRequirementIsGreaterThanBalance() public {
         deal(address(usdc), address(vault), 10000e6);
 
+        vm.prank(keeper);
         vault.rebalance();
 
         // set float to 2%
@@ -173,6 +183,7 @@ contract scUSDCTest is Test {
 
         uint256 collateralBefore = vault.getCollateral();
 
+        vm.prank(keeper);
         vault.rebalance();
 
         assertEq(vault.getCollateral(), collateralBefore, "collateral");
@@ -183,6 +194,7 @@ contract scUSDCTest is Test {
 
         vault.setFloatPercentage(0);
 
+        vm.prank(keeper);
         vault.rebalance();
 
         assertEq(vault.getCollateral(), 0, "collateral");
@@ -194,6 +206,7 @@ contract scUSDCTest is Test {
 
         vault.setFloatPercentage(0);
 
+        vm.prank(keeper);
         vault.rebalance();
 
         assertApproxEqAbs(vault.getCollateral(), vault.rebalanceMinimum(), 1, "collateral");
@@ -206,6 +219,7 @@ contract scUSDCTest is Test {
         deal(address(usdc), address(vault), amount);
         vault.setFloatPercentage(0.02e18);
 
+        vm.prank(keeper);
         vault.rebalance();
 
         assertEq(vault.getUsdcBalance(), floatRequired, "float");
@@ -219,6 +233,7 @@ contract scUSDCTest is Test {
         // no debt yet
         assertEq(vault.getLtv(), 0);
 
+        vm.prank(keeper);
         vault.rebalance();
 
         assertApproxEqRel(vault.getLtv(), vault.targetLtv(), 0.001e18);
@@ -231,6 +246,7 @@ contract scUSDCTest is Test {
         // no debt yet
         assertEq(vault.getLtv(), 0);
 
+        vm.prank(keeper);
         vault.rebalance();
 
         uint256 collateralBefore = vault.getCollateral();
@@ -239,6 +255,7 @@ contract scUSDCTest is Test {
         // add 1% more assets
         deal(address(usdc), address(vault), vault.totalAssets().mulWadUp(0.01e18));
 
+        vm.prank(keeper);
         vault.rebalance();
 
         assertEq(vault.getCollateral(), collateralBefore);
@@ -249,6 +266,7 @@ contract scUSDCTest is Test {
         uint256 initialBalance = 10000e6;
         deal(address(usdc), address(vault), initialBalance);
 
+        vm.prank(keeper);
         vault.rebalance();
 
         uint256 ltv = vault.getLtv();
@@ -263,6 +281,7 @@ contract scUSDCTest is Test {
 
         assertApproxEqRel(vault.totalAssets(), totalAssetsBefore.mulWadUp(1e18 + ltv), 0.01e18);
 
+        vm.prank(keeper);
         vault.rebalance();
 
         assertApproxEqRel(vault.getCollateral(), collateralBefore.mulWadUp(1e18 + ltv), 0.01e18);
@@ -274,6 +293,7 @@ contract scUSDCTest is Test {
         uint256 initialBalance = 10000e6;
         deal(address(usdc), address(vault), initialBalance);
 
+        vm.prank(keeper);
         vault.rebalance();
 
         uint256 collateralBefore = vault.getCollateral();
@@ -287,6 +307,7 @@ contract scUSDCTest is Test {
 
         assertTrue(vault.totalAssets() > totalAssetsBefore);
 
+        vm.prank(keeper);
         vault.rebalance();
 
         assertEq(vault.getCollateral(), collateralBefore);
@@ -300,6 +321,7 @@ contract scUSDCTest is Test {
         amount = bound(amount, lowerBound, 10_000_000e6);
         deal(address(usdc), address(vault), amount);
 
+        vm.prank(keeper);
         vault.rebalance();
 
         uint256 collateralBefore = vault.getCollateral();
@@ -313,6 +335,7 @@ contract scUSDCTest is Test {
         assertTrue(wethInvested > 0, "wethInvested must be > 0");
         deal(address(weth), address(wethVault), profit);
 
+        vm.prank(keeper);
         vault.rebalance();
 
         assertApproxEqRel(vault.totalAssets(), totalAssetsBefore * 2, 0.01e18);
@@ -335,14 +358,16 @@ contract scUSDCTest is Test {
         uint256 newTargetLtv = vault.targetLtv() / 2;
 
         vm.expectEmit(true, true, true, true);
-        emit NewTargetLtvApplied(address(this), newTargetLtv);
+        emit NewTargetLtvApplied(keeper, newTargetLtv);
 
+        vm.prank(keeper);
         vault.applyNewTargetLtv(newTargetLtv);
     }
 
     function test_applyNewTargetLtv_ChangesLtvUpAndRebalances() public {
         deal(address(usdc), address(vault), 10000e6);
 
+        vm.prank(keeper);
         vault.rebalance();
 
         uint256 oldTargetLtv = vault.targetLtv();
@@ -350,6 +375,7 @@ contract scUSDCTest is Test {
         // add 10% to target ltv
         uint256 newTargetLtv = oldTargetLtv.mulWadUp(1.1e18);
 
+        vm.prank(keeper);
         vault.applyNewTargetLtv(newTargetLtv);
 
         assertEq(vault.targetLtv(), newTargetLtv, "target ltv");
@@ -360,6 +386,7 @@ contract scUSDCTest is Test {
     function test_applyNewTargetLtv_ChangesLtvDownAndRebalances() public {
         deal(address(usdc), address(vault), 10000e6);
 
+        vm.prank(keeper);
         vault.rebalance();
 
         uint256 oldTargetLtv = vault.targetLtv();
@@ -367,6 +394,7 @@ contract scUSDCTest is Test {
         // subtract 10% from target ltv
         uint256 newTargetLtv = oldTargetLtv.mulWadDown(0.9e18);
 
+        vm.prank(keeper);
         vault.applyNewTargetLtv(newTargetLtv);
 
         assertEq(vault.targetLtv(), newTargetLtv, "target ltv");
@@ -380,17 +408,20 @@ contract scUSDCTest is Test {
         uint256 tooHighLtv = vault.getMaxLtv() + 1;
 
         vm.expectRevert(InvalidTargetLtv.selector);
+        vm.prank(keeper);
         vault.applyNewTargetLtv(tooHighLtv);
     }
 
     function test_applyNewTargetLtv_WorksIfNewLtvIs0() public {
         deal(address(usdc), address(vault), 10000e6);
 
+        vm.prank(keeper);
         vault.rebalance();
 
         assertTrue(vault.getLtv() > 0);
         uint256 collateralBefore = vault.getCollateral();
 
+        vm.prank(keeper);
         vault.applyNewTargetLtv(0);
 
         assertEq(vault.getLtv(), 0, "ltv");
@@ -404,6 +435,7 @@ contract scUSDCTest is Test {
         uint256 amount = 10000e6;
         deal(address(usdc), address(vault), amount);
 
+        vm.startPrank(keeper);
         vault.rebalance();
 
         assertApproxEqAbs(vault.totalAssets(), amount, 1, "total assets before ltv change");
@@ -417,6 +449,7 @@ contract scUSDCTest is Test {
         uint256 amount = 10000e6;
         deal(address(usdc), address(vault), amount);
 
+        vm.prank(keeper);
         vault.rebalance();
 
         // add 100% profit to the weth vault
@@ -433,6 +466,7 @@ contract scUSDCTest is Test {
         uint256 amount = 10000e6;
         deal(address(usdc), address(vault), amount);
 
+        vm.prank(keeper);
         vault.rebalance();
 
         // add 100% profit to the weth vault
@@ -468,6 +502,7 @@ contract scUSDCTest is Test {
         vm.stopPrank();
 
         vault.setFloatPercentage(0.5e18);
+        vm.prank(keeper);
         vault.rebalance();
 
         uint256 floatBefore = vault.getUsdcBalance();
@@ -496,6 +531,7 @@ contract scUSDCTest is Test {
         vault.deposit(deposit, alice);
         vm.stopPrank();
 
+        vm.prank(keeper);
         vault.rebalance();
 
         // add 100% profit to the weth vault
@@ -529,6 +565,7 @@ contract scUSDCTest is Test {
         vault.deposit(deposit, alice);
         vm.stopPrank();
 
+        vm.prank(keeper);
         vault.rebalance();
 
         assertEq(vault.getUsdcBalance(), 0, "vault float");
@@ -562,6 +599,7 @@ contract scUSDCTest is Test {
         vault.deposit(deposit, alice);
         vm.stopPrank();
 
+        vm.prank(keeper);
         vault.rebalance();
 
         // add 100% profit to the weth vault
@@ -593,6 +631,7 @@ contract scUSDCTest is Test {
         vault.deposit(deposit, alice);
         vm.stopPrank();
 
+        vm.prank(keeper);
         vault.rebalance();
 
         // add 100% profit to the weth vault
@@ -618,7 +657,7 @@ contract scUSDCTest is Test {
         MockSwapRouter mockRouter = new MockSwapRouter();
         deal(address(usdc), address(mockRouter), 10_000_000e6);
 
-        scUSDC.ConstructorParams memory params = createDefaultUsdcVaultConstructorParams(wethVault);
+        scUSDC.ConstructorParams memory params = _createDefaultUsdcVaultConstructorParams(wethVault);
         params.uniswapSwapRouter = mockRouter;
 
         vault = new scUSDC(params);
@@ -633,6 +672,7 @@ contract scUSDCTest is Test {
         vault.deposit(deposit, alice);
         vm.stopPrank();
 
+        vm.prank(keeper);
         vault.rebalance();
 
         // add 100% profit to the weth vault
@@ -662,6 +702,7 @@ contract scUSDCTest is Test {
         vault.deposit(deposit, alice);
         vm.stopPrank();
 
+        vm.prank(keeper);
         vault.rebalance();
 
         // add 100% profit to the weth vault
@@ -686,6 +727,7 @@ contract scUSDCTest is Test {
         vault.deposit(deposit, alice);
         vm.stopPrank();
 
+        vm.prank(keeper);
         vault.rebalance();
 
         // 50% loss to the weth vault
@@ -717,6 +759,7 @@ contract scUSDCTest is Test {
         vault.deposit(deposit, alice);
         vm.stopPrank();
 
+        vm.prank(keeper);
         vault.rebalance();
 
         // 50% loss to the weth vault
@@ -740,6 +783,7 @@ contract scUSDCTest is Test {
         vault.deposit(amount, alice);
         vm.stopPrank();
 
+        vm.prank(keeper);
         vault.rebalance();
 
         uint256 assets = vault.convertToAssets(vault.balanceOf(alice));
@@ -766,6 +810,7 @@ contract scUSDCTest is Test {
 
         vm.stopPrank();
 
+        vm.prank(keeper);
         vault.rebalance();
 
         // add 100% profit to the weth vault
@@ -800,6 +845,7 @@ contract scUSDCTest is Test {
 
         vm.stopPrank();
 
+        vm.prank(keeper);
         vault.rebalance();
 
         // add 100% profit to the weth vault
@@ -856,6 +902,7 @@ contract scUSDCTest is Test {
         vault.deposit(deposit, alice);
         vm.stopPrank();
 
+        vm.prank(keeper);
         vault.rebalance();
 
         vm.expectRevert(VaultNotUnderwater.selector);
@@ -871,6 +918,7 @@ contract scUSDCTest is Test {
         vault.deposit(deposit, alice);
         vm.stopPrank();
 
+        vm.prank(keeper);
         vault.rebalance();
 
         // simulate 50% loss
@@ -895,6 +943,7 @@ contract scUSDCTest is Test {
         vault.deposit(deposit, alice);
         vm.stopPrank();
 
+        vm.prank(keeper);
         vault.rebalance();
 
         // simulate 50% loss
@@ -924,13 +973,14 @@ contract scUSDCTest is Test {
 
     /// internal helper functions ///
 
-    function createDefaultUsdcVaultConstructorParams(scWETH scWeth)
+    function _createDefaultUsdcVaultConstructorParams(scWETH scWeth)
         internal
         view
         returns (scUSDC.ConstructorParams memory)
     {
         return scUSDC.ConstructorParams({
             admin: address(this),
+            keeper: keeper,
             scWETH: scWeth,
             usdc: ERC20(C.USDC),
             weth: WETH(payable(C.WETH)),

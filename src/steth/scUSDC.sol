@@ -84,6 +84,7 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
 
     struct ConstructorParams {
         address admin;
+        address keeper;
         ERC4626 scWETH;
         ERC20 usdc;
         WETH weth;
@@ -97,7 +98,7 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
     }
 
     constructor(ConstructorParams memory _params)
-        sc4626(_params.admin, _params.usdc, "Sandclock USDC Vault", "scUSDC")
+        sc4626(_params.admin, _params.keeper, _params.usdc, "Sandclock USDC Vault", "scUSDC")
     {
         scWETH = _params.scWETH;
         weth = _params.weth;
@@ -150,7 +151,7 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
      * @notice Rebalance the vault's positions.
      * @dev Called to increase or decrease the WETH debt to match the target LTV.
      */
-    function rebalance() public {
+    function rebalance() public onlyKeeper {
         uint256 initialBalance = getUsdcBalance();
         uint256 currentBalance = initialBalance;
         uint256 collateral = getCollateral();
