@@ -86,7 +86,6 @@ contract scWETH is sc4626, IFlashLoanRecipient {
     constructor(ConstructorParams memory _params)
         sc4626(_params.admin, _params.keeper, _params.weth, "Sandclock WETH Vault", "scWETH")
     {
-        if (_params.admin == address(0)) revert ZeroAddress();
         if (_params.slippageTolerance > C.ONE) revert InvalidSlippageTolerance();
 
         aavePool = _params.aavePool;

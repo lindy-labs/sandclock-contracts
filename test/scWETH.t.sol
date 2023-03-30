@@ -89,6 +89,14 @@ contract scWETHTest is Test {
         vault = new scWETH(params);
     }
 
+    function test_constructor_invalidKeeper() public {
+        scWETH.ConstructorParams memory params = _createDefaultWethVaultConstructorParams();
+        params.keeper = address(0x00); // invalid address
+
+        vm.expectRevert(ZeroAddress.selector);
+        vault = new scWETH(params);
+    }
+
     function test_constructor_invalidTargetLtv() public {
         scWETH.ConstructorParams memory params = _createDefaultWethVaultConstructorParams();
         params.targetLtv = 0.9e18; // invalid target ltv
