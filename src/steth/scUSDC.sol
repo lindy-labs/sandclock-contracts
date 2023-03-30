@@ -1,6 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.13;
 
+import {
+    InvalidTargetLtv,
+    InvalidSlippageTolerance,
+    InvalidFlashLoanCaller,
+    VaultNotUnderwater
+} from "../errors/scErrors.sol";
+
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {WETH} from "solmate/tokens/WETH.sol";
 import {ERC4626} from "solmate/mixins/ERC4626.sol";
@@ -26,11 +33,6 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
     using SafeTransferLib for ERC20;
     using SafeTransferLib for WETH;
     using FixedPointMathLib for uint256;
-
-    error InvalidTargetLtv();
-    error InvalidSlippageTolerance();
-    error InvalidFlashLoanCaller();
-    error VaultNotUnderwater();
 
     event NewTargetLtvApplied(address indexed admin, uint256 newTargetLtv);
     event SlippageToleranceUpdated(address indexed admin, uint256 newSlippageTolerance);

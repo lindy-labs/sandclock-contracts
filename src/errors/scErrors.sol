@@ -9,3 +9,6 @@ error ZeroAddress();
 error PleaseUseRedeemMethod();
 error FeesTooHigh();
 error TreasuryCannotBeZero();
+error VaultNotUnderwater();
+error CallerNotAdmin();
+error CallerNotKeeper();

@@ -4,7 +4,7 @@ pragma solidity ^0.8.10;
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {ERC4626} from "solmate/mixins/ERC4626.sol";
 import {AccessControl} from "openzeppelin-contracts/access/AccessControl.sol";
-import "./errors/scWETHErrors.sol";
+import {TreasuryCannotBeZero, FeesTooHigh, CallerNotAdmin, CallerNotKeeper} from "./errors/scErrors.sol";
 
 abstract contract sc4626 is ERC4626, AccessControl {
     constructor(address _admin, address _keeper, ERC20 _asset, string memory _name, string memory _symbol)
@@ -22,9 +22,6 @@ abstract contract sc4626 is ERC4626, AccessControl {
 
     /// Role allowed to harvest/reinvest
     bytes32 public constant KEEPER_ROLE = keccak256("KEEPER_ROLE");
-
-    error CallerNotAdmin();
-    error CallerNotKeeper();
 
     event PerformanceFeeUpdated(address indexed user, uint256 newPerformanceFee);
     event FloatPercentageUpdated(address indexed user, uint256 newFloatPercentage);

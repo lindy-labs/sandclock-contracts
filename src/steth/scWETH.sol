@@ -1,6 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.13;
 
+import {
+    InvalidTargetLtv,
+    ZeroAddress,
+    InvalidSlippageTolerance,
+    PleaseUseRedeemMethod,
+    InvalidFlashLoanCaller
+} from "../errors/scErrors.sol";
+
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
@@ -17,15 +25,14 @@ import {IwstETH} from "../interfaces/lido/IwstETH.sol";
 import {AggregatorV3Interface} from "../interfaces/chainlink/AggregatorV3Interface.sol";
 import {IVault} from "../interfaces/balancer/IVault.sol";
 import {IFlashLoanRecipient} from "../interfaces/balancer/IFlashLoanRecipient.sol";
-import "../errors/scWETHErrors.sol";
 
 contract scWETH is sc4626, IFlashLoanRecipient {
     using SafeTransferLib for ERC20;
     using FixedPointMathLib for uint256;
 
-    event SlippageToleranceUpdated(address indexed user, uint256 newSlippageTolerance);
+    event SlippageToleranceUpdated(address indexed admin, uint256 newSlippageTolerance);
     event ExchangeProxyAddressUpdated(address indexed user, address newAddress);
-    event TargetLtvRatioUpdated(address indexed user, uint256 newTargetLtv);
+    event NewTargetLtvApplied(address indexed admin, uint256 newTargetLtv);
     event Harvest(uint256 profitSinceLastHarvest, uint256 performanceFee);
 
     IPool public immutable aavePool;
@@ -41,9 +48,6 @@ contract scWETH is sc4626, IFlashLoanRecipient {
 
     IwstETH public immutable wstETH;
     WETH public immutable weth;
-
-    // 0x swap router
-    address public xrouter;
 
     // Chainlink pricefeed (stETH -> ETH)
     AggregatorV3Interface public stEThToEthPriceFeed;
@@ -73,7 +77,6 @@ contract scWETH is sc4626, IFlashLoanRecipient {
         ERC20 aaveVarDWeth;
         ICurvePool curveEthStEthPool;
         ILido stEth;
-        address xrouter;
         IwstETH wstEth;
         WETH weth;
         AggregatorV3Interface stEthToEthPriceFeed;
@@ -91,7 +94,6 @@ contract scWETH is sc4626, IFlashLoanRecipient {
         variableDebtToken = _params.aaveVarDWeth;
         curvePool = _params.curveEthStEthPool;
         stEth = _params.stEth;
-        xrouter = _params.xrouter;
         wstETH = _params.wstEth;
         weth = _params.weth;
         stEThToEthPriceFeed = _params.stEthToEthPriceFeed;
@@ -118,14 +120,6 @@ contract scWETH is sc4626, IFlashLoanRecipient {
         if (newSlippageTolerance > C.ONE) revert InvalidSlippageTolerance();
         slippageTolerance = newSlippageTolerance;
         emit SlippageToleranceUpdated(msg.sender, newSlippageTolerance);
-    }
-
-    /// @notice set the address of the exchange proxy for the 0x router
-    /// @param newAddress the new address of the 0x router
-    function setExchangeProxyAddress(address newAddress) external onlyAdmin {
-        if (newAddress == address(0)) revert ZeroAddress();
-        xrouter = newAddress;
-        emit ExchangeProxyAddressUpdated(msg.sender, newAddress);
     }
 
     /// @notice set stEThToEthPriceFeed address
@@ -166,13 +160,14 @@ contract scWETH is sc4626, IFlashLoanRecipient {
     /// @notice increase/decrease the target ltv used on borrows
     /// @param newTargetLtv the new target ltv
     /// @dev the new target ltv must be less than the max ltv allowed on aave
-    function changeLeverage(uint256 newTargetLtv) public onlyKeeper {
+    function applyNewTargetLtv(uint256 newTargetLtv) public onlyKeeper {
         if (newTargetLtv >= getMaxLtv()) revert InvalidTargetLtv();
 
         targetLtv = newTargetLtv;
-        emit TargetLtvRatioUpdated(msg.sender, newTargetLtv);
 
         _rebalancePosition();
+
+        emit NewTargetLtvApplied(msg.sender, newTargetLtv);
     }
 
     /// @notice deposit all available funds into the strategy
@@ -192,37 +187,37 @@ contract scWETH is sc4626, IFlashLoanRecipient {
     /// @notice returns the total assets (WETH) held by the strategy
     function totalAssets() public view override returns (uint256 assets) {
         // value of the supplied collateral in eth terms using chainlink oracle
-        assets = totalCollateralSupplied();
+        assets = getCollateral();
 
         // subtract the debt
-        assets -= totalDebt();
+        assets -= getDebt();
 
         // add float
         assets += asset.balanceOf(address(this));
     }
 
     /// @notice returns the total wstETH supplied as collateral (in ETH)
-    function totalCollateralSupplied() public view returns (uint256) {
+    function getCollateral() public view returns (uint256) {
         return _wstEthToEth(aToken.balanceOf(address(this)));
     }
 
     /// @notice returns the total ETH borrowed
-    function totalDebt() public view returns (uint256) {
+    function getDebt() public view returns (uint256) {
         return variableDebtToken.balanceOf(address(this));
     }
 
     /// @notice returns the net leverage that the strategy is using right now (1e18 = 100%)
     function getLeverage() public view returns (uint256) {
-        uint256 coll = totalCollateralSupplied();
-        return coll > 0 ? coll.divWadUp(coll - totalDebt()) : 0;
+        uint256 coll = getCollateral();
+        return coll > 0 ? coll.divWadUp(coll - getDebt()) : 0;
     }
 
     /// @notice returns the net LTV at which we have borrowed till now (1e18 = 100%)
     function getLtv() public view returns (uint256 ltv) {
-        uint256 collateral = totalCollateralSupplied();
+        uint256 collateral = getCollateral();
         if (collateral > 0) {
-            // totalDebt / totalSupplied
-            ltv = totalDebt().divWadUp(collateral);
+            // getDebt / totalSupplied
+            ltv = getDebt().divWadUp(collateral);
         }
     }
 
@@ -315,7 +310,7 @@ contract scWETH is sc4626, IFlashLoanRecipient {
         // if flashloan received as part of a withdrawal
         else {
             // repay debt + withdraw collateral
-            if (flashLoanAmount >= totalDebt()) {
+            if (flashLoanAmount >= getDebt()) {
                 aavePool.repay(address(weth), type(uint256).max, C.AAVE_VAR_INTEREST_RATE_MODE, address(this));
                 aavePool.withdraw(address(wstETH), type(uint256).max, address(this));
             } else {
@@ -346,8 +341,8 @@ contract scWETH is sc4626, IFlashLoanRecipient {
         // storage loads
         uint256 amount = asset.balanceOf(address(this));
         uint256 ltv = targetLtv;
-        uint256 debt = totalDebt();
-        uint256 collateral = totalCollateralSupplied();
+        uint256 debt = getDebt();
+        uint256 collateral = getCollateral();
 
         uint256 target = ltv.mulWadDown(amount + collateral);
 
@@ -371,8 +366,8 @@ contract scWETH is sc4626, IFlashLoanRecipient {
     }
 
     function _withdrawToVault(uint256 amount) internal {
-        uint256 debt = totalDebt();
-        uint256 collateral = totalCollateralSupplied();
+        uint256 debt = getDebt();
+        uint256 collateral = getCollateral();
 
         uint256 flashLoanAmount = amount.mulDivDown(debt, collateral - debt);
 
