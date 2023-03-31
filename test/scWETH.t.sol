@@ -389,7 +389,7 @@ contract scWETHTest is Test {
 
         _simulate_stEthStakingInterest(timePeriod, stEthStakingInterest);
 
-        assertEq(vault.totalProfit(), 0);
+        assertEq(vault.balanceOf(treasury), 0);
 
         vm.prank(keeper);
         vault.rebalance();
@@ -465,6 +465,56 @@ contract scWETHTest is Test {
         uint256 balance = vault.convertToAssets(vault.balanceOf(treasury));
         uint256 profit = vault.totalProfit();
         assertApproxEqRel(balance, profit.mulWadDown(vault.performanceFee()), 0.015e18);
+    }
+
+    function test_deposit_rebalance_deposit_rebalance() public {
+        uint256 amount = 100 ether;
+        _depositToVault(address(this), amount);
+
+        vm.prank(keeper);
+        vault.rebalance();
+
+        assertEq(vault.balanceOf(treasury), 0, "profit must be zero");
+
+        _depositToVault(alice, amount);
+
+        vm.prank(keeper);
+        vault.rebalance();
+
+        assertEq(vault.balanceOf(treasury), 0, "profit must be zero");
+    }
+
+    function test_deposit_rebalance_deposit_rebalance_withSimulatedProfits() public {
+        uint256 deposit1 = 10 ether;
+        uint256 deposit2 = deposit1 * 10;
+        uint256 deposit3 = deposit1 * 50;
+        _depositToVault(address(this), deposit2);
+
+        vm.prank(keeper);
+        vault.rebalance();
+
+        _simulate_stEthStakingInterest(365 days, 1.071e18);
+
+        _depositToVault(alice, deposit2);
+
+        vm.prank(keeper);
+        vault.rebalance();
+
+        uint256 profit1 = vault.totalProfit();
+
+        assertApproxEqRel(profit1, deposit1.mulWadDown(0.15e18), 0.015e18);
+
+        _simulate_stEthStakingInterest(365 days, 1.071e18);
+        _depositToVault(address(this), deposit3);
+
+        vm.prank(keeper);
+        vault.rebalance();
+
+        assertApproxEqRel(vault.totalProfit() - profit1, (deposit1 + deposit2).mulWadDown(0.15e18), 0.015e18);
+
+        // performance fees must only be minted from the first deposit
+        // since the second deposit didnot particapate in the profits
+        // uint256 expectedPerfFees = amount.mulWadDown(vault.performanceFee());
     }
 
     function test_mint_redeem(uint256 amount) public {
