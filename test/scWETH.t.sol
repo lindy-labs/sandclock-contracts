@@ -571,7 +571,7 @@ contract scWETHTest is Test {
             curveEthStEthPool: ICurvePool(C.CURVE_ETH_STETH_POOL),
             stEth: ILido(C.STETH),
             wstEth: IwstETH(C.WSTETH),
-            weth: WETH(payable(C.WETH)),
+            weth: C.WETH,
             stEthToEthPriceFeed: AggregatorV3Interface(C.CHAINLINK_STETH_ETH_PRICE_FEED),
             balancerVault: IVault(C.BALANCER_VAULT)
         });

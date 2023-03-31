@@ -78,13 +78,13 @@ contract scWETH is sc4626, IFlashLoanRecipient {
         ICurvePool curveEthStEthPool;
         ILido stEth;
         IwstETH wstEth;
-        WETH weth;
+        address weth;
         AggregatorV3Interface stEthToEthPriceFeed;
         IVault balancerVault;
     }
 
     constructor(ConstructorParams memory _params)
-        sc4626(_params.admin, _params.keeper, _params.weth, "Sandclock WETH Vault", "scWETH")
+        sc4626(_params.admin, _params.keeper, ERC20(_params.weth), "Sandclock WETH Vault", "scWETH")
     {
         if (_params.slippageTolerance > C.ONE) revert InvalidSlippageTolerance();
 
@@ -94,7 +94,7 @@ contract scWETH is sc4626, IFlashLoanRecipient {
         curvePool = _params.curveEthStEthPool;
         stEth = _params.stEth;
         wstETH = _params.wstEth;
-        weth = _params.weth;
+        weth = WETH(payable(_params.weth));
         stEThToEthPriceFeed = _params.stEthToEthPriceFeed;
         balancerVault = _params.balancerVault;
 
