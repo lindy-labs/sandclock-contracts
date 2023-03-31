@@ -62,7 +62,12 @@ jobs:
           FOUNDRY_PROFILE=ci forge coverage --report lcov
         id: coverage
 
+      - name: Prune lcov report
+        run: |
+          sudo apt-get install lcov
+          lcov --remove ./lcov.info -o ./lcov.info.pruned 'script/' 'test/'
+
       - name: Coveralls GitHub Action
         uses: coverallsapp/github-action@v2.0.0
         with:
-          path-to-lcov: lcov.info
+          path-to-lcov: lcov.info.pruned
