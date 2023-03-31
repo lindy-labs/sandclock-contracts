@@ -57,6 +57,7 @@ contract scWETHTest is Test {
 
         vault = new scWETH(params);
 
+        vault.setTreasury(treasury);
         // set vault eth balance to zero
         vm.deal(address(vault), 0);
 
@@ -74,7 +75,7 @@ contract scWETHTest is Test {
 
     function test_constructor() public {
         assertEq(aavePool.getUserEMode(address(vault)), 1, "Efficiency mode not 1");
-        assertEq(vault.treasury(), admin, "treasury not set");
+        assertEq(vault.treasury(), treasury, "treasury not set");
         assertEq(vault.hasRole(vault.DEFAULT_ADMIN_ROLE(), admin), true, "admin role not set");
         assertEq(vault.hasRole(vault.KEEPER_ROLE(), keeper), true, "keeper role not set");
         assertEq(vault.targetLtv(), targetLtv, "targetLtv not set");
@@ -234,7 +235,7 @@ contract scWETHTest is Test {
         _depositChecks(amount, preDepositBal);
 
         vm.prank(keeper);
-        vault.depositIntoStrategy();
+        vault.rebalance();
 
         // account for value loss if stETH worth less than ETH
         (, int256 price,,,) = vault.stEThToEthPriceFeed().latestRoundData();
@@ -243,9 +244,9 @@ contract scWETHTest is Test {
         // account for unrealized slippage loss
         amount = amount.mulWadDown(slippageTolerance);
 
-        assertApproxEqRel(vault.totalAssets(), amount, 0.01e18);
-        assertEq(vault.balanceOf(address(this)), shares);
-        assertApproxEqRel(vault.convertToAssets(vault.balanceOf(address(this))), amount, 0.01e18);
+        assertApproxEqRel(vault.totalAssets(), amount, 0.01e18, "vault totalAssets err");
+        assertEq(vault.balanceOf(address(this)), shares, "vault balance err");
+        assertApproxEqRel(vault.convertToAssets(vault.balanceOf(address(this))), amount, 0.01e18, "vault assets err");
 
         vault.redeem(shares, address(this), address(this));
 
@@ -265,7 +266,7 @@ contract scWETHTest is Test {
         uint256 shares2 = _depositToVault(alice, depositAmount2);
 
         vm.prank(keeper);
-        vault.depositIntoStrategy();
+        vault.rebalance();
 
         uint256 ltv = vault.targetLtv();
 
@@ -304,7 +305,7 @@ contract scWETHTest is Test {
         _depositToVault(address(this), amount);
 
         vm.startPrank(keeper);
-        vault.depositIntoStrategy();
+        vault.rebalance();
 
         newLtv = bound(newLtv, vault.getLtv() + 1e15, maxLtv - 0.001e18);
         vault.applyNewTargetLtv(newLtv);
@@ -317,7 +318,7 @@ contract scWETHTest is Test {
         _depositToVault(address(this), amount);
 
         vm.startPrank(keeper);
-        vault.depositIntoStrategy();
+        vault.rebalance();
 
         newLtv = bound(newLtv, 0.01e18, vault.getLtv() - 0.01e18);
         vault.applyNewTargetLtv(newLtv);
@@ -330,7 +331,7 @@ contract scWETHTest is Test {
         _depositToVault(address(this), amount);
 
         vm.startPrank(keeper);
-        vault.depositIntoStrategy();
+        vault.rebalance();
 
         vm.expectRevert(InvalidTargetLtv.selector);
         vault.applyNewTargetLtv(maxLtv + 1);
@@ -384,14 +385,14 @@ contract scWETHTest is Test {
         _depositToVault(address(this), amount);
 
         vm.prank(keeper);
-        vault.depositIntoStrategy();
+        vault.rebalance();
 
         _simulate_stEthStakingInterest(timePeriod, stEthStakingInterest);
 
         assertEq(vault.totalProfit(), 0);
 
         vm.prank(keeper);
-        vault.harvest();
+        vault.rebalance();
 
         uint256 minimumExpectedApy = 0.07e18;
 
@@ -415,7 +416,7 @@ contract scWETHTest is Test {
         _depositToVault(address(this), amount);
 
         vm.startPrank(keeper);
-        vault.depositIntoStrategy();
+        vault.rebalance();
 
         _withdrawToVaultChecks(0.018e18);
     }
@@ -426,11 +427,11 @@ contract scWETHTest is Test {
         _depositToVault(address(this), amount);
 
         vm.startPrank(keeper);
-        vault.depositIntoStrategy();
+        vault.rebalance();
 
         _simulate_stEthStakingInterest(365 days, 1.071e18);
 
-        vault.harvest();
+        vault.rebalance();
 
         // harvest must automatically rebalance
         assertApproxEqRel(vault.getLtv(), vault.targetLtv(), 0.001e18, "ltv not rebalanced");
@@ -452,15 +453,14 @@ contract scWETHTest is Test {
     }
 
     function test_harvest_performanceFees(uint256 amount) public {
-        vault.setTreasury(treasury);
         amount = bound(amount, boundMinimum, 10000 ether);
         _depositToVault(address(this), amount);
 
         vm.startPrank(keeper);
-        vault.depositIntoStrategy();
+        vault.rebalance();
 
         _simulate_stEthStakingInterest(365 days, 1.071e18);
-        vault.harvest();
+        vault.rebalance();
 
         uint256 balance = vault.convertToAssets(vault.balanceOf(treasury));
         uint256 profit = vault.totalProfit();
@@ -495,7 +495,7 @@ contract scWETHTest is Test {
         vault.mint(shares, address(this));
 
         vm.prank(keeper);
-        vault.depositIntoStrategy();
+        vault.rebalance();
 
         // account for value loss if stETH worth less than ETH
         (, int256 price,,,) = vault.stEThToEthPriceFeed().latestRoundData();
@@ -528,12 +528,12 @@ contract scWETHTest is Test {
         vm.stopPrank();
 
         vm.prank(keeper);
-        vault.depositIntoStrategy();
+        vault.rebalance();
 
         uint256 interest = 1.071e18;
         _simulate_stEthStakingInterest(365 days, interest);
         vm.prank(keeper);
-        vault.harvest();
+        vault.rebalance();
 
         vm.prank(alice);
         vault.redeem(shares, alice, alice);
