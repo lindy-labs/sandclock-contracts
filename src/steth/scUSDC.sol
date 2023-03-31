@@ -1,15 +1,20 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.13;
 
+import {
+    InvalidTargetLtv,
+    InvalidSlippageTolerance,
+    InvalidFlashLoanCaller,
+    VaultNotUnderwater
+} from "../errors/scErrors.sol";
+
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {WETH} from "solmate/tokens/WETH.sol";
 import {ERC4626} from "solmate/mixins/ERC4626.sol";
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
-import {ERC4626} from "solmate/mixins/ERC4626.sol";
 import {IPool} from "aave-v3/interfaces/IPool.sol";
 import {IAToken} from "aave-v3/interfaces/IAToken.sol";
-import {IVariableDebtToken} from "aave-v3/interfaces/IVariableDebtToken.sol";
 import {IPoolDataProvider} from "aave-v3/interfaces/IPoolDataProvider.sol";
 
 import {Constants as C} from "../lib/Constants.sol";
@@ -29,11 +34,6 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
     using SafeTransferLib for WETH;
     using FixedPointMathLib for uint256;
 
-    error InvalidTargetLtv();
-    error InvalidSlippageTolerance();
-    error InvalidFlashLoanCaller();
-    error VaultNotUnderwater();
-
     event NewTargetLtvApplied(address indexed admin, uint256 newTargetLtv);
     event SlippageToleranceUpdated(address indexed admin, uint256 newSlippageTolerance);
     event EmergencyExitExecuted(
@@ -49,29 +49,29 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
         uint256 finalUsdcBalance
     );
 
-    WETH public constant weth = WETH(payable(C.WETH));
+    WETH public immutable weth;
 
     // delta threshold for rebalancing in percentage
     uint256 constant DEBT_DELTA_THRESHOLD = 0.01e18;
 
     // main aave contract for interaction with the protocol
-    IPool public constant aavePool = IPool(C.AAVE_POOL);
+    IPool public immutable aavePool;
     // aave protocol data provider
-    IPoolDataProvider public constant aavePoolDataProvider = IPoolDataProvider(C.AAVE_POOL_DATA_PROVIDER);
+    IPoolDataProvider public immutable aavePoolDataProvider;
 
     // aave "aEthUSDC" token
-    IAToken public constant aUsdc = IAToken(C.AAVE_AUSDC_TOKEN);
+    IAToken public immutable aUsdc;
     // aave "variableDebtEthWETH" token
-    ERC20 public constant dWeth = ERC20(C.AAVAAVE_VAR_DEBT_WETH_TOKEN);
+    ERC20 public immutable dWeth;
 
     // Uniswap V3 router
-    ISwapRouter public swapRouter = ISwapRouter(C.UNISWAP_V3_SWAP_ROUTER);
+    ISwapRouter public immutable swapRouter;
 
     // Chainlink pricefeed (USDC -> WETH)
-    AggregatorV3Interface public constant usdcToEthPriceFeed = AggregatorV3Interface(C.CHAINLINK_USDC_ETH_PRICE_FEED);
+    AggregatorV3Interface public immutable usdcToEthPriceFeed;
 
     // Balancer vault for flashloans
-    IVault public constant balancerVault = IVault(C.BALANCER_VAULT);
+    IVault public immutable balancerVault;
 
     // USDC / WETH target LTV
     uint256 public targetLtv = 0.65e18;
@@ -82,14 +82,39 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
     // leveraged (w)eth vault
     ERC4626 public immutable scWETH;
 
-    constructor(address _admin, ERC4626 _scWETH) sc4626(_admin, ERC20(C.USDC), "Sandclock USDC Vault", "scUSDC") {
-        scWETH = _scWETH;
+    struct ConstructorParams {
+        address admin;
+        address keeper;
+        ERC4626 scWETH;
+        ERC20 usdc;
+        WETH weth;
+        IPool aavePool;
+        IPoolDataProvider aavePoolDataProvider;
+        IAToken aaveAUsdc;
+        ERC20 aaveVarDWeth;
+        ISwapRouter uniswapSwapRouter;
+        AggregatorV3Interface chainlinkUsdcToEthPriceFeed;
+        IVault balancerVault;
+    }
+
+    constructor(ConstructorParams memory _params)
+        sc4626(_params.admin, _params.keeper, _params.usdc, "Sandclock USDC Vault", "scUSDC")
+    {
+        scWETH = _params.scWETH;
+        weth = _params.weth;
+        aavePool = _params.aavePool;
+        aavePoolDataProvider = _params.aavePoolDataProvider;
+        aUsdc = _params.aaveAUsdc;
+        dWeth = _params.aaveVarDWeth;
+        swapRouter = _params.uniswapSwapRouter;
+        usdcToEthPriceFeed = _params.chainlinkUsdcToEthPriceFeed;
+        balancerVault = _params.balancerVault;
 
         asset.safeApprove(address(aavePool), type(uint256).max);
 
         weth.safeApprove(address(aavePool), type(uint256).max);
         weth.safeApprove(address(swapRouter), type(uint256).max);
-        weth.safeApprove(address(_scWETH), type(uint256).max);
+        weth.safeApprove(address(_params.scWETH), type(uint256).max);
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -126,7 +151,7 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
      * @notice Rebalance the vault's positions.
      * @dev Called to increase or decrease the WETH debt to match the target LTV.
      */
-    function rebalance() public {
+    function rebalance() public onlyKeeper {
         uint256 initialBalance = getUsdcBalance();
         uint256 currentBalance = initialBalance;
         uint256 collateral = getCollateral();

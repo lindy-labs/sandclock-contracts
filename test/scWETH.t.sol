@@ -6,28 +6,31 @@ import "forge-std/console2.sol";
 
 import {DSTestPlus} from "solmate/test/utils/DSTestPlus.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
+import {IPool} from "aave-v3/interfaces/IPool.sol";
+import {IAToken} from "aave-v3/interfaces/IAToken.sol";
+import {IVariableDebtToken} from "aave-v3/interfaces/IVariableDebtToken.sol";
+import {Errors} from "aave-v3/protocol/libraries/helpers/Errors.sol";
+import {ERC20} from "solmate/tokens/ERC20.sol";
+
+import {Constants as C} from "../src/lib/Constants.sol";
 import {scWETH} from "../src/steth/scWETH.sol";
 import {WETH} from "solmate/tokens/WETH.sol";
 import {ILido} from "../src/interfaces/lido/ILido.sol";
 import {IwstETH} from "../src/interfaces/lido/IwstETH.sol";
 import {ICurvePool} from "../src/interfaces/curve/ICurvePool.sol";
-import {IPool} from "aave-v3/interfaces/IPool.sol";
-import {IAToken} from "aave-v3/interfaces/IAToken.sol";
-import {IVariableDebtToken} from "aave-v3/interfaces/IVariableDebtToken.sol";
-import {Errors} from "aave-v3/protocol/libraries/helpers/Errors.sol";
-import {Constants as C} from "../src/lib/Constants.sol";
+import {IVault} from "../src/interfaces/balancer/IVault.sol";
+import {AggregatorV3Interface} from "../src/interfaces/chainlink/AggregatorV3Interface.sol";
 import {sc4626} from "../src/sc4626.sol";
-import "../src/errors/scWETHErrors.sol";
-
-import {ERC20} from "solmate/tokens/ERC20.sol";
+import "../src/errors/scErrors.sol";
 
 contract scWETHTest is Test {
     using FixedPointMathLib for uint256;
 
     uint256 mainnetFork;
 
-    // dummy users
+    address constant keeper = address(0x05);
     address constant alice = address(0x06);
+    address constant treasury = address(0x07);
     uint256 boundMinimum = 1e10; // below this amount, aave doesn't count it as collateral
 
     address admin = address(this);
@@ -50,7 +53,9 @@ contract scWETHTest is Test {
         vm.selectFork(mainnetFork);
         vm.rollFork(16784444);
 
-        vault = new scWETH(address(C.WETH), admin,  targetLtv, slippageTolerance);
+        scWETH.ConstructorParams memory params = _createDefaultWethVaultConstructorParams();
+
+        vault = new scWETH(params);
 
         // set vault eth balance to zero
         vm.deal(address(vault), 0);
@@ -71,24 +76,41 @@ contract scWETHTest is Test {
         assertEq(aavePool.getUserEMode(address(vault)), 1, "Efficiency mode not 1");
         assertEq(vault.treasury(), admin, "treasury not set");
         assertEq(vault.hasRole(vault.DEFAULT_ADMIN_ROLE(), admin), true, "admin role not set");
-        assertEq(vault.hasRole(vault.KEEPER_ROLE(), admin), true, "keeper role not set");
+        assertEq(vault.hasRole(vault.KEEPER_ROLE(), keeper), true, "keeper role not set");
         assertEq(vault.targetLtv(), targetLtv, "targetLtv not set");
         assertEq(vault.slippageTolerance(), slippageTolerance, "slippageTolerance not set");
     }
 
     function test_constructor_invalidAdmin() public {
-        vm.expectRevert(bytes4(keccak256("ZeroAddress()")));
-        vault = new scWETH(address(weth), address(0x00),  targetLtv, slippageTolerance);
+        scWETH.ConstructorParams memory params = _createDefaultWethVaultConstructorParams();
+        params.admin = address(0x00); // invalid address
+
+        vm.expectRevert(ZeroAddress.selector);
+        vault = new scWETH(params);
+    }
+
+    function test_constructor_invalidKeeper() public {
+        scWETH.ConstructorParams memory params = _createDefaultWethVaultConstructorParams();
+        params.keeper = address(0x00); // invalid address
+
+        vm.expectRevert(ZeroAddress.selector);
+        vault = new scWETH(params);
     }
 
     function test_constructor_invalidTargetLtv() public {
-        vm.expectRevert(bytes4(keccak256("InvalidTargetLtv()")));
-        vault = new scWETH(address(weth), admin,  0.9e18, slippageTolerance);
+        scWETH.ConstructorParams memory params = _createDefaultWethVaultConstructorParams();
+        params.targetLtv = 0.9e18; // invalid target ltv
+
+        vm.expectRevert(InvalidTargetLtv.selector);
+        vault = new scWETH(params);
     }
 
     function test_constructor_invalidSlippageTolerance() public {
-        vm.expectRevert(bytes4(keccak256("InvalidSlippageTolerance()")));
-        vault = new scWETH(address(weth), admin,  targetLtv, 1.01e18);
+        scWETH.ConstructorParams memory params = _createDefaultWethVaultConstructorParams();
+        params.slippageTolerance = 1.01e18; // invalid slippage tolerance
+
+        vm.expectRevert(InvalidSlippageTolerance.selector);
+        vault = new scWETH(params);
     }
 
     function test_setPerformanceFee() public {
@@ -101,7 +123,7 @@ contract scWETHTest is Test {
         vm.prank(alice);
         vault.setPerformanceFee(fee);
 
-        vm.expectRevert(bytes4(keccak256("FeesTooHigh()")));
+        vm.expectRevert(FeesTooHigh.selector);
         vault.setPerformanceFee(1.1e18);
     }
 
@@ -115,7 +137,7 @@ contract scWETHTest is Test {
         vm.prank(alice);
         vault.setTreasury(address(this));
 
-        vm.expectRevert(bytes4(keccak256("TreasuryCannotBeZero()")));
+        vm.expectRevert(TreasuryCannotBeZero.selector);
         vault.setTreasury(address(0x00));
     }
 
@@ -124,26 +146,12 @@ contract scWETHTest is Test {
         assertEq(vault.slippageTolerance(), 0.5e18, "slippageTolerance not set");
 
         // revert if called by another user
-        vm.expectRevert(sc4626.CallerNotAdmin.selector);
+        vm.expectRevert(CallerNotAdmin.selector);
         vm.prank(alice);
         vault.setSlippageTolerance(0.5e18);
 
-        vm.expectRevert(bytes4(keccak256("InvalidSlippageTolerance()")));
+        vm.expectRevert(InvalidSlippageTolerance.selector);
         vault.setSlippageTolerance(1.1e18);
-    }
-
-    function test_setExchangeProxyAddress() public {
-        address newExchangeProxy = alice;
-        vault.setExchangeProxyAddress(newExchangeProxy);
-        assertEq(vault.xrouter(), newExchangeProxy);
-
-        // revert if called by another user
-        vm.expectRevert(sc4626.CallerNotAdmin.selector);
-        vm.prank(alice);
-        vault.setExchangeProxyAddress(alice);
-
-        vm.expectRevert(bytes4(keccak256("ZeroAddress()")));
-        vault.setExchangeProxyAddress(address(0x00));
     }
 
     function test_setStEThToEthPriceFeed() public {
@@ -152,11 +160,11 @@ contract scWETHTest is Test {
         assertEq(address(vault.stEThToEthPriceFeed()), newStEthPriceFeed);
 
         // revert if called by another user
-        vm.expectRevert(sc4626.CallerNotAdmin.selector);
+        vm.expectRevert(CallerNotAdmin.selector);
         vm.prank(alice);
         vault.setStEThToEthPriceFeed(newStEthPriceFeed);
 
-        vm.expectRevert(bytes4(keccak256("ZeroAddress()")));
+        vm.expectRevert(ZeroAddress.selector);
         vault.setStEThToEthPriceFeed(address(0x00));
     }
 
@@ -225,6 +233,7 @@ contract scWETHTest is Test {
 
         _depositChecks(amount, preDepositBal);
 
+        vm.prank(keeper);
         vault.depositIntoStrategy();
 
         // account for value loss if stETH worth less than ETH
@@ -255,6 +264,7 @@ contract scWETHTest is Test {
         uint256 shares1 = _depositToVault(address(this), depositAmount1);
         uint256 shares2 = _depositToVault(alice, depositAmount2);
 
+        vm.prank(keeper);
         vault.depositIntoStrategy();
 
         uint256 ltv = vault.targetLtv();
@@ -289,22 +299,51 @@ contract scWETHTest is Test {
         assertEq(vault.getLtv(), 0);
     }
 
-    function test_leverageUp(uint256 amount, uint256 newLtv) public {
+    function test_applyNewTargetLtv_higherLtv(uint256 amount, uint256 newLtv) public {
         amount = bound(amount, boundMinimum, 1e20);
         _depositToVault(address(this), amount);
+
+        vm.startPrank(keeper);
         vault.depositIntoStrategy();
+
         newLtv = bound(newLtv, vault.getLtv() + 1e15, maxLtv - 0.001e18);
-        vault.changeLeverage(newLtv);
+        vault.applyNewTargetLtv(newLtv);
+
         assertApproxEqRel(vault.getLtv(), newLtv, 0.01e18, "leverage change failed");
     }
 
-    function test_leverageDown(uint256 amount, uint256 newLtv) public {
+    function test_applyNewTargetLtv_lowerLtv(uint256 amount, uint256 newLtv) public {
         amount = bound(amount, boundMinimum, 1e20);
         _depositToVault(address(this), amount);
+
+        vm.startPrank(keeper);
         vault.depositIntoStrategy();
+
         newLtv = bound(newLtv, 0.01e18, vault.getLtv() - 0.01e18);
-        vault.changeLeverage(newLtv);
+        vault.applyNewTargetLtv(newLtv);
+
         assertApproxEqRel(vault.getLtv(), newLtv, 0.01e18, "leverage change failed");
+    }
+
+    function test_applyNewTargetLtv_invalidMaxLtv() public {
+        uint256 amount = 100 ether;
+        _depositToVault(address(this), amount);
+
+        vm.startPrank(keeper);
+        vault.depositIntoStrategy();
+
+        vm.expectRevert(InvalidTargetLtv.selector);
+        vault.applyNewTargetLtv(maxLtv + 1);
+        vm.expectRevert(InvalidTargetLtv.selector);
+        vault.applyNewTargetLtv(maxLtv);
+    }
+
+    function test_receiveFlashLoan_InvalidFlashLoanCaller() public {
+        address[] memory empty;
+        uint256[] memory amounts = new uint[](1);
+        amounts[0] = 1;
+        vm.expectRevert(InvalidFlashLoanCaller.selector);
+        vault.receiveFlashLoan(empty, amounts, amounts, abi.encode(1));
     }
 
     function test_maxLtv(uint256 amount) public {
@@ -330,7 +369,7 @@ contract scWETHTest is Test {
     }
 
     function test_withdraw_revert() public {
-        vm.expectRevert(bytes4(keccak256("PleaseUseRedeemMethod()")));
+        vm.expectRevert(PleaseUseRedeemMethod.selector);
         vault.withdraw(1e18, address(this), address(this));
     }
 
@@ -344,12 +383,14 @@ contract scWETHTest is Test {
 
         _depositToVault(address(this), amount);
 
+        vm.prank(keeper);
         vault.depositIntoStrategy();
 
         _simulate_stEthStakingInterest(timePeriod, stEthStakingInterest);
 
         assertEq(vault.totalProfit(), 0);
 
+        vm.prank(keeper);
         vault.harvest();
 
         uint256 minimumExpectedApy = 0.07e18;
@@ -373,6 +414,7 @@ contract scWETHTest is Test {
         amount = bound(amount, boundMinimum, 10000 ether);
         _depositToVault(address(this), amount);
 
+        vm.startPrank(keeper);
         vault.depositIntoStrategy();
 
         _withdrawToVaultChecks(0.018e18);
@@ -383,6 +425,7 @@ contract scWETHTest is Test {
         uint256 amount = 10000 ether;
         _depositToVault(address(this), amount);
 
+        vm.startPrank(keeper);
         vault.depositIntoStrategy();
 
         _simulate_stEthStakingInterest(365 days, 1.071e18);
@@ -393,6 +436,7 @@ contract scWETHTest is Test {
         assertApproxEqRel(vault.getLtv(), vault.targetLtv(), 0.001e18, "ltv not rebalanced");
 
         _withdrawToVaultChecks(0.025e18);
+        vm.stopPrank();
 
         uint256 minimumExpectedApy = 0.05e18;
 
@@ -408,13 +452,19 @@ contract scWETHTest is Test {
     }
 
     function test_harvest_performanceFees(uint256 amount) public {
+        vault.setTreasury(treasury);
         amount = bound(amount, boundMinimum, 10000 ether);
         _depositToVault(address(this), amount);
 
+        vm.startPrank(keeper);
         vault.depositIntoStrategy();
 
         _simulate_stEthStakingInterest(365 days, 1.071e18);
         vault.harvest();
+
+        uint256 balance = vault.convertToAssets(vault.balanceOf(treasury));
+        uint256 profit = vault.totalProfit();
+        assertApproxEqRel(balance, profit.mulWadDown(vault.performanceFee()), 0.015e18);
     }
 
     function test_mint_redeem(uint256 amount) public {
@@ -444,6 +494,7 @@ contract scWETHTest is Test {
         uint256 shares = vault.previewMint(amount);
         vault.mint(shares, address(this));
 
+        vm.prank(keeper);
         vault.depositIntoStrategy();
 
         // account for value loss if stETH worth less than ETH
@@ -476,10 +527,12 @@ contract scWETHTest is Test {
         vault.mint(shares, alice);
         vm.stopPrank();
 
+        vm.prank(keeper);
         vault.depositIntoStrategy();
 
         uint256 interest = 1.071e18;
         _simulate_stEthStakingInterest(365 days, interest);
+        vm.prank(keeper);
         vault.harvest();
 
         vm.prank(alice);
@@ -505,6 +558,24 @@ contract scWETHTest is Test {
     }
 
     //////////////////////////// INTERNAL METHODS ////////////////////////////////////////
+
+    function _createDefaultWethVaultConstructorParams() internal view returns (scWETH.ConstructorParams memory) {
+        return scWETH.ConstructorParams({
+            admin: admin,
+            keeper: keeper,
+            targetLtv: targetLtv,
+            slippageTolerance: slippageTolerance,
+            aavePool: IPool(C.AAVE_POOL),
+            aaveAwstEth: IAToken(C.AAVE_AWSTETH_TOKEN),
+            aaveVarDWeth: ERC20(C.AAVAAVE_VAR_DEBT_WETH_TOKEN),
+            curveEthStEthPool: ICurvePool(C.CURVE_ETH_STETH_POOL),
+            stEth: ILido(C.STETH),
+            wstEth: IwstETH(C.WSTETH),
+            weth: WETH(payable(C.WETH)),
+            stEthToEthPriceFeed: AggregatorV3Interface(C.CHAINLINK_STETH_ETH_PRICE_FEED),
+            balancerVault: IVault(C.BALANCER_VAULT)
+        });
+    }
 
     function _depositToVault(address user, uint256 amount) internal returns (uint256 shares) {
         vm.deal(user, amount);
@@ -550,8 +621,8 @@ contract scWETHTest is Test {
         vault.withdrawToVault(assets / 2);
 
         uint256 dust = 100;
-        assertLt(vault.totalDebt(), dust, "test_withdrawToVault totalDebt error");
-        assertLt(vault.totalCollateralSupplied(), dust, "test_withdrawToVault totalCollateralSupplied error");
+        assertLt(vault.getDebt(), dust, "test_withdrawToVault getDebt error");
+        assertLt(vault.getCollateral(), dust, "test_withdrawToVault getCollateral error");
         assertApproxEqRel(weth.balanceOf(address(vault)), assets, maxAssetsDelta, "test_withdrawToVault asset balance");
     }
 
