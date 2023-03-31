@@ -36,7 +36,7 @@ forge test
 
 ### Echidna
 
-Install [echidna](https://github.com/crytic/echidna/releases).
+Install [echidna](https://github.com/crytic/echidna/releases) and add environment variables `ECHIDNA_RPC_URL` and `ECHIDNA_RPC_BLOCK=16771449`.
 
 ```
 echidna . --contract CryticERC4626InternalHarness --config echidna.yaml
