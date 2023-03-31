@@ -65,7 +65,7 @@ jobs:
       - name: Prune lcov report
         run: |
           sudo apt-get install lcov
-          lcov --remove ./lcov.info -o ./lcov.info 'script' 'test'
+          lcov --remove ./lcov.info -o ./lcov.info 'script/*' 'test/*'
 
       - name: Coveralls GitHub Action
         uses: coverallsapp/github-action@v2.0.0
