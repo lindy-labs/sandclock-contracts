@@ -234,7 +234,7 @@ contract scWETHTest is Test {
         _depositChecks(amount, preDepositBal);
 
         vm.prank(keeper);
-        vault.depositIntoStrategy();
+        vault.rebalance();
 
         // account for value loss if stETH worth less than ETH
         (, int256 price,,,) = vault.stEThToEthPriceFeed().latestRoundData();
@@ -265,7 +265,7 @@ contract scWETHTest is Test {
         uint256 shares2 = _depositToVault(alice, depositAmount2);
 
         vm.prank(keeper);
-        vault.depositIntoStrategy();
+        vault.rebalance();
 
         uint256 ltv = vault.targetLtv();
 
@@ -304,7 +304,7 @@ contract scWETHTest is Test {
         _depositToVault(address(this), amount);
 
         vm.startPrank(keeper);
-        vault.depositIntoStrategy();
+        vault.rebalance();
 
         newLtv = bound(newLtv, vault.getLtv() + 1e15, maxLtv - 0.001e18);
         vault.applyNewTargetLtv(newLtv);
@@ -317,7 +317,7 @@ contract scWETHTest is Test {
         _depositToVault(address(this), amount);
 
         vm.startPrank(keeper);
-        vault.depositIntoStrategy();
+        vault.rebalance();
 
         newLtv = bound(newLtv, 0.01e18, vault.getLtv() - 0.01e18);
         vault.applyNewTargetLtv(newLtv);
@@ -330,7 +330,7 @@ contract scWETHTest is Test {
         _depositToVault(address(this), amount);
 
         vm.startPrank(keeper);
-        vault.depositIntoStrategy();
+        vault.rebalance();
 
         vm.expectRevert(InvalidTargetLtv.selector);
         vault.applyNewTargetLtv(maxLtv + 1);
@@ -383,20 +383,20 @@ contract scWETHTest is Test {
 
         _depositToVault(address(this), amount);
 
+        uint256 initAssets = vault.totalAssets();
+
         vm.prank(keeper);
-        vault.depositIntoStrategy();
+        vault.rebalance();
 
         _simulate_stEthStakingInterest(timePeriod, stEthStakingInterest);
 
-        assertEq(vault.totalProfit(), 0);
-
         vm.prank(keeper);
-        vault.harvest();
+        vault.rebalance();
 
         uint256 minimumExpectedApy = 0.07e18;
 
         assertGt(
-            vault.totalProfit(),
+            vault.totalAssets() - initAssets,
             amount.mulWadDown(minimumExpectedApy.mulDivDown(timePeriod, annualPeriod)),
             "atleast 7% APY"
         );
@@ -415,7 +415,7 @@ contract scWETHTest is Test {
         _depositToVault(address(this), amount);
 
         vm.startPrank(keeper);
-        vault.depositIntoStrategy();
+        vault.rebalance();
 
         _withdrawToVaultChecks(0.018e18);
     }
@@ -426,11 +426,11 @@ contract scWETHTest is Test {
         _depositToVault(address(this), amount);
 
         vm.startPrank(keeper);
-        vault.depositIntoStrategy();
+        vault.rebalance();
 
         _simulate_stEthStakingInterest(365 days, 1.071e18);
 
-        vault.harvest();
+        vault.rebalance();
 
         // harvest must automatically rebalance
         assertApproxEqRel(vault.getLtv(), vault.targetLtv(), 0.001e18, "ltv not rebalanced");
@@ -440,7 +440,9 @@ contract scWETHTest is Test {
 
         uint256 minimumExpectedApy = 0.05e18;
 
-        assertGt(vault.totalProfit(), amount.mulWadDown(minimumExpectedApy), "atleast 5% APY");
+        uint256 profit = vault.totalAssets() - amount;
+
+        assertGt(profit, amount.mulWadDown(minimumExpectedApy), "atleast 5% APY");
 
         vault.redeem(vault.balanceOf(address(this)), address(this), address(this));
 
@@ -457,14 +459,19 @@ contract scWETHTest is Test {
         _depositToVault(address(this), amount);
 
         vm.startPrank(keeper);
-        vault.depositIntoStrategy();
+        vault.rebalance();
 
         _simulate_stEthStakingInterest(365 days, 1.071e18);
-        vault.harvest();
+        vault.rebalance();
+        vm.stopPrank();
 
-        uint256 balance = vault.convertToAssets(vault.balanceOf(treasury));
-        uint256 profit = vault.totalProfit();
-        assertApproxEqRel(balance, profit.mulWadDown(vault.performanceFee()), 0.015e18);
+        uint256 expectedUserProfit = vault.convertToAssets(vault.balanceOf(address(this))) - amount;
+        uint256 expectedFees = expectedUserProfit.mulWadDown(vault.performanceFee());
+
+        vault.redeem(vault.balanceOf(address(this)), address(this), address(this));
+
+        uint256 balance = weth.balanceOf(treasury);
+        assertApproxEqRel(balance, expectedFees, 0.2e18);
     }
 
     function test_mint_redeem(uint256 amount) public {
@@ -495,7 +502,7 @@ contract scWETHTest is Test {
         vault.mint(shares, address(this));
 
         vm.prank(keeper);
-        vault.depositIntoStrategy();
+        vault.rebalance();
 
         // account for value loss if stETH worth less than ETH
         (, int256 price,,,) = vault.stEThToEthPriceFeed().latestRoundData();
@@ -528,12 +535,12 @@ contract scWETHTest is Test {
         vm.stopPrank();
 
         vm.prank(keeper);
-        vault.depositIntoStrategy();
+        vault.rebalance();
 
         uint256 interest = 1.071e18;
         _simulate_stEthStakingInterest(365 days, interest);
         vm.prank(keeper);
-        vault.harvest();
+        vault.rebalance();
 
         vm.prank(alice);
         vault.redeem(shares, alice, alice);

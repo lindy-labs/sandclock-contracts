@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.13;
 
+import "forge-std/console.sol";
+
 import {
     InvalidTargetLtv,
     ZeroAddress,
@@ -55,11 +57,8 @@ contract scWETH is sc4626, IFlashLoanRecipient {
     // Balancer vault for flashloans
     IVault public immutable balancerVault;
 
-    // total invested during last harvest/rebalance
-    uint256 public totalInvested;
-
-    // total profit generated for this vault
-    uint256 public totalProfit;
+    // total principal deposited by an address
+    mapping(address => uint256) public principal;
 
     // the target ltv ratio at which we actually borrow (<= maxLtv)
     uint256 public targetLtv;
@@ -133,27 +132,9 @@ contract scWETH is sc4626, IFlashLoanRecipient {
     /// @notice harvest profits and rebalance the position by investing profits back into the strategy
     /// @dev reduces the getLtv() back to the target ltv
     /// @dev also mints performance fee tokens to the treasury
-    function harvest() external onlyKeeper {
-        // store the old total
-        uint256 oldTotalInvested = totalInvested;
-
+    function rebalance() external onlyKeeper {
         // reinvest
         _rebalancePosition();
-
-        totalInvested = totalAssets();
-
-        if (totalInvested > oldTotalInvested) {
-            // profit since last harvest, zero if there was a loss
-            uint256 profit = totalInvested - oldTotalInvested;
-            totalProfit += profit;
-
-            uint256 fee = profit.mulWadDown(performanceFee);
-
-            // mint equivalent amount of tokens to the performance fee beneficiary ie the treasury
-            _mint(treasury, fee.mulDivDown(C.ONE, convertToAssets(C.ONE)));
-
-            emit Harvest(profit, fee);
-        }
     }
 
     /// @notice increase/decrease the target ltv used on borrows
@@ -167,12 +148,6 @@ contract scWETH is sc4626, IFlashLoanRecipient {
         _rebalancePosition();
 
         emit NewTargetLtvApplied(msg.sender, newTargetLtv);
-    }
-
-    /// @notice deposit all available funds into the strategy
-    /// @dev separate to save gas for users depositing
-    function depositIntoStrategy() external onlyKeeper {
-        _rebalancePosition();
     }
 
     /// @notice withdraw funds from the strategy into the vault
@@ -244,6 +219,26 @@ contract scWETH is sc4626, IFlashLoanRecipient {
         afterDeposit(assets, shares);
     }
 
+    function deposit(uint256 assets, address receiver) public override returns (uint256 shares) {
+        principal[receiver] += assets;
+        shares = super.deposit(assets, receiver);
+    }
+
+    function mint(uint256 shares, address receiver) public override returns (uint256 assets) {
+        assets = previewMint(shares); // No need to check for rounding error, previewMint rounds up.
+
+        principal[receiver] += assets;
+
+        // Need to transfer before minting or ERC777s could reenter.
+        asset.safeTransferFrom(msg.sender, address(this), assets);
+
+        _mint(receiver, shares);
+
+        emit Deposit(msg.sender, receiver, assets, shares);
+
+        afterDeposit(assets, shares);
+    }
+
     function redeem(uint256 shares, address receiver, address owner) public override returns (uint256 assets) {
         if (msg.sender != owner) {
             uint256 allowed = allowance[owner][msg.sender]; // Saves gas for limited approvals.
@@ -262,6 +257,18 @@ contract scWETH is sc4626, IFlashLoanRecipient {
 
         if (assets > balance) {
             assets = balance;
+        }
+
+        uint256 balanceOwner = balanceOf[owner];
+        uint256 sharesToPrincipal =
+            shares < balanceOwner ? shares.mulDivDown(principal[owner], balanceOwner) : principal[owner];
+        principal[owner] -= sharesToPrincipal;
+        if (assets > sharesToPrincipal) {
+            uint256 profit = assets - sharesToPrincipal;
+            // deduct performance fees to treasury
+            uint256 fee = profit.mulWadDown(performanceFee);
+            asset.safeTransfer(treasury, fee);
+            assets -= fee;
         }
 
         emit Withdraw(msg.sender, receiver, owner, assets, shares);
@@ -357,9 +364,6 @@ contract scWETH is sc4626, IFlashLoanRecipient {
         uint256[] memory amounts = new uint256[](1);
         amounts[0] = flashLoanAmount;
 
-        // needed otherwise counted as profit during harvest
-        totalInvested += amount;
-
         // take flashloan
         balancerVault.flashLoan(address(this), tokens, amounts, abi.encode(isDeposit, amount));
     }
@@ -413,9 +417,6 @@ contract scWETH is sc4626, IFlashLoanRecipient {
         }
 
         uint256 missing = (assets - float);
-
-        // needed otherwise counted as loss during harvest
-        totalInvested -= missing;
 
         _withdrawToVault(missing);
     }
