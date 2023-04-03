@@ -577,6 +577,39 @@ contract scWETHTest is Test {
         assertEq(vault.totalProfit(), 0, "profit must be zero");
     }
 
+    function test_disinvest_invest_should_not_increase_invested(uint256 amount) public {
+        vault.setTreasury(treasury);
+        amount = bound(amount, boundMinimum, 1e21);
+        _depositToVault(address(this), amount);
+
+        vm.prank(keeper);
+        vault.harvest();
+
+        assertEq(vault.balanceOf(treasury), 0, "profit must be zero");
+        assertEq(vault.totalProfit(), 0, "profit must be zero");
+
+        _depositToVault(alice, amount);
+
+        vm.prank(keeper);
+        vault.harvest();
+
+        assertEq(vault.balanceOf(treasury), 0, "profit must be zero");
+        assertEq(vault.totalProfit(), 0, "profit must be zero");
+
+        vm.startPrank(keeper);
+        uint256 all = vault.totalInvested();
+        vault.withdrawToVault(all);
+        vault.depositIntoStrategy();
+        assertApproxEqRel(all, vault.totalInvested(), 0.01e18);
+
+        all = vault.totalInvested();
+        vault.withdrawToVault(all);
+        vault.harvest();
+        assertApproxEqRel(all, vault.totalInvested(), 0.01e18);
+        assertEq(vault.balanceOf(treasury), 0, "profit must be zero");
+        assertEq(vault.totalProfit(), 0, "profit must be zero");
+    }
+
     // harvest should never count new deposits as profit
     function test_deposit_profit_deposit_harvest(uint256 amount) public {
         vault.setTreasury(treasury);
