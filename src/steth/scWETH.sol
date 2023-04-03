@@ -131,6 +131,7 @@ contract scWETH is sc4626, IFlashLoanRecipient {
     /////////////////// ADMIN/KEEPER METHODS //////////////////////////////////
 
     /// @notice harvest profits and rebalance the position by investing profits back into the strategy
+    /// @dev for the first deposit, deposits everything into the strategy.
     /// @dev reduces the getLtv() back to the target ltv
     /// @dev also mints performance fee tokens to the treasury
     function harvest() external onlyKeeper {
@@ -168,12 +169,6 @@ contract scWETH is sc4626, IFlashLoanRecipient {
         _rebalancePosition();
 
         emit NewTargetLtvApplied(msg.sender, newTargetLtv);
-    }
-
-    /// @notice deposit all available funds into the strategy
-    /// @dev separate to save gas for users depositing
-    function depositIntoStrategy() external onlyKeeper {
-        _rebalancePosition();
     }
 
     /// @notice withdraw funds from the strategy into the vault
