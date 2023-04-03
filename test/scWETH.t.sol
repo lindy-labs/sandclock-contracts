@@ -322,7 +322,8 @@ contract scWETHTest is Test {
         newLtv = bound(newLtv, 0.01e18, vault.getLtv() - 0.01e18);
         vault.applyNewTargetLtv(newLtv);
 
-        assertApproxEqRel(vault.getLtv(), newLtv, 0.01e18, "leverage change failed");
+        // some amount will be left in vault, unrealized slippage
+        assertApproxEqRel(vault.getLtv(), newLtv, 0.03e18, "leverage change failed");
     }
 
     function test_applyNewTargetLtv_invalidMaxLtv() public {
@@ -670,6 +671,44 @@ contract scWETHTest is Test {
         assertApproxEqRel(
             vault.totalProfit(), profit1 + (profit1 + deposit1 + deposit2).mulWadDown(0.15e18) - slippage, 0.01e18
         );
+    }
+
+    function test_harvest_performanceFees_2() public {
+        uint256 amount = 1 ether;
+        vault.setTreasury(treasury);
+
+        _depositToVault(address(this), amount);
+
+        vm.startPrank(keeper);
+        vault.depositIntoStrategy();
+
+        _simulate_stEthStakingInterest(365 days, 1.1e18);
+        vault.harvest();
+
+        uint256 balance = vault.convertToAssets(vault.balanceOf(treasury));
+        uint256 profit = vault.totalProfit();
+
+        console2.log("treasury balance\t", balance);
+        console2.log("profit\t\t", profit);
+
+        console2.log("before loosing");
+        console2.log("total assets\t\t", vault.totalAssets());
+
+        _simulate_stEthStakingInterest(365 days, 0.954545455e18);
+        console2.log("after loosing");
+        console2.log("total assets\t\t", vault.totalAssets());
+        console2.log("profit\t\t", vault.totalProfit());
+        vault.harvest();
+
+        console2.log("treasury balance\t\t", vault.convertToAssets(vault.balanceOf(treasury)));
+        console2.log("profit\t\t\t", vault.totalProfit());
+
+        // 1.0476190481.047619048
+        _simulate_stEthStakingInterest(365 days, 1.047619048e18);
+        vault.harvest();
+
+        console2.log("treasury balance\t\t", vault.convertToAssets(vault.balanceOf(treasury)));
+        console2.log("profit\t\t\t", vault.totalProfit());
     }
 
     //////////////////////////// INTERNAL METHODS ////////////////////////////////////////
