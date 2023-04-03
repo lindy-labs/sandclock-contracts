@@ -673,7 +673,7 @@ contract scWETHTest is Test {
         );
     }
 
-    function test_harvest_performanceFees_2() public {
+    function test_harvest_DoesntTakePerfFeeWhenRecoveringFromLoss() public {
         uint256 amount = 1 ether;
         vault.setTreasury(treasury);
 
@@ -682,33 +682,21 @@ contract scWETHTest is Test {
         vm.startPrank(keeper);
         vault.depositIntoStrategy();
 
+        // earn some profits
         _simulate_stEthStakingInterest(365 days, 1.1e18);
         vault.harvest();
+        uint256 perfFees = vault.balanceOf(treasury);
 
-        uint256 balance = vault.convertToAssets(vault.balanceOf(treasury));
-        uint256 profit = vault.totalProfit();
-
-        console2.log("treasury balance\t", balance);
-        console2.log("profit\t\t", profit);
-
-        console2.log("before loosing");
-        console2.log("total assets\t\t", vault.totalAssets());
-
+        // loose some profits
         _simulate_stEthStakingInterest(365 days, 0.954545455e18);
-        console2.log("after loosing");
-        console2.log("total assets\t\t", vault.totalAssets());
-        console2.log("profit\t\t", vault.totalProfit());
         vault.harvest();
 
-        console2.log("treasury balance\t\t", vault.convertToAssets(vault.balanceOf(treasury)));
-        console2.log("profit\t\t\t", vault.totalProfit());
-
-        // 1.0476190481.047619048
+        // earn back some
         _simulate_stEthStakingInterest(365 days, 1.047619048e18);
         vault.harvest();
 
-        console2.log("treasury balance\t\t", vault.convertToAssets(vault.balanceOf(treasury)));
-        console2.log("profit\t\t\t", vault.totalProfit());
+        // we should not mint any perf fee shares when recovering from a loss
+        assertEq(vault.balanceOf(treasury), perfFees, "perf fee must be the same");
     }
 
     //////////////////////////// INTERNAL METHODS ////////////////////////////////////////
