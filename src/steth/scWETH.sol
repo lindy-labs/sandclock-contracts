@@ -361,7 +361,7 @@ contract scWETH is sc4626, IFlashLoanRecipient {
         totalInvested += amount;
 
         // when deleveraging, withdraw extra to cover slippage
-        if (!isDeposit) amount = flashLoanAmount.mulWadDown(C.ONE - slippageTolerance);
+        if (!isDeposit) amount += flashLoanAmount.mulWadDown(C.ONE - slippageTolerance);
 
         // take flashloan
         balancerVault.flashLoan(address(this), tokens, amounts, abi.encode(isDeposit, amount));
