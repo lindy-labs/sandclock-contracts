@@ -376,6 +376,9 @@ contract scWETH is sc4626, IFlashLoanRecipient {
         uint256[] memory amounts = new uint256[](1);
         amounts[0] = flashLoanAmount;
 
+        // needed otherwise counted as loss during harvest
+        totalInvested -= amount;
+
         // take flashloan
         balancerVault.flashLoan(address(this), tokens, amounts, abi.encode(false, amount));
     }
@@ -413,9 +416,6 @@ contract scWETH is sc4626, IFlashLoanRecipient {
         }
 
         uint256 missing = (assets - float);
-
-        // needed otherwise counted as loss during harvest
-        totalInvested -= missing;
 
         _withdrawToVault(missing);
     }

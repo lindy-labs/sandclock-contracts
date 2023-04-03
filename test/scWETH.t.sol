@@ -566,6 +566,7 @@ contract scWETHTest is Test {
         vault.harvest();
 
         assertEq(vault.balanceOf(treasury), 0, "profit must be zero");
+        assertEq(vault.totalProfit(), 0, "profit must be zero");
 
         _depositToVault(alice, amount);
 
@@ -573,6 +574,7 @@ contract scWETHTest is Test {
         vault.harvest();
 
         assertEq(vault.balanceOf(treasury), 0, "profit must be zero");
+        assertEq(vault.totalProfit(), 0, "profit must be zero");
     }
 
     // harvest should never count new deposits as profit
