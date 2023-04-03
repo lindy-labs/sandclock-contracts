@@ -134,17 +134,18 @@ contract scWETH is sc4626, IFlashLoanRecipient {
     /// @dev reduces the getLtv() back to the target ltv
     /// @dev also mints performance fee tokens to the treasury
     function harvest() external onlyKeeper {
-        // store the old total
-        uint256 oldTotalInvested = totalInvested;
-
         // reinvest
         _rebalancePosition();
 
-        totalInvested = totalAssets();
+        // store the old total
+        uint256 oldTotalInvested = totalInvested;
+        uint256 assets = totalAssets();
 
-        if (totalInvested > oldTotalInvested) {
+        if (assets > oldTotalInvested) {
+            totalInvested = assets;
+
             // profit since last harvest, zero if there was a loss
-            uint256 profit = totalInvested - oldTotalInvested;
+            uint256 profit = assets - oldTotalInvested;
             totalProfit += profit;
 
             uint256 fee = profit.mulWadDown(performanceFee);
@@ -360,6 +361,9 @@ contract scWETH is sc4626, IFlashLoanRecipient {
         // needed otherwise counted as profit during harvest
         totalInvested += amount;
 
+        // when deleveraging, withdraw extra to cover slippage
+        if (!isDeposit) amount += flashLoanAmount.mulWadDown(C.ONE - slippageTolerance);
+
         // take flashloan
         balancerVault.flashLoan(address(this), tokens, amounts, abi.encode(isDeposit, amount));
     }
@@ -375,6 +379,9 @@ contract scWETH is sc4626, IFlashLoanRecipient {
 
         uint256[] memory amounts = new uint256[](1);
         amounts[0] = flashLoanAmount;
+
+        // needed otherwise counted as loss during harvest
+        totalInvested -= amount;
 
         // take flashloan
         balancerVault.flashLoan(address(this), tokens, amounts, abi.encode(false, amount));
@@ -413,9 +420,6 @@ contract scWETH is sc4626, IFlashLoanRecipient {
         }
 
         uint256 missing = (assets - float);
-
-        // needed otherwise counted as loss during harvest
-        totalInvested -= missing;
 
         _withdrawToVault(missing);
     }

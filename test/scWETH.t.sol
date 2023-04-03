@@ -322,7 +322,8 @@ contract scWETHTest is Test {
         newLtv = bound(newLtv, 0.01e18, vault.getLtv() - 0.01e18);
         vault.applyNewTargetLtv(newLtv);
 
-        assertApproxEqRel(vault.getLtv(), newLtv, 0.01e18, "leverage change failed");
+        // some amount will be left in vault, unrealized slippage
+        assertApproxEqRel(vault.getLtv(), newLtv, 0.03e18, "leverage change failed");
     }
 
     function test_applyNewTargetLtv_invalidMaxLtv() public {
@@ -555,6 +556,147 @@ contract scWETHTest is Test {
         assertEq(address(this).balance, 0, "eth not transferred from user");
         assertEq(vault.balanceOf(address(this)), amount, "shares not minted");
         assertEq(weth.balanceOf(address(vault)), amount, "weth not transferred to vault");
+    }
+
+    function test_deposit_rebalance_deposit_rebalance() public {
+        vault.setTreasury(treasury);
+        uint256 amount = 100 ether;
+        _depositToVault(address(this), amount);
+
+        vm.prank(keeper);
+        vault.harvest();
+
+        assertEq(vault.balanceOf(treasury), 0, "profit must be zero");
+        assertEq(vault.totalProfit(), 0, "profit must be zero");
+
+        _depositToVault(alice, amount);
+
+        vm.prank(keeper);
+        vault.harvest();
+
+        assertEq(vault.balanceOf(treasury), 0, "profit must be zero");
+        assertEq(vault.totalProfit(), 0, "profit must be zero");
+    }
+
+    function test_disinvest_invest_should_not_increase_invested(uint256 amount) public {
+        vault.setTreasury(treasury);
+        amount = bound(amount, boundMinimum, 1e21);
+        _depositToVault(address(this), amount);
+
+        vm.prank(keeper);
+        vault.harvest();
+
+        assertEq(vault.balanceOf(treasury), 0, "profit must be zero");
+        assertEq(vault.totalProfit(), 0, "profit must be zero");
+
+        _depositToVault(alice, amount);
+
+        vm.prank(keeper);
+        vault.harvest();
+
+        assertEq(vault.balanceOf(treasury), 0, "profit must be zero");
+        assertEq(vault.totalProfit(), 0, "profit must be zero");
+
+        vm.startPrank(keeper);
+        uint256 all = vault.totalInvested();
+        vault.withdrawToVault(all);
+        vault.depositIntoStrategy();
+        assertApproxEqRel(all, vault.totalInvested(), 0.01e18);
+
+        all = vault.totalInvested();
+        vault.withdrawToVault(all);
+        vault.harvest();
+        assertApproxEqRel(all, vault.totalInvested(), 0.01e18);
+        assertEq(vault.balanceOf(treasury), 0, "profit must be zero");
+        assertEq(vault.totalProfit(), 0, "profit must be zero");
+    }
+
+    // harvest should never count new deposits as profit
+    function test_deposit_profit_deposit_harvest(uint256 amount) public {
+        vault.setTreasury(treasury);
+        amount = bound(amount, boundMinimum, 1e20);
+        _depositToVault(address(this), amount);
+
+        vm.prank(keeper);
+        vault.harvest();
+
+        assertEq(vault.balanceOf(treasury), 0, "profit must be zero");
+        assertEq(vault.totalProfit(), 0, "profit must be zero");
+
+        uint256 invested = vault.totalAssets();
+        _simulate_stEthStakingInterest(365 days, 1.071e18);
+        uint256 profit = vault.totalAssets() - invested;
+        console.log("vault.totalProfit()", vault.totalProfit());
+        console.log("profit", profit);
+        _depositToVault(alice, amount);
+        vm.prank(keeper);
+        vault.harvest();
+
+        // new deposits should not increase profits
+        assertGt(profit, vault.totalProfit());
+    }
+
+    function test_deposit_rebalance_deposit_rebalance_withSimulatedProfits() public {
+        vault.setTreasury(treasury);
+        uint256 deposit1 = 10 ether;
+        uint256 deposit2 = deposit1 * 10;
+        uint256 deposit3 = deposit1 * 50;
+        _depositToVault(address(this), deposit1);
+
+        vm.prank(keeper);
+        vault.harvest();
+
+        _simulate_stEthStakingInterest(365 days, 1.071e18);
+
+        _depositToVault(alice, deposit2);
+        uint256 slippage = vault.totalAssets();
+
+        vm.prank(keeper);
+        vault.harvest();
+        slippage -= vault.totalAssets();
+
+        uint256 profit1 = vault.totalProfit();
+
+        assertApproxEqRel(profit1, deposit1.mulWadDown(0.15e18) - slippage, 0.1e18);
+
+        _simulate_stEthStakingInterest(365 days, 1.071e18);
+        _depositToVault(address(this), deposit3);
+        slippage = vault.totalAssets();
+
+        vm.prank(keeper);
+        vault.harvest();
+        slippage -= vault.totalAssets();
+
+        assertApproxEqRel(vault.totalProfit(), (vault.totalAssets() - deposit1 - deposit2 - deposit3), 0.01e18);
+        assertApproxEqRel(
+            vault.totalProfit(), profit1 + (profit1 + deposit1 + deposit2).mulWadDown(0.15e18) - slippage, 0.01e18
+        );
+    }
+
+    function test_harvest_DoesntTakePerfFeeWhenRecoveringFromLoss() public {
+        uint256 amount = 1 ether;
+        vault.setTreasury(treasury);
+
+        _depositToVault(address(this), amount);
+
+        vm.startPrank(keeper);
+        vault.depositIntoStrategy();
+
+        // earn some profits
+        _simulate_stEthStakingInterest(365 days, 1.1e18);
+        vault.harvest();
+        uint256 perfFees = vault.balanceOf(treasury);
+
+        // loose some profits
+        _simulate_stEthStakingInterest(365 days, 0.954545455e18);
+        vault.harvest();
+
+        // earn back some
+        _simulate_stEthStakingInterest(365 days, 1.047619048e18);
+        vault.harvest();
+
+        // we should not mint any perf fee shares when recovering from a loss
+        assertEq(vault.balanceOf(treasury), perfFees, "perf fee must be the same");
     }
 
     //////////////////////////// INTERNAL METHODS ////////////////////////////////////////
