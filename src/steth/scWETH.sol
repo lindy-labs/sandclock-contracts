@@ -150,7 +150,7 @@ contract scWETH is sc4626, IFlashLoanRecipient {
             uint256 fee = profit.mulWadDown(performanceFee);
 
             // mint equivalent amount of tokens to the performance fee beneficiary ie the treasury
-            _mint(treasury, fee.mulDivDown(C.ONE, convertToAssets(C.ONE)));
+            _mint(treasury, convertToShares(fee));
 
             emit Harvest(profit, fee);
         }
