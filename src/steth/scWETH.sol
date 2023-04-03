@@ -139,12 +139,13 @@ contract scWETH is sc4626, IFlashLoanRecipient {
 
         // store the old total
         uint256 oldTotalInvested = totalInvested;
+        uint256 assets = totalAssets();
 
-        totalInvested = totalAssets();
+        if (assets > oldTotalInvested) {
+            totalInvested = assets;
 
-        if (totalInvested > oldTotalInvested) {
             // profit since last harvest, zero if there was a loss
-            uint256 profit = totalInvested - oldTotalInvested;
+            uint256 profit = assets - oldTotalInvested;
             totalProfit += profit;
 
             uint256 fee = profit.mulWadDown(performanceFee);
