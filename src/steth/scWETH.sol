@@ -134,11 +134,11 @@ contract scWETH is sc4626, IFlashLoanRecipient {
     /// @dev reduces the getLtv() back to the target ltv
     /// @dev also mints performance fee tokens to the treasury
     function harvest() external onlyKeeper {
-        // store the old total
-        uint256 oldTotalInvested = totalInvested;
-
         // reinvest
         _rebalancePosition();
+
+        // store the old total
+        uint256 oldTotalInvested = totalInvested;
 
         totalInvested = totalAssets();
 
