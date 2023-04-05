@@ -11,3 +11,10 @@ out/
 .env
 
 .vscode
+
+# Mac OS
+.DS_Store
+
+# Certora
+.certora_*
+.zip-*
