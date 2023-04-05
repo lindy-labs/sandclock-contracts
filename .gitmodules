@@ -19,3 +19,7 @@
 [submodule "lib/euler-interfaces"] 
   path = lib/euler-interfaces 
   url = https://github.com/euler-xyz/euler-interfaces.git
+[submodule "lib/compound-protocol"]
+	path = lib/compound-protocol
+	url = https://github.com/compound-finance/compound-protocol
+	branch = v2.8.1
