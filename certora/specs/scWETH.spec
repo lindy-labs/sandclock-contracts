@@ -78,7 +78,11 @@ definition coreFunctions(method f) returns bool =
     ||
     f.selector == withdraw(uint256, address, address).selector
     ||
-    f.selector == redeem(uint256, address, address).selector;
+    f.selector == redeem(uint256, address, address).selector
+    ||
+    f.selector == withdrawToVault(uint256).selector
+    ||
+    f.selector == receiveFlashLoan(address[],uint256[],uint256[],bytes).selector;
 
 ghost uint256 totalShares {
     init_state axiom totalShares == 0;
