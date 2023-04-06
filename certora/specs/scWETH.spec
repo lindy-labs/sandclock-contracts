@@ -485,7 +485,7 @@ rule redeem_reverts_if_not_enough_shares(uint256 shares, address receiver, addre
     @Category: Unit test
 
     @Description:
-        function applyNewTargetLtv updates the state variable flashloanLtv using newTargetLtv
+        function applyNewTargetLtv updates the state variable targetLtv using newTargetLtv
 */
 rule integrity_of_applyNewTargetLtv(uint256 newTargetLtv) {
     env e;
