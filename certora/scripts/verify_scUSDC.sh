@@ -21,7 +21,6 @@ then
     --link scUSDC:asset=USDC \
     --link scUSDC:weth=WETH \
     --link scUSDC:dWeth=DWeth \
-    --link scUSDC:usdc=USDC \
     --link scUSDC:swapRouter=SwapRouter \
     --link scUSDC:usdcToEthPriceFeed=AggregatorV3 \
     --link scUSDC:scWETH=scWETH \
@@ -74,7 +73,6 @@ then
     --link scUSDC:asset=USDC \
     --link scUSDC:weth=WETH \
     --link scUSDC:dWeth=DWeth \
-    --link scUSDC:usdc=USDC \
     --link scUSDC:swapRouter=SwapRouter \
     --link scUSDC:usdcToEthPriceFeed=AggregatorV3 \
     --link scUSDC:scWETH=scWETH \

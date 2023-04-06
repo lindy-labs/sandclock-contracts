@@ -62,7 +62,6 @@ methods {
     nonces(address) returns (uint256) envfree
 
    // state constants
-    ONE() returns (uint256) envfree // Specific scUSDC
     curvePool() returns (address) envfree
     stEth() returns (address) envfree
     wstETH() returns (address) envfree
@@ -81,6 +80,8 @@ methods {
     asset.totalSupply() returns (uint256) envfree
     asset.balanceOf(address) returns (uint256) envfree
 }
+
+definition ONE() returns uint256 = 10^18;
 
 definition coreFunctions(method f) returns bool =
     f.selector == mint(uint256, address).selector
