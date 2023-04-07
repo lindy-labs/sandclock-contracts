@@ -328,27 +328,7 @@ Formulas relate the results of method calls. In most cases, these methods are ge
     { performanceFee() == newPerformanceFee }
 ```
 
-#### 25. function setFloatPercentage updates the state variable performanceFee with the value provided by the parameter newPerformanceFee ✔️
-
-```
-    {}
-    
-        setFloatPercentage(e, newFloatPercentage)
-
-    { floatPercentage() == newFloatPercentage }
-```
-
-#### 26. function setTreasury updates the state variable treasury with the value provided by the parameter newTreasury ✔️
-
-```
-    {}
-        
-        setTreasury(e, newTreasury)
-
-    { treasury() == newTreasury }
-```
-
-#### 27. function setPerformanceFee reverts if the value of the parameter newPerformanceFee is greater than 10^18 ✔️
+#### 25. function setPerformanceFee reverts if the value of the parameter newPerformanceFee is greater than 10^18 ✔️
 
 ```
     { newPerformanceFee > 10^18 }
@@ -358,7 +338,18 @@ Formulas relate the results of method calls. In most cases, these methods are ge
     { lastReverted }
 ```
 
-#### 28. function setFloatPercentage reverts if the value of the parameter newFloatPercentage is greater than 10^18 ✔️
+#### 26. function setFloatPercentage updates the state variable performanceFee with the value provided by the parameter newPerformanceFee ✔️
+
+```
+    {}
+    
+        setFloatPercentage(e, newFloatPercentage)
+
+    { floatPercentage() == newFloatPercentage }
+```
+
+
+#### 27. function setFloatPercentage reverts if the value of the parameter newFloatPercentage is greater than 10^18 ✔️
 
 ```
     { newFloatPercentage > 10^18 }
@@ -366,6 +357,16 @@ Formulas relate the results of method calls. In most cases, these methods are ge
         setFloatPercentage@withrevert(e, newFloatPercentage)
 
     { lastReverted }
+```
+
+#### 28. function setTreasury updates the state variable treasury with the value provided by the parameter newTreasury ✔️
+
+```
+    {}
+        
+        setTreasury(e, newTreasury)
+
+    { treasury() == newTreasury }
 ```
 
 #### 29. function setTreasury reverts if address(0) ✔️

@@ -6,27 +6,23 @@ The scWETH contract inherits the properties of ERC-4626 which is a standard that
 
 It has mainly the following state constants:
 * `asset` (type `address`), the underlying ERC20 asset that is invested into the strategy
-* `KEEPER_ROLE` (type `bytes32`), the `keeper` `role`
-* `DEFAULT_ADMIN_ROLE` (type `bytes32`), the `admin` `role`
-* `EULER` (type `address`), the EULER token address
-* `markets` (type `IMarkets`), the IMarkets contract
-* `eToken` (type `IEulerEToken`), the Euler eToken
-* `dToken` (type `IEulerDToken`), the Euler dToken
+* `KEEPER_ROLE` (type `bytes32`), the `keeper` role
+* `DEFAULT_ADMIN_ROLE` (type `bytes32`), the `admin` role
+* `aavePool` (type `IPool`), the Aave WstETH pool
+* `aToken` (type `IAToken`), the Aave WstWETH AToken
+* `variableDebtToken` (type `ERC20`), the Aave's VariableDebtToken
 * `curvePool` (type `ICurvePool`), the CurvePool contract
 * `stEth` (type `ILido`), the Lido stETH contract
 * `wstETH` (type `IwstETH`), the IwstETH contract
 * `weth` (type `WETH`), the WETH contract
 * `stEThToEthPriceFeed` (type `AggregatorV3Interface`), the AggregatorV3 contract
 * `balancerVault` (type `IVault`), the balancer vault contract
-* `ethWstEthMaxLtv` (type `uint256`), the max ETH/wstETH LTV 
-
-It has mainly the following state variables:
 * `name` (type `string`), the name of the token which represents shares of the vault
 * `symbol` (type `string`), the symbol of the token which represents shares of the vault
 * `totalSupply` (type `uint256`), the total supply of the shares of the vault
 * `totalInvested` (type `uint256`), the total amount of asset invested into the strategy
 * `totalProfit` (type `uint256`), the total profit in the underlying asset made by the strategy
-* `flashloanLtv` (type `uint256`), the flashloan LTV
+* `targetLtv` (type `uint256`), the target LTV
 * `slippageTolerance` (type `uint256`), the slippage tolerance when trading assets
 * `performanceFee` (type `uint256` and initial value `0.2e18`), the performance fee used by the strategy
 * `floatPercentage` (type `uint256` and initial value `0.01e18`), the float percentage used by the strategy
@@ -41,25 +37,23 @@ It has the following external/functions that change state variables:
 * `mint(uint256 shares, address receiver) returns (uint256 assets)` mints exactly `shares` vault shares to `receiver` by depositing assets of underlying tokens
 * `withdraw(uint256 assets, address receiver, address owner) returns (uint256 shares)` burns `shares` from `owner` and send exactly `assets` token from the vault to `receiver`
 * `redeem(uint256 shares, address receiver, address owner) returns (uint256 assets)` redeems a specific number of `shares` from `owner` and send `assets` of underlying token from the vault to `receiver`
-* `depositWithPermit(uint256 amount, uint256 deadline, uint8 v, bytes32 r, bytes32 s) external` performs a `deposit` if it is permitted
 * `approve(address spender, uint256 amount) returns (bool)` returns `true` if it can sets the `amount` as the allowance of `spender` over the caller’s tokens
 * `transfer(address to, uint256 amount) returns (bool)` returns `true` if it can move `amount` tokens from the caller’s `account` to `recipient`
 * `transferFrom(address from, address to, uint256 amount) returns (bool)` returns `true` if it can move amount tokens from `sender` to `recipient` using the allowance mechanism, deducing the `amount` from the caller’s allowance
-* `permit(address owner, address spender, uint256 value, uint256 deadline, uint8 v, bytes32 r, bytes32 s)`, permit `spender` to spend `owner`'s ERC20 assets
 * `grantRole(bytes32 role, address account) onlyRole(getRoleAdmin(role))` grants `role` to `account`
 * `revokeRole(bytes32 role, address account) onlyRole(getRoleAdmin(role))` revokes `role` from `account`
 * `renounceRole(bytes32 role, address account)` revokes `role` from the calling `account`
-* `depositIntoStrategy() external` deposit floating asset into the strategy
 * `withdrawToVault(uint256 amount) onlyRole(KEEPER_ROLE)` withdraw assets from strategy to the vault
 * `harvest() onlyRole(KEEPER_ROLE)` harvest any unclaimed rewards
-* `changeLeverage(uint256 _targetLtv) onlyRole(KEEPER_ROLE)` change leverage ratio
+* `applyNewTargetLtv(uint256 _targetLtv) onlyRole(KEEPER_ROLE)` change leverage ratio
 * `receiveFlashLoan(address[] null, uint256[] amounts, uint256[] null, bytes userData)`, flashloan callback
 
 It has the following view functions, which do not change state:
-* `totalCollateralSupplied() returns (uint256)` returns total wstETH supplied as collateral (in ETH terms)
-* `totalDebt() returns (uint256)` returns total ETH borrowed
+* `getCollateral() returns (uint256)` returns total wstETH supplied as collateral (in ETH terms)
+* `getDebt() returns (uint256)` returns total ETH borrowed
 * `getLeverage() returns (uint256)` returns the net leverage that the strategy is using right now (1e18 = 100%)
 * `getLtv() returns (uint256 ltv)` returns the net LTV at which we have borrowed till now (1e18 = 100%)
+* `getMaxLtv() returns (uint256)` returns the max loan to value(ltv) ratio for borrowing eth on Aavev3 with wsteth as collateral for the flashloan (1e18 = 100%)
 * `wstEthToEth(uint256 wstEthAmount) returns (uint256 ethAmount)` returns ETH amount if trading wstETH for ETH
 * `totalAssets() returns (uint256)` returns the `total amount` of underlying assets held by the vault
 * `convertToShares(uint256 assets) returns (uint256 shares)` returns the amount of `shares` that would be exchanged by the vault for the amount of `assets` provided
@@ -72,8 +66,6 @@ It has the following view functions, which do not change state:
 * `maxMint(address receiver) returns (uint256)` returns the maximum amount of shares that can be minted in a `single mint` call by the `receiver`
 * `maxWithdraw(address owner) returns (uint256)` returns the maximum amount of underlying assets that can be withdrawn from the `owner` balance with a `single withdraw` call
 * `maxRedeem(address owner) returns (uint256)` returns the maximum amount of shares that can be redeem from the `owner` balance through a `redeem` call
-* `DOMAIN_SEPARATOR() returns (bytes32)` returns the domain separator of the underlying protocol
-* `supportsInterface(bytes4 interfaceId) returns (bool)` returns `true` if this contract implements the interface defined by `interfaceId`
 * `hasRole(bytes32 role, address account) returns (bool)` returns `true` if `account` has been granted `role`
 * `getRoleAdmin(bytes32 role) returns (bytes32)` returns the `admin role` that controls `role`
 

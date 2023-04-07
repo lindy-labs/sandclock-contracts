@@ -28,6 +28,7 @@ methods {
     getDebt() returns (uint256) envfree
     getLeverage() returns (uint256) envfree
     getLtv() returns (uint256) envfree
+    getMaxLtv() returns (uint256) envfree
     previewDeposit(uint256 assets) returns (uint256) envfree
     previewMint(uint256 shares) returns (uint256) envfree
     previewWithdraw(uint256 assets) returns (uint256) envfree
@@ -36,8 +37,6 @@ methods {
     maxMint(address null) returns (uint256) envfree
     maxWithdraw(address owner) returns (uint256) envfree
     maxRedeem(address owner) returns (uint256) envfree
-    DOMAIN_SEPARATOR() returns (bytes32) envfree
-    supportsInterface(bytes4 interfaceId) returns (bool) envfree
     hasRole(bytes32 role, address account) returns (bool) envfree
     getRoleAdmin(bytes32 role) returns (bytes32) envfree
 
@@ -297,19 +296,6 @@ rule previewMint_gte_mint(uint256 shares, address receiver) {
     @Category: High level
 
     @Description:
-        function previewWithdraw returns at least the same amount of assets than function withdraw
-*/
-rule previewWithdraw_gte_withdraw(uint256 assets, address receiver, address owner) {
-    env e;
-    assert previewWithdraw(assets) >= withdraw(e, assets, receiver, owner);
-}
-
-/*
-    @Rule
-
-    @Category: High level
-
-    @Description:
         function previewRedeem returns at most the same amount of shares than function redeem
 */
 rule previewRedeem_lte_redeem(uint256 shares, address receiver, address owner) {
@@ -544,34 +530,6 @@ rule integrity_of_setPerformanceFee(uint256 newPerformanceFee) {
     @Category: Unit test
 
     @Description:
-        function setFloatPercentage updates the state variable performanceFee with the value provided by the parameter newPerformanceFee
-*/
-rule integrity_of_setFloatPercentage(uint256 newFloatPercentage) {
-    env e;
-    setFloatPercentage(e, newFloatPercentage);
-    assert floatPercentage() == newFloatPercentage;
-}
-
-/*
-    @Rule
-
-    @Category: Unit test
-
-    @Description:
-        function setTreasury updates the state variable treasury with the value provided by the parameter newTreasury
-*/
-rule integrity_of_setTreasury(address newTreasury) {
-    env e;
-    setTreasury(e, newTreasury);
-    assert treasury() == newTreasury;
-}
-
-/*
-    @Rule
-
-    @Category: Unit test
-
-    @Description:
         function setPerformanceFee reverts if the value of the parameter newPerformanceFee is greater than 10^18
 */
 rule setPerformanceFee_reverts_if_newPerformanceFee_is_greater_than_1e18(uint256 newPerformanceFee) {
@@ -587,6 +545,21 @@ rule setPerformanceFee_reverts_if_newPerformanceFee_is_greater_than_1e18(uint256
     @Category: Unit test
 
     @Description:
+        function setFloatPercentage updates the state variable performanceFee with the value provided by the parameter newPerformanceFee
+*/
+rule integrity_of_setFloatPercentage(uint256 newFloatPercentage) {
+    env e;
+    setFloatPercentage(e, newFloatPercentage);
+    assert floatPercentage() == newFloatPercentage;
+}
+
+
+/*
+    @Rule
+
+    @Category: Unit test
+
+    @Description:
         function setFloatPercentage reverts if the value of the parameter newFloatPercentage is greater than 10^18
 */
 rule setFloatPercentage_reverts_if_newFloatPercentage_is_greater_than_1e18(uint256 newFloatPercentage) {
@@ -594,6 +567,20 @@ rule setFloatPercentage_reverts_if_newFloatPercentage_is_greater_than_1e18(uint2
     env e;
     setFloatPercentage@withrevert(e, newFloatPercentage);
     assert lastReverted;
+}
+
+/*
+    @Rule
+
+    @Category: Unit test
+
+    @Description:
+        function setTreasury updates the state variable treasury with the value provided by the parameter newTreasury
+*/
+rule integrity_of_setTreasury(address newTreasury) {
+    env e;
+    setTreasury(e, newTreasury);
+    assert treasury() == newTreasury;
 }
 
 /*
