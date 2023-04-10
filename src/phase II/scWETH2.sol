@@ -37,6 +37,7 @@ contract scWETH2 is sc4626, IFlashLoanRecipient {
 
     enum Protocol {
         AAVE_V3,
+        EULER,
         COMPOUND
     }
 
@@ -307,15 +308,11 @@ contract scWETH2 is sc4626, IFlashLoanRecipient {
             // wrap stETH
             wstETH.wrap(stEth.balanceOf(address(this)));
 
-            if (params.protocol == Protocol.AAVE_V3) {
-                _aaveV3SupplyBorrow(flashLoanAmount);
-            }
+            _supplyBorrow(flashLoanAmount, params.protocol);
         }
         // if flashloan received as part of a withdrawal
         else {
-            if (params.protocol == Protocol.AAVE_V3) {
-                _aaveV3RepayWithdraw(flashLoanAmount, params.amount);
-            }
+            _repayWithdraw(flashLoanAmount, params.amount, params.protocol);
 
             // unwrap wstETH
             uint256 stEthAmount = wstETH.unwrap(wstETH.balanceOf(address(this)));
@@ -416,23 +413,33 @@ contract scWETH2 is sc4626, IFlashLoanRecipient {
         }
     }
 
-    function _aaveV3SupplyBorrow(uint256 flashLoanAmount) internal {
-        //add wstETH liquidity on aave-v3
-        aavePool.supply(address(wstETH), wstETH.balanceOf(address(this)), address(this), 0);
-        //borrow enough weth from aave-v3 to payback flashloan
-        aavePool.borrow(address(weth), flashLoanAmount, C.AAVE_VAR_INTEREST_RATE_MODE, 0, address(this));
+    function _supplyBorrow(uint256 flashLoanAmount, Protocol protocol) internal {
+        if (protocol == Protocol.AAVE_V3) {
+            //add wstETH liquidity on aave-v3
+            aavePool.supply(address(wstETH), wstETH.balanceOf(address(this)), address(this), 0);
+            //borrow enough weth from aave-v3 to payback flashloan
+            aavePool.borrow(address(weth), flashLoanAmount, C.AAVE_VAR_INTEREST_RATE_MODE, 0, address(this));
+        } else if (protocol == Protocol.EULER) {
+            // todo
+        } else {
+            // todo
+        }
     }
 
-    function _compoundSupplyBorrow(uint256 flashLoanAmount) internal {}
-
-    function _aaveV3RepayWithdraw(uint256 flashLoanAmount, uint256 amount) internal {
-        // repay debt + withdraw collateral
-        if (flashLoanAmount >= getDebt()) {
-            aavePool.repay(address(weth), type(uint256).max, C.AAVE_VAR_INTEREST_RATE_MODE, address(this));
-            aavePool.withdraw(address(wstETH), type(uint256).max, address(this));
+    function _repayWithdraw(uint256 flashLoanAmount, uint256 amount, Protocol protocol) internal {
+        if (protocol == Protocol.AAVE_V3) {
+            // repay debt + withdraw collateral
+            if (flashLoanAmount >= getDebt()) {
+                aavePool.repay(address(weth), type(uint256).max, C.AAVE_VAR_INTEREST_RATE_MODE, address(this));
+                aavePool.withdraw(address(wstETH), type(uint256).max, address(this));
+            } else {
+                aavePool.repay(address(weth), flashLoanAmount, C.AAVE_VAR_INTEREST_RATE_MODE, address(this));
+                aavePool.withdraw(address(wstETH), _ethToWstEth(amount), address(this));
+            }
+        } else if (protocol == Protocol.EULER) {
+            // todo
         } else {
-            aavePool.repay(address(weth), flashLoanAmount, C.AAVE_VAR_INTEREST_RATE_MODE, address(this));
-            aavePool.withdraw(address(wstETH), _ethToWstEth(amount), address(this));
+            // todo
         }
     }
 
