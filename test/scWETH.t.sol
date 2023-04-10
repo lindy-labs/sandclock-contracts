@@ -709,7 +709,7 @@ contract scWETHTest is Test {
             slippageTolerance: slippageTolerance,
             aavePool: IPool(C.AAVE_POOL),
             aaveAwstEth: IAToken(C.AAVE_AWSTETH_TOKEN),
-            aaveVarDWeth: ERC20(C.AAVAAVE_VAR_DEBT_WETH_TOKEN),
+            aaveVarDWeth: ERC20(C.AAVE_VAR_DEBT_WETH_TOKEN),
             curveEthStEthPool: ICurvePool(C.CURVE_ETH_STETH_POOL),
             stEth: ILido(C.STETH),
             wstEth: IwstETH(C.WSTETH),

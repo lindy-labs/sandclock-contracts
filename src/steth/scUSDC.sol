@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.13;
 
+import "forge-std/console2.sol";
 import {
     InvalidTargetLtv,
     InvalidSlippageTolerance,
@@ -23,6 +24,9 @@ import {ISwapRouter} from "../interfaces/uniswap/ISwapRouter.sol";
 import {AggregatorV3Interface} from "../interfaces/chainlink/AggregatorV3Interface.sol";
 import {IFlashLoanRecipient} from "../interfaces/balancer/IFlashLoanRecipient.sol";
 import {sc4626} from "../sc4626.sol";
+import {CErc20} from "../interfaces/compound/CErc20.sol";
+import {CEther} from "../interfaces/compound/CEther.sol";
+import {Comptroller} from "../interfaces/compound/Comptroller.sol";
 
 /**
  * @title Sandclock USDC Vault
@@ -73,8 +77,18 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
     // Balancer vault for flashloans
     IVault public immutable balancerVault;
 
+    Comptroller public comptroller = Comptroller(C.COMPTROLLER);
+    CErc20 public cUsdc = CErc20(C.C_USDC);
+    CEther public cEth = CEther(C.C_ETH);
+
     // USDC / WETH target LTV
-    uint256 public targetLtv = 0.65e18;
+    uint256 public aaveTargetLtv = 0.65e18;
+    // 50% of the collateral is used for staking
+    uint256 public aaveCollateralAllocation = 0.5e18;
+
+    uint256 public compoundTargetLtv = 0.65e18;
+    uint256 public compoundCollateralAllocation = 0.5e18;
+
     // max slippage for swapping WETH -> USDC
     uint256 public slippageTolerance = 0.99e18; // 1% default
     uint256 public constant rebalanceMinimum = 10e6; // 10 USDC
@@ -115,6 +129,13 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
         weth.safeApprove(address(aavePool), type(uint256).max);
         weth.safeApprove(address(swapRouter), type(uint256).max);
         weth.safeApprove(address(_params.scWETH), type(uint256).max);
+
+        asset.safeApprove(address(cUsdc), type(uint256).max);
+
+        address[] memory cTokens = new address[](2);
+        cTokens[0] = address(cEth);
+        cTokens[1] = address(cUsdc);
+        uint256[] memory enterResults = comptroller.enterMarkets(cTokens);
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -140,11 +161,20 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
     function applyNewTargetLtv(uint256 _newTargetLtv) external onlyKeeper {
         if (_newTargetLtv > getMaxLtv()) revert InvalidTargetLtv();
 
-        targetLtv = _newTargetLtv;
+        aaveTargetLtv = _newTargetLtv;
 
         rebalance();
 
         emit NewTargetLtvApplied(msg.sender, _newTargetLtv);
+    }
+
+    function reallocate() public {
+        // use flashloan to repay all the debt
+        // withdraw all the collateral
+        // calculate new collateral distribution
+        // deposit new collateral
+        // borrow new debt
+        // repay flashloan
     }
 
     /**
@@ -172,13 +202,13 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
 
         // 2. deposit excess usdc as collateral
         if (excessUsdc >= rebalanceMinimum) {
-            aavePool.supply(address(asset), excessUsdc, address(this), 0);
-            collateral += excessUsdc;
-            currentBalance -= excessUsdc;
+            console2.log("depositing");
+            aavePool.supply(address(asset), excessUsdc.mulWadDown(aaveCollateralAllocation), address(this), 0);
+            cUsdc.mint(excessUsdc.mulWadDown(compoundCollateralAllocation));
         }
 
-        // 3. rebalance to target ltv
-        uint256 targetDebt = getWethFromUsdc(collateral.mulWadDown(targetLtv));
+        // 3. rebalance on aave to target ltv
+        uint256 targetDebt = getWethFromUsdc(aUsdc.balanceOf(address(this)).mulWadDown(aaveTargetLtv));
         uint256 delta = debt > targetDebt ? debt - targetDebt : targetDebt - debt;
 
         if (delta <= targetDebt.mulWadDown(DEBT_DELTA_THRESHOLD)) return;
@@ -187,13 +217,29 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
             _disinvest(delta);
             aavePool.repay(address(weth), delta, C.AAVE_VAR_INTEREST_RATE_MODE, address(this));
         } else {
+            console2.log("borrowing on aave");
             aavePool.borrow(address(weth), delta, C.AAVE_VAR_INTEREST_RATE_MODE, 0, address(this));
             scWETH.deposit(delta, address(this));
         }
 
-        emit Rebalanced(
-            targetLtv, debt, targetDebt, collateral - excessUsdc, collateral, initialBalance, currentBalance
-        );
+        collateral = cUsdc.balanceOfUnderlying(address(this));
+        debt = cEth.borrowBalanceCurrent(address(this));
+        targetDebt = getWethFromUsdc(cUsdc.balanceOfUnderlying(address(this)).mulWadDown(compoundTargetLtv));
+        delta = 0;
+        delta = debt > targetDebt ? debt - targetDebt : targetDebt - debt;
+
+        if (debt > targetDebt) {
+            _disinvest(delta);
+            weth.withdraw(delta);
+            cEth.repayBorrow{value: delta}();
+        } else {
+            console2.log("borrowing on compound");
+            cEth.borrow(delta);
+            weth.deposit{value: delta}();
+            scWETH.deposit(delta, address(this));
+        }
+
+        emit Rebalanced(aaveTargetLtv, debt, targetDebt, collateral + delta, collateral, initialBalance, currentBalance);
     }
 
     /**
@@ -286,7 +332,13 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
      * @return The USDC collateral amount.
      */
     function getCollateral() public view returns (uint256) {
-        return aUsdc.balanceOf(address(this));
+        return aUsdc.balanceOf(address(this)) + getUnderlyingBalaceView();
+    }
+
+    function getUnderlyingBalaceView() public view returns (uint256) {
+        uint256 cBalance = cUsdc.balanceOf(address(this));
+        uint256 exchangeRate = cUsdc.exchangeRateStored();
+        return cBalance.mulWadDown(exchangeRate);
     }
 
     /**
@@ -294,7 +346,8 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
      * @return The borrowed WETH amount.
      */
     function getDebt() public view returns (uint256) {
-        return dWeth.balanceOf(address(this));
+        // TODO: "borrowBalanceCurrent" is not a view function so we can't use it here
+        return dWeth.balanceOf(address(this)) + cEth.borrowBalanceStored(address(this));
     }
 
     /**
@@ -309,7 +362,7 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
      * @notice Returns the net LTV at which the vault has borrowed until now.
      * @return The current LTV (1e18 = 100%).
      */
-    function getLtv() public view returns (uint256) {
+    function getLtv() public returns (uint256) {
         uint256 debt = getDebt();
 
         if (debt == 0) return 0;
@@ -416,4 +469,6 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
 
         return swapRouter.exactInputSingle(params);
     }
+
+    receive() external payable {}
 }

@@ -43,6 +43,14 @@ contract CompoundExample is Test {
         assertEq(enterResults[0], 0, "did not enter the cETH market");
         assertEq(enterResults[1], 0, "did not enter the cUSDC market");
 
+        console2.log("cUsdcBalance before", cUSDC.balanceOf(address(this)));
+        vm.roll(block.number + 1000);
+        uint256 cUsdcBalance = cUSDC.balanceOf(address(this));
+        console2.log("cUsdcBalance", cUsdcBalance);
+
+        uint256 cUsdcBalanceOfUnderlying = cUSDC.balanceOfUnderlying(address(this));
+        console2.log("cUsdcBalanceOfUnderlying", cUsdcBalanceOfUnderlying);
+
         uint256 borrowAmount = 1e18;
         uint256 balanceBefore = address(this).balance;
         uint256 borrowResult = cETH.borrow(borrowAmount);

@@ -71,7 +71,7 @@ contract scUSDCTest is Test {
             slippageTolerance: 0.99e18,
             aavePool: IPool(C.AAVE_POOL),
             aaveAwstEth: IAToken(C.AAVE_AWSTETH_TOKEN),
-            aaveVarDWeth: ERC20(C.AAVAAVE_VAR_DEBT_WETH_TOKEN),
+            aaveVarDWeth: ERC20(C.AAVE_VAR_DEBT_WETH_TOKEN),
             curveEthStEthPool: ICurvePool(C.CURVE_ETH_STETH_POOL),
             stEth: ILido(C.STETH),
             wstEth: IwstETH(C.WSTETH),
@@ -157,7 +157,7 @@ contract scUSDCTest is Test {
         uint256 finalDebt = 3_758780025000000000;
         uint256 currentCollateral = 0;
         uint256 finalCollateral = 9_900e6;
-        uint256 targetLtv = vault.targetLtv();
+        uint256 targetLtv = vault.aaveTargetLtv();
 
         deal(address(usdc), address(vault), initialBalance);
 
@@ -236,7 +236,7 @@ contract scUSDCTest is Test {
         vm.prank(keeper);
         vault.rebalance();
 
-        assertApproxEqRel(vault.getLtv(), vault.targetLtv(), 0.001e18);
+        assertApproxEqRel(vault.getLtv(), vault.aaveTargetLtv(), 0.001e18);
     }
 
     function test_rebalance_DoesntRebalanceWhenLtvIsWithinRange() public {
@@ -347,7 +347,7 @@ contract scUSDCTest is Test {
     /// #applyNewTargetLtv ///
 
     function test_applyNewTargetLtv_FailsIfCallerIsNotKeeper() public {
-        uint256 newTargetLtv = vault.targetLtv() / 2;
+        uint256 newTargetLtv = vault.aaveTargetLtv() / 2;
 
         vm.startPrank(alice);
         vm.expectRevert(CallerNotKeeper.selector);
@@ -355,7 +355,7 @@ contract scUSDCTest is Test {
     }
 
     function test_applyNewTargetLtv_EmitsEventOnSuccess() public {
-        uint256 newTargetLtv = vault.targetLtv() / 2;
+        uint256 newTargetLtv = vault.aaveTargetLtv() / 2;
 
         vm.expectEmit(true, true, true, true);
         emit NewTargetLtvApplied(keeper, newTargetLtv);
@@ -370,7 +370,7 @@ contract scUSDCTest is Test {
         vm.prank(keeper);
         vault.rebalance();
 
-        uint256 oldTargetLtv = vault.targetLtv();
+        uint256 oldTargetLtv = vault.aaveTargetLtv();
         uint256 debtBefore = vault.getDebt();
         // add 10% to target ltv
         uint256 newTargetLtv = oldTargetLtv.mulWadUp(1.1e18);
@@ -378,7 +378,7 @@ contract scUSDCTest is Test {
         vm.prank(keeper);
         vault.applyNewTargetLtv(newTargetLtv);
 
-        assertEq(vault.targetLtv(), newTargetLtv, "target ltv");
+        assertEq(vault.aaveTargetLtv(), newTargetLtv, "target ltv");
         assertApproxEqRel(vault.getLtv(), newTargetLtv, 0.001e18, "ltv");
         assertApproxEqRel(vault.getDebt(), debtBefore.mulWadUp(1.1e18), 0.001e18, "debt");
     }
@@ -389,7 +389,7 @@ contract scUSDCTest is Test {
         vm.prank(keeper);
         vault.rebalance();
 
-        uint256 oldTargetLtv = vault.targetLtv();
+        uint256 oldTargetLtv = vault.aaveTargetLtv();
         uint256 debtBefore = vault.getDebt();
         // subtract 10% from target ltv
         uint256 newTargetLtv = oldTargetLtv.mulWadDown(0.9e18);
@@ -397,7 +397,7 @@ contract scUSDCTest is Test {
         vm.prank(keeper);
         vault.applyNewTargetLtv(newTargetLtv);
 
-        assertEq(vault.targetLtv(), newTargetLtv, "target ltv");
+        assertEq(vault.aaveTargetLtv(), newTargetLtv, "target ltv");
         assertApproxEqRel(vault.getLtv(), newTargetLtv, 0.001e18, "ltv");
         assertApproxEqRel(vault.getDebt(), debtBefore.mulWadUp(0.9e18), 0.001e18, "debt");
     }
@@ -827,7 +827,9 @@ contract scUSDCTest is Test {
         vault.withdraw(assets, alice, alice);
 
         assertApproxEqAbs(vault.balanceOf(alice), 0, 1, "balance");
-        assertApproxEqRel(usdc.balanceOf(alice), amount.mulWadDown(1e18 + vault.targetLtv()), 0.01e18, "usdc balance");
+        assertApproxEqRel(
+            usdc.balanceOf(alice), amount.mulWadDown(1e18 + vault.aaveTargetLtv()), 0.01e18, "usdc balance"
+        );
         assertTrue(vault.totalAssets() <= toleratedLeftover, "total assets");
     }
 
@@ -860,7 +862,9 @@ contract scUSDCTest is Test {
         vault.redeem(shares, alice, alice);
 
         assertEq(vault.balanceOf(alice), 0, "balance");
-        assertApproxEqRel(usdc.balanceOf(alice), amount.mulWadDown(1e18 + vault.targetLtv()), 0.01e18, "usdc balance");
+        assertApproxEqRel(
+            usdc.balanceOf(alice), amount.mulWadDown(1e18 + vault.aaveTargetLtv()), 0.01e18, "usdc balance"
+        );
         assertTrue(vault.totalAssets() <= toleratedLeftover, "total assets");
     }
 
@@ -987,10 +991,32 @@ contract scUSDCTest is Test {
             aavePool: IPool(C.AAVE_POOL),
             aavePoolDataProvider: IPoolDataProvider(C.AAVE_POOL_DATA_PROVIDER),
             aaveAUsdc: IAToken(C.AAVE_AUSDC_TOKEN),
-            aaveVarDWeth: ERC20(C.AAVAAVE_VAR_DEBT_WETH_TOKEN),
+            aaveVarDWeth: ERC20(C.AAVE_VAR_DEBT_WETH_TOKEN),
             uniswapSwapRouter: ISwapRouter(C.UNISWAP_V3_SWAP_ROUTER),
             chainlinkUsdcToEthPriceFeed: AggregatorV3Interface(C.CHAINLINK_USDC_ETH_PRICE_FEED),
             balancerVault: IVault(C.BALANCER_VAULT)
         });
+    }
+
+    function test_newRebalance() public {
+        uint256 amount = 10_000e6;
+        deal(address(usdc), alice, amount);
+        vault.setFloatPercentage(0);
+
+        vm.startPrank(alice);
+        usdc.approve(address(vault), type(uint256).max);
+        vault.deposit(amount, alice);
+        vm.stopPrank();
+
+        vm.prank(keeper);
+        vault.rebalance();
+
+        assertApproxEqAbs(vault.getCollateral(), amount, 1, "collateral");
+        uint256 debt = vault.getDebt();
+        uint256 debtInUsdcEq = vault.getUsdcFromWeth(debt);
+        assertApproxEqRel(debtInUsdcEq, amount.mulWadDown(0.65e18), 0.01e18, "debt");
+
+        assertApproxEqAbs(vault.aUsdc().balanceOf(address(vault)), amount / 2, 1, "aave collateral");
+        assertApproxEqAbs(vault.cUsdc().balanceOfUnderlying(address(vault)), amount / 2, 1, "compound collateral");
     }
 }

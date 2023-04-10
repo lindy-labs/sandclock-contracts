@@ -34,7 +34,7 @@ contract DeployScript is CREATE3Script {
             slippageTolerance: 0.99e18,
             aavePool: IPool(C.AAVE_POOL),
             aaveAwstEth: IAToken(C.AAVE_AWSTETH_TOKEN),
-            aaveVarDWeth: ERC20(C.AAVAAVE_VAR_DEBT_WETH_TOKEN),
+            aaveVarDWeth: ERC20(C.AAVE_VAR_DEBT_WETH_TOKEN),
             curveEthStEthPool: ICurvePool(C.CURVE_ETH_STETH_POOL),
             stEth: ILido(C.STETH),
             wstEth: IwstETH(C.WSTETH),
@@ -54,7 +54,7 @@ contract DeployScript is CREATE3Script {
             aavePool: IPool(C.AAVE_POOL),
             aavePoolDataProvider: IPoolDataProvider(C.AAVE_POOL_DATA_PROVIDER),
             aaveAUsdc: IAToken(C.AAVE_AUSDC_TOKEN),
-            aaveVarDWeth: ERC20(C.AAVAAVE_VAR_DEBT_WETH_TOKEN),
+            aaveVarDWeth: ERC20(C.AAVE_VAR_DEBT_WETH_TOKEN),
             uniswapSwapRouter: ISwapRouter(C.UNISWAP_V3_SWAP_ROUTER),
             chainlinkUsdcToEthPriceFeed: AggregatorV3Interface(C.CHAINLINK_USDC_ETH_PRICE_FEED),
             balancerVault: IVault(C.BALANCER_VAULT)

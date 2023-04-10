@@ -39,7 +39,7 @@ library Constants {
     // address of the Aave "aEthwstETH" token (supply token)
     address public constant AAVE_AWSTETH_TOKEN = 0x0B925eD163218f6662a35e0f0371Ac234f9E9371;
     // address of the Aave "variableDebtEthWETH" token (variable debt token)
-    address public constant AAVAAVE_VAR_DEBT_WETH_TOKEN = 0xeA51d7853EEFb32b6ee06b1C12E6dcCA88Be0fFE;
+    address public constant AAVE_VAR_DEBT_WETH_TOKEN = 0xeA51d7853EEFb32b6ee06b1C12E6dcCA88Be0fFE;
 
     // adress of the Chainlink aggregator for the USDC/eth price feed
     address public constant CHAINLINK_USDC_ETH_PRICE_FEED = 0x986b5E1e1755e3C2440e960477f25201B0a8bbD4;
@@ -51,4 +51,11 @@ library Constants {
 
     // address of the 0x swap router contract
     address public constant ZEROX_ROUTER = 0xDef1C0ded9bec7F1a1670819833240f027b25EfF;
+
+    // address of the Compound comptroller contract
+    address public constant COMPTROLLER = 0x3d9819210A31b4961b30EF54bE2aeD79B9c9Cd3B;
+    // address of the Compound USDC cToken contract
+    address public constant C_USDC = 0x39AA39c021dfbaE8faC545936693aC917d5E7563;
+    // address of the Compound ETH cToken contract
+    address public constant C_ETH = 0x4Ddc2D193948926D02f9B1fE9e1daa0718270ED5;
 }
