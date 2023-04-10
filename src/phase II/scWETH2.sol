@@ -421,7 +421,7 @@ contract scWETH2 is sc4626, IFlashLoanRecipient {
             aavePool.borrow(address(weth), flashLoanAmount, C.AAVE_VAR_INTEREST_RATE_MODE, 0, address(this));
         } else if (protocol == Protocol.EULER) {
             // todo
-        } else {
+        } else if (protocol == Protocol.COMPOUND) {
             // todo
         }
     }
@@ -438,7 +438,7 @@ contract scWETH2 is sc4626, IFlashLoanRecipient {
             }
         } else if (protocol == Protocol.EULER) {
             // todo
-        } else {
+        } else if (protocol == Protocol.COMPOUND) {
             // todo
         }
     }
