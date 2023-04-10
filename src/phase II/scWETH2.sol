@@ -16,6 +16,7 @@ import {WETH} from "solmate/tokens/WETH.sol";
 import {IPool} from "aave-v3/interfaces/IPool.sol";
 import {IAToken} from "aave-v3/interfaces/IAToken.sol";
 import {IVariableDebtToken} from "aave-v3/interfaces/IVariableDebtToken.sol";
+import {IEulerDToken, IEulerEToken, IEulerMarkets} from "lib/euler-interfaces/contracts/IEuler.sol";
 
 import {Constants as C} from "../lib/Constants.sol";
 import {sc4626} from "../sc4626.sol";
@@ -52,9 +53,6 @@ contract scWETH2 is sc4626, IFlashLoanRecipient {
         address keeper;
         uint256 targetLtv;
         uint256 slippageTolerance;
-        IPool aavePool;
-        IAToken aaveAwstEth;
-        ERC20 aaveVarDWeth;
         ICurvePool curveEthStEthPool;
         ILido stEth;
         IwstETH wstEth;
@@ -62,11 +60,6 @@ contract scWETH2 is sc4626, IFlashLoanRecipient {
         AggregatorV3Interface stEthToEthPriceFeed;
         IVault balancerVault;
     }
-
-    IPool public immutable aavePool;
-    // aToken is a rebasing token and pegged 1:1 to the underlying
-    IAToken public immutable aToken;
-    ERC20 public immutable variableDebtToken;
 
     // Curve pool for ETH-stETH
     ICurvePool public immutable curvePool;
@@ -100,9 +93,6 @@ contract scWETH2 is sc4626, IFlashLoanRecipient {
     {
         if (_params.slippageTolerance > C.ONE) revert InvalidSlippageTolerance();
 
-        aavePool = _params.aavePool;
-        aToken = _params.aaveAwstEth;
-        variableDebtToken = _params.aaveVarDWeth;
         curvePool = _params.curveEthStEthPool;
         stEth = _params.stEth;
         wstETH = _params.wstEth;
@@ -112,11 +102,14 @@ contract scWETH2 is sc4626, IFlashLoanRecipient {
 
         ERC20(address(stEth)).safeApprove(address(wstETH), type(uint256).max);
         ERC20(address(stEth)).safeApprove(address(curvePool), type(uint256).max);
-        ERC20(address(wstETH)).safeApprove(address(aavePool), type(uint256).max);
-        ERC20(address(weth)).safeApprove(address(aavePool), type(uint256).max);
+        ERC20(address(wstETH)).safeApprove(C.AAVE_POOL, type(uint256).max);
+        ERC20(address(weth)).safeApprove(C.AAVE_POOL, type(uint256).max);
+        ERC20(address(wstETH)).safeApprove(C.EULER, type(uint256).max);
 
+        // Enter the euler collateral market (collateral's address, *not* the eToken address) ,
+        IEulerMarkets(C.EULER_MARKETS).enterMarket(0, address(wstETH));
         // set e-mode on aave-v3 for increased borrowing capacity to 90% of collateral
-        aavePool.setUserEMode(C.AAVE_EMODE_ID);
+        IPool(C.AAVE_POOL).setUserEMode(C.AAVE_EMODE_ID);
 
         if (_params.targetLtv >= getMaxLtv()) revert InvalidTargetLtv();
 
@@ -205,12 +198,12 @@ contract scWETH2 is sc4626, IFlashLoanRecipient {
 
     /// @notice returns the total wstETH supplied as collateral (in ETH)
     function getCollateral() public view returns (uint256) {
-        return _wstEthToEth(aToken.balanceOf(address(this)));
+        return _wstEthToEth(IAToken(C.AAVE_AWSTETH_TOKEN).balanceOf(address(this)));
     }
 
     /// @notice returns the total ETH borrowed
     function getDebt() public view returns (uint256) {
-        return variableDebtToken.balanceOf(address(this));
+        return ERC20(C.AAVAAVE_VAR_DEBT_WETH_TOKEN).balanceOf(address(this));
     }
 
     /// @notice returns the net leverage that the strategy is using right now (1e18 = 100%)
@@ -230,7 +223,7 @@ contract scWETH2 is sc4626, IFlashLoanRecipient {
 
     /// @notice returns the max loan to value(ltv) ratio for borrowing eth on Aavev3 with wsteth as collateral for the flashloan (1e18 = 100%)
     function getMaxLtv() public view returns (uint256) {
-        return uint256(aavePool.getEModeCategoryData(C.AAVE_EMODE_ID).ltv) * 1e14;
+        return uint256(IPool(C.AAVE_POOL).getEModeCategoryData(C.AAVE_EMODE_ID).ltv) * 1e14;
     }
 
     //////////////////// EXTERNAL METHODS //////////////////////////
@@ -416,28 +409,37 @@ contract scWETH2 is sc4626, IFlashLoanRecipient {
     function _supplyBorrow(uint256 flashLoanAmount, Protocol protocol) internal {
         if (protocol == Protocol.AAVE_V3) {
             //add wstETH liquidity on aave-v3
-            aavePool.supply(address(wstETH), wstETH.balanceOf(address(this)), address(this), 0);
+            IPool(C.AAVE_POOL).supply(address(wstETH), wstETH.balanceOf(address(this)), address(this), 0);
             //borrow enough weth from aave-v3 to payback flashloan
-            aavePool.borrow(address(weth), flashLoanAmount, C.AAVE_VAR_INTEREST_RATE_MODE, 0, address(this));
+            IPool(C.AAVE_POOL).borrow(address(weth), flashLoanAmount, C.AAVE_VAR_INTEREST_RATE_MODE, 0, address(this));
         } else if (protocol == Protocol.EULER) {
-            // todo
+            // add wstETH Liquidity on Euler
+            IEulerEToken(C.EULER_ETOKEN_WSTETH).deposit(0, type(uint256).max);
+            // borrow enough weth from Euler to payback flashloan
+            IEulerDToken(C.EULER_DTOKEN_WETH).borrow(0, flashLoanAmount);
         } else if (protocol == Protocol.COMPOUND) {
             // todo
         }
     }
 
     function _repayWithdraw(uint256 flashLoanAmount, uint256 amount, Protocol protocol) internal {
+        bool withdrawAll = flashLoanAmount >= getDebt();
         if (protocol == Protocol.AAVE_V3) {
             // repay debt + withdraw collateral
-            if (flashLoanAmount >= getDebt()) {
-                aavePool.repay(address(weth), type(uint256).max, C.AAVE_VAR_INTEREST_RATE_MODE, address(this));
-                aavePool.withdraw(address(wstETH), type(uint256).max, address(this));
-            } else {
-                aavePool.repay(address(weth), flashLoanAmount, C.AAVE_VAR_INTEREST_RATE_MODE, address(this));
-                aavePool.withdraw(address(wstETH), _ethToWstEth(amount), address(this));
-            }
+            IPool(C.AAVE_POOL).repay(
+                address(weth),
+                withdrawAll ? type(uint256).max : flashLoanAmount,
+                C.AAVE_VAR_INTEREST_RATE_MODE,
+                address(this)
+            );
+            IPool(C.AAVE_POOL).withdraw(
+                address(wstETH), withdrawAll ? type(uint256).max : _ethToWstEth(amount), address(this)
+            );
         } else if (protocol == Protocol.EULER) {
-            // todo
+            // repay debt
+            IEulerDToken(C.EULER_DTOKEN_WETH).repay(0, withdrawAll ? type(uint256).max : flashLoanAmount);
+            // withdraw amount wstEth(collateral)
+            IEulerEToken(C.EULER_ETOKEN_WSTETH).withdraw(0, withdrawAll ? type(uint256).max : amount);
         } else if (protocol == Protocol.COMPOUND) {
             // todo
         }
