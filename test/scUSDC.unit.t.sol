@@ -5,82 +5,63 @@ import "forge-std/console2.sol";
 import "forge-std/Test.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {WETH} from "solmate/tokens/WETH.sol";
+import {ERC4626} from "solmate/mixins/ERC4626.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 import {IPool} from "aave-v3/interfaces/IPool.sol";
 import {IAToken} from "aave-v3/interfaces/IAToken.sol";
-import {IVariableDebtToken} from "aave-v3/interfaces/IVariableDebtToken.sol";
 import {IPoolDataProvider} from "aave-v3/interfaces/IPoolDataProvider.sol";
 
-import {Constants as C} from "../src/lib/Constants.sol";
-import {sc4626} from "../src/sc4626.sol";
 import {scUSDC} from "../src/steth/scUSDC.sol";
-import {scWETH} from "../src/steth/scWETH.sol";
 import {ISwapRouter} from "../src/interfaces/uniswap/ISwapRouter.sol";
 import {AggregatorV3Interface} from "../src/interfaces/chainlink/AggregatorV3Interface.sol";
 import {IVault} from "../src/interfaces/balancer/IVault.sol";
-import {ICurvePool} from "../src/interfaces/curve/ICurvePool.sol";
-import {ILido} from "../src/interfaces/lido/ILido.sol";
-import {IwstETH} from "../src/interfaces/lido/IwstETH.sol";
-import "../src/errors/scErrors.sol";
 
+import {MockERC4626} from "./mock/MockERC4626.sol";
 import {MockWETH} from "./mock/MockWETH.sol";
 import {MockUSDC} from "./mock/MockUSDC.sol";
 import {MockAavePool} from "./mock/aave-v3/MockAavePool.sol";
 import {MockAavePoolDataProvider} from "./mock/aave-v3/MockAavePoolDataProvider.sol";
 import {MockAUsdc} from "./mock/aave-v3/MockAUsdc.sol";
 import {MockVarDebtWETH} from "./mock/aave-v3/MockVarDebtWETH.sol";
-import {MockAwstETH} from "./mock/aave-v3/MockAwstETH.sol";
-import {MockStETH} from "./mock/lido/MockStETH.sol";
-import {MockWstETH} from "./mock/lido/MockWstETH.sol";
 import {MockChainlinkPriceFeed} from "./mock/chainlink/MockChainlinkPriceFeed.sol";
-import {MockCurvePool} from "./mock/curve/MockCurvePool.sol";
 import {MockBalancerVault} from "./mock/balancer/MockBalancerVault.sol";
 import {MockSwapRouter} from "./mock/uniswap/MockSwapRouter.sol";
 
-contract scUSDCTest is Test {
+contract scUSDCUnitTest is Test {
     using FixedPointMathLib for uint256;
 
     address constant keeper = address(0x05);
     address constant alice = address(0x06);
 
     scUSDC vault;
-    scWETH wethVault;
+    ERC4626 wethVault;
 
-    MockUSDC usdc = new MockUSDC();
-    MockWETH weth = new MockWETH();
+    MockUSDC usdc;
+    MockWETH weth;
 
-    IPoolDataProvider aavePoolDataProvider = new MockAavePoolDataProvider(address(usdc), address(weth));
-    MockAavePool aavePool = new MockAavePool();
-    MockAUsdc aaveAUsdc = new MockAUsdc(aavePool, usdc);
-    MockVarDebtWETH aaveVarDWeth = new MockVarDebtWETH(aavePool, weth);
-    MockStETH stEth = new MockStETH();
-    MockWstETH wstEth = new MockWstETH(stEth);
-    MockAwstETH aaveAWstEth = new MockAwstETH(aavePool, wstEth);
+    IPoolDataProvider aavePoolDataProvider;
+    MockAavePool aavePool;
+    MockAUsdc aaveAUsdc;
+    MockVarDebtWETH aaveVarDWeth;
 
-    MockCurvePool curveEthStEthPool = new MockCurvePool(stEth);
-    MockChainlinkPriceFeed stEthToEthPriceFeed = new MockChainlinkPriceFeed(address(stEth), address(weth), 1e18);
-    MockChainlinkPriceFeed usdcToEthPriceFeed = new MockChainlinkPriceFeed(address(usdc), address(weth), 0.001e18);
-    MockBalancerVault balancerVault = new MockBalancerVault(weth);
-    MockSwapRouter uniswapRouter = new MockSwapRouter();
+    MockChainlinkPriceFeed usdcToEthPriceFeed;
+    MockBalancerVault balancerVault;
+    MockSwapRouter uniswapRouter;
 
     function setUp() public {
-        scWETH.ConstructorParams memory scWethParams = scWETH.ConstructorParams({
-            admin: address(this),
-            keeper: keeper,
-            targetLtv: 0.7e18,
-            slippageTolerance: 0.99e18,
-            aavePool: aavePool,
-            aaveAwstEth: IAToken(address(aaveAWstEth)),
-            aaveVarDWeth: ERC20(address(aaveVarDWeth)),
-            curveEthStEthPool: curveEthStEthPool,
-            stEth: ILido(address(stEth)),
-            wstEth: IwstETH(address(wstEth)),
-            weth: WETH(payable(weth)),
-            stEthToEthPriceFeed: stEthToEthPriceFeed,
-            balancerVault: balancerVault
-        });
+        usdc = new MockUSDC();
+        weth = new MockWETH();
 
-        wethVault = new scWETH(scWethParams);
+        wethVault = new MockERC4626(weth);
+
+        aavePoolDataProvider = new MockAavePoolDataProvider(address(usdc), address(weth));
+        aavePool = new MockAavePool();
+        aaveAUsdc = new MockAUsdc(aavePool, usdc);
+        aaveVarDWeth = new MockVarDebtWETH(aavePool, weth);
+
+        usdcToEthPriceFeed = new MockChainlinkPriceFeed(address(usdc), address(weth), 0.001e18);
+        balancerVault = new MockBalancerVault(weth);
+        uniswapRouter = new MockSwapRouter();
 
         scUSDC.ConstructorParams memory scUsdcParams = scUSDC.ConstructorParams({
             admin: address(this),
@@ -108,7 +89,6 @@ contract scUSDCTest is Test {
 
         vm.startPrank(alice);
         usdc.approve(address(vault), type(uint256).max);
-
         vault.deposit(amount, alice);
         vm.stopPrank();
 
@@ -127,7 +107,6 @@ contract scUSDCTest is Test {
 
         vm.startPrank(alice);
         usdc.approve(address(vault), type(uint256).max);
-
         vault.deposit(depositAmount, alice);
         vm.stopPrank();
 
@@ -144,5 +123,45 @@ contract scUSDCTest is Test {
         assertEq(vault.getDebt(), uint256(6.435e18).mulWadDown(0.9e18), "debt");
         assertEq(vault.getUsdcBalance(), (depositAmount - withdrawAmount).mulWadUp(vault.floatPercentage()), "float");
         assertApproxEqAbs(vault.totalAssets(), (depositAmount - withdrawAmount), 1, "total assets");
+    }
+
+    function test_getCollateral_AccountsForInterestOnSuppliedUsdc() public {
+        uint256 amount = 10000e6;
+        deal(address(usdc), address(alice), amount);
+
+        vm.startPrank(alice);
+        usdc.approve(address(vault), type(uint256).max);
+        vault.deposit(amount, alice);
+        vm.stopPrank();
+
+        vm.prank(keeper);
+        vault.rebalance();
+
+        usdc.mint(address(this), 1_000_000e6);
+        usdc.approve(address(aavePool), type(uint256).max);
+        uint256 collateralBefore = vault.getCollateral();
+        uint256 interest = 0.05e18;
+        aavePool.addInterestOnSupply(address(vault), address(usdc), collateralBefore.mulWadDown(interest));
+
+        assertEq(vault.getCollateral(), collateralBefore.mulWadDown(1e18 + interest), "collateral with interest");
+    }
+
+    function test_getDebt_AccountsForInterestOnBorrowedWeth() public {
+        uint256 amount = 10000e6;
+        deal(address(usdc), address(alice), amount);
+
+        vm.startPrank(alice);
+        usdc.approve(address(vault), type(uint256).max);
+        vault.deposit(amount, alice);
+        vm.stopPrank();
+
+        vm.prank(keeper);
+        vault.rebalance();
+
+        uint256 debtBefore = vault.getDebt();
+        uint256 interest = 0.05e18;
+        aavePool.addInterestOnDebt(address(vault), address(weth), debtBefore.mulWadDown(interest));
+
+        assertEq(vault.getDebt(), debtBefore.mulWadDown(1e18 + interest), "debt with interest");
     }
 }
