@@ -38,20 +38,24 @@ contract scWETH2 is sc4626, IFlashLoanRecipient {
 
     enum Protocol {
         AAVE_V3,
-        EULER,
-        COMPOUND
+        EULER
     }
 
     struct FlashLoanParams {
         bool isDeposit;
         uint256 amount;
-        Protocol protocol; // the protocol for supply/borrow or withdraw/repay
+        uint256[] amounts; // amount to supply on each protocol in weth
+        uint256[] flashLoanAmounts; // amount to borrow on each protocol in weth
+    }
+
+    struct ProtocolParams {
+        uint128 allocationPercent; // uint256 maxLtv;
+        uint128 targetLtv; // the target ltv ratio at which we actually borrow (<= maxLtv)
     }
 
     struct ConstructorParams {
         address admin;
         address keeper;
-        uint256 targetLtv;
         uint256 slippageTolerance;
         ICurvePool curveEthStEthPool;
         ILido stEth;
@@ -59,7 +63,14 @@ contract scWETH2 is sc4626, IFlashLoanRecipient {
         WETH weth;
         AggregatorV3Interface stEthToEthPriceFeed;
         IVault balancerVault;
+        ProtocolParams[] protocolParams;
     }
+
+    // number of protocols to invest in
+    uint256 public protocols;
+
+    // mapping from protocol id to protocol params
+    mapping(Protocol => ProtocolParams) public protocolParams;
 
     // Curve pool for ETH-stETH
     ICurvePool public immutable curvePool;
@@ -82,11 +93,15 @@ contract scWETH2 is sc4626, IFlashLoanRecipient {
     // total profit generated for this vault
     uint256 public totalProfit;
 
-    // the target ltv ratio at which we actually borrow (<= maxLtv)
-    uint256 public targetLtv;
-
     // slippage for curve swaps
     uint256 public slippageTolerance;
+
+    function _addProtocols(ProtocolParams[] memory params) internal {
+        protocolParams[Protocol.AAVE_V3] = params[0];
+        protocolParams[Protocol.EULER] = params[1];
+
+        protocols += params.length;
+    }
 
     constructor(ConstructorParams memory _params)
         sc4626(_params.admin, _params.keeper, _params.weth, "Sandclock WETH Vault", "scWETH")
@@ -111,10 +126,9 @@ contract scWETH2 is sc4626, IFlashLoanRecipient {
         // set e-mode on aave-v3 for increased borrowing capacity to 90% of collateral
         IPool(C.AAVE_POOL).setUserEMode(C.AAVE_EMODE_ID);
 
-        if (_params.targetLtv >= getMaxLtv()) revert InvalidTargetLtv();
-
-        targetLtv = _params.targetLtv;
         slippageTolerance = _params.slippageTolerance;
+
+        _addProtocols(_params.protocolParams);
     }
 
     /// @notice set the slippage tolerance for curve swaps
@@ -163,23 +177,23 @@ contract scWETH2 is sc4626, IFlashLoanRecipient {
         }
     }
 
-    /// @notice increase/decrease the target ltv used on borrows
-    /// @param newTargetLtv the new target ltv
-    /// @dev the new target ltv must be less than the max ltv allowed on aave
-    function applyNewTargetLtv(uint256 newTargetLtv, Protocol protocol) public onlyKeeper {
-        if (newTargetLtv >= getMaxLtv()) revert InvalidTargetLtv();
+    // /// @notice increase/decrease the target ltv used on borrows
+    // /// @param newTargetLtv the new target ltv
+    // /// @dev the new target ltv must be less than the max ltv allowed on aave
+    // function applyNewTargetLtv(uint256 newTargetLtv, Protocol protocol) public onlyKeeper {
+    //     if (newTargetLtv >= getMaxLtv()) revert InvalidTargetLtv();
 
-        targetLtv = newTargetLtv;
+    //     targetLtv = newTargetLtv;
 
-        _rebalancePosition(protocol);
+    //     _rebalancePosition(protocol);
 
-        emit NewTargetLtvApplied(msg.sender, newTargetLtv);
-    }
+    //     emit NewTargetLtvApplied(msg.sender, newTargetLtv);
+    // }
 
     /// @notice withdraw funds from the strategy into the vault
     /// @param amount : amount of assets to withdraw into the vault
     function withdrawToVault(uint256 amount, Protocol protocol) external onlyKeeper {
-        _withdrawToVault(amount, protocol);
+        _withdrawToVault(amount);
     }
 
     //////////////////// VIEW METHODS //////////////////////////
@@ -187,37 +201,37 @@ contract scWETH2 is sc4626, IFlashLoanRecipient {
     /// @notice returns the total assets (WETH) held by the strategy
     function totalAssets() public view override returns (uint256 assets) {
         // value of the supplied collateral in eth terms using chainlink oracle
-        assets = getCollateral();
+        assets = totalCollateral();
 
         // subtract the debt
-        assets -= getDebt();
+        assets -= totalDebt();
 
         // add float
         assets += asset.balanceOf(address(this));
     }
 
     /// @notice returns the total wstETH supplied as collateral (in ETH)
-    function getCollateral() public view returns (uint256) {
+    function totalCollateral() public view returns (uint256) {
         return _wstEthToEth(IAToken(C.AAVE_AWSTETH_TOKEN).balanceOf(address(this)));
     }
 
     /// @notice returns the total ETH borrowed
-    function getDebt() public view returns (uint256) {
+    function totalDebt() public view returns (uint256) {
         return ERC20(C.AAVAAVE_VAR_DEBT_WETH_TOKEN).balanceOf(address(this));
     }
 
     /// @notice returns the net leverage that the strategy is using right now (1e18 = 100%)
     function getLeverage() public view returns (uint256) {
-        uint256 coll = getCollateral();
-        return coll > 0 ? coll.divWadUp(coll - getDebt()) : 0;
+        uint256 coll = totalCollateral();
+        return coll > 0 ? coll.divWadUp(coll - totalDebt()) : 0;
     }
 
     /// @notice returns the net LTV at which we have borrowed till now (1e18 = 100%)
     function getLtv() public view returns (uint256 ltv) {
-        uint256 collateral = getCollateral();
+        uint256 collateral = totalCollateral();
         if (collateral > 0) {
             // getDebt / totalSupplied
-            ltv = getDebt().divWadUp(collateral);
+            ltv = totalDebt().divWadUp(collateral);
         }
     }
 
@@ -301,11 +315,11 @@ contract scWETH2 is sc4626, IFlashLoanRecipient {
             // wrap stETH
             wstETH.wrap(stEth.balanceOf(address(this)));
 
-            _supplyBorrow(flashLoanAmount, params.protocol);
+            _supplyBorrow(params.amounts, params.flashLoanAmounts);
         }
         // if flashloan received as part of a withdrawal
         else {
-            _repayWithdraw(flashLoanAmount, params.amount, params.protocol);
+            // _repayWithdraw(flashLoanAmount, params.amount, params.protocol);
 
             // unwrap wstETH
             uint256 stEthAmount = wstETH.unwrap(wstETH.balanceOf(address(this)));
@@ -326,20 +340,54 @@ contract scWETH2 is sc4626, IFlashLoanRecipient {
 
     //////////////////// INTERNAL METHODS //////////////////////////
 
-    function _rebalancePosition(Protocol protocol) internal {
-        // storage loads
-        uint256 amount = asset.balanceOf(address(this));
-        uint256 ltv = targetLtv;
-        uint256 debt = getDebt();
-        uint256 collateral = getCollateral();
+    /// @notice returns the debt on a particular protocol
+    function getDebt(Protocol protocol) public view returns (uint256 debt) {
+        if (protocol == Protocol.AAVE_V3) {
+            // todo
+        } else if (protocol == Protocol.EULER) {
+            // todo
+        }
+    }
 
-        uint256 target = ltv.mulWadDown(amount + collateral);
+    /// @notice returns the collateral supplied on a particular protocol
+    function getCollateral(Protocol protocol) public view returns (uint256 collateral) {
+        if (protocol == Protocol.AAVE_V3) {
+            // todo
+        } else if (protocol == Protocol.EULER) {
+            // todo
+        }
+    }
 
-        // whether we should deposit or withdraw
-        bool isDeposit = target > debt;
+    function _calcFlashLoanAmount(Protocol protocol, uint256 totalAmount)
+        internal
+        view
+        returns (uint256 flashLoanAmount, uint256 target, uint256 debt, uint256 supplyAmount)
+    {
+        ProtocolParams memory params = protocolParams[protocol];
+
+        uint256 amount = totalAmount.mulWadDown(params.allocationPercent);
+        debt = getDebt(protocol);
+        uint256 collateral = getCollateral(protocol);
+
+        target = uint256(params.targetLtv).mulWadDown(amount + collateral);
 
         // calculate the flashloan amount needed
-        uint256 flashLoanAmount = (isDeposit ? target - debt : debt - target).divWadDown(C.ONE - ltv);
+        flashLoanAmount = (target > debt ? target - debt : debt - target).divWadDown(C.ONE - params.targetLtv);
+    }
+
+    function _rebalancePosition(Protocol protocol) internal {
+        // storage loads
+        uint256 totalAmount = asset.balanceOf(address(this));
+
+        (uint256 aaveFlashLoanAmount, uint256 aaveV3Target, uint256 aaveV3Debt, uint256 aaveV3SupplyAmount) =
+            _calcFlashLoanAmount(Protocol.AAVE_V3, totalAmount);
+        (uint256 eulerFlashLoanAmount, uint256 eulerTarget, uint256 eulerDebt, uint256 eulerSupplyAmount) =
+            _calcFlashLoanAmount(Protocol.EULER, totalAmount);
+
+        uint256 target = aaveV3Target + eulerTarget;
+        uint256 debt = aaveV3Debt + eulerDebt;
+
+        uint256 flashLoanAmount = aaveFlashLoanAmount + eulerFlashLoanAmount;
 
         address[] memory tokens = new address[](1);
         tokens[0] = address(weth);
@@ -347,21 +395,29 @@ contract scWETH2 is sc4626, IFlashLoanRecipient {
         uint256[] memory amounts = new uint256[](1);
         amounts[0] = flashLoanAmount;
 
+        uint256[] memory supplyAmounts = new uint[](2);
+        supplyAmounts[0] = aaveV3SupplyAmount;
+        supplyAmounts[1] = eulerSupplyAmount;
+
+        uint256[] memory flashLoanAmounts = new uint[](2);
+        flashLoanAmounts[0] = aaveFlashLoanAmount;
+        flashLoanAmounts[1] = eulerFlashLoanAmount;
+
         // needed otherwise counted as profit during harvest
-        totalInvested += amount;
+        totalInvested += totalAmount;
 
         // when deleveraging, withdraw extra to cover slippage
-        if (!isDeposit) amount += flashLoanAmount.mulWadDown(C.ONE - slippageTolerance);
+        // if (!isDeposit) totalAmount += flashLoanAmount.mulWadDown(C.ONE - slippageTolerance);
 
-        FlashLoanParams memory params = FlashLoanParams(isDeposit, amount, protocol);
+        FlashLoanParams memory params = FlashLoanParams(target > debt, totalAmount, supplyAmounts, flashLoanAmounts);
 
         // take flashloan
         balancerVault.flashLoan(address(this), tokens, amounts, abi.encode(params));
     }
 
-    function _withdrawToVault(uint256 amount, Protocol protocol) internal {
-        uint256 debt = getDebt();
-        uint256 collateral = getCollateral();
+    function _withdrawToVault(uint256 amount) internal {
+        uint256 debt = totalDebt();
+        uint256 collateral = totalCollateral();
 
         uint256 flashLoanAmount = amount.mulDivDown(debt, collateral - debt);
 
@@ -374,10 +430,10 @@ contract scWETH2 is sc4626, IFlashLoanRecipient {
         // needed otherwise counted as loss during harvest
         totalInvested -= amount;
 
-        FlashLoanParams memory params = FlashLoanParams(false, amount, protocol);
+        // FlashLoanParams memory params = FlashLoanParams(false, amount);
 
         // take flashloan
-        balancerVault.flashLoan(address(this), tokens, amounts, abi.encode(params));
+        // balancerVault.flashLoan(address(this), tokens, amounts, abi.encode(params));
     }
 
     function _stEthToEth(uint256 stEthAmount) internal view returns (uint256 ethAmount) {
@@ -406,43 +462,26 @@ contract scWETH2 is sc4626, IFlashLoanRecipient {
         }
     }
 
-    function _supplyBorrow(uint256 flashLoanAmount, Protocol protocol) internal {
-        if (protocol == Protocol.AAVE_V3) {
-            //add wstETH liquidity on aave-v3
-            IPool(C.AAVE_POOL).supply(address(wstETH), wstETH.balanceOf(address(this)), address(this), 0);
-            //borrow enough weth from aave-v3 to payback flashloan
-            IPool(C.AAVE_POOL).borrow(address(weth), flashLoanAmount, C.AAVE_VAR_INTEREST_RATE_MODE, 0, address(this));
-        } else if (protocol == Protocol.EULER) {
-            // add wstETH Liquidity on Euler
-            IEulerEToken(C.EULER_ETOKEN_WSTETH).deposit(0, type(uint256).max);
-            // borrow enough weth from Euler to payback flashloan
-            IEulerDToken(C.EULER_DTOKEN_WETH).borrow(0, flashLoanAmount);
-        } else if (protocol == Protocol.COMPOUND) {
-            // todo
-        }
+    function _supplyBorrow(uint256[] memory amounts, uint256[] memory flashLoanAmounts) internal {
+        // aave-v3
+        IPool(C.AAVE_POOL).supply(address(wstETH), _ethToWstEth(amounts[0]), address(this), 0);
+        IPool(C.AAVE_POOL).borrow(address(weth), flashLoanAmounts[0], C.AAVE_VAR_INTEREST_RATE_MODE, 0, address(this));
+
+        // Euler
+        IEulerEToken(C.EULER_ETOKEN_WSTETH).deposit(0, _ethToWstEth(amounts[1]));
+        IEulerDToken(C.EULER_DTOKEN_WETH).borrow(0, flashLoanAmounts[1]);
     }
 
-    function _repayWithdraw(uint256 flashLoanAmount, uint256 amount, Protocol protocol) internal {
-        bool withdrawAll = flashLoanAmount >= getDebt();
-        if (protocol == Protocol.AAVE_V3) {
-            // repay debt + withdraw collateral
-            IPool(C.AAVE_POOL).repay(
-                address(weth),
-                withdrawAll ? type(uint256).max : flashLoanAmount,
-                C.AAVE_VAR_INTEREST_RATE_MODE,
-                address(this)
-            );
-            IPool(C.AAVE_POOL).withdraw(
-                address(wstETH), withdrawAll ? type(uint256).max : _ethToWstEth(amount), address(this)
-            );
-        } else if (protocol == Protocol.EULER) {
-            // repay debt
-            IEulerDToken(C.EULER_DTOKEN_WETH).repay(0, withdrawAll ? type(uint256).max : flashLoanAmount);
-            // withdraw amount wstEth(collateral)
-            IEulerEToken(C.EULER_ETOKEN_WSTETH).withdraw(0, withdrawAll ? type(uint256).max : amount);
-        } else if (protocol == Protocol.COMPOUND) {
-            // todo
-        }
+    function _repayWithdraw(uint256[] memory amounts, uint256[] memory flashLoanAmounts) internal {
+        // bool withdrawAll = flashLoanAmount >= totalDebt();
+
+        // aave v3
+        IPool(C.AAVE_POOL).repay(address(weth), flashLoanAmounts[0], C.AAVE_VAR_INTEREST_RATE_MODE, address(this));
+        IPool(C.AAVE_POOL).withdraw(address(wstETH), _ethToWstEth(amounts[0] + flashLoanAmounts[0]), address(this));
+
+        // euler
+        IEulerDToken(C.EULER_DTOKEN_WETH).repay(0, flashLoanAmounts[1]);
+        IEulerEToken(C.EULER_ETOKEN_WSTETH).withdraw(0, _ethToWstEth(amounts[1] + flashLoanAmounts[1]));
     }
 
     function beforeWithdraw(uint256 assets, uint256) internal override {
@@ -454,6 +493,6 @@ contract scWETH2 is sc4626, IFlashLoanRecipient {
         uint256 missing = (assets - float);
 
         // todo: protocol hardcoded for now, change it later when withdraw method is turned async
-        _withdrawToVault(missing, Protocol.AAVE_V3);
+        _withdrawToVault(missing);
     }
 }
