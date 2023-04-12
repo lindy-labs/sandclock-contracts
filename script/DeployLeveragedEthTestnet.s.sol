@@ -19,20 +19,20 @@ import {ISwapRouter} from "../src/interfaces/uniswap/ISwapRouter.sol";
 import {scWETH} from "../src/steth/scWETH.sol";
 import {scUSDC} from "../src/steth/scUSDC.sol";
 
-import {MockWETH} from "../test/mock/MockWETH.sol";
-import {MockUSDC} from "../test/mock/MockUSDC.sol";
-import {MockAavePool} from "../test/mock/aave-v3/MockAavePool.sol";
-import {MockAavePoolDataProvider} from "../test/mock/aave-v3/MockAavePoolDataProvider.sol";
-import {MockAUsdc} from "../test/mock/aave-v3/MockAUsdc.sol";
-import {MockVarDebtWETH} from "../test/mock/aave-v3/MockVarDebtWETH.sol";
-import {MockAwstETH} from "../test/mock/aave-v3/MockAwstETH.sol";
+import {MockWETH} from "../test/mocks/MockWETH.sol";
+import {MockUSDC} from "../test/mocks/MockUSDC.sol";
+import {MockAavePool} from "../test/mocks/aave-v3/MockAavePool.sol";
+import {MockAavePoolDataProvider} from "../test/mocks/aave-v3/MockAavePoolDataProvider.sol";
+import {MockAUsdc} from "../test/mocks/aave-v3/MockAUsdc.sol";
+import {MockVarDebtWETH} from "../test/mocks/aave-v3/MockVarDebtWETH.sol";
+import {MockAwstETH} from "../test/mocks/aave-v3/MockAwstETH.sol";
 
-import {MockStETH} from "../test/mock/lido/MockStETH.sol";
-import {MockWstETH} from "../test/mock/lido/MockWstETH.sol";
-import {MockCurvePool} from "../test/mock/curve/MockCurvePool.sol";
-import {MockChainlinkPriceFeed} from "../test/mock/chainlink/MockChainlinkPriceFeed.sol";
-import {MockBalancerVault} from "../test/mock/balancer/MockBalancerVault.sol";
-import {MockSwapRouter} from "../test/mock/uniswap/MockSwapRouter.sol";
+import {MockStETH} from "../test/mocks/lido/MockStETH.sol";
+import {MockWstETH} from "../test/mocks/lido/MockWstETH.sol";
+import {MockCurvePool} from "../test/mocks/curve/MockCurvePool.sol";
+import {MockChainlinkPriceFeed} from "../test/mocks/chainlink/MockChainlinkPriceFeed.sol";
+import {MockBalancerVault} from "../test/mocks/balancer/MockBalancerVault.sol";
+import {MockSwapRouter} from "../test/mocks/uniswap/MockSwapRouter.sol";
 
 contract DeployScript is CREATE3Script {
     MockWETH weth;

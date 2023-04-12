@@ -18,15 +18,15 @@ import {ICurvePool} from "../src/interfaces/curve/ICurvePool.sol";
 import {ILido} from "../src/interfaces/lido/ILido.sol";
 import {IwstETH} from "../src/interfaces/lido/IwstETH.sol";
 
-import {MockWETH} from "./mock/MockWETH.sol";
-import {MockAavePool} from "./mock/aave-v3/MockAavePool.sol";
-import {MockVarDebtWETH} from "./mock/aave-v3/MockVarDebtWETH.sol";
-import {MockAwstETH} from "./mock/aave-v3/MockAwstETH.sol";
-import {MockStETH} from "./mock/lido/MockStETH.sol";
-import {MockWstETH} from "./mock/lido/MockWstETH.sol";
-import {MockChainlinkPriceFeed} from "./mock/chainlink/MockChainlinkPriceFeed.sol";
-import {MockCurvePool} from "./mock/curve/MockCurvePool.sol";
-import {MockBalancerVault} from "./mock/balancer/MockBalancerVault.sol";
+import {MockWETH} from "./mocks/MockWETH.sol";
+import {MockAavePool} from "./mocks/aave-v3/MockAavePool.sol";
+import {MockVarDebtWETH} from "./mocks/aave-v3/MockVarDebtWETH.sol";
+import {MockAwstETH} from "./mocks/aave-v3/MockAwstETH.sol";
+import {MockStETH} from "./mocks/lido/MockStETH.sol";
+import {MockWstETH} from "./mocks/lido/MockWstETH.sol";
+import {MockChainlinkPriceFeed} from "./mocks/chainlink/MockChainlinkPriceFeed.sol";
+import {MockCurvePool} from "./mocks/curve/MockCurvePool.sol";
+import {MockBalancerVault} from "./mocks/balancer/MockBalancerVault.sol";
 
 contract scWETHUnitTest is Test {
     using FixedPointMathLib for uint256;

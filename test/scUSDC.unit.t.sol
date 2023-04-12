@@ -6,6 +6,7 @@ import "forge-std/Test.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {WETH} from "solmate/tokens/WETH.sol";
 import {ERC4626} from "solmate/mixins/ERC4626.sol";
+import {MockERC4626} from "solmate/test/utils/mocks/MockERC4626.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 import {IPool} from "aave-v3/interfaces/IPool.sol";
 import {IAToken} from "aave-v3/interfaces/IAToken.sol";
@@ -16,16 +17,15 @@ import {ISwapRouter} from "../src/interfaces/uniswap/ISwapRouter.sol";
 import {AggregatorV3Interface} from "../src/interfaces/chainlink/AggregatorV3Interface.sol";
 import {IVault} from "../src/interfaces/balancer/IVault.sol";
 
-import {MockERC4626} from "./mock/MockERC4626.sol";
-import {MockWETH} from "./mock/MockWETH.sol";
-import {MockUSDC} from "./mock/MockUSDC.sol";
-import {MockAavePool} from "./mock/aave-v3/MockAavePool.sol";
-import {MockAavePoolDataProvider} from "./mock/aave-v3/MockAavePoolDataProvider.sol";
-import {MockAUsdc} from "./mock/aave-v3/MockAUsdc.sol";
-import {MockVarDebtWETH} from "./mock/aave-v3/MockVarDebtWETH.sol";
-import {MockChainlinkPriceFeed} from "./mock/chainlink/MockChainlinkPriceFeed.sol";
-import {MockBalancerVault} from "./mock/balancer/MockBalancerVault.sol";
-import {MockSwapRouter} from "./mock/uniswap/MockSwapRouter.sol";
+import {MockWETH} from "./mocks/MockWETH.sol";
+import {MockUSDC} from "./mocks/MockUSDC.sol";
+import {MockAavePool} from "./mocks/aave-v3/MockAavePool.sol";
+import {MockAavePoolDataProvider} from "./mocks/aave-v3/MockAavePoolDataProvider.sol";
+import {MockAUsdc} from "./mocks/aave-v3/MockAUsdc.sol";
+import {MockVarDebtWETH} from "./mocks/aave-v3/MockVarDebtWETH.sol";
+import {MockChainlinkPriceFeed} from "./mocks/chainlink/MockChainlinkPriceFeed.sol";
+import {MockBalancerVault} from "./mocks/balancer/MockBalancerVault.sol";
+import {MockSwapRouter} from "./mocks/uniswap/MockSwapRouter.sol";
 
 contract scUSDCUnitTest is Test {
     using FixedPointMathLib for uint256;
@@ -52,7 +52,7 @@ contract scUSDCUnitTest is Test {
         usdc = new MockUSDC();
         weth = new MockWETH();
 
-        wethVault = new MockERC4626(weth);
+        wethVault = new MockERC4626(weth, "Mock WETH Vault", "mWETH");
 
         aavePoolDataProvider = new MockAavePoolDataProvider(address(usdc), address(weth));
         aavePool = new MockAavePool();
