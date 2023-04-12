@@ -192,7 +192,7 @@ contract scWETH2 is sc4626, IFlashLoanRecipient {
 
     /// @notice withdraw funds from the strategy into the vault
     /// @param amount : amount of assets to withdraw into the vault
-    function withdrawToVault(uint256 amount, Protocol protocol) external onlyKeeper {
+    function withdrawToVault(uint256 amount) external onlyKeeper {
         _withdrawToVault(amount);
     }
 
@@ -212,12 +212,12 @@ contract scWETH2 is sc4626, IFlashLoanRecipient {
 
     /// @notice returns the total wstETH supplied as collateral (in ETH)
     function totalCollateral() public view returns (uint256) {
-        return _wstEthToEth(IAToken(C.AAVE_AWSTETH_TOKEN).balanceOf(address(this)));
+        return getCollateral(Protocol.AAVE_V3) + getCollateral(Protocol.EULER);
     }
 
     /// @notice returns the total ETH borrowed
     function totalDebt() public view returns (uint256) {
-        return ERC20(C.AAVAAVE_VAR_DEBT_WETH_TOKEN).balanceOf(address(this));
+        return getDebt(Protocol.AAVE_V3) + getDebt(Protocol.EULER);
     }
 
     /// @notice returns the net leverage that the strategy is using right now (1e18 = 100%)
@@ -243,18 +243,18 @@ contract scWETH2 is sc4626, IFlashLoanRecipient {
     /// @notice returns the debt on a particular protocol
     function getDebt(Protocol protocol) public view returns (uint256 debt) {
         if (protocol == Protocol.AAVE_V3) {
-            // todo
+            debt = ERC20(C.AAVAAVE_VAR_DEBT_WETH_TOKEN).balanceOf(address(this));
         } else if (protocol == Protocol.EULER) {
-            // todo
+            debt = IEulerDToken(C.EULER_DTOKEN_WETH).balanceOf(address(this));
         }
     }
 
     /// @notice returns the collateral supplied on a particular protocol
     function getCollateral(Protocol protocol) public view returns (uint256 collateral) {
         if (protocol == Protocol.AAVE_V3) {
-            // todo
+            collateral = _wstEthToEth(IAToken(C.AAVE_AWSTETH_TOKEN).balanceOf(address(this)));
         } else if (protocol == Protocol.EULER) {
-            // todo
+            collateral = _wstEthToEth(IEulerEToken(C.EULER_ETOKEN_WSTETH).balanceOfUnderlying(address(this)));
         }
     }
 
@@ -524,7 +524,6 @@ contract scWETH2 is sc4626, IFlashLoanRecipient {
 
         uint256 missing = (assets - float);
 
-        // todo: protocol hardcoded for now, change it later when withdraw method is turned async
         _withdrawToVault(missing);
     }
 }
