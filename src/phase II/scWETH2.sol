@@ -6,7 +6,8 @@ import {
     ZeroAddress,
     InvalidSlippageTolerance,
     PleaseUseRedeemMethod,
-    InvalidFlashLoanCaller
+    InvalidFlashLoanCaller,
+    InvalidAllocationPercents
 } from "../errors/scErrors.sol";
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
@@ -97,10 +98,17 @@ contract scWETH2 is sc4626, IFlashLoanRecipient {
     uint256 public slippageTolerance;
 
     function _addProtocols(ProtocolParams[] memory params) internal {
-        protocolParams[Protocol.AAVE_V3] = params[0];
-        protocolParams[Protocol.EULER] = params[1];
+        uint256 n = params.length;
 
-        protocols += params.length;
+        uint256 totalAllocationPercent;
+        for (uint256 i = 0; i < n; i++) {
+            protocolParams[Protocol(i)] = params[i];
+            totalAllocationPercent += params[i].allocationPercent;
+        }
+
+        if (totalAllocationPercent != C.ONE) revert InvalidAllocationPercents();
+
+        protocols = n;
     }
 
     constructor(ConstructorParams memory _params)
@@ -194,6 +202,26 @@ contract scWETH2 is sc4626, IFlashLoanRecipient {
     /// @param amount : amount of assets to withdraw into the vault
     function withdrawToVault(uint256 amount) external onlyKeeper {
         _withdrawToVault(amount);
+    }
+
+    function reallocatePositions(uint128[] calldata newAllocationPercents) external onlyKeeper {
+        uint256 n = newAllocationPercents.length;
+        if (n != protocols) revert InvalidAllocationPercents();
+
+        // withdraw everything
+        _withdrawToVault(totalCollateral() - totalDebt());
+
+        uint256 totalAllocationPercent;
+        // set new allocation percents
+        for (uint256 i = 0; i < n; i++) {
+            protocolParams[Protocol(i)].allocationPercent = newAllocationPercents[i];
+            totalAllocationPercent += newAllocationPercents[i];
+        }
+
+        if (totalAllocationPercent != C.ONE) revert InvalidAllocationPercents();
+
+        // invest everything into the strategy
+        _rebalancePosition();
     }
 
     //////////////////// VIEW METHODS //////////////////////////
