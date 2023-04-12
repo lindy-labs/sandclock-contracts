@@ -406,26 +406,29 @@ contract scWETH2 is sc4626, IFlashLoanRecipient {
     function _rebalancePosition() internal {
         // storage loads
         uint256 totalAmount = asset.balanceOf(address(this));
-        bool isDeposit;
+        uint256 target;
+        uint256 debt;
         uint256 flashLoanAmount;
         uint256[] memory supplyAmounts = new uint[](2);
         uint256[] memory flashLoanAmounts = new uint[](2);
 
         // scoping to prevent stack too deep errors
         {
-            (uint256 aaveFlashLoanAmount, uint256 aaveV3Target, uint256 aaveV3Debt, uint256 aaveV3SupplyAmount) =
-                _calcFlashLoanAmountRebalancing(Protocol.AAVE_V3, totalAmount);
-            (uint256 eulerFlashLoanAmount, uint256 eulerTarget, uint256 eulerDebt, uint256 eulerSupplyAmount) =
-                _calcFlashLoanAmountRebalancing(Protocol.EULER, totalAmount);
+            uint256 flashLoanAmount_;
+            uint256 target_;
+            uint256 debt_;
+            uint256 supplyAmount_;
 
-            isDeposit = aaveV3Target + eulerTarget > aaveV3Debt + eulerDebt;
-            flashLoanAmount = aaveFlashLoanAmount + eulerFlashLoanAmount;
+            for (uint256 i; i < protocols; i++) {
+                (flashLoanAmount_, target_, debt_, supplyAmount_) =
+                    _calcFlashLoanAmountRebalancing(Protocol(i), totalAmount);
 
-            supplyAmounts[0] = aaveV3SupplyAmount;
-            supplyAmounts[1] = eulerSupplyAmount;
-
-            flashLoanAmounts[0] = aaveFlashLoanAmount;
-            flashLoanAmounts[1] = eulerFlashLoanAmount;
+                supplyAmounts[i] = supplyAmount_;
+                flashLoanAmounts[i] = flashLoanAmount_;
+                flashLoanAmount += flashLoanAmount_;
+                target += target_;
+                debt += debt_;
+            }
         }
 
         address[] memory tokens = new address[](1);
@@ -440,7 +443,7 @@ contract scWETH2 is sc4626, IFlashLoanRecipient {
         // when deleveraging, withdraw extra to cover slippage
         // if (!isDeposit) totalAmount += flashLoanAmount.mulWadDown(C.ONE - slippageTolerance);
 
-        FlashLoanParams memory params = FlashLoanParams(isDeposit, totalAmount, supplyAmounts, flashLoanAmounts);
+        FlashLoanParams memory params = FlashLoanParams(target > debt, totalAmount, supplyAmounts, flashLoanAmounts);
 
         // take flashloan
         balancerVault.flashLoan(address(this), tokens, amounts, abi.encode(params));
@@ -467,18 +470,15 @@ contract scWETH2 is sc4626, IFlashLoanRecipient {
         uint256[] memory flashLoanAmounts = new uint[](2);
 
         {
-            (uint256 aaveFlashLoanAmount, uint256 aaveV3Amount) =
-                _calcFlashLoanAmountWithdrawing(Protocol.AAVE_V3, amount);
-            (uint256 eulerFlashLoanAmount, uint256 eulerAmount) =
-                _calcFlashLoanAmountWithdrawing(Protocol.EULER, amount);
+            uint256 flashLoanAmount_;
+            uint256 amount_;
+            for (uint256 i; i < protocols; i++) {
+                (flashLoanAmount_, amount_) = _calcFlashLoanAmountWithdrawing(Protocol(i), amount);
 
-            flashLoanAmount = aaveFlashLoanAmount + eulerFlashLoanAmount;
-
-            withdrawAmounts[0] = aaveV3Amount;
-            withdrawAmounts[1] = eulerAmount;
-
-            flashLoanAmounts[0] = aaveFlashLoanAmount;
-            flashLoanAmounts[1] = eulerFlashLoanAmount;
+                withdrawAmounts[i] = amount_;
+                flashLoanAmounts[i] = flashLoanAmount_;
+                flashLoanAmount += flashLoanAmount_;
+            }
         }
 
         address[] memory tokens = new address[](1);
