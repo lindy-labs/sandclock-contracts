@@ -15,3 +15,4 @@ error CallerNotKeeper();
 error NoProfitsToSell();
 error EndUsdcBalanceTooLow();
 error InvalidAllocationPercents();
+error InsufficientDepositBalance();
