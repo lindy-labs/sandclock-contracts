@@ -15,6 +15,7 @@ import {IEulerMarkets, IEulerEToken, IEulerDToken} from "lib/euler-interfaces/co
 import {Constants as C} from "../src/lib/Constants.sol";
 import {sc4626} from "../src/sc4626.sol";
 import {scUSDCv2} from "../src/steth/scUSDCv2.sol";
+import {UsdcWethLendingManager} from "../src/steth/UsdcWethLendingManager.sol";
 import {scWETH} from "../src/steth/scWETH.sol";
 import {ISwapRouter} from "../src/interfaces/uniswap/ISwapRouter.sol";
 import {AggregatorV3Interface} from "../src/interfaces/chainlink/AggregatorV3Interface.sol";
@@ -120,7 +121,7 @@ contract scUSDCv2Test is Test {
 
         scUSDCv2.RebalanceParams[] memory params = new scUSDCv2.RebalanceParams[](1);
         params[0] = scUSDCv2.RebalanceParams({
-            marketId: scUSDCv2.LendingMarkets.AAVE_V3,
+            protocol: UsdcWethLendingManager.Protocol.AAVE_V3,
             addCollateralAmount: initialBalance,
             isBorrow: true,
             amount: 100 ether
@@ -128,8 +129,8 @@ contract scUSDCv2Test is Test {
 
         vault.rebalance(params);
 
-        assertEq(vault.getDebt(), 100 ether);
-        assertEq(vault.getCollateral(), initialBalance);
+        assertEq(vault.totalDebt(), 100 ether);
+        assertEq(vault.totalCollateral(), initialBalance);
     }
 
     function test_rebalance_oneProtocolWithAdditionalDeposits() public {
@@ -138,7 +139,7 @@ contract scUSDCv2Test is Test {
 
         scUSDCv2.RebalanceParams[] memory params = new scUSDCv2.RebalanceParams[](1);
         params[0] = scUSDCv2.RebalanceParams({
-            marketId: scUSDCv2.LendingMarkets.AAVE_V3,
+            protocol: UsdcWethLendingManager.Protocol.AAVE_V3,
             addCollateralAmount: initialBalance,
             isBorrow: true,
             amount: 100 ether
@@ -146,14 +147,14 @@ contract scUSDCv2Test is Test {
 
         vault.rebalance(params);
 
-        assertEq(vault.getDebt(), 100 ether);
-        assertEq(vault.getCollateral(), initialBalance);
+        assertEq(vault.totalDebt(), 100 ether);
+        assertEq(vault.totalCollateral(), initialBalance);
 
         uint256 additionalBalance = 100_000e6;
         deal(address(usdc), address(vault), additionalBalance);
         params = new scUSDCv2.RebalanceParams[](1);
         params[0] = scUSDCv2.RebalanceParams({
-            marketId: scUSDCv2.LendingMarkets.AAVE_V3,
+            protocol: UsdcWethLendingManager.Protocol.AAVE_V3,
             addCollateralAmount: additionalBalance,
             isBorrow: true,
             amount: 10 ether
@@ -161,8 +162,8 @@ contract scUSDCv2Test is Test {
 
         vault.rebalance(params);
 
-        assertEq(vault.getDebt(), 110 ether);
-        assertEq(vault.getCollateral(), initialBalance + additionalBalance);
+        assertEq(vault.totalDebt(), 110 ether);
+        assertEq(vault.totalCollateral(), initialBalance + additionalBalance);
     }
 
     function test_rebalance_twoProtocols() public {
@@ -171,13 +172,13 @@ contract scUSDCv2Test is Test {
 
         scUSDCv2.RebalanceParams[] memory params = new scUSDCv2.RebalanceParams[](2);
         params[0] = scUSDCv2.RebalanceParams({
-            marketId: scUSDCv2.LendingMarkets.AAVE_V3,
+            protocol: UsdcWethLendingManager.Protocol.AAVE_V3,
             addCollateralAmount: initialBalance / 2,
             isBorrow: true,
             amount: 50 ether
         });
         params[1] = scUSDCv2.RebalanceParams({
-            marketId: scUSDCv2.LendingMarkets.EULER,
+            protocol: UsdcWethLendingManager.Protocol.EULER,
             addCollateralAmount: initialBalance / 2,
             isBorrow: true,
             amount: 50 ether
@@ -185,8 +186,8 @@ contract scUSDCv2Test is Test {
 
         vault.rebalance(params);
 
-        assertApproxEqAbs(vault.getCollateral(), initialBalance, 1);
-        assertApproxEqAbs(vault.getDebt(), 100 ether, 1);
+        assertApproxEqAbs(vault.totalCollateral(), initialBalance, 1);
+        assertApproxEqAbs(vault.totalDebt(), 100 ether, 1);
 
         assertApproxEqAbs(vault.getCollateralOnAave(), initialBalance / 2, 1);
         assertApproxEqAbs(vault.getCollateralOnEuler(), initialBalance / 2, 1);
@@ -201,7 +202,7 @@ contract scUSDCv2Test is Test {
 
         scUSDCv2.RebalanceParams[] memory rebalanceParams = new scUSDCv2.RebalanceParams[](1);
         rebalanceParams[0] = scUSDCv2.RebalanceParams({
-            marketId: scUSDCv2.LendingMarkets.AAVE_V3,
+            protocol: UsdcWethLendingManager.Protocol.AAVE_V3,
             addCollateralAmount: initialBalance,
             isBorrow: true,
             amount: 100 ether
@@ -209,8 +210,8 @@ contract scUSDCv2Test is Test {
 
         vault.rebalance(rebalanceParams);
 
-        assertApproxEqAbs(vault.getCollateral(), initialBalance, 1);
-        assertApproxEqAbs(vault.getDebt(), 100 ether, 1);
+        assertApproxEqAbs(vault.totalCollateral(), initialBalance, 1);
+        assertApproxEqAbs(vault.totalDebt(), 100 ether, 1);
 
         assertApproxEqAbs(vault.getCollateralOnAave(), initialBalance, 1);
         assertApproxEqAbs(vault.getCollateralOnEuler(), 0, 1);
@@ -220,13 +221,13 @@ contract scUSDCv2Test is Test {
 
         scUSDCv2.ReallocationParams[] memory reallocateParams = new scUSDCv2.ReallocationParams[](2);
         reallocateParams[0] = scUSDCv2.ReallocationParams({
-            marketId: scUSDCv2.LendingMarkets.AAVE_V3,
+            protocol: UsdcWethLendingManager.Protocol.AAVE_V3,
             isDownsize: true,
             collateralAmount: 1_000_000e6,
             debtAmount: 100 ether
         });
         reallocateParams[1] = scUSDCv2.ReallocationParams({
-            marketId: scUSDCv2.LendingMarkets.EULER,
+            protocol: UsdcWethLendingManager.Protocol.EULER,
             isDownsize: false,
             collateralAmount: 1_000_000e6,
             debtAmount: 100 ether
@@ -235,8 +236,8 @@ contract scUSDCv2Test is Test {
         uint256 flashLoanAmount = 100 ether;
         vault.reallocateCapital(reallocateParams, flashLoanAmount);
 
-        assertApproxEqAbs(vault.getCollateral(), initialBalance, 1);
-        assertApproxEqAbs(vault.getDebt(), 100 ether, 1);
+        assertApproxEqAbs(vault.totalCollateral(), initialBalance, 1);
+        assertApproxEqAbs(vault.totalDebt(), 100 ether, 1);
 
         assertApproxEqAbs(vault.getCollateralOnAave(), 0, 1);
         assertApproxEqAbs(vault.getCollateralOnEuler(), initialBalance, 1);

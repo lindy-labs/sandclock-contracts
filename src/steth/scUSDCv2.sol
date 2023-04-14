@@ -25,32 +25,17 @@ import {ISwapRouter} from "../interfaces/uniswap/ISwapRouter.sol";
 import {AggregatorV3Interface} from "../interfaces/chainlink/AggregatorV3Interface.sol";
 import {IFlashLoanRecipient} from "../interfaces/balancer/IFlashLoanRecipient.sol";
 import {sc4626} from "../sc4626.sol";
+import {UsdcWethLendingManager} from "./UsdcWethLendingManager.sol";
 
 /**
  * @title Sandclock USDC Vault
  * @notice A vault that allows users to earn interest on their USDC deposits from leveraged WETH staking.
  * @dev This vault uses Sandclock's leveraged WETH staking vault - scWETH.
  */
-contract scUSDCv2 is sc4626, IFlashLoanRecipient {
+contract scUSDCv2 is sc4626, UsdcWethLendingManager, IFlashLoanRecipient {
     using SafeTransferLib for ERC20;
     using SafeTransferLib for WETH;
     using FixedPointMathLib for uint256;
-
-    enum LendingMarkets {
-        AAVE_V3,
-        EULER
-    }
-
-    struct LendingMarket {
-        function(uint256) supplyFunc;
-        function(uint256) borrowFunc;
-        function(uint256) repayFunc;
-        function(uint256) withdrawFunc;
-        function() view returns(uint256) getCollateralFunc;
-        function() view returns(uint256) getDebtFunc;
-    }
-
-    mapping(LendingMarkets => LendingMarket) lendingMarkets;
 
     event NewTargetLtvApplied(address indexed admin, uint256 newTargetLtv);
     event SlippageToleranceUpdated(address indexed admin, uint256 newSlippageTolerance);
@@ -67,21 +52,6 @@ contract scUSDCv2 is sc4626, IFlashLoanRecipient {
         uint256 finalUsdcBalance
     );
 
-    WETH public immutable weth;
-
-    // delta threshold for rebalancing in percentage
-    uint256 constant DEBT_DELTA_THRESHOLD = 0.01e18;
-
-    // main aave contract for interaction with the protocol
-    IPool public immutable aavePool;
-    // aave protocol data provider
-    IPoolDataProvider public immutable aavePoolDataProvider;
-
-    // aave "aEthUSDC" token
-    IAToken public immutable aUsdc;
-    // aave "variableDebtEthWETH" token
-    ERC20 public immutable dWeth;
-
     // Uniswap V3 router
     ISwapRouter public immutable swapRouter;
 
@@ -91,25 +61,11 @@ contract scUSDCv2 is sc4626, IFlashLoanRecipient {
     // Balancer vault for flashloans
     IVault public immutable balancerVault;
 
-    // USDC / WETH target LTV
-    uint256 public targetLtv = 0.65e18;
     // max slippage for swapping WETH -> USDC
     uint256 public slippageTolerance = 0.99e18; // 1% default
-    uint256 public constant rebalanceMinimum = 10e6; // 10 USDC
 
     // leveraged (w)eth vault
     ERC4626 public immutable scWETH;
-
-    // EULER lending market
-    address public immutable eulerProtocol;
-    // The Euler market contract
-    IEulerMarkets public immutable eulerMarkets;
-    // Euler supply token for USDC (eUSDC)
-    IEulerEToken public immutable eulerEUsdc;
-    // Euler debt token for WETH (dWETH)
-    IEulerDToken public immutable eulerDWeth;
-    // euler rewards token (EUL)
-    ERC20 public immutable eulerRewardsToken;
 
     struct ConstructorParams {
         address admin;
@@ -133,43 +89,27 @@ contract scUSDCv2 is sc4626, IFlashLoanRecipient {
 
     constructor(ConstructorParams memory _params)
         sc4626(_params.admin, _params.keeper, _params.usdc, "Sandclock USDC Vault", "scUSDC")
+        UsdcWethLendingManager(
+            _params.usdc,
+            _params.weth,
+            _params.aavePool,
+            _params.aavePoolDataProvider,
+            _params.aaveAUsdc,
+            _params.aaveVarDWeth,
+            _params.eulerProtocol,
+            _params.eulerMarkets,
+            _params.eulerEUsdc,
+            _params.eulerDWeth,
+            _params.eulerRewardsToken
+        )
     {
         scWETH = _params.scWETH;
-        weth = _params.weth;
-        aavePool = _params.aavePool;
-        aavePoolDataProvider = _params.aavePoolDataProvider;
-        aUsdc = _params.aaveAUsdc;
-        dWeth = _params.aaveVarDWeth;
         swapRouter = _params.uniswapSwapRouter;
         usdcToEthPriceFeed = _params.chainlinkUsdcToEthPriceFeed;
         balancerVault = _params.balancerVault;
-        eulerProtocol = _params.eulerProtocol;
-        eulerMarkets = _params.eulerMarkets;
-        eulerEUsdc = _params.eulerEUsdc;
-        eulerDWeth = _params.eulerDWeth;
-        eulerRewardsToken = _params.eulerRewardsToken;
 
-        asset.safeApprove(address(aavePool), type(uint256).max);
-
-        weth.safeApprove(address(aavePool), type(uint256).max);
         weth.safeApprove(address(swapRouter), type(uint256).max);
-        weth.safeApprove(address(_params.scWETH), type(uint256).max);
-
-        asset.safeApprove(eulerProtocol, type(uint256).max);
-        weth.safeApprove(eulerProtocol, type(uint256).max);
-        eulerMarkets.enterMarket(0, address(asset));
-
-        lendingMarkets[LendingMarkets.AAVE_V3] = LendingMarket(
-            supplyUsdcOnAave, borrowWethOnAave, repayDebtOnAave, withdrawUsdcOnAave, getCollateralOnAave, getDebtOnAave
-        );
-        lendingMarkets[LendingMarkets.EULER] = LendingMarket(
-            supplyUsdcOnEuler,
-            borrowWethOnEuler,
-            repayDebtOnEuler,
-            withdrawUsdcOnEuler,
-            getCollateralOnEuler,
-            getDebtOnEuler
-        );
+        weth.safeApprove(address(scWETH), type(uint256).max);
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -189,7 +129,7 @@ contract scUSDCv2 is sc4626, IFlashLoanRecipient {
     }
 
     struct ReallocationParams {
-        LendingMarkets marketId;
+        Protocol protocol;
         bool isDownsize;
         uint256 collateralAmount;
         uint256 debtAmount;
@@ -220,12 +160,14 @@ contract scUSDCv2 is sc4626, IFlashLoanRecipient {
         (ReallocationParams[] memory params) = abi.decode(userData, (ReallocationParams[]));
 
         for (uint8 i = 0; i < params.length; i++) {
+            ProtocolActions memory protocolActions = lendingProtocols[params[i].protocol];
+
             if (params[i].isDownsize) {
-                lendingMarkets[params[i].marketId].repayFunc(params[i].debtAmount);
-                lendingMarkets[params[i].marketId].withdrawFunc(params[i].collateralAmount);
+                protocolActions.repay(params[i].debtAmount);
+                protocolActions.withdraw(params[i].collateralAmount);
             } else {
-                lendingMarkets[params[i].marketId].supplyFunc(params[i].collateralAmount);
-                lendingMarkets[params[i].marketId].borrowFunc(params[i].debtAmount);
+                protocolActions.supply(params[i].collateralAmount);
+                protocolActions.borrow(params[i].debtAmount);
             }
         }
 
@@ -233,7 +175,7 @@ contract scUSDCv2 is sc4626, IFlashLoanRecipient {
     }
 
     struct RebalanceParams {
-        LendingMarkets marketId;
+        Protocol protocol;
         uint256 addCollateralAmount;
         bool isBorrow;
         uint256 amount;
@@ -245,77 +187,26 @@ contract scUSDCv2 is sc4626, IFlashLoanRecipient {
      */
     function rebalance(RebalanceParams[] calldata _params) public {
         for (uint8 i = 0; i < _params.length; i++) {
+            ProtocolActions memory protocolActions = lendingProtocols[_params[i].protocol];
+
             // respect new deposits
             if (_params[i].addCollateralAmount != 0) {
-                lendingMarkets[_params[i].marketId].supplyFunc(_params[i].addCollateralAmount);
+                protocolActions.supply(_params[i].addCollateralAmount);
             }
 
             // borrow and invest or disinvest and repay
             if (_params[i].isBorrow) {
-                lendingMarkets[_params[i].marketId].borrowFunc(_params[i].amount);
+                protocolActions.borrow(_params[i].amount);
                 scWETH.deposit(_params[i].amount, address(this));
             } else {
                 uint256 withdrawn = _disinvest(_params[i].amount);
-                lendingMarkets[_params[i].marketId].repayFunc(withdrawn);
+                protocolActions.repay(withdrawn);
             }
         }
     }
 
-    // TODO: figure out how to separate protocol specific logic from the vault
-    // AAVE
-
-    function supplyUsdcOnAave(uint256 _amount) internal {
-        aavePool.supply(address(asset), _amount, address(this), 0);
-    }
-
-    function borrowWethOnAave(uint256 _amount) internal {
-        aavePool.borrow(address(weth), _amount, C.AAVE_VAR_INTEREST_RATE_MODE, 0, address(this));
-    }
-
-    function repayDebtOnAave(uint256 _amount) internal {
-        aavePool.repay(address(weth), _amount, C.AAVE_VAR_INTEREST_RATE_MODE, address(this));
-    }
-
-    function withdrawUsdcOnAave(uint256 _amount) internal {
-        aavePool.withdraw(address(asset), _amount, address(this));
-    }
-
-    function getCollateralOnAave() public view returns (uint256) {
-        return aUsdc.balanceOf(address(this));
-    }
-
-    function getDebtOnAave() public view returns (uint256) {
-        return dWeth.balanceOf(address(this));
-    }
-
-    // EULER
-
-    function supplyUsdcOnEuler(uint256 _amount) internal {
-        eulerEUsdc.deposit(0, _amount);
-    }
-
-    function borrowWethOnEuler(uint256 _amount) internal {
-        eulerDWeth.borrow(0, _amount);
-    }
-
-    function repayDebtOnEuler(uint256 _amount) internal {
-        eulerDWeth.repay(0, _amount);
-    }
-
-    function withdrawUsdcOnEuler(uint256 _amount) internal {
-        eulerEUsdc.withdraw(0, _amount);
-    }
-
-    function getCollateralOnEuler() public view returns (uint256) {
-        return eulerEUsdc.balanceOfUnderlying(address(this));
-    }
-
-    function getDebtOnEuler() public view returns (uint256) {
-        return eulerDWeth.balanceOf(address(this));
-    }
-
     function totalAssets() public view override returns (uint256) {
-        return _calculateTotalAssets(getUsdcBalance(), getCollateral(), getInvested(), getDebt());
+        return _calculateTotalAssets(usdcBalance(), totalCollateral(), wethInvested(), totalDebt());
     }
 
     function getUsdcFromWeth(uint256 _wethAmount) public view returns (uint256) {
@@ -334,33 +225,35 @@ contract scUSDCv2 is sc4626, IFlashLoanRecipient {
      * @notice Returns the USDC balance of the vault.
      * @return The USDC balance.
      */
-    function getUsdcBalance() public view returns (uint256) {
+    function usdcBalance() public view returns (uint256) {
         return asset.balanceOf(address(this));
     }
 
     /**
      * @notice Returns the total USDC supplied as collateral to Aave.
-     * @return The USDC collateral amount.
+     * @return total supplied USDC amount.
      */
-    function getCollateral() public view returns (uint256) {
-        // TODO: can be made protocol agnostic?
-        return lendingMarkets[LendingMarkets.AAVE_V3].getCollateralFunc()
-            + lendingMarkets[LendingMarkets.EULER].getCollateralFunc();
+    function totalCollateral() public view returns (uint256 total) {
+        for (uint8 i = 0; i <= uint256(type(Protocol).max); i++) {
+            total += lendingProtocols[Protocol(i)].getCollateral();
+        }
     }
 
     /**
      * @notice Returns the total WETH borrowed on Aave.
-     * @return The borrowed WETH amount.
+     * @return total borrowed WETH amount.
      */
-    function getDebt() public view returns (uint256) {
-        return lendingMarkets[LendingMarkets.AAVE_V3].getDebtFunc() + lendingMarkets[LendingMarkets.EULER].getDebtFunc();
+    function totalDebt() public view returns (uint256 total) {
+        for (uint8 i = 0; i <= uint256(type(Protocol).max); i++) {
+            total += lendingProtocols[Protocol(i)].getDebt();
+        }
     }
 
     /**
      * @notice Returns the amount of WETH invested in the leveraged WETH vault.
      * @return The WETH invested amount.
      */
-    function getInvested() public view returns (uint256) {
+    function wethInvested() public view returns (uint256) {
         return scWETH.convertToAssets(scWETH.balanceOf(address(this)));
     }
 
@@ -368,16 +261,15 @@ contract scUSDCv2 is sc4626, IFlashLoanRecipient {
      * @notice Returns the net LTV at which the vault has borrowed until now.
      * @return The current LTV (1e18 = 100%).
      */
-    // TODO: make protocol specific
-    function getLtv() public view returns (uint256) {
-        uint256 debt = getDebt();
+    function getLtv(Protocol _protocol) public view returns (uint256) {
+        uint256 debt = lendingProtocols[_protocol].getDebt();
 
         if (debt == 0) return 0;
 
         uint256 debtPriceInUsdc = getUsdcFromWeth(debt);
 
         // totalDebt / totalSupplied
-        return debtPriceInUsdc.divWadUp(getCollateral());
+        return debtPriceInUsdc.divWadUp(lendingProtocols[_protocol].getCollateral());
     }
 
     /**
@@ -398,12 +290,12 @@ contract scUSDCv2 is sc4626, IFlashLoanRecipient {
 
     function beforeWithdraw(uint256 _assets, uint256) internal override {
         // TODO: find collateral allocation pct for each protocol and use that to calculate the amount to withdraw from each protocol
-        uint256 initialBalance = getUsdcBalance();
+        uint256 initialBalance = usdcBalance();
         if (initialBalance >= _assets) return;
 
-        uint256 collateral = getCollateral();
-        uint256 debt = getDebt();
-        uint256 invested = getInvested();
+        uint256 collateral = totalCollateral();
+        uint256 debt = totalDebt();
+        uint256 invested = wethInvested();
         uint256 total = _calculateTotalAssets(initialBalance, collateral, invested, debt);
         uint256 profit = _calculateWethProfit(invested, debt);
         uint256 floatRequired = total > _assets ? (total - _assets).mulWadUp(floatPercentage) : 0;
@@ -435,10 +327,10 @@ contract scUSDCv2 is sc4626, IFlashLoanRecipient {
         uint256 withdrawn = _disinvest(wethNeeded);
         // aavePool.repay(address(weth), withdrawn, C.AAVE_VAR_INTEREST_RATE_MODE, address(this));
         // aavePool.withdraw(address(asset), _usdcNeeded, address(this));
-        // lendingMarkets[LendingMarkets.AAVE_V3].repayFunc(withdrawn);
-        // lendingMarkets[LendingMarkets.AAVE_V3].withdrawFunc(_usdcNeeded);
-        lendingMarkets[LendingMarkets.EULER].repayFunc(withdrawn);
-        lendingMarkets[LendingMarkets.EULER].withdrawFunc(_usdcNeeded);
+        // lendingMarkets[LendingMarkets.AAVE_V3].repay(withdrawn);
+        // lendingMarkets[LendingMarkets.AAVE_V3].withdraw(_usdcNeeded);
+        lendingProtocols[Protocol.EULER].repay(withdrawn);
+        lendingProtocols[Protocol.EULER].withdraw(_usdcNeeded);
     }
 
     function _calculateTotalAssets(uint256 _float, uint256 _collateral, uint256 _invested, uint256 _debt)
