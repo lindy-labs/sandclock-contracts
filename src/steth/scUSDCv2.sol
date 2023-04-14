@@ -101,19 +101,15 @@ contract scUSDCv2 is sc4626, IFlashLoanRecipient {
     ERC4626 public immutable scWETH;
 
     // EULER lending market
-    address public constant EULER = 0x27182842E098f60e3D576794A5bFFb0777E025d3;
-
-    // euler rewards token EUL
-    ERC20 public eul = ERC20(0xd9Fcd98c322942075A5C3860693e9f4f03AAE07b);
-
+    address public immutable eulerProtocol;
     // The Euler market contract
-    IEulerMarkets public constant markets = IEulerMarkets(0x3520d5a913427E6F0D6A83E07ccD4A4da316e4d3);
-
+    IEulerMarkets public immutable eulerMarkets;
     // Euler supply token for USDC (eUSDC)
-    IEulerEToken public constant eulUsdc = IEulerEToken(0xEb91861f8A4e1C12333F42DCE8fB0Ecdc28dA716);
-
+    IEulerEToken public immutable eulerEUsdc;
     // Euler debt token for WETH (dWETH)
-    IEulerDToken public constant eulDWeth = IEulerDToken(0x62e28f054efc24b26A794F5C1249B6349454352C);
+    IEulerDToken public immutable eulerDWeth;
+    // euler rewards token (EUL)
+    ERC20 public immutable eulerRewardsToken;
 
     struct ConstructorParams {
         address admin;
@@ -128,6 +124,11 @@ contract scUSDCv2 is sc4626, IFlashLoanRecipient {
         ISwapRouter uniswapSwapRouter;
         AggregatorV3Interface chainlinkUsdcToEthPriceFeed;
         IVault balancerVault;
+        address eulerProtocol;
+        IEulerMarkets eulerMarkets;
+        IEulerEToken eulerEUsdc;
+        IEulerDToken eulerDWeth;
+        ERC20 eulerRewardsToken;
     }
 
     constructor(ConstructorParams memory _params)
@@ -142,6 +143,11 @@ contract scUSDCv2 is sc4626, IFlashLoanRecipient {
         swapRouter = _params.uniswapSwapRouter;
         usdcToEthPriceFeed = _params.chainlinkUsdcToEthPriceFeed;
         balancerVault = _params.balancerVault;
+        eulerProtocol = _params.eulerProtocol;
+        eulerMarkets = _params.eulerMarkets;
+        eulerEUsdc = _params.eulerEUsdc;
+        eulerDWeth = _params.eulerDWeth;
+        eulerRewardsToken = _params.eulerRewardsToken;
 
         asset.safeApprove(address(aavePool), type(uint256).max);
 
@@ -149,9 +155,9 @@ contract scUSDCv2 is sc4626, IFlashLoanRecipient {
         weth.safeApprove(address(swapRouter), type(uint256).max);
         weth.safeApprove(address(_params.scWETH), type(uint256).max);
 
-        asset.safeApprove(EULER, type(uint256).max);
-        weth.safeApprove(EULER, type(uint256).max);
-        markets.enterMarket(0, address(asset));
+        asset.safeApprove(eulerProtocol, type(uint256).max);
+        weth.safeApprove(eulerProtocol, type(uint256).max);
+        eulerMarkets.enterMarket(0, address(asset));
 
         lendingMarkets[LendingMarkets.AAVE_V3] = LendingMarket(
             supplyUsdcOnAave, borrowWethOnAave, repayDebtOnAave, withdrawUsdcOnAave, getCollateralOnAave, getDebtOnAave
@@ -285,27 +291,27 @@ contract scUSDCv2 is sc4626, IFlashLoanRecipient {
     // EULER
 
     function supplyUsdcOnEuler(uint256 _amount) internal {
-        eulUsdc.deposit(0, _amount);
+        eulerEUsdc.deposit(0, _amount);
     }
 
     function borrowWethOnEuler(uint256 _amount) internal {
-        eulDWeth.borrow(0, _amount);
+        eulerDWeth.borrow(0, _amount);
     }
 
     function repayDebtOnEuler(uint256 _amount) internal {
-        eulDWeth.repay(0, _amount);
+        eulerDWeth.repay(0, _amount);
     }
 
     function withdrawUsdcOnEuler(uint256 _amount) internal {
-        eulUsdc.withdraw(0, _amount);
+        eulerEUsdc.withdraw(0, _amount);
     }
 
     function getCollateralOnEuler() public view returns (uint256) {
-        return eulUsdc.balanceOfUnderlying(address(this));
+        return eulerEUsdc.balanceOfUnderlying(address(this));
     }
 
     function getDebtOnEuler() public view returns (uint256) {
-        return eulDWeth.balanceOf(address(this));
+        return eulerDWeth.balanceOf(address(this));
     }
 
     function totalAssets() public view override returns (uint256) {

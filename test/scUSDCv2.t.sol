@@ -10,6 +10,7 @@ import {IPool} from "aave-v3/interfaces/IPool.sol";
 import {IAToken} from "aave-v3/interfaces/IAToken.sol";
 import {IVariableDebtToken} from "aave-v3/interfaces/IVariableDebtToken.sol";
 import {IPoolDataProvider} from "aave-v3/interfaces/IPoolDataProvider.sol";
+import {IEulerMarkets, IEulerEToken, IEulerDToken} from "lib/euler-interfaces/contracts/IEuler.sol";
 
 import {Constants as C} from "../src/lib/Constants.sol";
 import {sc4626} from "../src/sc4626.sol";
@@ -98,10 +99,14 @@ contract scUSDCv2Test is Test {
 
         // check approvals
         assertEq(usdc.allowance(address(vault), address(vault.aavePool())), type(uint256).max, "usdc->aave allowance");
-        assertEq(usdc.allowance(address(vault), address(vault.EULER())), type(uint256).max, "usdc->euler allowance");
+        assertEq(
+            usdc.allowance(address(vault), address(vault.eulerProtocol())), type(uint256).max, "usdc->euler allowance"
+        );
 
         assertEq(weth.allowance(address(vault), address(vault.aavePool())), type(uint256).max, "weth->aave allowance");
-        assertEq(weth.allowance(address(vault), address(vault.EULER())), type(uint256).max, "weth->euler allowance");
+        assertEq(
+            weth.allowance(address(vault), address(vault.eulerProtocol())), type(uint256).max, "weth->euler allowance"
+        );
 
         assertEq(
             weth.allowance(address(vault), address(vault.swapRouter())), type(uint256).max, "weth->swapRouter allowance"
@@ -259,7 +264,12 @@ contract scUSDCv2Test is Test {
             aaveVarDWeth: ERC20(C.AAVAAVE_VAR_DEBT_WETH_TOKEN),
             uniswapSwapRouter: ISwapRouter(C.UNISWAP_V3_SWAP_ROUTER),
             chainlinkUsdcToEthPriceFeed: AggregatorV3Interface(C.CHAINLINK_USDC_ETH_PRICE_FEED),
-            balancerVault: IVault(C.BALANCER_VAULT)
+            balancerVault: IVault(C.BALANCER_VAULT),
+            eulerProtocol: C.EULER_PROTOCOL,
+            eulerMarkets: IEulerMarkets(C.EULER_MARKETS),
+            eulerEUsdc: IEulerEToken(C.EULER_EUSDC_TOKEN),
+            eulerDWeth: IEulerDToken(C.EULER_DWETH_TOKEN),
+            eulerRewardsToken: ERC20(C.EULER_REWARDS_TOKEN)
         });
     }
 }

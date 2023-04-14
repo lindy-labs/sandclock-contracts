@@ -51,4 +51,15 @@ library Constants {
 
     // address of the 0x swap router contract
     address public constant ZEROX_ROUTER = 0xDef1C0ded9bec7F1a1670819833240f027b25EfF;
+
+    // address of the EULER protocol contract
+    address public constant EULER_PROTOCOL = 0x27182842E098f60e3D576794A5bFFb0777E025d3;
+    // address of the EULER markets contract
+    address public constant EULER_MARKETS = 0x3520d5a913427E6F0D6A83E07ccD4A4da316e4d3;
+    // address of the EULER eUSDC token contract (supply token)
+    address public constant EULER_EUSDC_TOKEN = 0xEb91861f8A4e1C12333F42DCE8fB0Ecdc28dA716;
+    // address of the EULER eWETH token contract (debt token)
+    address public constant EULER_DWETH_TOKEN = 0x62e28f054efc24b26A794F5C1249B6349454352C;
+    // address of the EULER rewards token contract
+    address public constant EULER_REWARDS_TOKEN = 0xd9Fcd98c322942075A5C3860693e9f4f03AAE07b;
 }
