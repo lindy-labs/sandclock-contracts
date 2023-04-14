@@ -152,18 +152,27 @@ contract scUSDCTest is Test {
 
     function test_rebalance_EmitsEventOnSuccess() public {
         uint256 initialBalance = 10000e6;
-        uint256 finalBalance = initialBalance.mulWadUp(vault.floatPercentage());
-        uint256 currentDebt = 0;
-        uint256 finalDebt = 3_758780025000000000;
-        uint256 currentCollateral = 0;
-        uint256 finalCollateral = 9_900e6;
-        uint256 targetLtv = vault.targetLtv();
-
         deal(address(usdc), address(vault), initialBalance);
+        vm.prank(keeper);
+        vault.rebalance();
+        uint256 currentFloat = usdc.balanceOf(address(vault));
+
+        // double the initial balance
+        deal(address(usdc), address(vault), initialBalance);
+
+        uint256 finalFloat = 199000000;
+        assertApproxEqRel(currentFloat * 2, finalFloat, 0.01e18, "float");
+        uint256 currentDebt = vault.getDebt();
+        uint256 finalDebt = 7479972249750000000;
+        assertApproxEqRel(currentDebt * 2, finalDebt, 0.01e18, "debt");
+        uint256 currentCollateral = vault.getCollateral();
+        uint256 finalCollateral = 19701000000;
+        assertApproxEqRel(currentCollateral * 2, finalCollateral, 0.01e18, "collateral");
+        uint256 targetLtv = vault.targetLtv();
 
         vm.expectEmit(true, true, true, true);
         emit Rebalanced(
-            targetLtv, currentDebt, finalDebt, currentCollateral, finalCollateral, initialBalance, finalBalance
+            targetLtv, currentDebt, finalDebt, currentCollateral, finalCollateral, initialBalance, finalFloat
         );
         vm.prank(keeper);
         vault.rebalance();
@@ -386,8 +395,10 @@ contract scUSDCTest is Test {
     function test_applyNewTargetLtv_ChangesLtvDownAndRebalances() public {
         deal(address(usdc), address(vault), 10000e6);
 
-        vm.prank(keeper);
+        vm.startPrank(keeper);
         vault.rebalance();
+        wethVault.harvest();
+        vm.stopPrank();
 
         uint256 oldTargetLtv = vault.targetLtv();
         uint256 debtBefore = vault.getDebt();
