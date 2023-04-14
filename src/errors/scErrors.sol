@@ -13,3 +13,4 @@ error VaultNotUnderwater();
 error CallerNotAdmin();
 error CallerNotKeeper();
 error InvalidAllocationPercents();
+error InsufficientDepositBalance();
