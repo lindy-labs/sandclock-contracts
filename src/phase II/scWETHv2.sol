@@ -28,8 +28,9 @@ import {IwstETH} from "../interfaces/lido/IwstETH.sol";
 import {AggregatorV3Interface} from "../interfaces/chainlink/AggregatorV3Interface.sol";
 import {IVault} from "../interfaces/balancer/IVault.sol";
 import {IFlashLoanRecipient} from "../interfaces/balancer/IFlashLoanRecipient.sol";
+import {LendingManager} from "./LendingManager.sol";
 
-contract scWETH2 is sc4626, IFlashLoanRecipient {
+contract scWETHv2 is sc4626, LendingManager, IFlashLoanRecipient {
     using SafeTransferLib for ERC20;
     using FixedPointMathLib for uint256;
 
@@ -37,20 +38,6 @@ contract scWETH2 is sc4626, IFlashLoanRecipient {
     event ExchangeProxyAddressUpdated(address indexed user, address newAddress);
     event NewTargetLtvApplied(address indexed admin, uint256 newTargetLtv);
     event Harvest(uint256 profitSinceLastHarvest, uint256 performanceFee);
-
-    enum LendingMarketType {
-        AAVE_V3,
-        EULER
-    }
-
-    struct LendingMarket {
-        function(uint256) supply;
-        function(uint256) borrow;
-        function(uint256) repay;
-        function(uint256) withdraw;
-        function() view returns(uint256) getCollateral;
-        function() view returns(uint256) getDebt;
-    }
 
     struct FlashLoanParams {
         bool isDeposit;
@@ -81,15 +68,6 @@ contract scWETH2 is sc4626, IFlashLoanRecipient {
     // Curve pool for ETH-stETH
     ICurvePool public immutable curvePool;
 
-    // Lido staking contract (stETH)
-    ILido public immutable stEth;
-
-    IwstETH public immutable wstETH;
-    WETH public immutable weth;
-
-    // Chainlink pricefeed (stETH -> ETH)
-    AggregatorV3Interface public stEThToEthPriceFeed;
-
     // Balancer vault for flashloans
     IVault public immutable balancerVault;
 
@@ -104,14 +82,11 @@ contract scWETH2 is sc4626, IFlashLoanRecipient {
 
     constructor(ConstructorParams memory _params)
         sc4626(_params.admin, _params.keeper, _params.weth, "Sandclock WETH Vault v2", "scWETHv2")
+        LendingManager(_params.stEth, _params.wstEth, _params.weth, _params.stEthToEthPriceFeed)
     {
         if (_params.slippageTolerance > C.ONE) revert InvalidSlippageTolerance();
 
         curvePool = _params.curveEthStEthPool;
-        stEth = _params.stEth;
-        wstETH = _params.wstEth;
-        weth = _params.weth;
-        stEThToEthPriceFeed = _params.stEthToEthPriceFeed;
         balancerVault = _params.balancerVault;
 
         ERC20(address(stEth)).safeApprove(address(wstETH), type(uint256).max);
@@ -481,32 +456,6 @@ contract scWETH2 is sc4626, IFlashLoanRecipient {
         balancerVault.flashLoan(address(this), tokens, amounts, abi.encode(params));
     }
 
-    function _stEthToEth(uint256 stEthAmount) internal view returns (uint256 ethAmount) {
-        if (stEthAmount > 0) {
-            // stEth to eth
-            (, int256 price,,,) = stEThToEthPriceFeed.latestRoundData();
-            ethAmount = stEthAmount.mulWadDown(uint256(price));
-        }
-    }
-
-    function _wstEthToEth(uint256 wstEthAmount) internal view returns (uint256 ethAmount) {
-        // wstETh to stEth using exchangeRate
-        uint256 stEthAmount = wstETH.getStETHByWstETH(wstEthAmount);
-        ethAmount = _stEthToEth(stEthAmount);
-    }
-
-    function _ethToWstEth(uint256 ethAmount) internal view returns (uint256 wstEthAmount) {
-        if (ethAmount > 0) {
-            (, int256 price,,,) = stEThToEthPriceFeed.latestRoundData();
-
-            // eth to stEth
-            uint256 stEthAmount = ethAmount.divWadDown(uint256(price));
-
-            // stEth to wstEth
-            wstEthAmount = wstETH.getWstETHByStETH(stEthAmount);
-        }
-    }
-
     function _supplyBorrow(uint256[] memory amounts, uint256[] memory flashLoanAmounts) internal {
         LendingMarket memory lendingMarket;
         for (uint256 i; i < totalMarkets(); i++) {
@@ -524,54 +473,6 @@ contract scWETH2 is sc4626, IFlashLoanRecipient {
             if (flashLoanAmounts[i] > 0) lendingMarket.repay(flashLoanAmounts[i]);
             if (amounts[i] > 0) lendingMarket.withdraw(amounts[i] + flashLoanAmounts[i]);
         }
-    }
-
-    function supplyWstEthAAVEV3(uint256 amount) internal {
-        IPool(C.AAVE_POOL).supply(address(wstETH), _ethToWstEth(amount), address(this), 0);
-    }
-
-    function borrowWethAAVEV3(uint256 amount) internal {
-        IPool(C.AAVE_POOL).borrow(address(weth), amount, C.AAVE_VAR_INTEREST_RATE_MODE, 0, address(this));
-    }
-
-    function supplyWstEthEuler(uint256 amount) internal {
-        IEulerEToken(C.EULER_ETOKEN_WSTETH).deposit(0, _ethToWstEth(amount));
-    }
-
-    function borrowWethEuler(uint256 amount) internal {
-        IEulerDToken(C.EULER_DTOKEN_WETH).borrow(0, amount);
-    }
-
-    function repayWethAAVEV3(uint256 amount) internal {
-        IPool(C.AAVE_POOL).repay(address(weth), amount, C.AAVE_VAR_INTEREST_RATE_MODE, address(this));
-    }
-
-    function withdrawWstEthAAVEV3(uint256 amount) internal {
-        IPool(C.AAVE_POOL).withdraw(address(wstETH), _ethToWstEth(amount), address(this));
-    }
-
-    function repayWethEuler(uint256 amount) internal {
-        IEulerDToken(C.EULER_DTOKEN_WETH).repay(0, amount);
-    }
-
-    function withdrawWstEthEuler(uint256 amount) internal {
-        IEulerEToken(C.EULER_ETOKEN_WSTETH).withdraw(0, _ethToWstEth(amount));
-    }
-
-    function getCollateralAAVEV3() internal view returns (uint256) {
-        return _wstEthToEth(IAToken(C.AAVE_AWSTETH_TOKEN).balanceOf(address(this)));
-    }
-
-    function getDebtAAVEV3() internal view returns (uint256) {
-        return ERC20(C.AAVAAVE_VAR_DEBT_WETH_TOKEN).balanceOf(address(this));
-    }
-
-    function getCollateralEuler() internal view returns (uint256) {
-        return _wstEthToEth(IEulerEToken(C.EULER_ETOKEN_WSTETH).balanceOfUnderlying(address(this)));
-    }
-
-    function getDebtEuler() internal view returns (uint256) {
-        return IEulerDToken(C.EULER_DTOKEN_WETH).balanceOf(address(this));
     }
 
     // number of lending markets we are currently using
