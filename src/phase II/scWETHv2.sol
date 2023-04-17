@@ -162,8 +162,6 @@ contract scWETHv2 is sc4626, LendingMarketManager, IFlashLoanRecipient {
         balancerVault.flashLoan(address(this), tokens, amounts, abi.encode(params));
     }
 
-    function reallocatePositions(uint256 totalFlashLoanAmount) external onlyKeeper {}
-
     //////////////////// VIEW METHODS //////////////////////////
 
     /// @notice returns the total assets (WETH) held by the strategy
