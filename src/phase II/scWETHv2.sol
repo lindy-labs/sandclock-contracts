@@ -15,10 +15,6 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 import {WETH} from "solmate/tokens/WETH.sol";
-import {IPool} from "aave-v3/interfaces/IPool.sol";
-import {IAToken} from "aave-v3/interfaces/IAToken.sol";
-import {IVariableDebtToken} from "aave-v3/interfaces/IVariableDebtToken.sol";
-import {IEulerDToken, IEulerEToken, IEulerMarkets} from "lib/euler-interfaces/contracts/IEuler.sol";
 
 import {Constants as C} from "../lib/Constants.sol";
 import {sc4626} from "../sc4626.sol";
@@ -59,17 +55,8 @@ contract scWETHv2 is sc4626, LendingManager, IFlashLoanRecipient {
         uint256[] allocationPercents;
     }
 
-    // mapping from lending market id to protocol params
-    mapping(LendingMarketType => LendingMarket) lendingMarkets;
-
     // mapping from protocol id to allocation Percent in each. requried while withdrawing
     mapping(LendingMarketType => uint256) allocationPercents;
-
-    // Curve pool for ETH-stETH
-    ICurvePool public immutable curvePool;
-
-    // Balancer vault for flashloans
-    IVault public immutable balancerVault;
 
     // total invested during last harvest/rebalance
     uint256 public totalInvested;
@@ -82,42 +69,21 @@ contract scWETHv2 is sc4626, LendingManager, IFlashLoanRecipient {
 
     constructor(ConstructorParams memory _params)
         sc4626(_params.admin, _params.keeper, _params.weth, "Sandclock WETH Vault v2", "scWETHv2")
-        LendingManager(_params.stEth, _params.wstEth, _params.weth, _params.stEthToEthPriceFeed)
+        LendingManager(
+            _params.stEth,
+            _params.wstEth,
+            _params.weth,
+            _params.stEthToEthPriceFeed,
+            _params.curveEthStEthPool,
+            _params.balancerVault
+        )
     {
         if (_params.slippageTolerance > C.ONE) revert InvalidSlippageTolerance();
-
-        curvePool = _params.curveEthStEthPool;
-        balancerVault = _params.balancerVault;
-
-        ERC20(address(stEth)).safeApprove(address(wstETH), type(uint256).max);
-        ERC20(address(stEth)).safeApprove(address(curvePool), type(uint256).max);
-        ERC20(address(wstETH)).safeApprove(C.AAVE_POOL, type(uint256).max);
-        ERC20(address(weth)).safeApprove(C.AAVE_POOL, type(uint256).max);
-        ERC20(address(wstETH)).safeApprove(C.EULER, type(uint256).max);
-
-        // Enter the euler collateral market (collateral's address, *not* the eToken address) ,
-        IEulerMarkets(C.EULER_MARKETS).enterMarket(0, address(wstETH));
-        // set e-mode on aave-v3 for increased borrowing capacity to 90% of collateral
-        IPool(C.AAVE_POOL).setUserEMode(C.AAVE_EMODE_ID);
-
         slippageTolerance = _params.slippageTolerance;
 
         for (uint256 i = 0; i < _params.allocationPercents.length; i++) {
             allocationPercents[LendingMarketType(i)] = _params.allocationPercents[i];
         }
-
-        lendingMarkets[LendingMarketType.AAVE_V3] = LendingMarket(
-            supplyWstEthAAVEV3,
-            borrowWethAAVEV3,
-            repayWethAAVEV3,
-            withdrawWstEthAAVEV3,
-            getCollateralAAVEV3,
-            getDebtAAVEV3
-        );
-
-        lendingMarkets[LendingMarketType.EULER] = LendingMarket(
-            supplyWstEthEuler, borrowWethEuler, repayWethEuler, withdrawWstEthEuler, getCollateralEuler, getDebtEuler
-        );
     }
 
     /// @notice set the slippage tolerance for curve swaps
@@ -473,11 +439,6 @@ contract scWETHv2 is sc4626, LendingManager, IFlashLoanRecipient {
             if (flashLoanAmounts[i] > 0) lendingMarket.repay(flashLoanAmounts[i]);
             if (amounts[i] > 0) lendingMarket.withdraw(amounts[i] + flashLoanAmounts[i]);
         }
-    }
-
-    // number of lending markets we are currently using
-    function totalMarkets() internal pure returns (uint256) {
-        return uint256(type(LendingMarketType).max) + 1;
     }
 
     function beforeWithdraw(uint256 assets, uint256) internal override {

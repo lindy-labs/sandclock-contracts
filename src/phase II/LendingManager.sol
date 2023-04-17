@@ -20,6 +20,7 @@ import {IVault} from "../interfaces/balancer/IVault.sol";
 import {IFlashLoanRecipient} from "../interfaces/balancer/IFlashLoanRecipient.sol";
 
 abstract contract LendingManager {
+    using SafeTransferLib for ERC20;
     using FixedPointMathLib for uint256;
 
     enum LendingMarketType {
@@ -45,11 +46,57 @@ abstract contract LendingManager {
     // Chainlink pricefeed (stETH -> ETH)
     AggregatorV3Interface public stEThToEthPriceFeed;
 
-    constructor(ILido _stEth, IwstETH _wstEth, WETH _weth, AggregatorV3Interface _stEthToEthPriceFeed) {
+    // Curve pool for ETH-stETH
+    ICurvePool public immutable curvePool;
+    // Balancer vault for flashloans
+    IVault public immutable balancerVault;
+
+    // mapping from lending market id to protocol params
+    mapping(LendingMarketType => LendingMarket) lendingMarkets;
+
+    constructor(
+        ILido _stEth,
+        IwstETH _wstEth,
+        WETH _weth,
+        AggregatorV3Interface _stEthToEthPriceFeed,
+        ICurvePool _curvePool,
+        IVault _balancerVault
+    ) {
         stEth = _stEth;
         wstETH = _wstEth;
         weth = _weth;
         stEThToEthPriceFeed = _stEthToEthPriceFeed;
+        curvePool = _curvePool;
+        balancerVault = _balancerVault;
+
+        ERC20(address(stEth)).safeApprove(address(wstETH), type(uint256).max);
+        ERC20(address(stEth)).safeApprove(address(curvePool), type(uint256).max);
+        ERC20(address(wstETH)).safeApprove(C.AAVE_POOL, type(uint256).max);
+        ERC20(address(weth)).safeApprove(C.AAVE_POOL, type(uint256).max);
+        ERC20(address(wstETH)).safeApprove(C.EULER, type(uint256).max);
+
+        // Enter the euler collateral market (collateral's address, *not* the eToken address) ,
+        IEulerMarkets(C.EULER_MARKETS).enterMarket(0, address(wstETH));
+        // set e-mode on aave-v3 for increased borrowing capacity to 90% of collateral
+        IPool(C.AAVE_POOL).setUserEMode(C.AAVE_EMODE_ID);
+
+        lendingMarkets[LendingMarketType.AAVE_V3] = LendingMarket(
+            supplyWstEthAAVEV3,
+            borrowWethAAVEV3,
+            repayWethAAVEV3,
+            withdrawWstEthAAVEV3,
+            getCollateralAAVEV3,
+            getDebtAAVEV3
+        );
+
+        lendingMarkets[LendingMarketType.EULER] = LendingMarket(
+            supplyWstEthEuler, borrowWethEuler, repayWethEuler, withdrawWstEthEuler, getCollateralEuler, getDebtEuler
+        );
+    }
+
+    // number of lending markets we are currently using
+    function totalMarkets() internal pure returns (uint256) {
+        return uint256(type(LendingMarketType).max) + 1;
     }
 
     //////////////////////////     AAVE V3 ///////////////////////////////
@@ -102,6 +149,8 @@ abstract contract LendingManager {
     function getDebtEuler() internal view returns (uint256) {
         return IEulerDToken(C.EULER_DTOKEN_WETH).balanceOf(address(this));
     }
+
+    //////////////////////// ORACLE METHODS ///////////////////////////////
 
     function _ethToWstEth(uint256 ethAmount) internal view returns (uint256 wstEthAmount) {
         if (ethAmount > 0) {
