@@ -19,7 +19,7 @@ import {AggregatorV3Interface} from "../interfaces/chainlink/AggregatorV3Interfa
 import {IVault} from "../interfaces/balancer/IVault.sol";
 import {IFlashLoanRecipient} from "../interfaces/balancer/IFlashLoanRecipient.sol";
 
-abstract contract LendingManager {
+abstract contract LendingMarketManager {
     using SafeTransferLib for ERC20;
     using FixedPointMathLib for uint256;
 
@@ -97,6 +97,24 @@ abstract contract LendingManager {
     // number of lending markets we are currently using
     function totalMarkets() internal pure returns (uint256) {
         return uint256(type(LendingMarketType).max) + 1;
+    }
+
+    function allocationPercent(LendingMarketType market) external view returns (uint256) {
+        return lendingMarkets[market].getCollateral().divWadDown(totalCollateral());
+    }
+
+    /// @notice returns the total wstETH supplied as collateral (in ETH)
+    function totalCollateral() public view returns (uint256 collateral) {
+        for (uint256 i = 0; i < totalMarkets(); i++) {
+            collateral += lendingMarkets[LendingMarketType(i)].getCollateral();
+        }
+    }
+
+    /// @notice returns the total ETH borrowed
+    function totalDebt() public view returns (uint256 debt) {
+        for (uint256 i = 0; i < totalMarkets(); i++) {
+            debt += lendingMarkets[LendingMarketType(i)].getDebt();
+        }
     }
 
     //////////////////////////     AAVE V3 ///////////////////////////////
