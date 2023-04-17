@@ -100,7 +100,7 @@ contract DeployScript is CREATE3Script {
 
     function deployMocks() internal {
         weth = new MockWETH();
-        usdc = new MockUSDC();
+        usdc = MockUSDC(0x9d5fCB5b31E8Eba24D8A47ed28c94c93e72d98B1);
         aavePool = new MockAavePool();
         aavePoolDataProvider = new MockAavePoolDataProvider(address(usdc), address(weth));
         aaveAUsdc = new MockAUsdc(aavePool, usdc);
