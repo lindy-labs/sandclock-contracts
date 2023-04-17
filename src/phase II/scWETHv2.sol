@@ -24,9 +24,9 @@ import {IwstETH} from "../interfaces/lido/IwstETH.sol";
 import {AggregatorV3Interface} from "../interfaces/chainlink/AggregatorV3Interface.sol";
 import {IVault} from "../interfaces/balancer/IVault.sol";
 import {IFlashLoanRecipient} from "../interfaces/balancer/IFlashLoanRecipient.sol";
-import {LendingManager} from "./LendingManager.sol";
+import {LendingMarketManager} from "./LendingMarketManager.sol";
 
-contract scWETHv2 is sc4626, LendingManager, IFlashLoanRecipient {
+contract scWETHv2 is sc4626, LendingMarketManager, IFlashLoanRecipient {
     using SafeTransferLib for ERC20;
     using FixedPointMathLib for uint256;
 
@@ -55,9 +55,6 @@ contract scWETHv2 is sc4626, LendingManager, IFlashLoanRecipient {
         uint256[] allocationPercents;
     }
 
-    // mapping from protocol id to allocation Percent in each. requried while withdrawing
-    mapping(LendingMarketType => uint256) allocationPercents;
-
     // total invested during last harvest/rebalance
     uint256 public totalInvested;
 
@@ -69,7 +66,7 @@ contract scWETHv2 is sc4626, LendingManager, IFlashLoanRecipient {
 
     constructor(ConstructorParams memory _params)
         sc4626(_params.admin, _params.keeper, _params.weth, "Sandclock WETH Vault v2", "scWETHv2")
-        LendingManager(
+        LendingMarketManager(
             _params.stEth,
             _params.wstEth,
             _params.weth,
@@ -80,10 +77,6 @@ contract scWETHv2 is sc4626, LendingManager, IFlashLoanRecipient {
     {
         if (_params.slippageTolerance > C.ONE) revert InvalidSlippageTolerance();
         slippageTolerance = _params.slippageTolerance;
-
-        for (uint256 i = 0; i < _params.allocationPercents.length; i++) {
-            allocationPercents[LendingMarketType(i)] = _params.allocationPercents[i];
-        }
     }
 
     /// @notice set the slippage tolerance for curve swaps
@@ -183,20 +176,6 @@ contract scWETHv2 is sc4626, LendingManager, IFlashLoanRecipient {
 
         // add float
         assets += asset.balanceOf(address(this));
-    }
-
-    /// @notice returns the total wstETH supplied as collateral (in ETH)
-    function totalCollateral() public view returns (uint256 collateral) {
-        for (uint256 i = 0; i < totalMarkets(); i++) {
-            collateral += lendingMarkets[LendingMarketType(i)].getCollateral();
-        }
-    }
-
-    /// @notice returns the total ETH borrowed
-    function totalDebt() public view returns (uint256 debt) {
-        for (uint256 i = 0; i < totalMarkets(); i++) {
-            debt += lendingMarkets[LendingMarketType(i)].getDebt();
-        }
     }
 
     /// @notice returns the net leverage that the strategy is using right now (1e18 = 100%)
@@ -375,16 +354,16 @@ contract scWETHv2 is sc4626, LendingManager, IFlashLoanRecipient {
         balancerVault.flashLoan(address(this), tokens, amounts, abi.encode(params));
     }
 
-    function _calcFlashLoanAmountWithdrawing(LendingMarketType market, uint256 totalAmount)
+    function _calcFlashLoanAmountWithdrawing(LendingMarketType market, uint256 totalAmount, uint256 totalCollateral_)
         internal
         view
         returns (uint256 flashLoanAmount, uint256 amount)
     {
         LendingMarket memory lendingMarket = lendingMarkets[market];
-        // withdraw from each protocol based on the allocation percent
-        amount = totalAmount.mulWadDown(allocationPercents[market]);
         uint256 debt = lendingMarket.getDebt();
         uint256 collateral = lendingMarket.getCollateral();
+        // withdraw from each protocol based on the allocation percent
+        amount = totalAmount.mulDivDown(collateral, totalCollateral_);
 
         // calculate the flashloan amount needed
         flashLoanAmount = amount.mulDivDown(debt, collateral - debt);
@@ -395,11 +374,14 @@ contract scWETHv2 is sc4626, LendingManager, IFlashLoanRecipient {
         uint256[] memory withdrawAmounts = new uint[](2);
         uint256[] memory flashLoanAmounts = new uint[](2);
 
+        uint256 totalCollateral_ = totalCollateral();
+
         {
             uint256 flashLoanAmount_;
             uint256 amount_;
             for (uint256 i; i < totalMarkets(); i++) {
-                (flashLoanAmount_, amount_) = _calcFlashLoanAmountWithdrawing(LendingMarketType(i), amount);
+                (flashLoanAmount_, amount_) =
+                    _calcFlashLoanAmountWithdrawing(LendingMarketType(i), amount, totalCollateral_);
 
                 withdrawAmounts[i] = amount_;
                 flashLoanAmounts[i] = flashLoanAmount_;
