@@ -35,11 +35,24 @@ contract scWETHv2 is sc4626, LendingMarketManager, IFlashLoanRecipient {
     event NewTargetLtvApplied(address indexed admin, uint256 newTargetLtv);
     event Harvest(uint256 profitSinceLastHarvest, uint256 performanceFee);
 
-    struct FlashLoanParams {
-        bool isDeposit;
-        uint256 amount;
-        uint256[] amounts;
-        uint256[] flashLoanAmounts;
+    struct RebalanceParams {
+        RepayWithdrawParam[] repayWithdrawParams;
+        SupplyBorrowParam[] supplyBorrowParams;
+        bool doWstEthToWethSwap; // if true wstEth will be swapped to eth after weth repay and wstEth Withdraw
+        bool doWethToWstEthSwap; // if true weth will be swapped to wstEth before wstEth supply and weth borrow
+        uint256 wethSwapAmount; // if doWethToWstEthSwap is true, amount of weth to swap to wstEth
+    }
+
+    struct RepayWithdrawParam {
+        LendingMarketType market;
+        uint256 repayAmount;
+        uint256 withdrawAmount;
+    }
+
+    struct SupplyBorrowParam {
+        LendingMarketType market;
+        uint256 supplyAmount;
+        uint256 borrowAmount;
     }
 
     struct ConstructorParams {
@@ -52,7 +65,6 @@ contract scWETHv2 is sc4626, LendingMarketManager, IFlashLoanRecipient {
         WETH weth;
         AggregatorV3Interface stEthToEthPriceFeed;
         IVault balancerVault;
-        uint256[] allocationPercents;
     }
 
     // total invested during last harvest/rebalance
@@ -101,9 +113,9 @@ contract scWETHv2 is sc4626, LendingMarketManager, IFlashLoanRecipient {
     /// @dev for the first deposit, deposits everything into the strategy.
     /// @dev reduces the getLtv() back to the target ltv
     /// @dev also mints performance fee tokens to the treasury
-    function harvest(uint256 totalFlashLoanAmount, FlashLoanParams memory params) external onlyKeeper {
+    function harvest(uint256 totalFlashLoanAmount, RebalanceParams memory params) external {
         // reinvest
-        _rebalancePosition(totalFlashLoanAmount, params);
+        rebalancePosition(totalFlashLoanAmount, params);
 
         // store the old total
         uint256 oldTotalInvested = totalInvested;
@@ -125,44 +137,32 @@ contract scWETHv2 is sc4626, LendingMarketManager, IFlashLoanRecipient {
         }
     }
 
-    // /// @notice increase/decrease the target ltv used on borrows
-    // /// @param newTargetLtv the new target ltv
-    // /// @dev the new target ltv must be less than the max ltv allowed on aave
-    // function applyNewTargetLtv(uint256 newTargetLtv, Protocol protocol) public onlyKeeper {
-    //     if (newTargetLtv >= getMaxLtv()) revert InvalidTargetLtv();
-
-    //     targetLtv = newTargetLtv;
-
-    //     _rebalancePosition();
-
-    //     emit NewTargetLtvApplied(msg.sender, newTargetLtv);
-    // }
-
     /// @notice withdraw funds from the strategy into the vault
     /// @param amount : amount of assets to withdraw into the vault
     function withdrawToVault(uint256 amount) external onlyKeeper {
         _withdrawToVault(amount);
     }
 
-    // function reallocatePositions(uint128[] calldata newAllocationPercents) external onlyKeeper {
-    //     uint256 n = newAllocationPercents.length;
-    //     if (n != protocols) revert InvalidAllocationPercents();
+    /// @dev the backend will calculate the supposed amounts and flashloan amounts for each protocol
+    /// @dev this same method is to be used to reallocate positions
+    function rebalancePosition(uint256 totalFlashLoanAmount, RebalanceParams memory params) public onlyKeeper {
+        // if (params.amount > asset.balanceOf(address(this))) revert InsufficientDepositBalance();
 
-    //     // withdraw everything
-    //     _withdrawToVault(totalCollateral() - totalDebt());
+        address[] memory tokens = new address[](1);
+        tokens[0] = address(weth);
 
-    //     uint256 totalAllocationPercent;
-    //     // set new allocation percents
-    //     for (uint256 i = 0; i < n; i++) {
-    //         protocolParams[Protocol(i)].allocationPercent = newAllocationPercents[i];
-    //         totalAllocationPercent += newAllocationPercents[i];
-    //     }
+        uint256[] memory amounts = new uint256[](1);
+        amounts[0] = totalFlashLoanAmount;
 
-    //     if (totalAllocationPercent != C.ONE) revert InvalidAllocationPercents();
+        // todo: override the user deposit mehtod for this
+        // needed otherwise counted as profit during harvest
+        // totalInvested += params.amount;
 
-    //     // invest everything into the strategy
-    //     _rebalancePosition();
-    // }
+        // take flashloan
+        balancerVault.flashLoan(address(this), tokens, amounts, abi.encode(params));
+    }
+
+    function reallocatePositions(uint256 totalFlashLoanAmount) external onlyKeeper {}
 
     //////////////////// VIEW METHODS //////////////////////////
 
@@ -196,24 +196,6 @@ contract scWETHv2 is sc4626, LendingMarketManager, IFlashLoanRecipient {
     // /// @notice returns the max loan to value(ltv) ratio for borrowing eth on Aavev3 with wsteth as collateral for the flashloan (1e18 = 100%)
     // function getMaxLtv() public view returns (uint256) {
     //     return uint256(IPool(C.AAVE_POOL).getEModeCategoryData(C.AAVE_EMODE_ID).ltv) * 1e14;
-    // }
-
-    // /// @notice returns the debt on a particular protocol
-    // function getDebt(Protocol protocol) public view returns (uint256 debt) {
-    //     if (protocol == Protocol.AAVE_V3) {
-    //         debt = ERC20(C.AAVAAVE_VAR_DEBT_WETH_TOKEN).balanceOf(address(this));
-    //     } else if (protocol == Protocol.EULER) {
-    //         debt = IEulerDToken(C.EULER_DTOKEN_WETH).balanceOf(address(this));
-    //     }
-    // }
-
-    // /// @notice returns the collateral supplied on a particular protocol
-    // function getCollateral(Protocol protocol) public view returns (uint256 collateral) {
-    //     if (protocol == Protocol.AAVE_V3) {
-    //         collateral = _wstEthToEth(IAToken(C.AAVE_AWSTETH_TOKEN).balanceOf(address(this)));
-    //     } else if (protocol == Protocol.EULER) {
-    //         collateral = _wstEthToEth(IEulerEToken(C.EULER_ETOKEN_WSTETH).balanceOfUnderlying(address(this)));
-    //     }
     // }
 
     //////////////////// EXTERNAL METHODS //////////////////////////
@@ -276,36 +258,30 @@ contract scWETHv2 is sc4626, LendingMarketManager, IFlashLoanRecipient {
         uint256 flashLoanAmount = amounts[0];
 
         // decode user data
-        (FlashLoanParams memory params) = abi.decode(userData, (FlashLoanParams));
+        (RebalanceParams memory rebalanceParams) = abi.decode(userData, (RebalanceParams));
 
-        params.amount += flashLoanAmount;
+        // repay and withdraw first
+        _repayWithdraw(rebalanceParams.repayWithdrawParams);
 
-        // if flashloan received as part of a deposit
-        if (params.isDeposit) {
-            // unwrap eth
-            weth.withdraw(params.amount);
-
-            // stake to lido / eth => stETH
-            stEth.submit{value: params.amount}(address(0x00));
-
-            // wrap stETH
-            wstETH.wrap(stEth.balanceOf(address(this)));
-
-            _supplyBorrow(params.amounts, params.flashLoanAmounts);
-        }
-        // if flashloan received as part of a withdrawal
-        else {
-            _repayWithdraw(params.amounts, params.flashLoanAmounts);
-
+        if (rebalanceParams.doWstEthToWethSwap) {
             // unwrap wstETH
             uint256 stEthAmount = wstETH.unwrap(wstETH.balanceOf(address(this)));
-
             // stETH to eth
             curvePool.exchange(1, 0, stEthAmount, _stEthToEth(stEthAmount).mulWadDown(slippageTolerance));
-
             // wrap eth
             weth.deposit{value: address(this).balance}();
         }
+
+        if (rebalanceParams.doWethToWstEthSwap) {
+            // unwrap eth
+            weth.withdraw(rebalanceParams.wethSwapAmount);
+            // stake to lido / eth => stETH
+            stEth.submit{value: rebalanceParams.wethSwapAmount}(address(0x00));
+            // wrap stETH
+            wstETH.wrap(stEth.balanceOf(address(this)));
+        }
+
+        _supplyBorrow(rebalanceParams.supplyBorrowParams);
 
         // payback flashloan
         asset.safeTransfer(address(balancerVault), flashLoanAmount);
@@ -334,26 +310,6 @@ contract scWETHv2 is sc4626, LendingMarketManager, IFlashLoanRecipient {
     //     flashLoanAmount = (target > debt ? target - debt : debt - target).divWadDown(C.ONE - params.targetLtv);
     // }
 
-    /// @dev the backend will calculate the supposed amounts and flashloan amounts for each protocol
-    function _rebalancePosition(uint256 totalFlashLoanAmount, FlashLoanParams memory params) internal {
-        if (params.amount > asset.balanceOf(address(this))) revert InsufficientDepositBalance();
-
-        address[] memory tokens = new address[](1);
-        tokens[0] = address(weth);
-
-        uint256[] memory amounts = new uint256[](1);
-        amounts[0] = totalFlashLoanAmount;
-
-        // needed otherwise counted as profit during harvest
-        totalInvested += params.amount;
-
-        // when deleveraging, withdraw extra to cover slippage
-        // if (!rebalanceParams.isDeposit) amount += flashLoanAmount.mulWadDown(C.ONE - slippageTolerance);
-
-        // take flashloan
-        balancerVault.flashLoan(address(this), tokens, amounts, abi.encode(params));
-    }
-
     function _calcFlashLoanAmountWithdrawing(LendingMarketType market, uint256 totalAmount, uint256 totalCollateral_)
         internal
         view
@@ -370,21 +326,20 @@ contract scWETHv2 is sc4626, LendingMarketManager, IFlashLoanRecipient {
     }
 
     function _withdrawToVault(uint256 amount) internal {
+        uint256 n = totalMarkets();
         uint256 flashLoanAmount;
-        uint256[] memory withdrawAmounts = new uint[](2);
-        uint256[] memory flashLoanAmounts = new uint[](2);
+        RepayWithdrawParam[] memory repayWithdrawParams = new RepayWithdrawParam[](n);
 
         uint256 totalCollateral_ = totalCollateral();
 
         {
             uint256 flashLoanAmount_;
             uint256 amount_;
-            for (uint256 i; i < totalMarkets(); i++) {
+            for (uint256 i; i < n; i++) {
                 (flashLoanAmount_, amount_) =
                     _calcFlashLoanAmountWithdrawing(LendingMarketType(i), amount, totalCollateral_);
 
-                withdrawAmounts[i] = amount_;
-                flashLoanAmounts[i] = flashLoanAmount_;
+                repayWithdrawParams[i] = RepayWithdrawParam(LendingMarketType(i), amount_, flashLoanAmount_ + amount_);
                 flashLoanAmount += flashLoanAmount_;
             }
         }
@@ -398,28 +353,33 @@ contract scWETHv2 is sc4626, LendingMarketManager, IFlashLoanRecipient {
         // needed otherwise counted as loss during harvest
         totalInvested -= amount;
 
-        FlashLoanParams memory params = FlashLoanParams(false, amount, withdrawAmounts, flashLoanAmounts);
+        SupplyBorrowParam[] memory empty;
+        RebalanceParams memory params = RebalanceParams(repayWithdrawParams, empty, true, false, amount);
 
         // take flashloan
         balancerVault.flashLoan(address(this), tokens, amounts, abi.encode(params));
     }
 
-    function _supplyBorrow(uint256[] memory amounts, uint256[] memory flashLoanAmounts) internal {
+    function _supplyBorrow(SupplyBorrowParam[] memory supplyBorrowParams) internal {
         LendingMarket memory lendingMarket;
-        for (uint256 i; i < totalMarkets(); i++) {
-            lendingMarket = lendingMarkets[LendingMarketType(i)];
-            if (amounts[i] > 0) lendingMarket.supply(amounts[i]);
-            if (flashLoanAmounts[i] > 0) lendingMarket.borrow(flashLoanAmounts[i]);
+        uint256 n = supplyBorrowParams.length;
+        for (uint256 i; i < n; i++) {
+            lendingMarket = lendingMarkets[supplyBorrowParams[i].market];
+            if (supplyBorrowParams[i].supplyAmount != 0) lendingMarket.supply(supplyBorrowParams[i].supplyAmount);
+            if (supplyBorrowParams[i].borrowAmount != 0) lendingMarket.borrow(supplyBorrowParams[i].borrowAmount);
         }
     }
 
-    function _repayWithdraw(uint256[] memory amounts, uint256[] memory flashLoanAmounts) internal {
+    function _repayWithdraw(RepayWithdrawParam[] memory repayWithdrawParams) internal {
         // bool withdrawAll = flashLoanAmount >= totalDebt();
         LendingMarket memory lendingMarket;
-        for (uint256 i; i < totalMarkets(); i++) {
-            lendingMarket = lendingMarkets[LendingMarketType(i)];
-            if (flashLoanAmounts[i] > 0) lendingMarket.repay(flashLoanAmounts[i]);
-            if (amounts[i] > 0) lendingMarket.withdraw(amounts[i] + flashLoanAmounts[i]);
+        uint256 n = repayWithdrawParams.length;
+        for (uint256 i; i < n; i++) {
+            lendingMarket = lendingMarkets[repayWithdrawParams[i].market];
+            if (repayWithdrawParams[i].repayAmount != 0) lendingMarket.repay(repayWithdrawParams[i].repayAmount);
+            if (repayWithdrawParams[i].withdrawAmount != 0) {
+                lendingMarket.withdraw(repayWithdrawParams[i].withdrawAmount);
+            }
         }
     }
 
