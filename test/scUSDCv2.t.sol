@@ -246,6 +246,46 @@ contract scUSDCv2Test is Test {
         assertApproxEqAbs(vault.getDebtOnEuler(), 100 ether, 1);
     }
 
+    function test_withdraw_() public {
+        uint256 initialBalance = 1_000_000e6;
+        deal(address(usdc), alice, initialBalance);
+        vault.setFloatPercentage(0);
+
+        vm.startPrank(alice);
+        usdc.approve(address(vault), initialBalance);
+        vault.deposit(initialBalance, alice);
+        vm.stopPrank();
+
+        scUSDCv2.RebalanceParams[] memory params = new scUSDCv2.RebalanceParams[](2);
+        params[0] = scUSDCv2.RebalanceParams({
+            protocol: UsdcWethLendingManager.Protocol.AAVE_V3,
+            addCollateralAmount: initialBalance / 2,
+            isBorrow: true,
+            amount: 50 ether
+        });
+        params[1] = scUSDCv2.RebalanceParams({
+            protocol: UsdcWethLendingManager.Protocol.EULER,
+            addCollateralAmount: initialBalance / 2,
+            isBorrow: true,
+            amount: 50 ether
+        });
+
+        vault.rebalance(params);
+
+        uint256 withdrawAmount = initialBalance / 2;
+        vm.prank(alice);
+        vault.withdraw(withdrawAmount, alice, alice);
+
+        assertApproxEqRel(vault.totalCollateral(), initialBalance / 2, 0.01e18, "totalCollateral");
+        assertApproxEqRel(vault.totalDebt(), 50 ether, 0.01e18, "total Debt");
+        assertApproxEqRel(usdc.balanceOf(alice), initialBalance / 2, 0.01e18, "alice usdc balance");
+
+        assertApproxEqRel(vault.getCollateralOnAave(), initialBalance / 4, 0.01e18, "collateral on aave");
+        assertApproxEqRel(vault.getCollateralOnEuler(), initialBalance / 4, 0.01e18, "collateral on euler");
+        assertApproxEqRel(vault.getDebtOnAave(), 25 ether, 0.01e18, "debt on aave");
+        assertApproxEqRel(vault.getDebtOnEuler(), 25 ether, 0.01e18, "debt on euler");
+    }
+
     /// internal helper functions ///
 
     function _createDefaultUsdcVaultConstructorParams(scWETH scWeth)

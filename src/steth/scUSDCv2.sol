@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.13;
 
-import "forge-std/console2.sol";
 import {
     InvalidTargetLtv,
     InvalidSlippageTolerance,
@@ -272,24 +271,11 @@ contract scUSDCv2 is sc4626, UsdcWethLendingManager, IFlashLoanRecipient {
         return debtPriceInUsdc.divWadUp(lendingProtocols[_protocol].getCollateral());
     }
 
-    /**
-     * @notice Returns the current max LTV for USDC / WETH loans on Aave.
-     * @return The max LTV (1e18 = 100%).
-     */
-    // TODO: make protocol specific
-    function getMaxLtv() public view returns (uint256) {
-        (, uint256 ltv,,,,,,,,) = aavePoolDataProvider.getReserveConfigurationData(address(asset));
-
-        // ltv is returned as a percentage with 2 decimals (e.g. 80% = 8000) so we need to multiply by 1e14
-        return ltv * 1e14;
-    }
-
     /*//////////////////////////////////////////////////////////////
                             INTERNAL API
     //////////////////////////////////////////////////////////////*/
 
     function beforeWithdraw(uint256 _assets, uint256) internal override {
-        // TODO: find collateral allocation pct for each protocol and use that to calculate the amount to withdraw from each protocol
         uint256 initialBalance = usdcBalance();
         if (initialBalance >= _assets) return;
 
@@ -325,12 +311,15 @@ contract scUSDCv2 is sc4626, UsdcWethLendingManager, IFlashLoanRecipient {
         wethNeeded = wethNeeded > _invested ? _invested : wethNeeded;
 
         uint256 withdrawn = _disinvest(wethNeeded);
-        // aavePool.repay(address(weth), withdrawn, C.AAVE_VAR_INTEREST_RATE_MODE, address(this));
-        // aavePool.withdraw(address(asset), _usdcNeeded, address(this));
-        // lendingMarkets[LendingMarkets.AAVE_V3].repay(withdrawn);
-        // lendingMarkets[LendingMarkets.AAVE_V3].withdraw(_usdcNeeded);
-        lendingProtocols[Protocol.EULER].repay(withdrawn);
-        lendingProtocols[Protocol.EULER].withdraw(_usdcNeeded);
+
+        // repay debt and withdraw collateral from each protocol in proportion to their collateral allocation
+        for (uint8 i = 0; i <= uint256(type(Protocol).max); i++) {
+            uint256 protocolCollateral = lendingProtocols[Protocol(i)].getCollateral();
+            uint256 allocationPct = protocolCollateral.divWadDown(_collateral);
+
+            lendingProtocols[Protocol(i)].repay(withdrawn.mulWadUp(allocationPct));
+            lendingProtocols[Protocol(i)].withdraw(_usdcNeeded.mulWadUp(allocationPct));
+        }
     }
 
     function _calculateTotalAssets(uint256 _float, uint256 _collateral, uint256 _invested, uint256 _debt)

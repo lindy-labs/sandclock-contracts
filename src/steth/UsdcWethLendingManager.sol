@@ -43,6 +43,7 @@ abstract contract UsdcWethLendingManager {
         function(uint256) withdraw;
         function() view returns(uint256) getCollateral;
         function() view returns(uint256) getDebt;
+        function() view returns(uint256) getMaxLtv;
     }
 
     mapping(Protocol => ProtocolActions) lendingProtocols;
@@ -96,7 +97,13 @@ abstract contract UsdcWethLendingManager {
         eulerMarkets.enterMarket(0, address(usdc));
 
         lendingProtocols[Protocol.AAVE_V3] = ProtocolActions(
-            supplyUsdcOnAave, borrowWethOnAave, repayDebtOnAave, withdrawUsdcOnAave, getCollateralOnAave, getDebtOnAave
+            supplyUsdcOnAave,
+            borrowWethOnAave,
+            repayDebtOnAave,
+            withdrawUsdcOnAave,
+            getCollateralOnAave,
+            getDebtOnAave,
+            getMaxLtvOnAave
         );
         lendingProtocols[Protocol.EULER] = ProtocolActions(
             supplyUsdcOnEuler,
@@ -104,7 +111,8 @@ abstract contract UsdcWethLendingManager {
             repayDebtOnEuler,
             withdrawUsdcOnEuler,
             getCollateralOnEuler,
-            getDebtOnEuler
+            getDebtOnEuler,
+            getMaxLtvOnEuler
         );
     }
 
@@ -136,6 +144,13 @@ abstract contract UsdcWethLendingManager {
         return aaveVarDWeth.balanceOf(address(this));
     }
 
+    function getMaxLtvOnAave() public view returns (uint256) {
+        (, uint256 ltv,,,,,,,,) = aavePoolDataProvider.getReserveConfigurationData(address(usdc));
+
+        // ltv is returned as a percentage with 2 decimals (e.g. 80% = 8000) so we need to multiply by 1e14
+        return ltv * 1e14;
+    }
+
     /*//////////////////////////////////////////////////////////////
                             EULER API
     //////////////////////////////////////////////////////////////*/
@@ -162,5 +177,15 @@ abstract contract UsdcWethLendingManager {
 
     function getDebtOnEuler() public view returns (uint256) {
         return eulerDWeth.balanceOf(address(this));
+    }
+
+    function getMaxLtvOnEuler() public view returns (uint256) {
+        uint256 collateralFactor = eulerMarkets.underlyingToAssetConfig(address(usdc)).collateralFactor;
+        uint256 borrowFactor = eulerMarkets.underlyingToAssetConfig(address(weth)).borrowFactor;
+
+        uint256 scaledCollateralFactor = collateralFactor.divWadDown(C.EULER_CONFIG_FACTOR_SCALE);
+        uint256 scaledBorrowFactor = borrowFactor.divWadDown(C.EULER_CONFIG_FACTOR_SCALE);
+
+        return scaledCollateralFactor.mulWadDown(scaledBorrowFactor);
     }
 }
