@@ -215,9 +215,9 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
         uint256[] memory amounts = new uint256[](1);
         amounts[0] = debt - wethBalance;
 
-        initiateFlashLoan();
+        _initiateFlashLoan();
         balancerVault.flashLoan(address(this), tokens, amounts, abi.encode(collateral, debt));
-        finalizeFlashLoan();
+        _finalizeFlashLoan();
 
         emit EmergencyExitExecuted(msg.sender, wethBalance, debt, collateral);
     }
@@ -232,7 +232,7 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
         if (msg.sender != address(balancerVault)) {
             revert InvalidFlashLoanCaller();
         }
-        isFlashLoanInitiated();
+        _isFlashLoanInitiated();
 
         uint256 flashLoanAmount = amounts[0];
         (uint256 collateral, uint256 debt) = abi.decode(userData, (uint256, uint256));

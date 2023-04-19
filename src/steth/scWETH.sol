@@ -276,7 +276,7 @@ contract scWETH is sc4626, IFlashLoanRecipient {
         if (msg.sender != address(balancerVault)) {
             revert InvalidFlashLoanCaller();
         }
-        isFlashLoanInitiated();
+        _isFlashLoanInitiated();
 
         // the amount flashloaned
         uint256 flashLoanAmount = amounts[0];
@@ -361,9 +361,9 @@ contract scWETH is sc4626, IFlashLoanRecipient {
         if (!isDeposit) amount += flashLoanAmount.mulWadDown(C.ONE - slippageTolerance);
 
         // take flashloan
-        initiateFlashLoan();
+        _initiateFlashLoan();
         balancerVault.flashLoan(address(this), tokens, amounts, abi.encode(isDeposit, amount));
-        finalizeFlashLoan();
+        _finalizeFlashLoan();
     }
 
     function _withdrawToVault(uint256 amount) internal {
@@ -382,9 +382,9 @@ contract scWETH is sc4626, IFlashLoanRecipient {
         totalInvested -= amount;
 
         // take flashloan
-        initiateFlashLoan();
+        _initiateFlashLoan();
         balancerVault.flashLoan(address(this), tokens, amounts, abi.encode(false, amount));
-        finalizeFlashLoan();
+        _finalizeFlashLoan();
     }
 
     function _stEthToEth(uint256 stEthAmount) internal view returns (uint256 ethAmount) {

@@ -66,15 +66,15 @@ abstract contract sc4626 is ERC4626, AccessControl {
         emit TreasuryUpdated(msg.sender, newTreasury);
     }
 
-    function initiateFlashLoan() internal {
+    function _initiateFlashLoan() internal {
         flashLoanInitiated = true;
     }
 
-    function finalizeFlashLoan() internal {
+    function _finalizeFlashLoan() internal {
         flashLoanInitiated = false;
     }
 
-    function isFlashLoanInitiated() internal view {
+    function _isFlashLoanInitiated() internal view {
         if (!flashLoanInitiated) revert InvalidFlashLoanCaller();
     }
 }
