@@ -4,7 +4,14 @@ pragma solidity ^0.8.10;
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {ERC4626} from "solmate/mixins/ERC4626.sol";
 import {AccessControl} from "openzeppelin-contracts/access/AccessControl.sol";
-import {TreasuryCannotBeZero, FeesTooHigh, CallerNotAdmin, CallerNotKeeper, ZeroAddress} from "./errors/scErrors.sol";
+import {
+    TreasuryCannotBeZero,
+    FeesTooHigh,
+    CallerNotAdmin,
+    CallerNotKeeper,
+    ZeroAddress,
+    InvalidFlashLoanCaller
+} from "./errors/scErrors.sol";
 
 abstract contract sc4626 is ERC4626, AccessControl {
     constructor(address _admin, address _keeper, ERC20 _asset, string memory _name, string memory _symbol)
@@ -19,6 +26,7 @@ abstract contract sc4626 is ERC4626, AccessControl {
         treasury = _admin;
     }
 
+    bool flashLoanInitiated;
     uint256 public performanceFee = 0.1e18;
     uint256 public floatPercentage = 0.01e18;
     address public treasury;
@@ -56,5 +64,17 @@ abstract contract sc4626 is ERC4626, AccessControl {
         if (newTreasury == address(0)) revert TreasuryCannotBeZero();
         treasury = newTreasury;
         emit TreasuryUpdated(msg.sender, newTreasury);
+    }
+
+    function initiateFlashLoan() internal {
+        flashLoanInitiated = true;
+    }
+
+    function finalizeFlashLoan() internal {
+        flashLoanInitiated = false;
+    }
+
+    function isFlashLoanInitiated() internal view {
+        if (!flashLoanInitiated) revert InvalidFlashLoanCaller();
     }
 }
