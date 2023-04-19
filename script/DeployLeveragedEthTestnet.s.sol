@@ -38,12 +38,6 @@ import {MockSwapRouter} from "../test/mocks/uniswap/MockSwapRouter.sol";
 
 contract DeployScript is DeployLeveragedEth {
     function run() external {
-        if (block.chainid != 5) {
-            console2.log("Not goerli");
-
-            return;
-        }
-
         deployMocks();
         deploy();
     }
