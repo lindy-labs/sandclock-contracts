@@ -54,7 +54,7 @@ contract DeployScript is DeployLeveragedEth, Test {
     }
 
     function deposit(address from, address to, uint256 amount) internal {
-        console2.log("depositing");
+        console2.log("depositing", from);
 
         vm.startPrank(from);
         weth.approve(address(to), type(uint256).max);
@@ -71,7 +71,7 @@ contract DeployScript is DeployLeveragedEth, Test {
     }
 
     function redeem(address redeemer) internal {
-        console2.log("redeeming");
+        console2.log("redeeming", redeemer);
 
         uint256 stEthToEthSlippage = 0.99e18;
         curveEthStEthPool.setSlippage(stEthToEthSlippage);
