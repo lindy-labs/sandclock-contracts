@@ -720,9 +720,8 @@ contract scWETHTest is Test {
     }
 
     function _depositToVault(address user, uint256 amount) internal returns (uint256 shares) {
-        vm.deal(user, amount);
+        deal(address(weth), user, amount);
         vm.startPrank(user);
-        weth.deposit{value: amount}();
         weth.approve(address(vault), amount);
         shares = vault.deposit(amount, user);
         vm.stopPrank();

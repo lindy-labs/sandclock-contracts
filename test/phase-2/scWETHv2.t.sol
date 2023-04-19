@@ -78,7 +78,55 @@ contract scWETHv2Test is Test {
         assertEq(vault.slippageTolerance(), slippageTolerance);
     }
 
+    function test_deposit_redeem(uint256 amount) public {
+        amount = bound(amount, boundMinimum, 1e27);
+        vm.deal(address(this), amount);
+        weth.deposit{value: amount}();
+        weth.approve(address(vault), amount);
+
+        uint256 preDepositBal = weth.balanceOf(address(this));
+
+        vault.deposit(amount, address(this));
+
+        _depositChecks(amount, preDepositBal);
+
+        vault.redeem(vault.balanceOf(address(this)), address(this), address(this));
+
+        _redeemChecks(preDepositBal);
+    }
+
+    function test_rebalancePosition_reallocation() public {}
+
+    function test_rebalancePosition_reinvestingProfits() public {}
+
+    // we decrease ltv in case of a loss, since the ltv goes higher than the target ltv in such a scenario
+    function test_rebalancePosition_decreasingLtv() public {}
+
     //////////////////////////// INTERNAL METHODS ////////////////////////////////////////
+
+    function _depositChecks(uint256 amount, uint256 preDepositBal) internal {
+        assertEq(vault.convertToAssets(10 ** vault.decimals()), 1e18);
+        assertEq(vault.totalAssets(), amount);
+        assertEq(vault.balanceOf(address(this)), amount);
+        assertEq(vault.convertToAssets(vault.balanceOf(address(this))), amount);
+        assertEq(weth.balanceOf(address(this)), preDepositBal - amount);
+    }
+
+    function _redeemChecks(uint256 preDepositBal) internal {
+        assertEq(vault.convertToAssets(10 ** vault.decimals()), 1e18);
+        assertEq(vault.totalAssets(), 0);
+        assertEq(vault.balanceOf(address(this)), 0);
+        assertEq(vault.convertToAssets(vault.balanceOf(address(this))), 0);
+        assertEq(weth.balanceOf(address(this)), preDepositBal);
+    }
+
+    function _depositToVault(address user, uint256 amount) internal returns (uint256 shares) {
+        deal(address(weth), user, amount);
+        vm.startPrank(user);
+        weth.approve(address(vault), amount);
+        shares = vault.deposit(amount, user);
+        vm.stopPrank();
+    }
 
     function _createDefaultWethv2VaultConstructorParams() internal view returns (scWETHv2.ConstructorParams memory) {
         return scWETHv2.ConstructorParams({
