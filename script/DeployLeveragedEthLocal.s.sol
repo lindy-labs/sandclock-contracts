@@ -32,6 +32,7 @@ contract DeployScript is DeployLeveragedEth, Test {
 
     function fund() internal {
         console2.log("funding");
+
         deal(alice, 10e18);
         deal(keeper, 10e18);
         deal(address(weth), 100e18);
