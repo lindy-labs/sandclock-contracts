@@ -14,6 +14,7 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 
 import {Constants as C} from "../../src/lib/Constants.sol";
 import {scWETHv2} from "../../src/phase-2/scWETHv2.sol";
+import {LendingMarketManager} from "../../src/phase-2/LendingMarketManager.sol";
 import {WETH} from "solmate/tokens/WETH.sol";
 import {ILido} from "../../src/interfaces/lido/ILido.sol";
 import {IwstETH} from "../../src/interfaces/lido/IwstETH.sol";
@@ -46,7 +47,8 @@ contract scWETHv2Test is Test {
     ICurvePool curvePool;
     uint256 slippageTolerance = 0.99e18;
     uint256 maxLtv;
-    uint256 targetLtv = 0.7e18;
+
+    mapping(LendingMarketManager.LendingMarketType => uint256) targetLtv;
 
     function setUp() public {
         vm.createFork(vm.envString("RPC_URL_MAINNET"));
@@ -64,6 +66,9 @@ contract scWETHv2Test is Test {
         stEth = vault.stEth();
         wstEth = vault.wstETH();
         curvePool = vault.curvePool();
+
+        targetLtv[LendingMarketManager.LendingMarketType.AAVE_V3] = 0.7e18;
+        targetLtv[LendingMarketManager.LendingMarketType.EULER] = 0.5e18;
     }
 
     function test_constructor() public {
@@ -95,14 +100,47 @@ contract scWETHv2Test is Test {
         _redeemChecks(preDepositBal);
     }
 
-    function test_rebalancePosition_reallocation() public {}
+    function test_rebalance_depositIntoStrategy() public {
+        uint256 amount = 10 ether;
+        _depositToVault(address(this), amount);
 
-    function test_rebalancePosition_reinvestingProfits() public {}
+        scWETHv2.RepayWithdrawParam[] memory repayWithdrawParams;
+        scWETHv2.SupplyBorrowParam[] memory supplyBorrowParams = new scWETHv2.SupplyBorrowParam[](2);
+
+        // supply 70% to aaveV3 and 30% to Euler
+        supplyBorrowParams[0] = scWETHv2.SupplyBorrowParam({
+            market: LendingMarketManager.LendingMarketType.AAVE_V3,
+            supplyAmount: 0,
+            borrowAmount: 0
+        });
+
+        // deposit into strategy
+        // vault.rebalance();
+    }
+
+    function test_rebalance_reinvestingProfits() public {}
+
+    function test_rebalance_reallocation() public {}
 
     // we decrease ltv in case of a loss, since the ltv goes higher than the target ltv in such a scenario
-    function test_rebalancePosition_decreasingLtv() public {}
+    function test_rebalance_decreassLtv() public {}
 
     //////////////////////////// INTERNAL METHODS ////////////////////////////////////////
+
+    function _calcFlashLoanAmount(LendingMarketManager.LendingMarketType market, uint256 amount)
+        internal
+        view
+        returns (uint256 flashLoanAmount)
+    {
+        scWETHv2.LendingMarket memory lendingMarket = vault.lendingMarkets[market];
+        uint256 debt = lendingMarket.getDebt();
+        uint256 collateral = lendingMarket.getCollateral();
+
+        uint256 target = targetLtv[market].mulWadDown(amount + collateral);
+
+        // calculate the flashloan amount needed
+        flashLoanAmount = (target > debt ? target - debt : debt - target).divWadDown(C.ONE - targetLtv[market]);
+    }
 
     function _depositChecks(uint256 amount, uint256 preDepositBal) internal {
         assertEq(vault.convertToAssets(10 ** vault.decimals()), 1e18);

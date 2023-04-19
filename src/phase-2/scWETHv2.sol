@@ -51,8 +51,8 @@ contract scWETHv2 is sc4626, LendingMarketManager, IFlashLoanRecipient {
 
     struct SupplyBorrowParam {
         LendingMarketType market;
-        uint256 supplyAmount;
-        uint256 borrowAmount;
+        uint256 supplyAmount; // amount + flashLoanAmount
+        uint256 borrowAmount; // flashLoanAmount
     }
 
     struct ConstructorParams {
@@ -115,7 +115,7 @@ contract scWETHv2 is sc4626, LendingMarketManager, IFlashLoanRecipient {
     /// @dev also mints performance fee tokens to the treasury
     function harvest(uint256 totalFlashLoanAmount, RebalanceParams memory params) external {
         // reinvest
-        rebalancePosition(totalFlashLoanAmount, params);
+        rebalance(totalFlashLoanAmount, params);
 
         // store the old total
         uint256 oldTotalInvested = totalInvested;
@@ -145,7 +145,7 @@ contract scWETHv2 is sc4626, LendingMarketManager, IFlashLoanRecipient {
 
     /// @dev the backend will calculate the supposed amounts and flashloan amounts for each protocol
     /// @dev this same method is to be used to reallocate positions
-    function rebalancePosition(uint256 totalFlashLoanAmount, RebalanceParams memory params) public onlyKeeper {
+    function rebalance(uint256 totalFlashLoanAmount, RebalanceParams memory params) public onlyKeeper {
         // if (params.amount > asset.balanceOf(address(this))) revert InsufficientDepositBalance();
 
         address[] memory tokens = new address[](1);
@@ -174,6 +174,20 @@ contract scWETHv2 is sc4626, LendingMarketManager, IFlashLoanRecipient {
 
         // add float
         assets += asset.balanceOf(address(this));
+    }
+
+    /// @notice returns the total wstETH supplied as collateral (in ETH)
+    function totalCollateral() public view override returns (uint256 collateral) {
+        for (uint256 i = 0; i < totalMarkets(); i++) {
+            collateral += lendingMarkets[LendingMarketType(i)].getCollateral();
+        }
+    }
+
+    /// @notice returns the total ETH borrowed
+    function totalDebt() public view override returns (uint256 debt) {
+        for (uint256 i = 0; i < totalMarkets(); i++) {
+            debt += lendingMarkets[LendingMarketType(i)].getDebt();
+        }
     }
 
     /// @notice returns the net leverage that the strategy is using right now (1e18 = 100%)
@@ -244,7 +258,7 @@ contract scWETHv2 is sc4626, LendingMarketManager, IFlashLoanRecipient {
         revert PleaseUseRedeemMethod();
     }
 
-    /// @dev called after the flashLoan on _rebalancePosition
+    /// @dev called after the flashLoan on rebalance
     function receiveFlashLoan(address[] memory, uint256[] memory amounts, uint256[] memory, bytes memory userData)
         external
     {
