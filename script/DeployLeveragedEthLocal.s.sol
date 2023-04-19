@@ -5,8 +5,11 @@ import "forge-std/console2.sol";
 import "forge-std/Test.sol";
 
 import {DeployLeveragedEth} from "./base/DeployLeveragedEth.sol";
+import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 
 contract DeployScript is DeployLeveragedEth, Test {
+    using FixedPointMathLib for uint256;
+
     address constant alice = address(0x06);
     address constant bob = address(0x07);
 
@@ -31,6 +34,8 @@ contract DeployScript is DeployLeveragedEth, Test {
         deposit(bob, address(wethContract), 10e18);
 
         harvest();
+
+        redeem(alice);
     }
 
     function fund() internal {
@@ -40,6 +45,7 @@ contract DeployScript is DeployLeveragedEth, Test {
         deal(alice, 10e18);
         deal(bob, 10e18);
         deal(keeper, 10e18);
+        deal(address(curveEthStEthPool), 100e18);
 
         // Dole out WETH
         deal(address(weth), 100e18);
@@ -62,5 +68,17 @@ contract DeployScript is DeployLeveragedEth, Test {
         vm.prank(keeper);
         wethContract.harvest();
         vm.stopPrank();
+    }
+
+    function redeem(address redeemer) internal {
+        console2.log("redeeming");
+
+        uint256 stEthToEthSlippage = 0.99e18;
+        curveEthStEthPool.setSlippage(stEthToEthSlippage);
+
+        uint256 withdrawAmount = 1e18;
+        uint256 sharesToReddem = wethContract.convertToShares(withdrawAmount);
+        vm.prank(redeemer);
+        wethContract.redeem(sharesToReddem, redeemer, redeemer);
     }
 }
