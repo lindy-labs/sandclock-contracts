@@ -121,10 +121,10 @@ contract scUSDCv2Test is Test {
 
         scUSDCv2.RebalanceParams[] memory params = new scUSDCv2.RebalanceParams[](1);
         params[0] = scUSDCv2.RebalanceParams({
-            protocol: UsdcWethLendingManager.Protocol.AAVE_V3,
-            addCollateralAmount: initialBalance,
-            isBorrow: true,
-            amount: 100 ether
+            protocolId: UsdcWethLendingManager.Protocol.AAVE_V3,
+            supplyAmount: initialBalance,
+            leverageUp: true,
+            wethAmount: 100 ether
         });
 
         vault.rebalance(params);
@@ -139,10 +139,10 @@ contract scUSDCv2Test is Test {
 
         scUSDCv2.RebalanceParams[] memory params = new scUSDCv2.RebalanceParams[](1);
         params[0] = scUSDCv2.RebalanceParams({
-            protocol: UsdcWethLendingManager.Protocol.AAVE_V3,
-            addCollateralAmount: initialBalance,
-            isBorrow: true,
-            amount: 100 ether
+            protocolId: UsdcWethLendingManager.Protocol.AAVE_V3,
+            supplyAmount: initialBalance,
+            leverageUp: true,
+            wethAmount: 100 ether
         });
 
         vault.rebalance(params);
@@ -154,10 +154,10 @@ contract scUSDCv2Test is Test {
         deal(address(usdc), address(vault), additionalBalance);
         params = new scUSDCv2.RebalanceParams[](1);
         params[0] = scUSDCv2.RebalanceParams({
-            protocol: UsdcWethLendingManager.Protocol.AAVE_V3,
-            addCollateralAmount: additionalBalance,
-            isBorrow: true,
-            amount: 10 ether
+            protocolId: UsdcWethLendingManager.Protocol.AAVE_V3,
+            supplyAmount: additionalBalance,
+            leverageUp: true,
+            wethAmount: 10 ether
         });
 
         vault.rebalance(params);
@@ -172,16 +172,16 @@ contract scUSDCv2Test is Test {
 
         scUSDCv2.RebalanceParams[] memory params = new scUSDCv2.RebalanceParams[](2);
         params[0] = scUSDCv2.RebalanceParams({
-            protocol: UsdcWethLendingManager.Protocol.AAVE_V3,
-            addCollateralAmount: initialBalance / 2,
-            isBorrow: true,
-            amount: 50 ether
+            protocolId: UsdcWethLendingManager.Protocol.AAVE_V3,
+            supplyAmount: initialBalance / 2,
+            leverageUp: true,
+            wethAmount: 50 ether
         });
         params[1] = scUSDCv2.RebalanceParams({
-            protocol: UsdcWethLendingManager.Protocol.EULER,
-            addCollateralAmount: initialBalance / 2,
-            isBorrow: true,
-            amount: 50 ether
+            protocolId: UsdcWethLendingManager.Protocol.EULER,
+            supplyAmount: initialBalance / 2,
+            leverageUp: true,
+            wethAmount: 50 ether
         });
 
         vault.rebalance(params);
@@ -202,10 +202,10 @@ contract scUSDCv2Test is Test {
 
         scUSDCv2.RebalanceParams[] memory rebalanceParams = new scUSDCv2.RebalanceParams[](1);
         rebalanceParams[0] = scUSDCv2.RebalanceParams({
-            protocol: UsdcWethLendingManager.Protocol.AAVE_V3,
-            addCollateralAmount: initialBalance,
-            isBorrow: true,
-            amount: 100 ether
+            protocolId: UsdcWethLendingManager.Protocol.AAVE_V3,
+            supplyAmount: initialBalance,
+            leverageUp: true,
+            wethAmount: 100 ether
         });
 
         vault.rebalance(rebalanceParams);
@@ -221,13 +221,13 @@ contract scUSDCv2Test is Test {
 
         scUSDCv2.ReallocationParams[] memory reallocateParams = new scUSDCv2.ReallocationParams[](2);
         reallocateParams[0] = scUSDCv2.ReallocationParams({
-            protocol: UsdcWethLendingManager.Protocol.AAVE_V3,
+            protocolId: UsdcWethLendingManager.Protocol.AAVE_V3,
             isDownsize: true,
             collateralAmount: 1_000_000e6,
             debtAmount: 100 ether
         });
         reallocateParams[1] = scUSDCv2.ReallocationParams({
-            protocol: UsdcWethLendingManager.Protocol.EULER,
+            protocolId: UsdcWethLendingManager.Protocol.EULER,
             isDownsize: false,
             collateralAmount: 1_000_000e6,
             debtAmount: 100 ether
@@ -258,16 +258,16 @@ contract scUSDCv2Test is Test {
 
         scUSDCv2.RebalanceParams[] memory params = new scUSDCv2.RebalanceParams[](2);
         params[0] = scUSDCv2.RebalanceParams({
-            protocol: UsdcWethLendingManager.Protocol.AAVE_V3,
-            addCollateralAmount: initialBalance / 2,
-            isBorrow: true,
-            amount: 50 ether
+            protocolId: UsdcWethLendingManager.Protocol.AAVE_V3,
+            supplyAmount: initialBalance / 2,
+            leverageUp: true,
+            wethAmount: 50 ether
         });
         params[1] = scUSDCv2.RebalanceParams({
-            protocol: UsdcWethLendingManager.Protocol.EULER,
-            addCollateralAmount: initialBalance / 2,
-            isBorrow: true,
-            amount: 50 ether
+            protocolId: UsdcWethLendingManager.Protocol.EULER,
+            supplyAmount: initialBalance / 2,
+            leverageUp: true,
+            wethAmount: 50 ether
         });
 
         vault.rebalance(params);

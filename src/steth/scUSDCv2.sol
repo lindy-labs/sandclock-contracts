@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.13;
 
+import "forge-std/console2.sol";
 import {
     InvalidTargetLtv,
     InvalidSlippageTolerance,
@@ -26,6 +27,7 @@ import {IFlashLoanRecipient} from "../interfaces/balancer/IFlashLoanRecipient.so
 import {sc4626} from "../sc4626.sol";
 import {UsdcWethLendingManager} from "./UsdcWethLendingManager.sol";
 
+// TODO: add modifiers to all functions
 /**
  * @title Sandclock USDC Vault
  * @notice A vault that allows users to earn interest on their USDC deposits from leveraged WETH staking.
@@ -35,6 +37,8 @@ contract scUSDCv2 is sc4626, UsdcWethLendingManager, IFlashLoanRecipient {
     using SafeTransferLib for ERC20;
     using SafeTransferLib for WETH;
     using FixedPointMathLib for uint256;
+
+    error LtvAboveMaxAllowed(Protocol protocolId);
 
     event NewTargetLtvApplied(address indexed admin, uint256 newTargetLtv);
     event SlippageToleranceUpdated(address indexed admin, uint256 newSlippageTolerance);
@@ -87,7 +91,7 @@ contract scUSDCv2 is sc4626, UsdcWethLendingManager, IFlashLoanRecipient {
     }
 
     constructor(ConstructorParams memory _params)
-        sc4626(_params.admin, _params.keeper, _params.usdc, "Sandclock USDC Vault", "scUSDC")
+        sc4626(_params.admin, _params.keeper, _params.usdc, "Sandclock USDC Vault v2", "scUSDCv2")
         UsdcWethLendingManager(
             _params.usdc,
             _params.weth,
@@ -128,7 +132,7 @@ contract scUSDCv2 is sc4626, UsdcWethLendingManager, IFlashLoanRecipient {
     }
 
     struct ReallocationParams {
-        Protocol protocol;
+        Protocol protocolId;
         bool isDownsize;
         uint256 collateralAmount;
         uint256 debtAmount;
@@ -159,7 +163,7 @@ contract scUSDCv2 is sc4626, UsdcWethLendingManager, IFlashLoanRecipient {
         (ReallocationParams[] memory params) = abi.decode(userData, (ReallocationParams[]));
 
         for (uint8 i = 0; i < params.length; i++) {
-            ProtocolActions memory protocolActions = lendingProtocols[params[i].protocol];
+            ProtocolActions memory protocolActions = lendingProtocols[params[i].protocolId];
 
             if (params[i].isDownsize) {
                 protocolActions.repay(params[i].debtAmount);
@@ -174,10 +178,10 @@ contract scUSDCv2 is sc4626, UsdcWethLendingManager, IFlashLoanRecipient {
     }
 
     struct RebalanceParams {
-        Protocol protocol;
-        uint256 addCollateralAmount;
-        bool isBorrow;
-        uint256 amount;
+        Protocol protocolId;
+        uint256 supplyAmount;
+        bool leverageUp;
+        uint256 wethAmount;
     }
 
     /**
@@ -185,23 +189,49 @@ contract scUSDCv2 is sc4626, UsdcWethLendingManager, IFlashLoanRecipient {
      * @dev Called to increase or decrease the WETH debt to maintain the LTV (loan to value).
      */
     function rebalance(RebalanceParams[] calldata _params) public {
+        // TODO: check float requirement
+
         for (uint8 i = 0; i < _params.length; i++) {
-            ProtocolActions memory protocolActions = lendingProtocols[_params[i].protocol];
+            ProtocolActions memory protocolActions = lendingProtocols[_params[i].protocolId];
 
             // respect new deposits
-            if (_params[i].addCollateralAmount != 0) {
-                protocolActions.supply(_params[i].addCollateralAmount);
+            if (_params[i].supplyAmount != 0) {
+                protocolActions.supply(_params[i].supplyAmount);
             }
 
             // borrow and invest or disinvest and repay
-            if (_params[i].isBorrow) {
-                protocolActions.borrow(_params[i].amount);
-                scWETH.deposit(_params[i].amount, address(this));
+            if (_params[i].leverageUp) {
+                uint256 maxLtv = protocolActions.getMaxLtv();
+                uint256 expectedLtv = getUsdcFromWeth(protocolActions.getDebt() + _params[i].wethAmount).divWadUp(
+                    protocolActions.getCollateral()
+                );
+
+                // TODO: test this case
+                if (expectedLtv >= maxLtv) {
+                    revert LtvAboveMaxAllowed(Protocol(i));
+                }
+
+                protocolActions.borrow(_params[i].wethAmount);
+                scWETH.deposit(_params[i].wethAmount, address(this));
             } else {
-                uint256 withdrawn = _disinvest(_params[i].amount);
+                uint256 withdrawn = _disinvest(_params[i].wethAmount);
                 protocolActions.repay(withdrawn);
             }
+
+            // TODO: emit event
         }
+    }
+
+    // TODO: add tests
+    function takeProfits() public {
+        uint256 profit = _calculateWethProfit(wethInvested(), totalDebt());
+        // TODO: check if profit is above minimum
+
+        uint256 withdrawn = _disinvest(profit);
+
+        _swapWethForUsdc(withdrawn);
+
+        // TODO: emit event
     }
 
     function totalAssets() public view override returns (uint256) {
