@@ -95,6 +95,8 @@ contract DeployScript is CREATE3Script {
 
         scUsdc = new scUSDC(scUsdcParams);
 
+        if (block.chainid == 31337) fixtures();
+
         vm.stopBroadcast();
     }
 
@@ -137,5 +139,9 @@ contract DeployScript is CREATE3Script {
 
         console2.log("NOTE: 1 mWETH = 1000 mUSDC");
         console2.log("NOTE: 1 mstETH = 1 ETH");
+    }
+
+    function fixtures() internal {
+        console2.log("running steth fixture script");
     }
 }
