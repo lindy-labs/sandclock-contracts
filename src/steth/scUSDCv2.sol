@@ -39,21 +39,14 @@ contract scUSDCv2 is sc4626, UsdcWethLendingManager, IFlashLoanRecipient {
     using FixedPointMathLib for uint256;
 
     error LtvAboveMaxAllowed(Protocol protocolId);
+    error FloatBalanceTooSmall(uint256 actual, uint256 required);
 
     event NewTargetLtvApplied(address indexed admin, uint256 newTargetLtv);
     event SlippageToleranceUpdated(address indexed admin, uint256 newSlippageTolerance);
     event EmergencyExitExecuted(
         address indexed admin, uint256 wethWithdrawn, uint256 debtRepaid, uint256 collateralReleased
     );
-    event Rebalanced(
-        uint256 targetLtv,
-        uint256 initialDebt,
-        uint256 finalDebt,
-        uint256 initialCollateral,
-        uint256 finalCollateral,
-        uint256 initialUsdcBalance,
-        uint256 finalUsdcBalance
-    );
+    event Rebalanced(Protocol protocolId, uint256 supplied, bool leverageUp, uint256 debt);
 
     // Uniswap V3 router
     ISwapRouter public immutable swapRouter;
@@ -189,8 +182,6 @@ contract scUSDCv2 is sc4626, UsdcWethLendingManager, IFlashLoanRecipient {
      * @dev Called to increase or decrease the WETH debt to maintain the LTV (loan to value).
      */
     function rebalance(RebalanceParams[] calldata _params) public {
-        // TODO: check float requirement
-
         for (uint8 i = 0; i < _params.length; i++) {
             ProtocolActions memory protocolActions = lendingProtocols[_params[i].protocolId];
 
@@ -206,9 +197,8 @@ contract scUSDCv2 is sc4626, UsdcWethLendingManager, IFlashLoanRecipient {
                     protocolActions.getCollateral()
                 );
 
-                // TODO: test this case
                 if (expectedLtv >= maxLtv) {
-                    revert LtvAboveMaxAllowed(Protocol(i));
+                    revert LtvAboveMaxAllowed(Protocol(_params[i].protocolId));
                 }
 
                 protocolActions.borrow(_params[i].wethAmount);
@@ -218,7 +208,16 @@ contract scUSDCv2 is sc4626, UsdcWethLendingManager, IFlashLoanRecipient {
                 protocolActions.repay(withdrawn);
             }
 
-            // TODO: emit event
+            emit Rebalanced(
+                _params[i].protocolId, _params[i].supplyAmount, _params[i].leverageUp, _params[i].wethAmount
+            );
+        }
+
+        uint256 float = usdcBalance();
+        uint256 floatRequired = totalAssets().mulWadDown(floatPercentage);
+
+        if (float < floatRequired) {
+            revert FloatBalanceTooSmall(float, floatRequired);
         }
     }
 

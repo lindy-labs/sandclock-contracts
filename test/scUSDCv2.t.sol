@@ -34,15 +34,7 @@ contract scUSDCv2Test is Test {
     event EmergencyExitExecuted(
         address indexed admin, uint256 wethWithdrawn, uint256 debtRepaid, uint256 collateralReleased
     );
-    event Rebalanced(
-        uint256 targetLtv,
-        uint256 initialDebt,
-        uint256 finalDebt,
-        uint256 initialCollateral,
-        uint256 finalCollateral,
-        uint256 initialUsdcBalance,
-        uint256 finalUsdcBalance
-    );
+    event Rebalanced(UsdcWethLendingManager.Protocol protocolId, uint256 supplied, bool leverageUp, uint256 debt);
 
     uint256 mainnetFork;
     uint256 constant ethWstEthMaxLtv = 0.7735e18;
@@ -90,6 +82,8 @@ contract scUSDCv2Test is Test {
 
         // set vault eth balance to zero
         vm.deal(address(vault), 0);
+        // set float percentage to 0 for most tests
+        vault.setFloatPercentage(0);
     }
 
     /// #constructor ///
@@ -115,6 +109,8 @@ contract scUSDCv2Test is Test {
         assertEq(weth.allowance(address(vault), address(vault.scWETH())), type(uint256).max, "weth->scWETH allowance");
     }
 
+    /// #rebalance ///
+
     function test_rebalance_oneProtocol() public {
         uint256 initialBalance = 1_000_000e6;
         deal(address(usdc), address(vault), initialBalance);
@@ -129,8 +125,35 @@ contract scUSDCv2Test is Test {
 
         vault.rebalance(params);
 
-        assertEq(vault.totalDebt(), 100 ether);
-        assertEq(vault.totalCollateral(), initialBalance);
+        assertEq(vault.totalDebt(), 100 ether, "totalDebt");
+        assertEq(vault.totalCollateral(), initialBalance, "totalCollateral");
+    }
+
+    function test_rebalance_oneProtocolSecondInOrder() public {
+        uint256 initialBalance = 1_000_000e6;
+        deal(address(usdc), address(vault), initialBalance);
+
+        UsdcWethLendingManager.Protocol second = UsdcWethLendingManager.Protocol.EULER;
+        assertTrue(UsdcWethLendingManager.Protocol.AAVE_V3 < second, "protocol order");
+
+        scUSDCv2.RebalanceParams[] memory params = new scUSDCv2.RebalanceParams[](1);
+        params[0] = scUSDCv2.RebalanceParams({
+            protocolId: second,
+            supplyAmount: initialBalance,
+            leverageUp: true,
+            wethAmount: 100 ether
+        });
+
+        vault.rebalance(params);
+
+        assertApproxEqAbs(vault.totalDebt(), 100 ether, 1, "totalDebt");
+        assertApproxEqAbs(vault.totalCollateral(), initialBalance, 1, "totalCollateral");
+
+        assertEq(vault.getCollateralOnAave(), 0, "collateralOnAave");
+        assertEq(vault.getDebtOnAave(), 0, "debtOnAave");
+
+        assertApproxEqAbs(vault.getCollateralOnEuler(), initialBalance, 1, "collateralOnEuler");
+        assertApproxEqAbs(vault.getDebtOnEuler(), 100 ether, 1, "debtOnEuler");
     }
 
     function test_rebalance_oneProtocolWithAdditionalDeposits() public {
@@ -147,8 +170,8 @@ contract scUSDCv2Test is Test {
 
         vault.rebalance(params);
 
-        assertEq(vault.totalDebt(), 100 ether);
-        assertEq(vault.totalCollateral(), initialBalance);
+        assertEq(vault.totalDebt(), 100 ether, "totalDebt before");
+        assertEq(vault.totalCollateral(), initialBalance, "totalCollateral before");
 
         uint256 additionalBalance = 100_000e6;
         deal(address(usdc), address(vault), additionalBalance);
@@ -162,8 +185,8 @@ contract scUSDCv2Test is Test {
 
         vault.rebalance(params);
 
-        assertEq(vault.totalDebt(), 110 ether);
-        assertEq(vault.totalCollateral(), initialBalance + additionalBalance);
+        assertEq(vault.totalDebt(), 110 ether, "totalDebt after");
+        assertEq(vault.totalCollateral(), initialBalance + additionalBalance, "totalCollateral after");
     }
 
     function test_rebalance_twoProtocols() public {
@@ -186,15 +209,83 @@ contract scUSDCv2Test is Test {
 
         vault.rebalance(params);
 
-        assertApproxEqAbs(vault.totalCollateral(), initialBalance, 1);
-        assertApproxEqAbs(vault.totalDebt(), 100 ether, 1);
+        assertApproxEqAbs(vault.totalCollateral(), initialBalance, 1, "totalCollateral");
+        assertApproxEqAbs(vault.totalDebt(), 100 ether, 1, "totalDebt");
 
-        assertApproxEqAbs(vault.getCollateralOnAave(), initialBalance / 2, 1);
-        assertApproxEqAbs(vault.getCollateralOnEuler(), initialBalance / 2, 1);
+        assertApproxEqAbs(vault.getCollateralOnAave(), initialBalance / 2, 1, "collateralOnAave");
+        assertApproxEqAbs(vault.getCollateralOnEuler(), initialBalance / 2, 1, "collateralOnEuler");
 
-        assertApproxEqAbs(vault.getDebtOnAave(), 50 ether, 1);
-        assertApproxEqAbs(vault.getDebtOnEuler(), 50 ether, 1);
+        assertApproxEqAbs(vault.getDebtOnAave(), 50 ether, 1, "debtOnAave");
+        assertApproxEqAbs(vault.getDebtOnEuler(), 50 ether, 1, "debtOnEuler");
     }
+
+    function test_rebalance_emitsEventForEachProtocol() public {
+        uint256 initialBalance = 1_000_000e6;
+        deal(address(usdc), address(vault), initialBalance);
+
+        scUSDCv2.RebalanceParams[] memory params = new scUSDCv2.RebalanceParams[](2);
+        params[0] = scUSDCv2.RebalanceParams({
+            protocolId: UsdcWethLendingManager.Protocol.AAVE_V3,
+            supplyAmount: initialBalance / 2,
+            leverageUp: true,
+            wethAmount: 50 ether
+        });
+        params[1] = scUSDCv2.RebalanceParams({
+            protocolId: UsdcWethLendingManager.Protocol.EULER,
+            supplyAmount: initialBalance / 2,
+            leverageUp: true,
+            wethAmount: 50 ether
+        });
+
+        vm.expectEmit(true, true, true, true);
+        emit Rebalanced(params[0].protocolId, params[0].supplyAmount, params[0].leverageUp, params[0].wethAmount);
+        emit Rebalanced(params[1].protocolId, params[1].supplyAmount, params[1].leverageUp, params[1].wethAmount);
+
+        vault.rebalance(params);
+    }
+
+    function test_rebalance_failsWhenBorrowingOverMaxLtv() public {
+        uint256 initialBalance = 1_000_000e6;
+        deal(address(usdc), address(vault), initialBalance);
+        uint256 maxLtv = vault.getMaxLtvOnEuler();
+        uint256 tooLargeBorrowAmount = vault.getWethFromUsdc(initialBalance).mulWadUp(maxLtv + 0.01e18);
+
+        scUSDCv2.RebalanceParams[] memory params = new scUSDCv2.RebalanceParams[](1);
+        params[0] = scUSDCv2.RebalanceParams({
+            protocolId: UsdcWethLendingManager.Protocol.EULER,
+            supplyAmount: initialBalance / 2,
+            leverageUp: true,
+            wethAmount: tooLargeBorrowAmount
+        });
+
+        vm.expectRevert(
+            abi.encodeWithSelector(scUSDCv2.LtvAboveMaxAllowed.selector, UsdcWethLendingManager.Protocol.EULER)
+        );
+        vault.rebalance(params);
+    }
+
+    function test_rebalance_enforcesFloatAmountToRemainInVault() public {
+        uint256 initialBalance = 1_000_000e6;
+        deal(address(usdc), address(vault), initialBalance);
+        uint256 floatPercentage = 0.02e18; // 2%
+        vault.setFloatPercentage(floatPercentage);
+        assertEq(vault.floatPercentage(), floatPercentage, "floatPercentage");
+        uint256 expectedFloat = initialBalance.mulWadUp(floatPercentage);
+        uint256 actualFloat = 1_000e6;
+
+        scUSDCv2.RebalanceParams[] memory params = new scUSDCv2.RebalanceParams[](1);
+        params[0] = scUSDCv2.RebalanceParams({
+            protocolId: UsdcWethLendingManager.Protocol.AAVE_V3,
+            supplyAmount: initialBalance - actualFloat,
+            leverageUp: true,
+            wethAmount: 50 ether
+        });
+
+        vm.expectRevert(abi.encodeWithSelector(scUSDCv2.FloatBalanceTooSmall.selector, actualFloat, expectedFloat));
+        vault.rebalance(params);
+    }
+
+    /// #reallocateCapital ///
 
     function test_reallocateCapital_moveEverythingFromOneProtocolToAnother() public {
         uint256 initialBalance = 1_000_000e6;
@@ -210,14 +301,14 @@ contract scUSDCv2Test is Test {
 
         vault.rebalance(rebalanceParams);
 
-        assertApproxEqAbs(vault.totalCollateral(), initialBalance, 1);
-        assertApproxEqAbs(vault.totalDebt(), 100 ether, 1);
+        assertApproxEqAbs(vault.totalCollateral(), initialBalance, 1, "totalCollateral before");
+        assertApproxEqAbs(vault.totalDebt(), 100 ether, 1, "totalDebt before");
 
-        assertApproxEqAbs(vault.getCollateralOnAave(), initialBalance, 1);
-        assertApproxEqAbs(vault.getCollateralOnEuler(), 0, 1);
+        assertApproxEqAbs(vault.getCollateralOnAave(), initialBalance, 1, "collateralOnAave before");
+        assertApproxEqAbs(vault.getCollateralOnEuler(), 0, 1, "collateralOnEuler before");
 
-        assertApproxEqAbs(vault.getDebtOnAave(), 100 ether, 1);
-        assertApproxEqAbs(vault.getDebtOnEuler(), 0, 1);
+        assertApproxEqAbs(vault.getDebtOnAave(), 100 ether, 1, "debtOnAave before");
+        assertApproxEqAbs(vault.getDebtOnEuler(), 0, 1, "debtOnEuler before");
 
         scUSDCv2.ReallocationParams[] memory reallocateParams = new scUSDCv2.ReallocationParams[](2);
         reallocateParams[0] = scUSDCv2.ReallocationParams({
@@ -236,20 +327,21 @@ contract scUSDCv2Test is Test {
         uint256 flashLoanAmount = 100 ether;
         vault.reallocateCapital(reallocateParams, flashLoanAmount);
 
-        assertApproxEqAbs(vault.totalCollateral(), initialBalance, 1);
-        assertApproxEqAbs(vault.totalDebt(), 100 ether, 1);
+        assertApproxEqAbs(vault.totalCollateral(), initialBalance, 1, "totalCollateral after");
+        assertApproxEqAbs(vault.totalDebt(), 100 ether, 1, "totalDebt after");
 
-        assertApproxEqAbs(vault.getCollateralOnAave(), 0, 1);
-        assertApproxEqAbs(vault.getCollateralOnEuler(), initialBalance, 1);
+        assertApproxEqAbs(vault.getCollateralOnAave(), 0, 1, "collateralOnAave after");
+        assertApproxEqAbs(vault.getCollateralOnEuler(), initialBalance, 1, "collateralOnEuler after");
 
-        assertApproxEqAbs(vault.getDebtOnAave(), 0, 1);
-        assertApproxEqAbs(vault.getDebtOnEuler(), 100 ether, 1);
+        assertApproxEqAbs(vault.getDebtOnAave(), 0, 1, "debtOnAave after");
+        assertApproxEqAbs(vault.getDebtOnEuler(), 100 ether, 1, "debtOnEuler after");
     }
 
-    function test_withdraw_() public {
+    /// #withdraw ///
+
+    function test_withdraw_pullsFundsFromAllProtocols() public {
         uint256 initialBalance = 1_000_000e6;
         deal(address(usdc), alice, initialBalance);
-        vault.setFloatPercentage(0);
 
         vm.startPrank(alice);
         usdc.approve(address(vault), initialBalance);
