@@ -8,6 +8,7 @@ import {DeployLeveragedEth} from "./base/DeployLeveragedEth.sol";
 
 contract DeployScript is DeployLeveragedEth, Test {
     address constant alice = address(0x06);
+    address constant bob = address(0x07);
 
     function run() external {
         if (block.chainid != 31337) {
@@ -27,6 +28,7 @@ contract DeployScript is DeployLeveragedEth, Test {
         fund();
 
         deposit(alice, address(wethContract), 10e18);
+        deposit(bob, address(wethContract), 10e18);
 
         harvest();
     }
@@ -34,11 +36,15 @@ contract DeployScript is DeployLeveragedEth, Test {
     function fund() internal {
         console2.log("funding");
 
+        // Dole out ETH
         deal(alice, 10e18);
+        deal(bob, 10e18);
         deal(keeper, 10e18);
+
+        // Dole out WETH
         deal(address(weth), 100e18);
         deal(address(weth), alice, 100e18);
-        deal(address(weth), keeper, 100e18);
+        deal(address(weth), bob, 100e18);
     }
 
     function deposit(address from, address to, uint256 amount) internal {
@@ -51,7 +57,7 @@ contract DeployScript is DeployLeveragedEth, Test {
     }
 
     function harvest() internal {
-        console2.log("harvesting", keeper);
+        console2.log("harvesting");
 
         vm.prank(keeper);
         wethContract.harvest();
