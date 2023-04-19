@@ -50,12 +50,15 @@ abstract contract DeployLeveragedEth is CREATE3Script {
     MockChainlinkPriceFeed usdcToEthPriceFeed;
     MockBalancerVault balancerVault;
     MockSwapRouter uniswapRouter;
+    scWETH wethContract;
+    scUSDC usdcContract;
+
+    address keeper = vm.envAddress("KEEPER");
 
     constructor() CREATE3Script(vm.envString("VERSION")) {}
 
-    function deploy() internal returns (scWETH scWeth, scUSDC scUsdc) {
+    function deploy() internal {
         uint256 deployerPrivateKey = uint256(vm.envBytes32("PRIVATE_KEY"));
-        address keeper = vm.envAddress("KEEPER");
 
         vm.startBroadcast(deployerPrivateKey);
 
@@ -77,12 +80,12 @@ abstract contract DeployLeveragedEth is CREATE3Script {
             balancerVault: balancerVault
         });
 
-        scWeth = new scWETH(scWethParams);
+        wethContract = new scWETH(scWethParams);
 
         scUSDC.ConstructorParams memory scUsdcParams = scUSDC.ConstructorParams({
             admin: address(this),
             keeper: keeper,
-            scWETH: scWeth,
+            scWETH: wethContract,
             usdc: usdc,
             weth: WETH(payable(weth)),
             aavePool: aavePool,
@@ -94,7 +97,7 @@ abstract contract DeployLeveragedEth is CREATE3Script {
             balancerVault: balancerVault
         });
 
-        scUsdc = new scUSDC(scUsdcParams);
+        usdcContract = new scUSDC(scUsdcParams);
 
         vm.stopBroadcast();
     }
