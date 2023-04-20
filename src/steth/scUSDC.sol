@@ -310,14 +310,11 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
      * @return The current LTV (1e18 = 100%).
      */
     function getLtv() public view returns (uint256) {
-        uint256 debt = getDebt();
+        (uint256 totalCollateralBase, uint256 totalDebtBase,,,,) = aavePool.getUserAccountData(address(this));
 
-        if (debt == 0) return 0;
+        if (totalCollateralBase == 0) return 0;
 
-        uint256 debtPriceInUsdc = getUsdcFromWeth(debt);
-
-        // totalDebt / totalSupplied
-        return debtPriceInUsdc.divWadUp(getCollateral());
+        return totalDebtBase.divWadUp(totalCollateralBase);
     }
 
     /**

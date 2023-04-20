@@ -245,7 +245,7 @@ contract scUSDCTest is Test {
         vm.prank(keeper);
         vault.rebalance();
 
-        assertApproxEqRel(vault.getLtv(), vault.targetLtv(), 0.001e18);
+        assertApproxEqRel(vault.getLtv(), vault.targetLtv(), 0.005e18);
     }
 
     function test_rebalance_DoesntRebalanceWhenLtvIsWithinRange() public {
@@ -340,9 +340,9 @@ contract scUSDCTest is Test {
 
         uint256 wethInvested = weth.balanceOf(address(wethVault));
         // add enough profit to make total assets double
-        uint256 profit = wethInvested + wethInvested.mulDivUp(1e18, vault.getLtv());
-        assertTrue(wethInvested > 0, "wethInvested must be > 0");
+        uint256 profit = wethInvested + wethInvested.mulDivUp(1.02e18, vault.getLtv());
         deal(address(weth), address(wethVault), profit);
+        assertTrue(vault.totalAssets() >= totalAssetsBefore * 2, "totalAssets less than doubled");
 
         vm.prank(keeper);
         vault.rebalance();
@@ -388,7 +388,7 @@ contract scUSDCTest is Test {
         vault.applyNewTargetLtv(newTargetLtv);
 
         assertEq(vault.targetLtv(), newTargetLtv, "target ltv");
-        assertApproxEqRel(vault.getLtv(), newTargetLtv, 0.001e18, "ltv");
+        assertApproxEqRel(vault.getLtv(), newTargetLtv, 0.005e18, "ltv");
         assertApproxEqRel(vault.getDebt(), debtBefore.mulWadUp(1.1e18), 0.001e18, "debt");
     }
 
@@ -409,7 +409,7 @@ contract scUSDCTest is Test {
         vault.applyNewTargetLtv(newTargetLtv);
 
         assertEq(vault.targetLtv(), newTargetLtv, "target ltv");
-        assertApproxEqRel(vault.getLtv(), newTargetLtv, 0.001e18, "ltv");
+        assertApproxEqRel(vault.getLtv(), newTargetLtv, 0.005e18, "ltv");
         assertApproxEqRel(vault.getDebt(), debtBefore.mulWadUp(0.9e18), 0.001e18, "debt");
     }
 

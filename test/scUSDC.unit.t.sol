@@ -164,4 +164,21 @@ contract scUSDCUnitTest is Test {
 
         assertEq(vault.getDebt(), debtBefore.mulWadDown(1e18 + interest), "debt with interest");
     }
+
+    function test_getLtv() public {
+        uint256 amount = 10000e6;
+        deal(address(usdc), address(alice), amount);
+
+        vm.startPrank(alice);
+        usdc.approve(address(vault), type(uint256).max);
+        vault.deposit(amount, alice);
+        vm.stopPrank();
+
+        vm.prank(keeper);
+        vault.rebalance();
+
+        aavePool.setUsdcWethPriceFeed(usdcToEthPriceFeed, usdc, weth);
+
+        assertEq(vault.getLtv(), vault.targetLtv(), "ltv");
+    }
 }
