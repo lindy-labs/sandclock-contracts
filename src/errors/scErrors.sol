@@ -12,3 +12,4 @@ error TreasuryCannotBeZero();
 error VaultNotUnderwater();
 error CallerNotAdmin();
 error CallerNotKeeper();
+error NoProfitsToSell();
