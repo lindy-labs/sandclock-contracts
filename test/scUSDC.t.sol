@@ -982,6 +982,18 @@ contract scUSDCTest is Test {
         vault.receiveFlashLoan(tokens, amounts, feeAmounts, bytes("0"));
     }
 
+    function test_receiveFlashLoan_FailsIfInitiatorIsNotVault() public {
+        IVault balancer = IVault(C.BALANCER_VAULT);
+        address[] memory tokens = new address[](1);
+        uint256[] memory amounts = new uint256[](1);
+
+        tokens[0] = address(weth);
+        amounts[0] = 100e18;
+
+        vm.expectRevert(InvalidFlashLoanCaller.selector);
+        balancer.flashLoan(address(vault), tokens, amounts, abi.encode(0, 0));
+    }
+
     /// internal helper functions ///
 
     function _createDefaultUsdcVaultConstructorParams(scWETH scWeth)
