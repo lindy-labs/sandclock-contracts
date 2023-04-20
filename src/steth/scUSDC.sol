@@ -5,7 +5,8 @@ import {
     InvalidTargetLtv,
     InvalidSlippageTolerance,
     InvalidFlashLoanCaller,
-    VaultNotUnderwater
+    VaultNotUnderwater,
+    EndUsdcBalanceTooLow
 } from "../errors/scErrors.sol";
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
@@ -198,8 +199,9 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
 
     /**
      * @notice Emergency exit to release collateral if the vault is underwater.
+     * @param _endUsdcBalanceMin The minimum USDC balance to end with after all positions are closed.
      */
-    function exitAllPositions() external onlyAdmin {
+    function exitAllPositions(uint256 _endUsdcBalanceMin) external onlyAdmin {
         uint256 debt = getDebt();
 
         if (getInvested() >= debt) {
@@ -216,6 +218,8 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
         amounts[0] = debt - wethBalance;
 
         balancerVault.flashLoan(address(this), tokens, amounts, abi.encode(collateral, debt));
+
+        if (getUsdcBalance() < _endUsdcBalanceMin) revert EndUsdcBalanceTooLow();
 
         emit EmergencyExitExecuted(msg.sender, wethBalance, debt, collateral);
     }

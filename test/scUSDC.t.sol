@@ -901,7 +901,7 @@ contract scUSDCTest is Test {
     function test_exitAllPositions_FailsIfCallerIsNotAdmin() public {
         vm.startPrank(alice);
         vm.expectRevert(CallerNotAdmin.selector);
-        vault.exitAllPositions();
+        vault.exitAllPositions(0);
     }
 
     function test_exitAllPositions_FailsIfVaultIsNotUnderawater() public {
@@ -917,7 +917,7 @@ contract scUSDCTest is Test {
         vault.rebalance();
 
         vm.expectRevert(VaultNotUnderwater.selector);
-        vault.exitAllPositions();
+        vault.exitAllPositions(0);
     }
 
     function test_exitAllPositions_RepaysDebtAndReleasesCollateral() public {
@@ -938,7 +938,7 @@ contract scUSDCTest is Test {
 
         uint256 totalBefore = vault.totalAssets();
 
-        vault.exitAllPositions();
+        vault.exitAllPositions(0);
 
         assertApproxEqRel(vault.getUsdcBalance(), totalBefore, 0.01e18, "vault usdc balance");
         assertEq(vault.getCollateral(), 0, "vault collateral");
@@ -967,7 +967,29 @@ contract scUSDCTest is Test {
 
         vm.expectEmit(true, true, true, true);
         emit EmergencyExitExecuted(address(this), invested, debt, collateral);
-        vault.exitAllPositions();
+        vault.exitAllPositions(0);
+    }
+
+    function test_exitAllPositions_FailsIfEndBalanceIsLowerThanMin() public {
+        uint256 deposit = 1_000_000e6;
+        deal(address(usdc), alice, deposit);
+
+        vm.startPrank(alice);
+        usdc.approve(address(vault), type(uint256).max);
+        vault.deposit(deposit, alice);
+        vm.stopPrank();
+
+        vm.prank(keeper);
+        vault.rebalance();
+
+        // simulate 50% loss
+        uint256 wethInvested = weth.balanceOf(address(wethVault));
+        deal(address(weth), address(wethVault), wethInvested / 2);
+
+        uint256 invalidEndUsdcBalanceMin = vault.totalAssets().mulWadDown(1.05e18);
+
+        vm.expectRevert(EndUsdcBalanceTooLow.selector);
+        vault.exitAllPositions(invalidEndUsdcBalanceMin);
     }
 
     /// #receiveFlashLoan ///
