@@ -140,7 +140,7 @@ contract scWETH is sc4626, IFlashLoanRecipient {
 
         // store the old total
         uint256 oldTotalInvested = totalInvested;
-        uint256 assets = totalAssets();
+        uint256 assets = getCollateral() - getDebt();
 
         if (assets > oldTotalInvested) {
             totalInvested = assets;
