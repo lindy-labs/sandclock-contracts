@@ -264,7 +264,7 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
     function getUsdcFromWeth(uint256 _wethAmount) public view returns (uint256) {
         (, int256 usdcPriceInWeth,,,) = usdcToEthPriceFeed.latestRoundData();
 
-        return (_wethAmount).divWadDown(uint256(usdcPriceInWeth)) / C.WETH_USDC_DECIMALS_DIFF;
+        return (_wethAmount).divWadDown(uint256(usdcPriceInWeth) * C.WETH_USDC_DECIMALS_DIFF);
     }
 
     function getWethFromUsdc(uint256 _usdcAmount) public view returns (uint256) {
