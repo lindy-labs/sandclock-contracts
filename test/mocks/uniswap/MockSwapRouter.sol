@@ -1,21 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.13;
 
-import "forge-std/Test.sol";
-
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
-import {ISwapRouter} from "../../src/interfaces/uniswap/ISwapRouter.sol";
-import {AggregatorV3Interface} from "../../src/interfaces/chainlink/AggregatorV3Interface.sol";
+import {ISwapRouter} from "../../../src/interfaces/uniswap/ISwapRouter.sol";
 
 contract MockSwapRouter is ISwapRouter {
     using FixedPointMathLib for uint256;
-
-    // Chainlink pricefeed (USDC -> WETH)
-    AggregatorV3Interface public constant usdcToEthPriceFeed =
-        AggregatorV3Interface(0x986b5E1e1755e3C2440e960477f25201B0a8bbD4);
-
-    uint256 public slippage = 0.05e8;
 
     function exactInputSingle(ExactInputSingleParams calldata params)
         external

@@ -21,7 +21,7 @@ import {IVault} from "../src/interfaces/balancer/IVault.sol";
 import {ICurvePool} from "../src/interfaces/curve/ICurvePool.sol";
 import {ILido} from "../src/interfaces/lido/ILido.sol";
 import {IwstETH} from "../src/interfaces/lido/IwstETH.sol";
-import {MockSwapRouter} from "./mock/MockSwapRouter.sol";
+import {MockSwapRouter} from "./mocks/uniswap/MockSwapRouter.sol";
 import "../src/errors/scErrors.sol";
 
 contract scUSDCTest is Test {
@@ -152,18 +152,27 @@ contract scUSDCTest is Test {
 
     function test_rebalance_EmitsEventOnSuccess() public {
         uint256 initialBalance = 10000e6;
-        uint256 finalBalance = initialBalance.mulWadUp(vault.floatPercentage());
-        uint256 currentDebt = 0;
-        uint256 finalDebt = 3_758780025000000000;
-        uint256 currentCollateral = 0;
-        uint256 finalCollateral = 9_900e6;
-        uint256 targetLtv = vault.targetLtv();
-
         deal(address(usdc), address(vault), initialBalance);
+        vm.prank(keeper);
+        vault.rebalance();
+        uint256 currentFloat = usdc.balanceOf(address(vault));
+
+        // double the initial balance
+        deal(address(usdc), address(vault), initialBalance);
+
+        uint256 finalFloat = 199000000;
+        assertApproxEqRel(currentFloat * 2, finalFloat, 0.01e18, "float");
+        uint256 currentDebt = vault.getDebt();
+        uint256 finalDebt = 7479972249750000000;
+        assertApproxEqRel(currentDebt * 2, finalDebt, 0.01e18, "debt");
+        uint256 currentCollateral = vault.getCollateral();
+        uint256 finalCollateral = 19701000000;
+        assertApproxEqRel(currentCollateral * 2, finalCollateral, 0.01e18, "collateral");
+        uint256 targetLtv = vault.targetLtv();
 
         vm.expectEmit(true, true, true, true);
         emit Rebalanced(
-            targetLtv, currentDebt, finalDebt, currentCollateral, finalCollateral, initialBalance, finalBalance
+            targetLtv, currentDebt, finalDebt, currentCollateral, finalCollateral, initialBalance, finalFloat
         );
         vm.prank(keeper);
         vault.rebalance();
@@ -386,8 +395,10 @@ contract scUSDCTest is Test {
     function test_applyNewTargetLtv_ChangesLtvDownAndRebalances() public {
         deal(address(usdc), address(vault), 10000e6);
 
-        vm.prank(keeper);
+        vm.startPrank(keeper);
         vault.rebalance();
+        wethVault.harvest();
+        vm.stopPrank();
 
         uint256 oldTargetLtv = vault.targetLtv();
         uint256 debtBefore = vault.getDebt();
@@ -969,6 +980,18 @@ contract scUSDCTest is Test {
         uint256[] memory feeAmounts = new uint256[](1);
 
         vault.receiveFlashLoan(tokens, amounts, feeAmounts, bytes("0"));
+    }
+
+    function test_receiveFlashLoan_FailsIfInitiatorIsNotVault() public {
+        IVault balancer = IVault(C.BALANCER_VAULT);
+        address[] memory tokens = new address[](1);
+        uint256[] memory amounts = new uint256[](1);
+
+        tokens[0] = address(weth);
+        amounts[0] = 100e18;
+
+        vm.expectRevert(InvalidFlashLoanCaller.selector);
+        balancer.flashLoan(address(vault), tokens, amounts, abi.encode(0, 0));
     }
 
     /// internal helper functions ///

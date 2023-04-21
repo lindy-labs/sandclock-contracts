@@ -156,8 +156,8 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
         uint256 currentBalance = initialBalance;
         uint256 collateral = getCollateral();
         uint256 invested = getInvested();
-        uint256 debt = getDebt();
-        uint256 profit = _calculateWethProfit(invested, debt);
+        uint256 initialDebt = getDebt();
+        uint256 profit = _calculateWethProfit(invested, initialDebt);
 
         // 1. sell profits
         if (profit > invested.mulWadDown(DEBT_DELTA_THRESHOLD)) {
@@ -167,7 +167,7 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
         }
 
         uint256 floatRequired =
-            _calculateTotalAssets(currentBalance, collateral, invested, debt).mulWadDown(floatPercentage);
+            _calculateTotalAssets(currentBalance, collateral, invested, initialDebt).mulWadDown(floatPercentage);
         uint256 excessUsdc = currentBalance > floatRequired ? currentBalance - floatRequired : 0;
 
         // 2. deposit excess usdc as collateral
@@ -179,20 +179,20 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
 
         // 3. rebalance to target ltv
         uint256 targetDebt = getWethFromUsdc(collateral.mulWadDown(targetLtv));
-        uint256 delta = debt > targetDebt ? debt - targetDebt : targetDebt - debt;
+        uint256 delta = initialDebt > targetDebt ? initialDebt - targetDebt : targetDebt - initialDebt;
 
         if (delta <= targetDebt.mulWadDown(DEBT_DELTA_THRESHOLD)) return;
 
-        if (debt > targetDebt) {
-            _disinvest(delta);
-            aavePool.repay(address(weth), delta, C.AAVE_VAR_INTEREST_RATE_MODE, address(this));
+        if (initialDebt > targetDebt) {
+            uint256 withdrawn = _disinvest(delta);
+            aavePool.repay(address(weth), withdrawn, C.AAVE_VAR_INTEREST_RATE_MODE, address(this));
         } else {
             aavePool.borrow(address(weth), delta, C.AAVE_VAR_INTEREST_RATE_MODE, 0, address(this));
             scWETH.deposit(delta, address(this));
         }
 
         emit Rebalanced(
-            targetLtv, debt, targetDebt, collateral - excessUsdc, collateral, initialBalance, currentBalance
+            targetLtv, initialDebt, getDebt(), collateral - excessUsdc, collateral, initialBalance, currentBalance
         );
     }
 
@@ -215,7 +215,9 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
         uint256[] memory amounts = new uint256[](1);
         amounts[0] = debt - wethBalance;
 
+        _initiateFlashLoan();
         balancerVault.flashLoan(address(this), tokens, amounts, abi.encode(collateral, debt));
+        _finalizeFlashLoan();
 
         emit EmergencyExitExecuted(msg.sender, wethBalance, debt, collateral);
     }
@@ -230,6 +232,7 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
         if (msg.sender != address(balancerVault)) {
             revert InvalidFlashLoanCaller();
         }
+        _isFlashLoanInitiated();
 
         uint256 flashLoanAmount = amounts[0];
         (uint256 collateral, uint256 debt) = abi.decode(userData, (uint256, uint256));
@@ -264,7 +267,7 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
     function getUsdcFromWeth(uint256 _wethAmount) public view returns (uint256) {
         (, int256 usdcPriceInWeth,,,) = usdcToEthPriceFeed.latestRoundData();
 
-        return (_wethAmount / C.WETH_USDC_DECIMALS_DIFF).divWadDown(uint256(usdcPriceInWeth));
+        return (_wethAmount).divWadDown(uint256(usdcPriceInWeth) * C.WETH_USDC_DECIMALS_DIFF);
     }
 
     function getWethFromUsdc(uint256 _usdcAmount) public view returns (uint256) {
