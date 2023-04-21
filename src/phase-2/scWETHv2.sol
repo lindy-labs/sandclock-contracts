@@ -174,12 +174,9 @@ contract scWETHv2 is sc4626, LendingMarketManager, IFlashLoanRecipient {
         balancerVault.flashLoan(address(this), tokens, amounts, abi.encode(params));
     }
 
-    function disinvest() external onlyKeeper {}
-
-    function reallocate(
-        RepayWithdrawParam[] calldata repayWithdrawParams,
-        SupplyBorrowParam[] calldata supplyBorrowParams
-    ) external onlyKeeper {
+    /// @notice disinvest from lending markets in case of a loss
+    /// @param repayWithdrawParams : protocols to disinvest from and their respective amounts
+    function disinvest(RepayWithdrawParam[] calldata repayWithdrawParams) external onlyKeeper {
         uint256 totalFlashLoanAmount;
         for (uint256 i; i < repayWithdrawParams.length; i++) {
             totalFlashLoanAmount += repayWithdrawParams[i].repayAmount;
@@ -187,7 +184,31 @@ contract scWETHv2 is sc4626, LendingMarketManager, IFlashLoanRecipient {
 
         RebalanceParams memory params = RebalanceParams({
             repayWithdrawParams: repayWithdrawParams,
-            supplyBorrowParams: supplyBorrowParams,
+            supplyBorrowParams: new SupplyBorrowParam[](0),
+            doWstEthToWethSwap: true,
+            doWethToWstEthSwap: false,
+            wethSwapAmount: 0
+        });
+
+        address[] memory tokens = new address[](1);
+        tokens[0] = address(weth);
+
+        uint256[] memory amounts = new uint256[](1);
+        amounts[0] = totalFlashLoanAmount;
+
+        // take flashloan
+        balancerVault.flashLoan(address(this), tokens, amounts, abi.encode(params));
+    }
+
+    function reallocate(RepayWithdrawParam[] calldata from, SupplyBorrowParam[] calldata to) external onlyKeeper {
+        uint256 totalFlashLoanAmount;
+        for (uint256 i; i < from.length; i++) {
+            totalFlashLoanAmount += from[i].repayAmount;
+        }
+
+        RebalanceParams memory params = RebalanceParams({
+            repayWithdrawParams: from,
+            supplyBorrowParams: to,
             doWstEthToWethSwap: false,
             doWethToWstEthSwap: false,
             wethSwapAmount: 0
