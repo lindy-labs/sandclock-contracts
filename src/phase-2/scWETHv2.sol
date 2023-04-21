@@ -113,9 +113,10 @@ contract scWETHv2 is sc4626, LendingMarketManager, IFlashLoanRecipient {
     /// @dev for the first deposit, deposits everything into the strategy.
     /// @dev reduces the getLtv() back to the target ltv
     /// @dev also mints performance fee tokens to the treasury
-    function harvest(uint256 totalFlashLoanAmount, RebalanceParams memory params) external {
+    function harvest(SupplyBorrowParam[] calldata supplyBorrowParams) external {
         // reinvest
-        rebalance(totalFlashLoanAmount, params);
+        // todo: use float here instead of full asset balance
+        invest(asset.balanceOf(address(this)), supplyBorrowParams);
 
         // store the old total
         uint256 oldTotalInvested = totalInvested;
@@ -146,7 +147,7 @@ contract scWETHv2 is sc4626, LendingMarketManager, IFlashLoanRecipient {
     /// @notice invest funds into the strategy (or reinvesting profits)
     /// @param totalInvestAmount : amount of weth to invest into the strategy
     /// @param supplyBorrowParams : protocols to invest into and their respective amounts
-    function invest(uint256 totalInvestAmount, SupplyBorrowParam[] calldata supplyBorrowParams) external onlyKeeper {
+    function invest(uint256 totalInvestAmount, SupplyBorrowParam[] calldata supplyBorrowParams) public onlyKeeper {
         if (totalInvestAmount > asset.balanceOf(address(this))) revert InsufficientDepositBalance();
 
         uint256 totalFlashLoanAmount;
@@ -226,7 +227,7 @@ contract scWETHv2 is sc4626, LendingMarketManager, IFlashLoanRecipient {
 
     /// @dev the backend will calculate the supposed amounts and flashloan amounts for each protocol
     /// @dev this same method is to be used to reallocate positions
-    function rebalance(uint256 totalFlashLoanAmount, RebalanceParams memory params) public onlyKeeper {
+    function rebalance(uint256 totalFlashLoanAmount, RebalanceParams memory params) external onlyKeeper {
         // if (params.amount > asset.balanceOf(address(this))) revert InsufficientDepositBalance();
 
         address[] memory tokens = new address[](1);
