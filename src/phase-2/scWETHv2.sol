@@ -45,8 +45,8 @@ contract scWETHv2 is sc4626, LendingMarketManager, IFlashLoanRecipient {
 
     struct RepayWithdrawParam {
         LendingMarketType market;
-        uint256 repayAmount;
-        uint256 withdrawAmount;
+        uint256 repayAmount; // flashLoanAmount (in WETH)
+        uint256 withdrawAmount; // amount + flashLoanAmount (in WETH)
     }
 
     struct SupplyBorrowParam {
@@ -145,14 +145,14 @@ contract scWETHv2 is sc4626, LendingMarketManager, IFlashLoanRecipient {
 
     /// @notice invest funds into the strategy (or reinvesting profits)
     /// @param totalInvestAmount : amount of weth to invest into the strategy
-    /// @param totalFlashLoanAmount : total weth amount to flashloan
     /// @param supplyBorrowParams : protocols to invest into and their respective amounts
-    function invest(
-        uint256 totalInvestAmount,
-        uint256 totalFlashLoanAmount,
-        SupplyBorrowParam[] calldata supplyBorrowParams
-    ) external onlyKeeper {
+    function invest(uint256 totalInvestAmount, SupplyBorrowParam[] calldata supplyBorrowParams) external onlyKeeper {
         if (totalInvestAmount > asset.balanceOf(address(this))) revert InsufficientDepositBalance();
+
+        uint256 totalFlashLoanAmount;
+        for (uint256 i; i < supplyBorrowParams.length; i++) {
+            totalFlashLoanAmount += supplyBorrowParams[i].borrowAmount;
+        }
 
         RebalanceParams memory params = RebalanceParams({
             repayWithdrawParams: new RepayWithdrawParam[](0),
@@ -168,6 +168,38 @@ contract scWETHv2 is sc4626, LendingMarketManager, IFlashLoanRecipient {
         uint256[] memory amounts = new uint256[](1);
         amounts[0] = totalFlashLoanAmount;
 
+        // needed otherwise counted as profit during harvest
+        totalInvested += totalInvestAmount;
+
+        balancerVault.flashLoan(address(this), tokens, amounts, abi.encode(params));
+    }
+
+    function disinvest() external onlyKeeper {}
+
+    function reallocate(
+        RepayWithdrawParam[] calldata repayWithdrawParams,
+        SupplyBorrowParam[] calldata supplyBorrowParams
+    ) external onlyKeeper {
+        uint256 totalFlashLoanAmount;
+        for (uint256 i; i < repayWithdrawParams.length; i++) {
+            totalFlashLoanAmount += repayWithdrawParams[i].repayAmount;
+        }
+
+        RebalanceParams memory params = RebalanceParams({
+            repayWithdrawParams: repayWithdrawParams,
+            supplyBorrowParams: supplyBorrowParams,
+            doWstEthToWethSwap: false,
+            doWethToWstEthSwap: false,
+            wethSwapAmount: 0
+        });
+
+        address[] memory tokens = new address[](1);
+        tokens[0] = address(weth);
+
+        uint256[] memory amounts = new uint256[](1);
+        amounts[0] = totalFlashLoanAmount;
+
+        // take flashloan
         balancerVault.flashLoan(address(this), tokens, amounts, abi.encode(params));
     }
 
