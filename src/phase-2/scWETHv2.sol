@@ -143,6 +143,34 @@ contract scWETHv2 is sc4626, LendingMarketManager, IFlashLoanRecipient {
         _withdrawToVault(amount);
     }
 
+    /// @notice invest funds into the strategy (or reinvesting profits)
+    /// @param totalInvestAmount : amount of weth to invest into the strategy
+    /// @param totalFlashLoanAmount : total weth amount to flashloan
+    /// @param supplyBorrowParams : protocols to invest into and their respective amounts
+    function invest(
+        uint256 totalInvestAmount,
+        uint256 totalFlashLoanAmount,
+        SupplyBorrowParam[] calldata supplyBorrowParams
+    ) external onlyKeeper {
+        if (totalInvestAmount > asset.balanceOf(address(this))) revert InsufficientDepositBalance();
+
+        RebalanceParams memory params = RebalanceParams({
+            repayWithdrawParams: new RepayWithdrawParam[](0),
+            supplyBorrowParams: supplyBorrowParams,
+            doWstEthToWethSwap: false,
+            doWethToWstEthSwap: true,
+            wethSwapAmount: totalInvestAmount + totalFlashLoanAmount
+        });
+
+        address[] memory tokens = new address[](1);
+        tokens[0] = address(weth);
+
+        uint256[] memory amounts = new uint256[](1);
+        amounts[0] = totalFlashLoanAmount;
+
+        balancerVault.flashLoan(address(this), tokens, amounts, abi.encode(params));
+    }
+
     /// @dev the backend will calculate the supposed amounts and flashloan amounts for each protocol
     /// @dev this same method is to be used to reallocate positions
     function rebalance(uint256 totalFlashLoanAmount, RebalanceParams memory params) public onlyKeeper {

@@ -101,7 +101,6 @@ contract scWETHv2Test is Test {
 
         _depositChecks(amount, amount);
 
-        scWETHv2.RepayWithdrawParam[] memory repayWithdrawParams;
         scWETHv2.SupplyBorrowParam[] memory supplyBorrowParams = new scWETHv2.SupplyBorrowParam[](2);
 
         // supply 70% to aaveV3 and 30% to Euler
@@ -127,17 +126,9 @@ contract scWETHv2Test is Test {
 
         uint256 totalFlashLoanAmount = aaveV3FlashLoanAmount + eulerFlashLoanAmount;
 
-        scWETHv2.RebalanceParams memory rebalanceParams = scWETHv2.RebalanceParams({
-            repayWithdrawParams: repayWithdrawParams,
-            supplyBorrowParams: supplyBorrowParams,
-            doWstEthToWethSwap: false,
-            doWethToWstEthSwap: true,
-            wethSwapAmount: totalFlashLoanAmount + amount
-        });
-
         // deposit into strategy
         hoax(keeper);
-        vault.rebalance(totalFlashLoanAmount, rebalanceParams);
+        vault.invest(amount, totalFlashLoanAmount, supplyBorrowParams);
     }
 
     function test_rebalance_reinvestingProfits() public {}
