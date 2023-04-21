@@ -104,10 +104,18 @@ abstract contract LendingMarketManager {
     }
 
     /// @notice returns the total wstETH supplied as collateral (in ETH)
-    function totalCollateral() public view virtual returns (uint256);
+    function totalCollateral() public view returns (uint256 collateral) {
+        for (uint256 i = 0; i < totalMarkets(); i++) {
+            collateral += lendingMarkets[LendingMarketType(i)].getCollateral();
+        }
+    }
 
     /// @notice returns the total ETH borrowed
-    function totalDebt() public view virtual returns (uint256);
+    function totalDebt() public view returns (uint256 debt) {
+        for (uint256 i = 0; i < totalMarkets(); i++) {
+            debt += lendingMarkets[LendingMarketType(i)].getDebt();
+        }
+    }
 
     //////////////////////////     AAVE V3 ///////////////////////////////
     function supplyWstEthAAVEV3(uint256 amount) internal {
