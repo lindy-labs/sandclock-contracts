@@ -24,7 +24,7 @@ import {AggregatorV3Interface} from "../../src/interfaces/chainlink/AggregatorV3
 import {sc4626} from "../../src/sc4626.sol";
 import "../../src/errors/scErrors.sol";
 
-contract scWETHv2Test is Test, MockLendingMarketManager {
+contract scWETHv2Test is Test {
     using FixedPointMathLib for uint256;
 
     uint256 mainnetFork;
@@ -40,6 +40,9 @@ contract scWETHv2Test is Test, MockLendingMarketManager {
 
     uint256 slippageTolerance = 0.99e18;
     uint256 maxLtv;
+    WETH weth;
+    ILido stEth;
+    IwstETH wstEth;
 
     mapping(LendingMarketManager.LendingMarketType => uint256) targetLtv;
 
@@ -51,6 +54,10 @@ contract scWETHv2Test is Test, MockLendingMarketManager {
         scWETHv2.ConstructorParams memory params = _createDefaultWethv2VaultConstructorParams();
 
         vault = new scWETHv2(params);
+
+        weth = vault.weth();
+        stEth = vault.stEth();
+        wstEth = vault.wstETH();
 
         // set vault eth balance to zero
         vm.deal(address(vault), 0);
@@ -92,6 +99,8 @@ contract scWETHv2Test is Test, MockLendingMarketManager {
         uint256 amount = 10 ether;
         _depositToVault(address(this), amount);
 
+        _depositChecks(amount, amount);
+
         scWETHv2.RepayWithdrawParam[] memory repayWithdrawParams;
         scWETHv2.SupplyBorrowParam[] memory supplyBorrowParams = new scWETHv2.SupplyBorrowParam[](2);
 
@@ -123,10 +132,11 @@ contract scWETHv2Test is Test, MockLendingMarketManager {
             supplyBorrowParams: supplyBorrowParams,
             doWstEthToWethSwap: false,
             doWethToWstEthSwap: true,
-            wethSwapAmount: 0
+            wethSwapAmount: totalFlashLoanAmount + amount
         });
 
         // deposit into strategy
+        hoax(keeper);
         vault.rebalance(totalFlashLoanAmount, rebalanceParams);
     }
 
@@ -143,9 +153,8 @@ contract scWETHv2Test is Test, MockLendingMarketManager {
         internal
         returns (uint256 flashLoanAmount)
     {
-        scWETHv2.LendingMarket memory lendingMarket = lendingMarkets[market];
-        uint256 debt = lendingMarket.getDebt();
-        uint256 collateral = lendingMarket.getCollateral();
+        uint256 debt = vault.getDebt(market);
+        uint256 collateral = vault.getCollateral(market);
 
         uint256 target = targetLtv[market].mulWadDown(amount + collateral);
 
@@ -159,9 +168,8 @@ contract scWETHv2Test is Test, MockLendingMarketManager {
         internal
         returns (uint256 flashLoanAmount)
     {
-        scWETHv2.LendingMarket memory lendingMarket = lendingMarkets[market];
-        uint256 debt = lendingMarket.getDebt();
-        uint256 collateral = lendingMarket.getCollateral();
+        uint256 debt = vault.getDebt(market);
+        uint256 collateral = vault.getCollateral(market);
 
         uint256 target = targetLtv[market].mulWadDown(amount + collateral);
 
@@ -172,11 +180,11 @@ contract scWETHv2Test is Test, MockLendingMarketManager {
     }
 
     function _depositChecks(uint256 amount, uint256 preDepositBal) internal {
-        assertEq(vault.convertToAssets(10 ** vault.decimals()), 1e18);
-        assertEq(vault.totalAssets(), amount);
-        assertEq(vault.balanceOf(address(this)), amount);
-        assertEq(vault.convertToAssets(vault.balanceOf(address(this))), amount);
-        assertEq(weth.balanceOf(address(this)), preDepositBal - amount);
+        assertEq(vault.convertToAssets(10 ** vault.decimals()), 1e18, "convertToAssets decimal assertion failed");
+        assertEq(vault.totalAssets(), amount, "totalAssets assertion failed");
+        assertEq(vault.balanceOf(address(this)), amount, "balanceOf assertion failed");
+        assertEq(vault.convertToAssets(vault.balanceOf(address(this))), amount, "convertToAssets assertion failed");
+        assertEq(weth.balanceOf(address(this)), preDepositBal - amount, "weth balance assertion failed");
     }
 
     function _redeemChecks(uint256 preDepositBal) internal {

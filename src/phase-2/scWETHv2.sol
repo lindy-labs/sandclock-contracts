@@ -51,8 +51,8 @@ contract scWETHv2 is sc4626, LendingMarketManager, IFlashLoanRecipient {
 
     struct SupplyBorrowParam {
         LendingMarketType market;
-        uint256 supplyAmount; // amount + flashLoanAmount
-        uint256 borrowAmount; // flashLoanAmount
+        uint256 supplyAmount; // amount + flashLoanAmount (in WETH)
+        uint256 borrowAmount; // flashLoanAmount (in WETH)
     }
 
     struct ConstructorParams {
@@ -363,7 +363,9 @@ contract scWETHv2 is sc4626, LendingMarketManager, IFlashLoanRecipient {
         uint256 n = supplyBorrowParams.length;
         for (uint256 i; i < n; i++) {
             lendingMarket = lendingMarkets[supplyBorrowParams[i].market];
-            if (supplyBorrowParams[i].supplyAmount != 0) lendingMarket.supply(supplyBorrowParams[i].supplyAmount);
+            if (supplyBorrowParams[i].supplyAmount != 0) {
+                lendingMarket.supply(_ethToWstEth(supplyBorrowParams[i].supplyAmount));
+            }
             if (supplyBorrowParams[i].borrowAmount != 0) lendingMarket.borrow(supplyBorrowParams[i].borrowAmount);
         }
     }
@@ -376,7 +378,7 @@ contract scWETHv2 is sc4626, LendingMarketManager, IFlashLoanRecipient {
             lendingMarket = lendingMarkets[repayWithdrawParams[i].market];
             if (repayWithdrawParams[i].repayAmount != 0) lendingMarket.repay(repayWithdrawParams[i].repayAmount);
             if (repayWithdrawParams[i].withdrawAmount != 0) {
-                lendingMarket.withdraw(repayWithdrawParams[i].withdrawAmount);
+                lendingMarket.withdraw(_ethToWstEth(repayWithdrawParams[i].withdrawAmount));
             }
         }
     }
