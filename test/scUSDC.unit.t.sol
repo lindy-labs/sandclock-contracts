@@ -167,7 +167,7 @@ contract scUSDCUnitTest is Test {
 
     function test_getLtv() public {
         uint256 amount = 10000e6;
-        deal(address(usdc), address(alice), amount);
+        deal(address(usdc), alice, amount);
 
         vm.startPrank(alice);
         usdc.approve(address(vault), type(uint256).max);

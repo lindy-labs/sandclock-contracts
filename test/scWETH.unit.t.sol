@@ -135,4 +135,21 @@ contract scWETHUnitTest is Test {
         uint256 expectedPctDiff = uint256(1e18 - stEthToEthSlippage).mulWadDown(leverage);
         assertApproxEqAbs(weth.balanceOf(alice), withdrawAmount.mulWadDown(1e18 - expectedPctDiff), 1, "alice's weth");
     }
+
+    function test_getLtv() public {
+        uint256 amount = 10e18;
+        deal(address(weth), alice, amount);
+
+        vm.startPrank(alice);
+        weth.approve(address(vault), type(uint256).max);
+        vault.deposit(amount, alice);
+        vm.stopPrank();
+
+        vm.prank(keeper);
+        vault.harvest();
+
+        aavePool.setStEthToEthPriceFeed(stEthToEthPriceFeed, wstEth, weth);
+
+        assertEq(vault.getLtv(), vault.targetLtv(), "ltv");
+    }
 }

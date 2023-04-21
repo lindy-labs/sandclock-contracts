@@ -23,6 +23,9 @@ contract MockAavePool is IPool {
     MockWETH weth;
     MockChainlinkPriceFeed usdcToEthPriceFeed;
 
+    ERC20 wstEth;
+    MockChainlinkPriceFeed stEthToEthPriceFeed;
+
     mapping(address => mapping(address => AssetData)) public book;
 
     function supply(address asset, uint256 amount, address, uint16) external override {
@@ -82,6 +85,14 @@ contract MockAavePool is IPool {
         weth = _weth;
     }
 
+    function setStEthToEthPriceFeed(MockChainlinkPriceFeed _stEthToEthPriceFeed, ERC20 _wstEth, MockWETH _weth)
+        external
+    {
+        stEthToEthPriceFeed = _stEthToEthPriceFeed;
+        wstEth = _wstEth;
+        weth = _weth;
+    }
+
     function getUserAccountData(address user)
         external
         view
@@ -107,6 +118,12 @@ contract MockAavePool is IPool {
             uint256 borrowedWeth = book[user][address(weth)].borrowAmount;
             (, int256 usdcPriceInWeth,,,) = usdcToEthPriceFeed.latestRoundData();
             totalDebtBase = (borrowedWeth / C.WETH_USDC_DECIMALS_DIFF).divWadDown(uint256(usdcPriceInWeth));
+        } else {
+            totalCollateralBase = book[user][address(wstEth)].supplyAmount;
+
+            uint256 borrowedWeth = book[user][address(weth)].borrowAmount;
+            (, int256 wstEthPriceInWeth,,,) = stEthToEthPriceFeed.latestRoundData();
+            totalDebtBase = borrowedWeth.divWadDown(uint256(wstEthPriceInWeth));
         }
     }
 
