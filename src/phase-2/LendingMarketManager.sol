@@ -117,6 +117,14 @@ abstract contract LendingMarketManager {
         }
     }
 
+    function getDebt(LendingMarketType market) public view returns (uint256) {
+        return lendingMarkets[market].getDebt();
+    }
+
+    function getCollateral(LendingMarketType market) public view returns (uint256) {
+        return lendingMarkets[market].getCollateral();
+    }
+
     //////////////////////////     AAVE V3 ///////////////////////////////
     function supplyWstEthAAVEV3(uint256 amount) internal {
         IPool(C.AAVE_POOL).supply(address(wstETH), _ethToWstEth(amount), address(this), 0);
