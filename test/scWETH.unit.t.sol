@@ -50,15 +50,15 @@ contract scWETHUnitTest is Test {
 
     function setUp() public {
         weth = new MockWETH();
-
-        aavePool = new MockAavePool();
-        aaveVarDWeth = new MockVarDebtWETH(aavePool, weth);
         stEth = new MockStETH();
         wstEth = new MockWstETH(stEth);
+        stEthToEthPriceFeed = new MockChainlinkPriceFeed(address(stEth), address(weth), 1e18);
+        aavePool = new MockAavePool();
+        aavePool.setStEthToEthPriceFeed(stEthToEthPriceFeed, wstEth, weth);
+        aaveVarDWeth = new MockVarDebtWETH(aavePool, weth);
         aaveAWstEth = new MockAwstETH(aavePool, wstEth);
 
         curveEthStEthPool = new MockCurvePool(stEth);
-        stEthToEthPriceFeed = new MockChainlinkPriceFeed(address(stEth), address(weth), 1e18);
         balancerVault = new MockBalancerVault(weth);
 
         scWETH.ConstructorParams memory scWethParams = scWETH.ConstructorParams({

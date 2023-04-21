@@ -55,11 +55,12 @@ contract scUSDCUnitTest is Test {
         wethVault = new MockERC4626(weth, "Mock WETH Vault", "mWETH");
 
         aavePoolDataProvider = new MockAavePoolDataProvider(address(usdc), address(weth));
+        usdcToEthPriceFeed = new MockChainlinkPriceFeed(address(usdc), address(weth), 0.001e18);
         aavePool = new MockAavePool();
+        aavePool.setUsdcWethPriceFeed(usdcToEthPriceFeed, usdc, weth);
         aaveAUsdc = new MockAUsdc(aavePool, usdc);
         aaveVarDWeth = new MockVarDebtWETH(aavePool, weth);
 
-        usdcToEthPriceFeed = new MockChainlinkPriceFeed(address(usdc), address(weth), 0.001e18);
         balancerVault = new MockBalancerVault(weth);
         uniswapRouter = new MockSwapRouter();
 
