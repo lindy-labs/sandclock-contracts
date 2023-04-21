@@ -125,11 +125,9 @@ contract scWETHv2Test is Test {
             borrowAmount: eulerFlashLoanAmount
         });
 
-        uint256 totalFlashLoanAmount = aaveV3FlashLoanAmount + eulerFlashLoanAmount;
-
         // deposit into strategy
         hoax(keeper);
-        vault.invest(amount, totalFlashLoanAmount, supplyBorrowParams);
+        vault.invest(amount, supplyBorrowParams);
     }
 
     function test_rebalance_reinvestingProfits() public {}
