@@ -88,47 +88,47 @@ contract scWETHv2Test is Test, MockLendingMarketManager {
     //     _redeemChecks(preDepositBal);
     // }
 
-    // function test_rebalance_depositIntoStrategy() public {
-    //     uint256 amount = 10 ether;
-    //     _depositToVault(address(this), amount);
+    function test_rebalance_depositIntoStrategy() public {
+        uint256 amount = 10 ether;
+        _depositToVault(address(this), amount);
 
-    //     scWETHv2.RepayWithdrawParam[] memory repayWithdrawParams;
-    //     scWETHv2.SupplyBorrowParam[] memory supplyBorrowParams = new scWETHv2.SupplyBorrowParam[](2);
+        scWETHv2.RepayWithdrawParam[] memory repayWithdrawParams;
+        scWETHv2.SupplyBorrowParam[] memory supplyBorrowParams = new scWETHv2.SupplyBorrowParam[](2);
 
-    //     // supply 70% to aaveV3 and 30% to Euler
-    //     uint256 aaveV3Amount = amount.mulWadDown(0.7e18);
-    //     uint256 eulerAmount = amount.mulWadDown(0.3e18);
+        // supply 70% to aaveV3 and 30% to Euler
+        uint256 aaveV3Amount = amount.mulWadDown(0.7e18);
+        uint256 eulerAmount = amount.mulWadDown(0.3e18);
 
-    //     uint256 aaveV3FlashLoanAmount =
-    //         _calcSupplyBorrowFlashLoanAmount(LendingMarketManager.LendingMarketType.AAVE_V3, aaveV3Amount);
-    //     uint256 eulerFlashLoanAmount =
-    //         _calcSupplyBorrowFlashLoanAmount(LendingMarketManager.LendingMarketType.EULER, eulerAmount);
+        uint256 aaveV3FlashLoanAmount =
+            _calcSupplyBorrowFlashLoanAmount(LendingMarketManager.LendingMarketType.AAVE_V3, aaveV3Amount);
+        uint256 eulerFlashLoanAmount =
+            _calcSupplyBorrowFlashLoanAmount(LendingMarketManager.LendingMarketType.EULER, eulerAmount);
 
-    //     supplyBorrowParams[0] = scWETHv2.SupplyBorrowParam({
-    //         market: LendingMarketManager.LendingMarketType.AAVE_V3,
-    //         supplyAmount: aaveV3Amount + aaveV3FlashLoanAmount,
-    //         borrowAmount: aaveV3FlashLoanAmount
-    //     });
+        supplyBorrowParams[0] = scWETHv2.SupplyBorrowParam({
+            market: LendingMarketManager.LendingMarketType.AAVE_V3,
+            supplyAmount: aaveV3Amount + aaveV3FlashLoanAmount,
+            borrowAmount: aaveV3FlashLoanAmount
+        });
 
-    //     supplyBorrowParams[1] = scWETHv2.SupplyBorrowParam({
-    //         market: LendingMarketManager.LendingMarketType.EULER,
-    //         supplyAmount: eulerAmount + eulerFlashLoanAmount,
-    //         borrowAmount: eulerFlashLoanAmount
-    //     });
+        supplyBorrowParams[1] = scWETHv2.SupplyBorrowParam({
+            market: LendingMarketManager.LendingMarketType.EULER,
+            supplyAmount: eulerAmount + eulerFlashLoanAmount,
+            borrowAmount: eulerFlashLoanAmount
+        });
 
-    //     uint256 totalFlashLoanAmount = aaveV3FlashLoanAmount + eulerFlashLoanAmount;
+        uint256 totalFlashLoanAmount = aaveV3FlashLoanAmount + eulerFlashLoanAmount;
 
-    //     scWETHv2.RebalanceParams memory rebalanceParams = scWETHv2.RebalanceParams({
-    //         repayWithdrawParams: repayWithdrawParams,
-    //         supplyBorrowParams: supplyBorrowParams,
-    //         doWstEthToWethSwap: false,
-    //         doWethToWstEthSwap: true,
-    //         wethSwapAmount: 0
-    //     });
+        scWETHv2.RebalanceParams memory rebalanceParams = scWETHv2.RebalanceParams({
+            repayWithdrawParams: repayWithdrawParams,
+            supplyBorrowParams: supplyBorrowParams,
+            doWstEthToWethSwap: false,
+            doWethToWstEthSwap: true,
+            wethSwapAmount: 0
+        });
 
-    //     // deposit into strategy
-    //     vault.rebalance(totalFlashLoanAmount, rebalanceParams);
-    // }
+        // deposit into strategy
+        vault.rebalance(totalFlashLoanAmount, rebalanceParams);
+    }
 
     function test_rebalance_reinvestingProfits() public {}
 
@@ -139,61 +139,61 @@ contract scWETHv2Test is Test, MockLendingMarketManager {
 
     //////////////////////////// INTERNAL METHODS ////////////////////////////////////////
 
-    // function _calcSupplyBorrowFlashLoanAmount(LendingMarketManager.LendingMarketType market, uint256 amount)
-    //     internal
-    //     returns (uint256 flashLoanAmount)
-    // {
-    //     scWETHv2.LendingMarket memory lendingMarket = lendingMarkets[market];
-    //     uint256 debt = lendingMarket.getDebt();
-    //     uint256 collateral = lendingMarket.getCollateral();
+    function _calcSupplyBorrowFlashLoanAmount(LendingMarketManager.LendingMarketType market, uint256 amount)
+        internal
+        returns (uint256 flashLoanAmount)
+    {
+        scWETHv2.LendingMarket memory lendingMarket = lendingMarkets[market];
+        uint256 debt = lendingMarket.getDebt();
+        uint256 collateral = lendingMarket.getCollateral();
 
-    //     uint256 target = targetLtv[market].mulWadDown(amount + collateral);
+        uint256 target = targetLtv[market].mulWadDown(amount + collateral);
 
-    //     assertGt(target, debt, "target not greater than debt for supply borrow");
+        assertGt(target, debt, "target not greater than debt for supply borrow");
 
-    //     // calculate the flashloan amount needed
-    //     flashLoanAmount = (target - debt).divWadDown(C.ONE - targetLtv[market]);
-    // }
+        // calculate the flashloan amount needed
+        flashLoanAmount = (target - debt).divWadDown(C.ONE - targetLtv[market]);
+    }
 
-    // function _calcRepayWithdrawFlashLoanAmount(LendingMarketManager.LendingMarketType market, uint256 amount)
-    //     internal
-    //     returns (uint256 flashLoanAmount)
-    // {
-    //     scWETHv2.LendingMarket memory lendingMarket = lendingMarkets[market];
-    //     uint256 debt = lendingMarket.getDebt();
-    //     uint256 collateral = lendingMarket.getCollateral();
+    function _calcRepayWithdrawFlashLoanAmount(LendingMarketManager.LendingMarketType market, uint256 amount)
+        internal
+        returns (uint256 flashLoanAmount)
+    {
+        scWETHv2.LendingMarket memory lendingMarket = lendingMarkets[market];
+        uint256 debt = lendingMarket.getDebt();
+        uint256 collateral = lendingMarket.getCollateral();
 
-    //     uint256 target = targetLtv[market].mulWadDown(amount + collateral);
+        uint256 target = targetLtv[market].mulWadDown(amount + collateral);
 
-    //     assertLt(target, debt, "target not less than debt for repay withdraw");
+        assertLt(target, debt, "target not less than debt for repay withdraw");
 
-    //     // calculate the flashloan amount needed
-    //     flashLoanAmount = (debt - target).divWadDown(C.ONE - targetLtv[market]);
-    // }
+        // calculate the flashloan amount needed
+        flashLoanAmount = (debt - target).divWadDown(C.ONE - targetLtv[market]);
+    }
 
-    // function _depositChecks(uint256 amount, uint256 preDepositBal) internal {
-    //     assertEq(vault.convertToAssets(10 ** vault.decimals()), 1e18);
-    //     assertEq(vault.totalAssets(), amount);
-    //     assertEq(vault.balanceOf(address(this)), amount);
-    //     assertEq(vault.convertToAssets(vault.balanceOf(address(this))), amount);
-    //     assertEq(weth.balanceOf(address(this)), preDepositBal - amount);
-    // }
+    function _depositChecks(uint256 amount, uint256 preDepositBal) internal {
+        assertEq(vault.convertToAssets(10 ** vault.decimals()), 1e18);
+        assertEq(vault.totalAssets(), amount);
+        assertEq(vault.balanceOf(address(this)), amount);
+        assertEq(vault.convertToAssets(vault.balanceOf(address(this))), amount);
+        assertEq(weth.balanceOf(address(this)), preDepositBal - amount);
+    }
 
-    // function _redeemChecks(uint256 preDepositBal) internal {
-    //     assertEq(vault.convertToAssets(10 ** vault.decimals()), 1e18);
-    //     assertEq(vault.totalAssets(), 0);
-    //     assertEq(vault.balanceOf(address(this)), 0);
-    //     assertEq(vault.convertToAssets(vault.balanceOf(address(this))), 0);
-    //     assertEq(weth.balanceOf(address(this)), preDepositBal);
-    // }
+    function _redeemChecks(uint256 preDepositBal) internal {
+        assertEq(vault.convertToAssets(10 ** vault.decimals()), 1e18);
+        assertEq(vault.totalAssets(), 0);
+        assertEq(vault.balanceOf(address(this)), 0);
+        assertEq(vault.convertToAssets(vault.balanceOf(address(this))), 0);
+        assertEq(weth.balanceOf(address(this)), preDepositBal);
+    }
 
-    // function _depositToVault(address user, uint256 amount) internal returns (uint256 shares) {
-    //     deal(address(weth), user, amount);
-    //     vm.startPrank(user);
-    //     weth.approve(address(vault), amount);
-    //     shares = vault.deposit(amount, user);
-    //     vm.stopPrank();
-    // }
+    function _depositToVault(address user, uint256 amount) internal returns (uint256 shares) {
+        deal(address(weth), user, amount);
+        vm.startPrank(user);
+        weth.approve(address(vault), amount);
+        shares = vault.deposit(amount, user);
+        vm.stopPrank();
+    }
 
     function _createDefaultWethv2VaultConstructorParams() internal view returns (scWETHv2.ConstructorParams memory) {
         return scWETHv2.ConstructorParams({
