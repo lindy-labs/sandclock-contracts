@@ -215,7 +215,9 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
         uint256[] memory amounts = new uint256[](1);
         amounts[0] = debt - wethBalance;
 
+        _initiateFlashLoan();
         balancerVault.flashLoan(address(this), tokens, amounts, abi.encode(collateral, debt));
+        _finalizeFlashLoan();
 
         emit EmergencyExitExecuted(msg.sender, wethBalance, debt, collateral);
     }
@@ -230,6 +232,7 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
         if (msg.sender != address(balancerVault)) {
             revert InvalidFlashLoanCaller();
         }
+        _isFlashLoanInitiated();
 
         uint256 flashLoanAmount = amounts[0];
         (uint256 collateral, uint256 debt) = abi.decode(userData, (uint256, uint256));
@@ -264,7 +267,7 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
     function getUsdcFromWeth(uint256 _wethAmount) public view returns (uint256) {
         (, int256 usdcPriceInWeth,,,) = usdcToEthPriceFeed.latestRoundData();
 
-        return (_wethAmount / C.WETH_USDC_DECIMALS_DIFF).divWadDown(uint256(usdcPriceInWeth));
+        return (_wethAmount).divWadDown(uint256(usdcPriceInWeth) * C.WETH_USDC_DECIMALS_DIFF);
     }
 
     function getWethFromUsdc(uint256 _usdcAmount) public view returns (uint256) {

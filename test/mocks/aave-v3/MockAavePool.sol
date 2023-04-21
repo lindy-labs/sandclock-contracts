@@ -89,12 +89,18 @@ contract MockAavePool is IPool {
         returns (
             uint256 totalCollateralBase,
             uint256 totalDebtBase,
-            uint256, /* availableBorrowsBase */
-            uint256, /* currentLiquidationThreshold */
-            uint256, /* ltv */
-            uint256 /* healthFactor */
+            uint256 availableBorrowsBase,
+            uint256 currentLiquidationThreshold,
+            uint256 ltv,
+            uint256 healthFactor
         )
     {
+        // to ignore unused variables compiler warning
+        availableBorrowsBase = 0;
+        currentLiquidationThreshold = 0;
+        ltv = 0;
+        healthFactor = 0;
+
         if (book[user][address(usdc)].supplyAmount > 0) {
             totalCollateralBase = book[user][address(usdc)].supplyAmount;
 
