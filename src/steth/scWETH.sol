@@ -208,12 +208,12 @@ contract scWETH is sc4626, IFlashLoanRecipient {
     }
 
     /// @notice returns the net LTV at which we have borrowed till now (1e18 = 100%)
-    function getLtv() public view returns (uint256 ltv) {
-        uint256 collateral = getCollateral();
-        if (collateral > 0) {
-            // getDebt / totalSupplied
-            ltv = getDebt().divWadUp(collateral);
-        }
+    function getLtv() public view returns (uint256) {
+        (uint256 totalCollateralBase, uint256 totalDebtBase,,,,) = aavePool.getUserAccountData(address(this));
+
+        if (totalCollateralBase == 0) return 0;
+
+        return totalDebtBase.divWadUp(totalCollateralBase);
     }
 
     /// @notice returns the max loan to value(ltv) ratio for borrowing eth on Aavev3 with wsteth as collateral for the flashloan (1e18 = 100%)

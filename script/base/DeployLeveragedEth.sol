@@ -105,16 +105,17 @@ abstract contract DeployLeveragedEth is CREATE3Script {
     function deployMockTokens() internal virtual {}
 
     function deployMocks() internal {
+        stEth = new MockStETH();
+        wstEth = new MockWstETH(stEth);
+        stEthToEthPriceFeed = new MockChainlinkPriceFeed(address(stEth), address(weth), 1e18);
+        usdcToEthPriceFeed = new MockChainlinkPriceFeed(address(usdc), address(weth), 0.001e18);
         aavePool = new MockAavePool();
+        aavePool.setStEthToEthPriceFeed(stEthToEthPriceFeed, wstEth, weth);
         aavePoolDataProvider = new MockAavePoolDataProvider(address(usdc), address(weth));
         aaveAUsdc = new MockAUsdc(aavePool, usdc);
         aaveVarDWeth = new MockVarDebtWETH(aavePool, weth);
-        stEth = new MockStETH();
-        wstEth = new MockWstETH(stEth);
         aaveAwstEth = new MockAwstETH(aavePool, wstEth);
         curveEthStEthPool = new MockCurvePool(stEth);
-        stEthToEthPriceFeed = new MockChainlinkPriceFeed(address(stEth), address(weth), 1e18);
-        usdcToEthPriceFeed = new MockChainlinkPriceFeed(address(usdc), address(weth), 0.001e18);
         balancerVault = new MockBalancerVault(weth);
         uniswapRouter = new MockSwapRouter();
 
