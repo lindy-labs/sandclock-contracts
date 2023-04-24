@@ -208,7 +208,7 @@ contract scWETH is sc4626, IFlashLoanRecipient {
     }
 
     /// @notice returns the net LTV at which we have borrowed till now (1e18 = 100%)
-    function getLtv() public view returns (uint256 ltv) {
+    function getLtv() public view returns (uint256) {
         (uint256 totalCollateralBase, uint256 totalDebtBase,,,,) = aavePool.getUserAccountData(address(this));
 
         if (totalCollateralBase == 0) return 0;
