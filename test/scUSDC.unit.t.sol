@@ -164,4 +164,12 @@ contract scUSDCUnitTest is Test {
 
         assertEq(vault.getDebt(), debtBefore.mulWadDown(1e18 + interest), "debt with interest");
     }
+
+    function test_getUsdcFromWeth_precisionLoss() public {
+        uint256 wethAmount = 1e13;
+        uint256 wethAmountPlusSome = wethAmount + 1e10; // a bit more
+        usdcToEthPriceFeed.setLatestAnswer(512640446503388);
+
+        assertTrue(vault.getUsdcFromWeth(wethAmount) < vault.getUsdcFromWeth(wethAmountPlusSome), "precision loss");
+    }
 }
