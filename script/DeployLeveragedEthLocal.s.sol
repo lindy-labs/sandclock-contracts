@@ -15,7 +15,7 @@ contract DeployScript is DeployLeveragedEth, Test {
     address constant alice = address(0x06);
     address constant bob = address(0x07);
 
-    function deployMockTokens () override internal {
+    function deployMockTokens() internal override {
         weth = new MockWETH();
         usdc = new MockUSDC();
     }
