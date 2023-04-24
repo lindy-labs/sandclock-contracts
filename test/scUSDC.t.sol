@@ -41,6 +41,7 @@ contract scUSDCTest is Test {
         uint256 initialUsdcBalance,
         uint256 finalUsdcBalance
     );
+    event ProfitSold(uint256 wethSold, uint256 usdcReceived);
 
     uint256 mainnetFork;
     uint256 constant ethWstEthMaxLtv = 0.7735e18;
@@ -271,33 +272,6 @@ contract scUSDCTest is Test {
         assertEq(vault.getDebt(), debtBefore);
     }
 
-    function test_rebalance_SellsProfitsAndConvertsToAdditionalCollateral() public {
-        uint256 initialBalance = 10000e6;
-        deal(address(usdc), address(vault), initialBalance);
-
-        vm.prank(keeper);
-        vault.rebalance();
-
-        uint256 ltv = vault.getLtv();
-        uint256 collateralBefore = vault.getCollateral();
-        uint256 debtBefore = vault.getDebt();
-        uint256 floatBefore = vault.getUsdcBalance();
-        uint256 totalAssetsBefore = vault.totalAssets();
-
-        // add 100% profit to the weth vault
-        uint256 wethInvested = weth.balanceOf(address(wethVault));
-        deal(address(weth), address(wethVault), wethInvested * 2);
-
-        assertApproxEqRel(vault.totalAssets(), totalAssetsBefore.mulWadUp(1e18 + ltv), 0.01e18);
-
-        vm.prank(keeper);
-        vault.rebalance();
-
-        assertApproxEqRel(vault.getCollateral(), collateralBefore.mulWadUp(1e18 + ltv), 0.01e18);
-        assertApproxEqRel(vault.getDebt(), debtBefore.mulWadUp(1e18 + ltv), 0.01e18);
-        assertApproxEqRel(vault.getUsdcBalance(), floatBefore.mulWadUp(1e18 + ltv), 0.01e18);
-    }
-
     function test_rebalance_DoesntRebalanceForSmallProfit() public {
         uint256 initialBalance = 10000e6;
         deal(address(usdc), address(vault), initialBalance);
@@ -344,13 +318,85 @@ contract scUSDCTest is Test {
         assertTrue(wethInvested > 0, "wethInvested must be > 0");
         deal(address(weth), address(wethVault), profit);
 
-        vm.prank(keeper);
+        vm.startPrank(keeper);
+        vault.sellProfit(0);
         vault.rebalance();
 
         assertApproxEqRel(vault.totalAssets(), totalAssetsBefore * 2, 0.01e18);
         assertApproxEqRel(vault.getCollateral(), collateralBefore * 2, 0.01e18, "collateral");
         assertApproxEqRel(vault.getDebt(), debtBefore * 2, 0.01e18, "debt");
         assertApproxEqRel(vault.getUsdcBalance(), floatBefore * 2, 0.01e18, "float");
+    }
+
+    /// #sellProfit ///
+
+    function test_sellProfit_FailsIfCallerIsNotKeeper() public {
+        vm.prank(alice);
+        vm.expectRevert(CallerNotKeeper.selector);
+        vault.sellProfit(0);
+    }
+
+    function test_sellProfit_FailsIfProfitsAre0() public {
+        vm.prank(keeper);
+        vm.expectRevert(NoProfitsToSell.selector);
+        vault.sellProfit(0);
+    }
+
+    function test_sellProfit_onlySellsProfit() public {
+        uint256 amount = 10000e6;
+        deal(address(usdc), address(vault), amount);
+
+        vm.prank(keeper);
+        vault.rebalance();
+
+        // add 100% profit to the weth vault
+        uint256 initialWethInvested = vault.getInvested();
+        deal(address(weth), address(wethVault), initialWethInvested * 2);
+
+        uint256 usdcBalanceBefore = vault.getUsdcBalance();
+
+        vm.prank(keeper);
+        vault.sellProfit(0);
+
+        uint256 expectedUsdcBalance = usdcBalanceBefore + vault.getCollateral().mulWadDown(vault.targetLtv());
+        assertApproxEqRel(vault.getUsdcBalance(), expectedUsdcBalance, 0.01e18, "usdc balance");
+        assertApproxEqRel(vault.getInvested(), initialWethInvested, 0.001e18, "sold more than actual profit");
+    }
+
+    function test_sellProfit_emitsEvent() public {
+        uint256 amount = 10000e6;
+        deal(address(usdc), address(vault), amount);
+
+        vm.prank(keeper);
+        vault.rebalance();
+
+        // add 100% profit to the weth vault
+        uint256 wethInvested = weth.balanceOf(address(wethVault));
+        deal(address(weth), address(wethVault), wethInvested * 2);
+        uint256 profit = vault.getProfit();
+
+        vm.expectEmit(true, true, true, true);
+        emit ProfitSold(profit, 6438_101822);
+        vm.prank(keeper);
+        vault.sellProfit(0);
+    }
+
+    function test_sellProfit_FailsIfAmountReceivedIsLeessThanAmountOutMin() public {
+        uint256 amount = 10000e6;
+        deal(address(usdc), address(vault), amount);
+
+        vm.prank(keeper);
+        vault.rebalance();
+
+        // add 100% profit to the weth vault
+        uint256 wethInvested = weth.balanceOf(address(wethVault));
+        deal(address(weth), address(wethVault), wethInvested * 2);
+
+        uint256 tooLargeUsdcAmountOutMin = vault.getCollateral().mulWadDown(vault.targetLtv()).mulWadDown(1.05e18); // add 5% more than expected
+
+        vm.prank(keeper);
+        vm.expectRevert("Too little received");
+        vault.sellProfit(tooLargeUsdcAmountOutMin);
     }
 
     /// #applyNewTargetLtv ///
@@ -901,7 +947,7 @@ contract scUSDCTest is Test {
     function test_exitAllPositions_FailsIfCallerIsNotAdmin() public {
         vm.startPrank(alice);
         vm.expectRevert(CallerNotAdmin.selector);
-        vault.exitAllPositions();
+        vault.exitAllPositions(0);
     }
 
     function test_exitAllPositions_FailsIfVaultIsNotUnderawater() public {
@@ -917,7 +963,7 @@ contract scUSDCTest is Test {
         vault.rebalance();
 
         vm.expectRevert(VaultNotUnderwater.selector);
-        vault.exitAllPositions();
+        vault.exitAllPositions(0);
     }
 
     function test_exitAllPositions_RepaysDebtAndReleasesCollateral() public {
@@ -938,7 +984,7 @@ contract scUSDCTest is Test {
 
         uint256 totalBefore = vault.totalAssets();
 
-        vault.exitAllPositions();
+        vault.exitAllPositions(0);
 
         assertApproxEqRel(vault.getUsdcBalance(), totalBefore, 0.01e18, "vault usdc balance");
         assertEq(vault.getCollateral(), 0, "vault collateral");
@@ -967,7 +1013,29 @@ contract scUSDCTest is Test {
 
         vm.expectEmit(true, true, true, true);
         emit EmergencyExitExecuted(address(this), invested, debt, collateral);
-        vault.exitAllPositions();
+        vault.exitAllPositions(0);
+    }
+
+    function test_exitAllPositions_FailsIfEndBalanceIsLowerThanMin() public {
+        uint256 deposit = 1_000_000e6;
+        deal(address(usdc), alice, deposit);
+
+        vm.startPrank(alice);
+        usdc.approve(address(vault), type(uint256).max);
+        vault.deposit(deposit, alice);
+        vm.stopPrank();
+
+        vm.prank(keeper);
+        vault.rebalance();
+
+        // simulate 50% loss
+        uint256 wethInvested = weth.balanceOf(address(wethVault));
+        deal(address(weth), address(wethVault), wethInvested / 2);
+
+        uint256 invalidEndUsdcBalanceMin = vault.totalAssets().mulWadDown(1.05e18);
+
+        vm.expectRevert(EndUsdcBalanceTooLow.selector);
+        vault.exitAllPositions(invalidEndUsdcBalanceMin);
     }
 
     /// #receiveFlashLoan ///
@@ -980,6 +1048,18 @@ contract scUSDCTest is Test {
         uint256[] memory feeAmounts = new uint256[](1);
 
         vault.receiveFlashLoan(tokens, amounts, feeAmounts, bytes("0"));
+    }
+
+    function test_receiveFlashLoan_FailsIfInitiatorIsNotVault() public {
+        IVault balancer = IVault(C.BALANCER_VAULT);
+        address[] memory tokens = new address[](1);
+        uint256[] memory amounts = new uint256[](1);
+
+        tokens[0] = address(weth);
+        amounts[0] = 100e18;
+
+        vm.expectRevert(InvalidFlashLoanCaller.selector);
+        balancer.flashLoan(address(vault), tokens, amounts, abi.encode(0, 0));
     }
 
     /// internal helper functions ///

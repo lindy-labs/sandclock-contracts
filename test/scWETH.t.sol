@@ -347,6 +347,18 @@ contract scWETHTest is Test {
         vault.receiveFlashLoan(empty, amounts, amounts, abi.encode(1));
     }
 
+    function test_receiveFlashLoan_FailsIfInitiatorIsNotVault() public {
+        IVault balancer = IVault(C.BALANCER_VAULT);
+        address[] memory tokens = new address[](1);
+        uint256[] memory amounts = new uint256[](1);
+
+        tokens[0] = address(weth);
+        amounts[0] = 100e18;
+
+        vm.expectRevert(InvalidFlashLoanCaller.selector);
+        balancer.flashLoan(address(vault), tokens, amounts, abi.encode(0, 0));
+    }
+
     function test_maxLtv(uint256 amount) public {
         amount = bound(amount, boundMinimum, 1e21);
         vm.deal(address(this), amount);
