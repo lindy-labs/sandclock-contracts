@@ -1,16 +1,30 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.13;
 
+import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {IPool} from "aave-v3/interfaces/IPool.sol";
 import {IPoolAddressesProvider} from "aave-v3/interfaces/IPoolAddressesProvider.sol";
 import {DataTypes} from "aave-v3/protocol/libraries/types/DataTypes.sol";
 
+import {Constants as C} from "../../../src/lib/Constants.sol";
+import {MockChainlinkPriceFeed} from "../chainlink/MockChainlinkPriceFeed.sol";
+import {MockWETH} from "../MockWETH.sol";
+
 contract MockAavePool is IPool {
+    using FixedPointMathLib for uint256;
+
     struct AssetData {
         uint256 supplyAmount;
         uint256 borrowAmount;
     }
+
+    ERC20 usdc;
+    MockWETH weth;
+    MockChainlinkPriceFeed usdcToEthPriceFeed;
+
+    ERC20 wstEth;
+    MockChainlinkPriceFeed stEthToEthPriceFeed;
 
     mapping(address => mapping(address => AssetData)) public book;
 
@@ -63,6 +77,54 @@ contract MockAavePool is IPool {
 
     function getEModeCategoryData(uint8) external pure override returns (DataTypes.EModeCategory memory) {
         return DataTypes.EModeCategory(9000, 0, 0, address(0), "");
+    }
+
+    function setUsdcWethPriceFeed(MockChainlinkPriceFeed _usdcToEthPriceFeed, ERC20 _usdc, MockWETH _weth) external {
+        usdcToEthPriceFeed = _usdcToEthPriceFeed;
+        usdc = _usdc;
+        weth = _weth;
+    }
+
+    function setStEthToEthPriceFeed(MockChainlinkPriceFeed _stEthToEthPriceFeed, ERC20 _wstEth, MockWETH _weth)
+        external
+    {
+        stEthToEthPriceFeed = _stEthToEthPriceFeed;
+        wstEth = _wstEth;
+        weth = _weth;
+    }
+
+    function getUserAccountData(address user)
+        external
+        view
+        override
+        returns (
+            uint256 totalCollateralBase,
+            uint256 totalDebtBase,
+            uint256 availableBorrowsBase,
+            uint256 currentLiquidationThreshold,
+            uint256 ltv,
+            uint256 healthFactor
+        )
+    {
+        // to ignore unused variables compiler warning
+        availableBorrowsBase = 0;
+        currentLiquidationThreshold = 0;
+        ltv = 0;
+        healthFactor = 0;
+
+        if (book[user][address(usdc)].supplyAmount > 0) {
+            totalCollateralBase = book[user][address(usdc)].supplyAmount;
+
+            uint256 borrowedWeth = book[user][address(weth)].borrowAmount;
+            (, int256 usdcPriceInWeth,,,) = usdcToEthPriceFeed.latestRoundData();
+            totalDebtBase = (borrowedWeth / C.WETH_USDC_DECIMALS_DIFF).divWadDown(uint256(usdcPriceInWeth));
+        } else {
+            totalCollateralBase = book[user][address(wstEth)].supplyAmount;
+
+            uint256 borrowedWeth = book[user][address(weth)].borrowAmount;
+            (, int256 wstEthPriceInWeth,,,) = stEthToEthPriceFeed.latestRoundData();
+            totalDebtBase = borrowedWeth.divWadDown(uint256(wstEthPriceInWeth));
+        }
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -132,20 +194,6 @@ contract MockAavePool is IPool {
         bytes calldata params,
         uint16 referralCode
     ) external override {}
-
-    function getUserAccountData(address user)
-        external
-        view
-        override
-        returns (
-            uint256 totalCollateralBase,
-            uint256 totalDebtBase,
-            uint256 availableBorrowsBase,
-            uint256 currentLiquidationThreshold,
-            uint256 ltv,
-            uint256 healthFactor
-        )
-    {}
 
     function initReserve(
         address asset,
