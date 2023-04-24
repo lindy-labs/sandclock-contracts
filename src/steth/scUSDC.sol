@@ -5,7 +5,8 @@ import {
     InvalidTargetLtv,
     InvalidSlippageTolerance,
     InvalidFlashLoanCaller,
-    VaultNotUnderwater
+    VaultNotUnderwater,
+    EndUsdcBalanceTooLow
 } from "../errors/scErrors.sol";
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
@@ -198,8 +199,9 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
 
     /**
      * @notice Emergency exit to release collateral if the vault is underwater.
+     * @param _endUsdcBalanceMin The minimum USDC balance to end with after all positions are closed.
      */
-    function exitAllPositions() external onlyAdmin {
+    function exitAllPositions(uint256 _endUsdcBalanceMin) external onlyAdmin {
         uint256 debt = getDebt();
 
         if (getInvested() >= debt) {
@@ -218,6 +220,8 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
         _initiateFlashLoan();
         balancerVault.flashLoan(address(this), tokens, amounts, abi.encode(collateral, debt));
         _finalizeFlashLoan();
+
+        if (getUsdcBalance() < _endUsdcBalanceMin) revert EndUsdcBalanceTooLow();
 
         emit EmergencyExitExecuted(msg.sender, wethBalance, debt, collateral);
     }
@@ -267,7 +271,7 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
     function getUsdcFromWeth(uint256 _wethAmount) public view returns (uint256) {
         (, int256 usdcPriceInWeth,,,) = usdcToEthPriceFeed.latestRoundData();
 
-        return (_wethAmount).divWadDown(uint256(usdcPriceInWeth) * C.WETH_USDC_DECIMALS_DIFF);
+        return _wethAmount.divWadDown(uint256(usdcPriceInWeth) * C.WETH_USDC_DECIMALS_DIFF);
     }
 
     function getWethFromUsdc(uint256 _usdcAmount) public view returns (uint256) {
