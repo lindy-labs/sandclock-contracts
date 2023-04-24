@@ -102,9 +102,9 @@ abstract contract DeployLeveragedEth is CREATE3Script {
         vm.stopBroadcast();
     }
 
+    function deployMockTokens() internal virtual {}
+
     function deployMocks() internal {
-        weth = new MockWETH();
-        usdc = new MockUSDC();
         stEth = new MockStETH();
         wstEth = new MockWstETH(stEth);
         stEthToEthPriceFeed = new MockChainlinkPriceFeed(address(stEth), address(weth), 1e18);

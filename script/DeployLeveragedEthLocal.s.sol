@@ -6,12 +6,19 @@ import "forge-std/Test.sol";
 
 import {DeployLeveragedEth} from "./base/DeployLeveragedEth.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
+import {MockWETH} from "../test/mocks/MockWETH.sol";
+import {MockUSDC} from "../test/mocks/MockUSDC.sol";
 
 contract DeployScript is DeployLeveragedEth, Test {
     using FixedPointMathLib for uint256;
 
     address constant alice = address(0x06);
     address constant bob = address(0x07);
+
+    function deployMockTokens() internal override {
+        weth = new MockWETH();
+        usdc = new MockUSDC();
+    }
 
     function run() external {
         if (block.chainid != 31337) {
@@ -20,6 +27,7 @@ contract DeployScript is DeployLeveragedEth, Test {
             return;
         }
 
+        deployMockTokens();
         deployMocks();
         deploy();
         fixtures();
