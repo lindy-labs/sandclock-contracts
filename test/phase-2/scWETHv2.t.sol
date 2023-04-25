@@ -44,6 +44,7 @@ contract scWETHv2Test is Test {
     WETH weth;
     ILido stEth;
     IwstETH wstEth;
+    AggregatorV3Interface public stEThToEthPriceFeed;
 
     mapping(LendingMarketManager.LendingMarketType => uint256) targetLtv;
 
@@ -59,6 +60,7 @@ contract scWETHv2Test is Test {
         weth = vault.weth();
         stEth = vault.stEth();
         wstEth = vault.wstETH();
+        stEThToEthPriceFeed = vault.stEThToEthPriceFeed();
 
         // set vault eth balance to zero
         vm.deal(address(vault), 0);
@@ -96,65 +98,52 @@ contract scWETHv2Test is Test {
     //     _redeemChecks(preDepositBal);
     // }
 
-    function test_rebalance_invest() public {
+    function test_invest() public {
         uint256 amount = 10 ether;
+        uint256 stEthRateTolerance = 0.999e18;
         _depositToVault(address(this), amount);
-
         _depositChecks(amount, amount);
 
-        scWETHv2.SupplyBorrowParam[] memory supplyBorrowParams = new scWETHv2.SupplyBorrowParam[](1);
+        scWETHv2.SupplyBorrowParam[] memory supplyBorrowParams = new scWETHv2.SupplyBorrowParam[](2);
 
         // supply 70% to aaveV3 and 30% to Euler
-        // uint256 aaveV3Amount = amount.mulWadDown(0.7e18);
-        // uint256 eulerAmount = amount.mulWadDown(0.3e18);
+        uint256 aaveV3Amount = amount.mulWadDown(0.7e18);
+        uint256 eulerAmount = amount.mulWadDown(0.3e18);
 
         uint256 aaveV3FlashLoanAmount =
-            _calcSupplyBorrowFlashLoanAmount(LendingMarketManager.LendingMarketType.AAVE_V3, amount);
-        // uint256 eulerFlashLoanAmount =
-        //     _calcSupplyBorrowFlashLoanAmount(LendingMarketManager.LendingMarketType.EULER, eulerAmount);
+            _calcSupplyBorrowFlashLoanAmount(LendingMarketManager.LendingMarketType.AAVE_V3, aaveV3Amount);
+        uint256 eulerFlashLoanAmount =
+            _calcSupplyBorrowFlashLoanAmount(LendingMarketManager.LendingMarketType.EULER, eulerAmount);
 
-        console.log("supplyAmount", amount + aaveV3FlashLoanAmount);
-        console.log("borrowAmount", aaveV3FlashLoanAmount);
+        uint256 aaveV3SupplyAmount = _ethToWstEth(aaveV3Amount + aaveV3FlashLoanAmount).mulWadDown(stEthRateTolerance);
+        uint256 eulerSupplyAmount = _ethToWstEth(eulerAmount + eulerFlashLoanAmount).mulWadDown(stEthRateTolerance);
 
         supplyBorrowParams[0] = scWETHv2.SupplyBorrowParam({
             market: LendingMarketManager.LendingMarketType.AAVE_V3,
-            supplyAmount: amount + aaveV3FlashLoanAmount,
+            supplyAmount: aaveV3SupplyAmount,
             borrowAmount: aaveV3FlashLoanAmount
         });
-
-        // supplyBorrowParams[1] = scWETHv2.SupplyBorrowParam({
-        //     market: LendingMarketManager.LendingMarketType.EULER,
-        //     supplyAmount: eulerAmount + eulerFlashLoanAmount,
-        //     borrowAmount: eulerFlashLoanAmount
-        // });
+        supplyBorrowParams[1] = scWETHv2.SupplyBorrowParam({
+            market: LendingMarketManager.LendingMarketType.EULER,
+            supplyAmount: eulerSupplyAmount,
+            borrowAmount: eulerFlashLoanAmount
+        });
 
         // deposit into strategy
         hoax(keeper);
         vault.invest(amount, supplyBorrowParams);
 
-        // should have deposited 70% to aaveV3 and 30% to Euler
-        // uint256 totalCollateral = vault.totalCollateral();
-
-        assertApproxEqRel(vault.totalAssets(), amount, 0.01e18, "totalAssets not equal amount");
-        assertEq(vault.totalInvested(), amount, "totalInvested not updated");
-
-        // uint256 aaveV3Deposited = vault.getCollateral(LendingMarketManager.LendingMarketType.AAVE_V3)
-        //     - vault.getDebt(LendingMarketManager.LendingMarketType.AAVE_V3);
-
-        // uint256 eulerDeposited = vault.getCollateral(LendingMarketManager.LendingMarketType.EULER)
-        //     - vault.getDebt(LendingMarketManager.LendingMarketType.EULER);
-
-        // assertApproxEqRel(aaveV3Deposited, amount.mulWadDown(0.7e18), 1e15, "aaveV3 allocation not correct");
-
-        // assertApproxEqRel(eulerDeposited, amount.mulWadDown(0.3e18), 1e15, "euler allocation not correct");
+        _investChecks(
+            amount, _wstEthToEth(aaveV3SupplyAmount + eulerSupplyAmount), aaveV3FlashLoanAmount + eulerFlashLoanAmount
+        );
     }
 
-    function test_rebalance_reinvestingProfits() public {}
+    function test_invest_reinvestingProfits() public {}
 
-    function test_rebalance_reallocation() public {}
+    function test__reallocate() public {}
 
     // we decrease ltv in case of a loss, since the ltv goes higher than the target ltv in such a scenario
-    function test_rebalance_decreassLtv() public {}
+    function test_disinvest() public {}
 
     //////////////////////////// INTERNAL METHODS ////////////////////////////////////////
 
@@ -204,6 +193,36 @@ contract scWETHv2Test is Test {
         assertEq(weth.balanceOf(address(this)), preDepositBal);
     }
 
+    function _investChecks(uint256 amount, uint256 totalSupplyAmount, uint256 totalDebtTaken) internal {
+        uint256 totalCollateral = vault.totalCollateral();
+        uint256 totalDebt = vault.totalDebt();
+        assertApproxEqRel(totalCollateral - totalDebt, amount, 0.01e18, "totalAssets not equal amount");
+        assertEq(vault.totalInvested(), amount, "totalInvested not updated");
+        assertApproxEqRel(totalCollateral, totalSupplyAmount, 0.0001e18, "totalCollateral not equal totalSupplyAmount");
+        assertEq(totalDebt, totalDebtTaken, "totalDebt not equal totalDebtTaken");
+
+        uint256 aaveV3Deposited = vault.getCollateral(LendingMarketManager.LendingMarketType.AAVE_V3)
+            - vault.getDebt(LendingMarketManager.LendingMarketType.AAVE_V3);
+        uint256 eulerDeposited = vault.getCollateral(LendingMarketManager.LendingMarketType.EULER)
+            - vault.getDebt(LendingMarketManager.LendingMarketType.EULER);
+
+        assertApproxEqRel(aaveV3Deposited, amount.mulWadDown(0.7e18), 0.005e18, "aaveV3 allocation not correct");
+        assertApproxEqRel(eulerDeposited, amount.mulWadDown(0.3e18), 0.005e18, "euler allocation not correct");
+
+        assertApproxEqRel(
+            vault.getLtv(LendingMarketManager.LendingMarketType.AAVE_V3),
+            targetLtv[LendingMarketManager.LendingMarketType.AAVE_V3],
+            0.005e18,
+            "aaveV3 ltv not correct"
+        );
+        assertApproxEqRel(
+            vault.getLtv(LendingMarketManager.LendingMarketType.EULER),
+            targetLtv[LendingMarketManager.LendingMarketType.EULER],
+            0.005e18,
+            "euler ltv not correct"
+        );
+    }
+
     function _depositToVault(address user, uint256 amount) internal returns (uint256 shares) {
         deal(address(weth), user, amount);
         vm.startPrank(user);
@@ -224,5 +243,31 @@ contract scWETHv2Test is Test {
             stEthToEthPriceFeed: AggregatorV3Interface(C.CHAINLINK_STETH_ETH_PRICE_FEED),
             balancerVault: IVault(C.BALANCER_VAULT)
         });
+    }
+
+    function _ethToWstEth(uint256 ethAmount) internal view returns (uint256 wstEthAmount) {
+        if (ethAmount > 0) {
+            (, int256 price,,,) = stEThToEthPriceFeed.latestRoundData();
+
+            // eth to stEth
+            uint256 stEthAmount = ethAmount.divWadDown(uint256(price));
+
+            // stEth to wstEth
+            wstEthAmount = wstEth.getWstETHByStETH(stEthAmount);
+        }
+    }
+
+    function _stEthToEth(uint256 stEthAmount) internal view returns (uint256 ethAmount) {
+        if (stEthAmount > 0) {
+            // stEth to eth
+            (, int256 price,,,) = stEThToEthPriceFeed.latestRoundData();
+            ethAmount = stEthAmount.mulWadDown(uint256(price));
+        }
+    }
+
+    function _wstEthToEth(uint256 wstEthAmount) internal view returns (uint256 ethAmount) {
+        // wstETh to stEth using exchangeRate
+        uint256 stEthAmount = wstEth.getStETHByWstETH(wstEthAmount);
+        ethAmount = _stEthToEth(stEthAmount);
     }
 }

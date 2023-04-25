@@ -47,13 +47,13 @@ contract scWETHv2 is sc4626, LendingMarketManager, IFlashLoanRecipient {
 
     struct RepayWithdrawParam {
         LendingMarketType market;
-        uint256 repayAmount; // flashLoanAmount (in WETH)
-        uint256 withdrawAmount; // amount + flashLoanAmount (in WETH)
+        uint256 repayAmount; //  flashLoanAmount (in WETH)
+        uint256 withdrawAmount; // amount of wstEth to withdraw (amount + flashLoanAmount) (in wstEth)
     }
 
     struct SupplyBorrowParam {
         LendingMarketType market;
-        uint256 supplyAmount; // amount + flashLoanAmount (in WETH)
+        uint256 supplyAmount; // amount of wstEth to supply to the market (in wstEth)
         uint256 borrowAmount; // flashLoanAmount (in WETH)
     }
 
@@ -123,6 +123,8 @@ contract scWETHv2 is sc4626, LendingMarketManager, IFlashLoanRecipient {
         // store the old total
         uint256 oldTotalInvested = totalInvested;
         uint256 assets = totalAssets();
+
+        // todo: harvest euler rewards
 
         if (assets > oldTotalInvested) {
             totalInvested = assets;
@@ -354,7 +356,13 @@ contract scWETHv2 is sc4626, LendingMarketManager, IFlashLoanRecipient {
             // unwrap eth
             weth.withdraw(rebalanceParams.wethSwapAmount);
             // stake to lido / eth => stETH
+            // todo: since we are directly depositing to lido for stEth
+            // we are getting a slightly lower rate than the rate calculated from the
+            // chainlink oracle on _ethToWstEth method.
             stEth.submit{value: rebalanceParams.wethSwapAmount}(address(0x00));
+
+            // console.log("stEth balance: %s", stEth.balanceOf(address(this)));
+
             // wrap stETH
             wstETH.wrap(stEth.balanceOf(address(this)));
         }
@@ -443,9 +451,11 @@ contract scWETHv2 is sc4626, LendingMarketManager, IFlashLoanRecipient {
         uint256 n = supplyBorrowParams.length;
         for (uint256 i; i < n; i++) {
             lendingMarket = lendingMarkets[supplyBorrowParams[i].market];
-            lendingMarket.supply(_ethToWstEth(supplyBorrowParams[i].supplyAmount));
+            // console.log("supply Amount wstETH", supplyBorrowParams[i].supplyAmount);
+            // console.log("wstEth balance", wstETH.balanceOf(address(this)));
+            lendingMarket.supply(supplyBorrowParams[i].supplyAmount);
             lendingMarket.borrow(supplyBorrowParams[i].borrowAmount);
-            console.log("borrow Amount", supplyBorrowParams[i].borrowAmount);
+            // console.log("borrow Amount", supplyBorrowParams[i].borrowAmount);
         }
     }
 
@@ -456,7 +466,7 @@ contract scWETHv2 is sc4626, LendingMarketManager, IFlashLoanRecipient {
         for (uint256 i; i < n; i++) {
             lendingMarket = lendingMarkets[repayWithdrawParams[i].market];
             lendingMarket.repay(repayWithdrawParams[i].repayAmount);
-            lendingMarket.withdraw(_ethToWstEth(repayWithdrawParams[i].withdrawAmount));
+            lendingMarket.withdraw(repayWithdrawParams[i].withdrawAmount);
         }
     }
 
