@@ -1,6 +1,6 @@
 # Sandclock V2 
 
-🪃 **Sandclock V2** 🪃 is a set of yield strategies on mainnet, implemented as [ERC4626-compliant](https://eips.ethereum.org/EIPS/eip-4626) tokenized vaults. 
+🪃 **Sandclock V2** 🪃 is a set of yield strategies and staking contracts on mainnet, implemented as [ERC4626-compliant](https://eips.ethereum.org/EIPS/eip-4626) tokenized vaults. 
 
 [![Coverage Status](https://coveralls.io/repos/github/lindy-labs/sandclock-contracts/badge.svg)](https://coveralls.io/github/lindy-labs/sandclock-contracts)
 
