@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.13;
 
+import "forge-std/console.sol";
+
 import {
     InvalidTargetLtv,
     ZeroAddress,
@@ -441,10 +443,9 @@ contract scWETHv2 is sc4626, LendingMarketManager, IFlashLoanRecipient {
         uint256 n = supplyBorrowParams.length;
         for (uint256 i; i < n; i++) {
             lendingMarket = lendingMarkets[supplyBorrowParams[i].market];
-            if (supplyBorrowParams[i].supplyAmount != 0) {
-                lendingMarket.supply(_ethToWstEth(supplyBorrowParams[i].supplyAmount));
-            }
-            if (supplyBorrowParams[i].borrowAmount != 0) lendingMarket.borrow(supplyBorrowParams[i].borrowAmount);
+            lendingMarket.supply(_ethToWstEth(supplyBorrowParams[i].supplyAmount));
+            lendingMarket.borrow(supplyBorrowParams[i].borrowAmount);
+            console.log("borrow Amount", supplyBorrowParams[i].borrowAmount);
         }
     }
 
@@ -454,10 +455,8 @@ contract scWETHv2 is sc4626, LendingMarketManager, IFlashLoanRecipient {
         uint256 n = repayWithdrawParams.length;
         for (uint256 i; i < n; i++) {
             lendingMarket = lendingMarkets[repayWithdrawParams[i].market];
-            if (repayWithdrawParams[i].repayAmount != 0) lendingMarket.repay(repayWithdrawParams[i].repayAmount);
-            if (repayWithdrawParams[i].withdrawAmount != 0) {
-                lendingMarket.withdraw(_ethToWstEth(repayWithdrawParams[i].withdrawAmount));
-            }
+            lendingMarket.repay(repayWithdrawParams[i].repayAmount);
+            lendingMarket.withdraw(_ethToWstEth(repayWithdrawParams[i].withdrawAmount));
         }
     }
 

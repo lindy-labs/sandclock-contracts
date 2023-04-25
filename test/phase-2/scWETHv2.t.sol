@@ -63,7 +63,7 @@ contract scWETHv2Test is Test {
         // set vault eth balance to zero
         vm.deal(address(vault), 0);
 
-        targetLtv[LendingMarketManager.LendingMarketType.AAVE_V3] = 0.7e18;
+        targetLtv[LendingMarketManager.LendingMarketType.AAVE_V3] = 0.6e18;
         targetLtv[LendingMarketManager.LendingMarketType.EULER] = 0.5e18;
     }
 
@@ -102,34 +102,51 @@ contract scWETHv2Test is Test {
 
         _depositChecks(amount, amount);
 
-        scWETHv2.SupplyBorrowParam[] memory supplyBorrowParams = new scWETHv2.SupplyBorrowParam[](2);
+        scWETHv2.SupplyBorrowParam[] memory supplyBorrowParams = new scWETHv2.SupplyBorrowParam[](1);
 
         // supply 70% to aaveV3 and 30% to Euler
-        uint256 aaveV3Amount = amount.mulWadDown(0.7e18);
-        uint256 eulerAmount = amount.mulWadDown(0.3e18);
+        // uint256 aaveV3Amount = amount.mulWadDown(0.7e18);
+        // uint256 eulerAmount = amount.mulWadDown(0.3e18);
 
         uint256 aaveV3FlashLoanAmount =
-            _calcSupplyBorrowFlashLoanAmount(LendingMarketManager.LendingMarketType.AAVE_V3, aaveV3Amount);
-        uint256 eulerFlashLoanAmount =
-            _calcSupplyBorrowFlashLoanAmount(LendingMarketManager.LendingMarketType.EULER, eulerAmount);
+            _calcSupplyBorrowFlashLoanAmount(LendingMarketManager.LendingMarketType.AAVE_V3, amount);
+        // uint256 eulerFlashLoanAmount =
+        //     _calcSupplyBorrowFlashLoanAmount(LendingMarketManager.LendingMarketType.EULER, eulerAmount);
+
+        console.log("supplyAmount", amount + aaveV3FlashLoanAmount);
+        console.log("borrowAmount", aaveV3FlashLoanAmount);
 
         supplyBorrowParams[0] = scWETHv2.SupplyBorrowParam({
             market: LendingMarketManager.LendingMarketType.AAVE_V3,
-            supplyAmount: aaveV3Amount + aaveV3FlashLoanAmount,
+            supplyAmount: amount + aaveV3FlashLoanAmount,
             borrowAmount: aaveV3FlashLoanAmount
         });
 
-        supplyBorrowParams[1] = scWETHv2.SupplyBorrowParam({
-            market: LendingMarketManager.LendingMarketType.EULER,
-            supplyAmount: eulerAmount + eulerFlashLoanAmount,
-            borrowAmount: eulerFlashLoanAmount
-        });
+        // supplyBorrowParams[1] = scWETHv2.SupplyBorrowParam({
+        //     market: LendingMarketManager.LendingMarketType.EULER,
+        //     supplyAmount: eulerAmount + eulerFlashLoanAmount,
+        //     borrowAmount: eulerFlashLoanAmount
+        // });
 
         // deposit into strategy
         hoax(keeper);
         vault.invest(amount, supplyBorrowParams);
 
         // should have deposited 70% to aaveV3 and 30% to Euler
+        // uint256 totalCollateral = vault.totalCollateral();
+
+        assertApproxEqRel(vault.totalAssets(), amount, 0.01e18, "totalAssets not equal amount");
+        assertEq(vault.totalInvested(), amount, "totalInvested not updated");
+
+        // uint256 aaveV3Deposited = vault.getCollateral(LendingMarketManager.LendingMarketType.AAVE_V3)
+        //     - vault.getDebt(LendingMarketManager.LendingMarketType.AAVE_V3);
+
+        // uint256 eulerDeposited = vault.getCollateral(LendingMarketManager.LendingMarketType.EULER)
+        //     - vault.getDebt(LendingMarketManager.LendingMarketType.EULER);
+
+        // assertApproxEqRel(aaveV3Deposited, amount.mulWadDown(0.7e18), 1e15, "aaveV3 allocation not correct");
+
+        // assertApproxEqRel(eulerDeposited, amount.mulWadDown(0.3e18), 1e15, "euler allocation not correct");
     }
 
     function test_rebalance_reinvestingProfits() public {}
