@@ -95,7 +95,7 @@ contract scWETHv2Test is Test {
     //     _redeemChecks(preDepositBal);
     // }
 
-    function test_rebalance_depositIntoStrategy() public {
+    function test_rebalance_invest() public {
         uint256 amount = 10 ether;
         _depositToVault(address(this), amount);
 
@@ -127,6 +127,8 @@ contract scWETHv2Test is Test {
         // deposit into strategy
         hoax(keeper);
         vault.invest(amount, supplyBorrowParams);
+
+        // should have deposited 70% to aaveV3 and 30% to Euler
     }
 
     function test_rebalance_reinvestingProfits() public {}
