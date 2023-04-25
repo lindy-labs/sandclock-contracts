@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.13;
 
+import "forge-std/console.sol";
+
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
@@ -106,8 +108,9 @@ abstract contract LendingMarketManager {
     /// @notice returns the total wstETH supplied as collateral (in ETH)
     function totalCollateral() public view returns (uint256 collateral) {
         for (uint256 i = 0; i < totalMarkets(); i++) {
-            collateral += lendingMarkets[LendingMarketType(i)].getCollateral();
+            collateral += _wstEthToEth(lendingMarkets[LendingMarketType(i)].getCollateral());
         }
+        console.log("collateral", collateral);
     }
 
     /// @notice returns the total ETH borrowed
@@ -115,6 +118,7 @@ abstract contract LendingMarketManager {
         for (uint256 i = 0; i < totalMarkets(); i++) {
             debt += lendingMarkets[LendingMarketType(i)].getDebt();
         }
+        console.log("debt", debt);
     }
 
     function getDebt(LendingMarketType market) public view returns (uint256) {
@@ -126,8 +130,10 @@ abstract contract LendingMarketManager {
     }
 
     //////////////////////////     AAVE V3 ///////////////////////////////
+    ///  @notice supply wstETH to AAVE V3
+    /// @param amount amount of wstETH to supply
     function supplyWstEthAAVEV3(uint256 amount) internal {
-        IPool(C.AAVE_POOL).supply(address(wstETH), _ethToWstEth(amount), address(this), 0);
+        IPool(C.AAVE_POOL).supply(address(wstETH), amount, address(this), 0);
     }
 
     function borrowWethAAVEV3(uint256 amount) internal {
@@ -138,12 +144,14 @@ abstract contract LendingMarketManager {
         IPool(C.AAVE_POOL).repay(address(weth), amount, C.AAVE_VAR_INTEREST_RATE_MODE, address(this));
     }
 
+    /// @notice withdraw wstETH from AAVE V3
+    /// @param amount amount of wstETH to withdraw
     function withdrawWstEthAAVEV3(uint256 amount) internal {
-        IPool(C.AAVE_POOL).withdraw(address(wstETH), _ethToWstEth(amount), address(this));
+        IPool(C.AAVE_POOL).withdraw(address(wstETH), amount, address(this));
     }
 
     function getCollateralAAVEV3() internal view returns (uint256) {
-        return _wstEthToEth(IAToken(C.AAVE_AWSTETH_TOKEN).balanceOf(address(this)));
+        return IAToken(C.AAVE_AWSTETH_TOKEN).balanceOf(address(this));
     }
 
     function getDebtAAVEV3() internal view returns (uint256) {
@@ -153,7 +161,7 @@ abstract contract LendingMarketManager {
     ///////////////////////////////// EULER /////////////////////////////////
 
     function supplyWstEthEuler(uint256 amount) internal {
-        IEulerEToken(C.EULER_ETOKEN_WSTETH).deposit(0, _ethToWstEth(amount));
+        IEulerEToken(C.EULER_ETOKEN_WSTETH).deposit(0, amount);
     }
 
     function borrowWethEuler(uint256 amount) internal {
@@ -165,11 +173,11 @@ abstract contract LendingMarketManager {
     }
 
     function withdrawWstEthEuler(uint256 amount) internal {
-        IEulerEToken(C.EULER_ETOKEN_WSTETH).withdraw(0, _ethToWstEth(amount));
+        IEulerEToken(C.EULER_ETOKEN_WSTETH).withdraw(0, amount);
     }
 
     function getCollateralEuler() internal view returns (uint256) {
-        return _wstEthToEth(IEulerEToken(C.EULER_ETOKEN_WSTETH).balanceOfUnderlying(address(this)));
+        return IEulerEToken(C.EULER_ETOKEN_WSTETH).balanceOfUnderlying(address(this));
     }
 
     function getDebtEuler() internal view returns (uint256) {
