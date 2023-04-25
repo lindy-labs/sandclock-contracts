@@ -23,7 +23,6 @@ import {IVault} from "../src/interfaces/balancer/IVault.sol";
 import {ICurvePool} from "../src/interfaces/curve/ICurvePool.sol";
 import {ILido} from "../src/interfaces/lido/ILido.sol";
 import {IwstETH} from "../src/interfaces/lido/IwstETH.sol";
-import {MockSwapRouter} from "./mock/MockSwapRouter.sol";
 import "../src/errors/scErrors.sol";
 
 contract scUSDCv2Test is Test {
