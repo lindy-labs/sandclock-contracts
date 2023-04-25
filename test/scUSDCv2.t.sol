@@ -34,6 +34,7 @@ contract scUSDCv2Test is Test {
         address indexed admin, uint256 wethWithdrawn, uint256 debtRepaid, uint256 collateralReleased
     );
     event Rebalanced(UsdcWethLendingManager.Protocol protocolId, uint256 supplied, bool leverageUp, uint256 debt);
+    event ProfitSold(uint256 wethSold, uint256 usdcReceived);
 
     uint256 mainnetFork;
     uint256 constant ethWstEthMaxLtv = 0.7735e18;
@@ -334,6 +335,120 @@ contract scUSDCv2Test is Test {
 
         assertApproxEqAbs(vault.getDebtOnAave(), 0, 1, "debtOnAave after");
         assertApproxEqAbs(vault.getDebtOnEuler(), 100 ether, 1, "debtOnEuler after");
+    }
+
+    // #sellProfit //
+
+    function test_sellProfit_FailsIfCallerIsNotKeeper() public {
+        vm.prank(alice);
+        vm.expectRevert(CallerNotKeeper.selector);
+        vault.sellProfit(0);
+    }
+
+    function test_sellProfit_FailsIfProfitsAre0() public {
+        vm.prank(keeper);
+        vm.expectRevert(NoProfitsToSell.selector);
+        vault.sellProfit(0);
+    }
+
+    function test_sellProfit_onlySellsProfit() public {
+        uint256 initialBalance = 1_000_000e6;
+        deal(address(usdc), address(vault), initialBalance);
+
+        scUSDCv2.RebalanceParams[] memory params = new scUSDCv2.RebalanceParams[](2);
+        params[0] = scUSDCv2.RebalanceParams({
+            protocolId: UsdcWethLendingManager.Protocol.AAVE_V3,
+            supplyAmount: initialBalance / 2,
+            leverageUp: true,
+            wethAmount: 50 ether
+        });
+        params[1] = scUSDCv2.RebalanceParams({
+            protocolId: UsdcWethLendingManager.Protocol.EULER,
+            supplyAmount: initialBalance / 2,
+            leverageUp: true,
+            wethAmount: 50 ether
+        });
+
+        vm.prank(keeper);
+        vault.rebalance(params);
+
+        // add 100% profit to the weth vault
+        uint256 initialWethInvested = vault.wethInvested();
+        deal(address(weth), address(wethVault), initialWethInvested * 2);
+
+        uint256 usdcBalanceBefore = vault.usdcBalance();
+        uint256 profit = vault.getProfit();
+
+        vm.prank(keeper);
+        vault.sellProfit(0);
+
+        uint256 expectedUsdcBalance = usdcBalanceBefore + vault.getUsdcFromWeth(profit);
+        assertApproxEqRel(vault.usdcBalance(), expectedUsdcBalance, 0.01e18, "usdc balance");
+        assertApproxEqRel(vault.wethInvested(), initialWethInvested, 0.001e18, "sold more than actual profit");
+    }
+
+    function test_sellProfit_emitsEvent() public {
+        uint256 initialBalance = 1_000_000e6;
+        deal(address(usdc), address(vault), initialBalance);
+
+        scUSDCv2.RebalanceParams[] memory params = new scUSDCv2.RebalanceParams[](2);
+        params[0] = scUSDCv2.RebalanceParams({
+            protocolId: UsdcWethLendingManager.Protocol.AAVE_V3,
+            supplyAmount: initialBalance / 2,
+            leverageUp: true,
+            wethAmount: 50 ether
+        });
+        params[1] = scUSDCv2.RebalanceParams({
+            protocolId: UsdcWethLendingManager.Protocol.EULER,
+            supplyAmount: initialBalance / 2,
+            leverageUp: true,
+            wethAmount: 50 ether
+        });
+
+        vm.prank(keeper);
+        vault.rebalance(params);
+
+        // add 100% profit to the weth vault
+        uint256 wethInvested = weth.balanceOf(address(wethVault));
+        deal(address(weth), address(wethVault), wethInvested * 2);
+        uint256 profit = vault.wethInvested() - vault.totalDebt();
+
+        vm.expectEmit(true, true, true, true);
+        emit ProfitSold(profit, 171256_066845);
+        vm.prank(keeper);
+        vault.sellProfit(0);
+    }
+
+    function test_sellProfit_FailsIfAmountReceivedIsLeessThanAmountOutMin() public {
+        uint256 initialBalance = 1_000_000e6;
+        deal(address(usdc), address(vault), initialBalance);
+
+        scUSDCv2.RebalanceParams[] memory params = new scUSDCv2.RebalanceParams[](2);
+        params[0] = scUSDCv2.RebalanceParams({
+            protocolId: UsdcWethLendingManager.Protocol.AAVE_V3,
+            supplyAmount: initialBalance / 2,
+            leverageUp: true,
+            wethAmount: 50 ether
+        });
+        params[1] = scUSDCv2.RebalanceParams({
+            protocolId: UsdcWethLendingManager.Protocol.EULER,
+            supplyAmount: initialBalance / 2,
+            leverageUp: true,
+            wethAmount: 50 ether
+        });
+
+        vm.prank(keeper);
+        vault.rebalance(params);
+
+        // add 100% profit to the weth vault
+        uint256 wethInvested = weth.balanceOf(address(wethVault));
+        deal(address(weth), address(wethVault), wethInvested * 2);
+
+        uint256 tooLargeUsdcAmountOutMin = vault.getUsdcFromWeth(vault.getProfit()).mulWadDown(1.05e18); // add 5% more than expected
+
+        vm.prank(keeper);
+        vm.expectRevert("Too little received");
+        vault.sellProfit(tooLargeUsdcAmountOutMin);
     }
 
     /// #withdraw ///

@@ -6,7 +6,8 @@ import {
     InvalidTargetLtv,
     InvalidSlippageTolerance,
     InvalidFlashLoanCaller,
-    VaultNotUnderwater
+    VaultNotUnderwater,
+    NoProfitsToSell
 } from "../errors/scErrors.sol";
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
@@ -47,6 +48,7 @@ contract scUSDCv2 is sc4626, UsdcWethLendingManager, IFlashLoanRecipient {
         address indexed admin, uint256 wethWithdrawn, uint256 debtRepaid, uint256 collateralReleased
     );
     event Rebalanced(Protocol protocolId, uint256 supplied, bool leverageUp, uint256 debt);
+    event ProfitSold(uint256 wethSold, uint256 usdcReceived);
 
     // Uniswap V3 router
     ISwapRouter public immutable swapRouter;
@@ -221,16 +223,15 @@ contract scUSDCv2 is sc4626, UsdcWethLendingManager, IFlashLoanRecipient {
         }
     }
 
-    // TODO: add tests
-    function takeProfits() public {
+    function sellProfit(uint256 _usdcAmountOutMin) public onlyKeeper {
         uint256 profit = _calculateWethProfit(wethInvested(), totalDebt());
-        // TODO: check if profit is above minimum
+
+        if (profit == 0) revert NoProfitsToSell();
 
         uint256 withdrawn = _disinvest(profit);
+        uint256 usdcReceived = _swapWethForUsdc(withdrawn, _usdcAmountOutMin);
 
-        _swapWethForUsdc(withdrawn);
-
-        // TODO: emit event
+        emit ProfitSold(withdrawn, usdcReceived);
     }
 
     function totalAssets() public view override returns (uint256) {
@@ -285,6 +286,10 @@ contract scUSDCv2 is sc4626, UsdcWethLendingManager, IFlashLoanRecipient {
         return scWETH.convertToAssets(scWETH.balanceOf(address(this)));
     }
 
+    function getProfit() public view returns (uint256) {
+        return _calculateWethProfit(wethInvested(), totalDebt());
+    }
+
     /**
      * @notice Returns the net LTV at which the vault has borrowed until now.
      * @return The current LTV (1e18 = 100%).
@@ -319,7 +324,8 @@ contract scUSDCv2 is sc4626, UsdcWethLendingManager, IFlashLoanRecipient {
         // first try to sell profits to cover withdrawal amount
         if (profit != 0) {
             uint256 withdrawn = _disinvest(profit);
-            uint256 usdcReceived = _swapWethForUsdc(withdrawn);
+            uint256 usdcAmountOutMin = getUsdcFromWeth(withdrawn).mulWadDown(slippageTolerance);
+            uint256 usdcReceived = _swapWethForUsdc(withdrawn, usdcAmountOutMin);
 
             if (initialBalance + usdcReceived >= _assets) return;
 
@@ -378,7 +384,7 @@ contract scUSDCv2 is sc4626, UsdcWethLendingManager, IFlashLoanRecipient {
         amountWithdrawn = scWETH.redeem(shares, address(this), address(this));
     }
 
-    function _swapWethForUsdc(uint256 _wethAmount) internal returns (uint256) {
+    function _swapWethForUsdc(uint256 _wethAmount, uint256 _usdcAmountOutMin) internal returns (uint256) {
         ISwapRouter.ExactInputSingleParams memory params = ISwapRouter.ExactInputSingleParams({
             tokenIn: address(weth),
             tokenOut: address(asset),
@@ -386,7 +392,7 @@ contract scUSDCv2 is sc4626, UsdcWethLendingManager, IFlashLoanRecipient {
             recipient: address(this),
             deadline: block.timestamp,
             amountIn: _wethAmount,
-            amountOutMinimum: getUsdcFromWeth(_wethAmount).mulWadDown(slippageTolerance),
+            amountOutMinimum: _usdcAmountOutMin,
             sqrtPriceLimitX96: 0
         });
 
