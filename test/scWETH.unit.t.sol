@@ -50,15 +50,15 @@ contract scWETHUnitTest is Test {
 
     function setUp() public {
         weth = new MockWETH();
-
-        aavePool = new MockAavePool();
-        aaveVarDWeth = new MockVarDebtWETH(aavePool, weth);
         stEth = new MockStETH();
         wstEth = new MockWstETH(stEth);
+        stEthToEthPriceFeed = new MockChainlinkPriceFeed(address(stEth), address(weth), 1e18);
+        aavePool = new MockAavePool();
+        aavePool.setStEthToEthPriceFeed(stEthToEthPriceFeed, wstEth, weth);
+        aaveVarDWeth = new MockVarDebtWETH(aavePool, weth);
         aaveAWstEth = new MockAwstETH(aavePool, wstEth);
 
         curveEthStEthPool = new MockCurvePool(stEth);
-        stEthToEthPriceFeed = new MockChainlinkPriceFeed(address(stEth), address(weth), 1e18);
         balancerVault = new MockBalancerVault(weth);
 
         scWETH.ConstructorParams memory scWethParams = scWETH.ConstructorParams({
@@ -134,5 +134,22 @@ contract scWETHUnitTest is Test {
         uint256 leverage = uint256(1e18).divWadDown(1e18 - vault.targetLtv());
         uint256 expectedPctDiff = uint256(1e18 - stEthToEthSlippage).mulWadDown(leverage);
         assertApproxEqAbs(weth.balanceOf(alice), withdrawAmount.mulWadDown(1e18 - expectedPctDiff), 1, "alice's weth");
+    }
+
+    function test_getLtv() public {
+        uint256 amount = 10e18;
+        deal(address(weth), alice, amount);
+
+        vm.startPrank(alice);
+        weth.approve(address(vault), type(uint256).max);
+        vault.deposit(amount, alice);
+        vm.stopPrank();
+
+        vm.prank(keeper);
+        vault.harvest();
+
+        aavePool.setStEthToEthPriceFeed(stEthToEthPriceFeed, wstEth, weth);
+
+        assertEq(vault.getLtv(), vault.targetLtv(), "ltv");
     }
 }

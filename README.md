@@ -45,11 +45,11 @@ Please create a `.env` file before deployment. An example can be found in `.env.
 #### Dryrun
 
 ```
-forge script script/Deploy.s.sol -f [network]
+forge script script/[Script].s.sol --rpc-url [RPC URL]
 ```
 
 ### Live
 
 ```
-forge script script/Deploy.s.sol -f [network] --verify --broadcast
+forge script script/[Script].s.sol --rpc-url [RPC URL] --broadcast --verify
 ```

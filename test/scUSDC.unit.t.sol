@@ -55,11 +55,12 @@ contract scUSDCUnitTest is Test {
         wethVault = new MockERC4626(weth, "Mock WETH Vault", "mWETH");
 
         aavePoolDataProvider = new MockAavePoolDataProvider(address(usdc), address(weth));
+        usdcToEthPriceFeed = new MockChainlinkPriceFeed(address(usdc), address(weth), 0.001e18);
         aavePool = new MockAavePool();
+        aavePool.setUsdcWethPriceFeed(usdcToEthPriceFeed, usdc, weth);
         aaveAUsdc = new MockAUsdc(aavePool, usdc);
         aaveVarDWeth = new MockVarDebtWETH(aavePool, weth);
 
-        usdcToEthPriceFeed = new MockChainlinkPriceFeed(address(usdc), address(weth), 0.001e18);
         balancerVault = new MockBalancerVault(weth);
         uniswapRouter = new MockSwapRouter();
 
@@ -163,6 +164,23 @@ contract scUSDCUnitTest is Test {
         aavePool.addInterestOnDebt(address(vault), address(weth), debtBefore.mulWadDown(interest));
 
         assertEq(vault.getDebt(), debtBefore.mulWadDown(1e18 + interest), "debt with interest");
+    }
+
+    function test_getLtv() public {
+        uint256 amount = 10000e6;
+        deal(address(usdc), alice, amount);
+
+        vm.startPrank(alice);
+        usdc.approve(address(vault), type(uint256).max);
+        vault.deposit(amount, alice);
+        vm.stopPrank();
+
+        vm.prank(keeper);
+        vault.rebalance();
+
+        aavePool.setUsdcWethPriceFeed(usdcToEthPriceFeed, usdc, weth);
+
+        assertEq(vault.getLtv(), vault.targetLtv(), "ltv");
     }
 
     function test_getUsdcFromWeth_precisionLoss() public {
