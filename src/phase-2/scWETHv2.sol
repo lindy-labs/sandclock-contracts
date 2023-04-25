@@ -201,6 +201,7 @@ contract scWETHv2 is sc4626, LendingMarketManager, IFlashLoanRecipient {
         balancerVault.flashLoan(address(this), tokens, amounts, abi.encode(params));
     }
 
+    /// @notice reallocate funds from one protocol to another (without any slippage)
     function reallocate(RepayWithdrawParam[] calldata from, SupplyBorrowParam[] calldata to) external onlyKeeper {
         uint256 totalFlashLoanAmount;
         for (uint256 i; i < from.length; i++) {
@@ -225,24 +226,19 @@ contract scWETHv2 is sc4626, LendingMarketManager, IFlashLoanRecipient {
         balancerVault.flashLoan(address(this), tokens, amounts, abi.encode(params));
     }
 
-    /// @dev the backend will calculate the supposed amounts and flashloan amounts for each protocol
-    /// @dev this same method is to be used to reallocate positions
-    function rebalance(uint256 totalFlashLoanAmount, RebalanceParams memory params) external onlyKeeper {
-        // if (params.amount > asset.balanceOf(address(this))) revert InsufficientDepositBalance();
+    // /// @dev ultimate method for rebalancing the position
+    // function rebalance(uint256 totalFlashLoanAmount, RebalanceParams memory params) external onlyKeeper {
+    //     // if (params.amount > asset.balanceOf(address(this))) revert InsufficientDepositBalance();
 
-        address[] memory tokens = new address[](1);
-        tokens[0] = address(weth);
+    //     address[] memory tokens = new address[](1);
+    //     tokens[0] = address(weth);
 
-        uint256[] memory amounts = new uint256[](1);
-        amounts[0] = totalFlashLoanAmount;
+    //     uint256[] memory amounts = new uint256[](1);
+    //     amounts[0] = totalFlashLoanAmount;
 
-        // todo: override the user deposit mehtod for this
-        // needed otherwise counted as profit during harvest
-        // totalInvested += params.amount;
-
-        // take flashloan
-        balancerVault.flashLoan(address(this), tokens, amounts, abi.encode(params));
-    }
+    //     // take flashloan
+    //     balancerVault.flashLoan(address(this), tokens, amounts, abi.encode(params));
+    // }
 
     //////////////////// VIEW METHODS //////////////////////////
 
