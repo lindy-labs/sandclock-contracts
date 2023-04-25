@@ -110,7 +110,6 @@ abstract contract LendingMarketManager {
         for (uint256 i = 0; i < totalMarkets(); i++) {
             collateral += _wstEthToEth(lendingMarkets[LendingMarketType(i)].getCollateral());
         }
-        console.log("collateral", collateral);
     }
 
     /// @notice returns the total ETH borrowed
@@ -118,15 +117,21 @@ abstract contract LendingMarketManager {
         for (uint256 i = 0; i < totalMarkets(); i++) {
             debt += lendingMarkets[LendingMarketType(i)].getDebt();
         }
-        console.log("debt", debt);
     }
+
+    //////////////////// HELPER METHODS FOR BACKEND AND TESTS ////////////////////////////////
 
     function getDebt(LendingMarketType market) public view returns (uint256) {
         return lendingMarkets[market].getDebt();
     }
 
+    /// @dev in terms of weth
     function getCollateral(LendingMarketType market) public view returns (uint256) {
-        return lendingMarkets[market].getCollateral();
+        return _wstEthToEth(lendingMarkets[market].getCollateral());
+    }
+
+    function getLtv(LendingMarketType market) external view returns (uint256) {
+        return getDebt(market).divWadDown(getCollateral(market));
     }
 
     //////////////////////////     AAVE V3 ///////////////////////////////
