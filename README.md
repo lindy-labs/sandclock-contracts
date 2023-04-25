@@ -10,9 +10,9 @@
 
 ## Staking
 The yield strategies takes a performance fee which is distributed to Sandclock Quartz holders thru a set of staking contracts deployed on mainnet. These contracts additionally distributes bonus multiplier points (inspired by [GMX reward mechanism](https://gmxio.gitbook.io/gmx/rewards)) in order to incentivize long term staking.
-- **RewardTracker** - Deposit Quartz and recieve sfQuartz. You can also deposit bnQuartz. Over time, as performance fees are collected, you can claim WETH rewards in relation to the amount of sfQuartz you own and how many bnQuartz you've deposited. sfQuartz can be redeemed for Quartz at a 1:1 ratio at any time. On redemption, bnQuartz will be burned relative to the amount you redeem. Contracts are inspired and built on top of the [Playpen ERC20StakingPool](https://github.com/ZeframLou/playpen/blob/main/src/ERC20StakingPool.sol) contracts.
-- **BonusTracker** - Deposit sfQuartz and recieve sQuartz. Over time you can claim bnQuartz at a 100% APR. sQuartz can be redeemed for sfQuartz at a 1:1 ratio at any time.
 - **StakingRouter** - Provides a single user interfacing contract that routes between the different staking contracts. Deposit Quartz and receive sQuartz. Provides user with option to claim WETH rewards, compound bonus multiplier points and redeem sQuartz for Quartz.
+- **RewardTracker** - Deposit Quartz and recieve sfQuartz. You can also deposit bnQuartz. Over time, as performance fees are collected, you can claim WETH rewards. sfQuartz can be redeemed for Quartz at any time. On redemption, bnQuartz will be burned relative to the amount you redeem. 
+- **BonusTracker** - Deposit sfQuartz and recieve sQuartz. Over time you can claim bnQuartz at a 100% APR. sQuartz can be redeemed for sfQuartz at a 1:1 ratio after 30 days, before that a linearly decreasing tax is applied.
 
 ## Installation
 
