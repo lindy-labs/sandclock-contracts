@@ -36,6 +36,8 @@ abstract contract UsdcWethLendingManager {
         EULER
     }
 
+    // TODO: add ltv func
+
     struct ProtocolActions {
         function(uint256) supply;
         function(uint256) borrow;

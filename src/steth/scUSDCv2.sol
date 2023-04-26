@@ -29,6 +29,7 @@ import {sc4626} from "../sc4626.sol";
 import {UsdcWethLendingManager} from "./UsdcWethLendingManager.sol";
 
 // TODO: add modifiers to all functions
+// TODO: add function for harvesting EULER reward tokens
 /**
  * @title Sandclock USDC Vault
  * @notice A vault that allows users to earn interest on their USDC deposits from leveraged WETH staking.
@@ -134,8 +135,9 @@ contract scUSDCv2 is sc4626, UsdcWethLendingManager, IFlashLoanRecipient {
     }
 
     /**
-     * @notice Allocate capital between lending markets.
-     * @param _params The allocation parameters. Markets where positions are downsized must be listed first.
+     * @notice Reallocate capital between lending markets, ie moves debt and collateral from one protocol to another.
+     * @param _params The reallocation parameters. Markets where positions are downsized must be listed first because collateral has to be relased before it is reallocated.
+     * @param _flashLoanAmount The amount of WETH to flashloan from Balancer. Has to be at least equal to amount of WETH debt moved between lending markets.
      */
     function reallocateCapital(ReallocationParams[] calldata _params, uint256 _flashLoanAmount) public {
         address[] memory tokens = new address[](1);
@@ -144,12 +146,16 @@ contract scUSDCv2 is sc4626, UsdcWethLendingManager, IFlashLoanRecipient {
         uint256[] memory amounts = new uint256[](1);
         amounts[0] = _flashLoanAmount;
 
+        _initiateFlashLoan();
         balancerVault.flashLoan(address(this), tokens, amounts, abi.encode(_params));
+        _finalizeFlashLoan();
     }
 
     function receiveFlashLoan(address[] memory, uint256[] memory amounts, uint256[] memory, bytes memory userData)
         external
     {
+        _isFlashLoanInitiated();
+
         if (msg.sender != address(balancerVault)) {
             revert InvalidFlashLoanCaller();
         }
@@ -286,6 +292,10 @@ contract scUSDCv2 is sc4626, UsdcWethLendingManager, IFlashLoanRecipient {
         return scWETH.convertToAssets(scWETH.balanceOf(address(this)));
     }
 
+    /**
+     * @notice Returns the amount of profit made by the vault.
+     * @return The profit amount in WETH.
+     */
     function getProfit() public view returns (uint256) {
         return _calculateWethProfit(wethInvested(), totalDebt());
     }

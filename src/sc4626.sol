@@ -26,7 +26,7 @@ abstract contract sc4626 is ERC4626, AccessControl {
         treasury = _admin;
     }
 
-    bool flashLoanInitiated;
+    bool public flashLoanInitiated;
     uint256 public performanceFee = 0.1e18;
     uint256 public floatPercentage = 0.01e18;
     address public treasury;

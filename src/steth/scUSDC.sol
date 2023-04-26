@@ -320,6 +320,10 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
         return scWETH.convertToAssets(scWETH.balanceOf(address(this)));
     }
 
+    /**
+     * @notice Returns the amount of profit made by the vault.
+     * @return The profit amount in WETH.
+     */
     function getProfit() public view returns (uint256) {
         return _calculateWethProfit(getInvested(), getDebt());
     }
