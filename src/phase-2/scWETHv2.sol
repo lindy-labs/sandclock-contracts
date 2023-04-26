@@ -397,7 +397,7 @@ contract scWETHv2 is sc4626, LendingMarketManager, IFlashLoanRecipient {
         uint256 flashLoanAmount;
         RepayWithdrawParam[] memory repayWithdrawParams = new RepayWithdrawParam[](n);
 
-        uint256 totalInvested_ = totalInvested;
+        uint256 totalInvested_ = totalCollateral() - totalDebt();
 
         {
             uint256 flashLoanAmount_;
@@ -405,8 +405,6 @@ contract scWETHv2 is sc4626, LendingMarketManager, IFlashLoanRecipient {
             for (uint256 i; i < n; i++) {
                 (flashLoanAmount_, amount_) =
                     _calcFlashLoanAmountWithdrawing(LendingMarketType(i), amount, totalInvested_);
-
-                console.log("to withdraw", amount_);
 
                 repayWithdrawParams[i] =
                     RepayWithdrawParam(LendingMarketType(i), flashLoanAmount_, _ethToWstEth(flashLoanAmount_ + amount_));
