@@ -75,7 +75,7 @@ contract scUSDCTest is Test {
             curveEthStEthPool: ICurvePool(C.CURVE_ETH_STETH_POOL),
             stEth: ILido(C.STETH),
             wstEth: IwstETH(C.WSTETH),
-            weth: C.WETH,
+            weth: WETH(payable(C.WETH)),
             stEthToEthPriceFeed: AggregatorV3Interface(C.CHAINLINK_STETH_ETH_PRICE_FEED),
             balancerVault: IVault(C.BALANCER_VAULT)
         });

@@ -1,4 +1,4 @@
-corpusDir: "test/echidna-corpus"
+corpusDir: "echidna/corpus"
 testMode: assertion
 testLimit: 100000
 deployer: "0x10000"
