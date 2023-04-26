@@ -162,13 +162,13 @@ contract scWETHv2Test is Test {
         assertApproxEqRel(weth.balanceOf(address(vault)), assets / 2, maxAssetsDelta, "assets not withdrawn");
 
         // withdraw the remaining assets
-        // hoax(keeper);
-        // vault.withdrawToVault(assets / 2);
+        hoax(keeper);
+        vault.withdrawToVault(assets / 2);
 
-        // uint256 dust = 100;
-        // assertLt(vault.totalDebt(), dust, "test_withdrawToVault getDebt error");
-        // assertLt(vault.totalCollateral(), dust, "test_withdrawToVault getCollateral error");
-        // assertApproxEqRel(weth.balanceOf(address(vault)), assets, maxAssetsDelta, "test_withdrawToVault asset balance");
+        uint256 dust = 100;
+        assertLt(vault.totalDebt(), dust, "test_withdrawToVault getDebt error");
+        assertLt(vault.totalCollateral(), dust, "test_withdrawToVault getCollateral error");
+        assertApproxEqRel(weth.balanceOf(address(vault)), assets, maxAssetsDelta, "test_withdrawToVault asset balance");
     }
 
     function test_invest_reinvestingProfits() public {}
