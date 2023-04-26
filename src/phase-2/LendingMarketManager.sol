@@ -76,6 +76,7 @@ abstract contract LendingMarketManager {
         ERC20(address(wstETH)).safeApprove(C.AAVE_POOL, type(uint256).max);
         ERC20(address(weth)).safeApprove(C.AAVE_POOL, type(uint256).max);
         ERC20(address(wstETH)).safeApprove(C.EULER, type(uint256).max);
+        ERC20(address(weth)).safeApprove(C.EULER, type(uint256).max);
 
         // Enter the euler collateral market (collateral's address, *not* the eToken address) ,
         IEulerMarkets(C.EULER_MARKETS).enterMarket(0, address(wstETH));
@@ -101,11 +102,7 @@ abstract contract LendingMarketManager {
         return uint256(type(LendingMarketType).max) + 1;
     }
 
-    function allocationPercent(LendingMarketType market) external view returns (uint256) {
-        return lendingMarkets[market].getCollateral().divWadDown(totalCollateral());
-    }
-
-    /// @notice returns the total wstETH supplied as collateral (in ETH)
+    /// @notice returns the total assets supplied as collateral (in ETH)
     function totalCollateral() public view returns (uint256 collateral) {
         for (uint256 i = 0; i < totalMarkets(); i++) {
             collateral += _wstEthToEth(lendingMarkets[LendingMarketType(i)].getCollateral());
@@ -119,8 +116,6 @@ abstract contract LendingMarketManager {
         }
     }
 
-    //////////////////// HELPER METHODS FOR BACKEND AND TESTS ////////////////////////////////
-
     function getDebt(LendingMarketType market) public view returns (uint256) {
         return lendingMarkets[market].getDebt();
     }
@@ -130,7 +125,7 @@ abstract contract LendingMarketManager {
         return _wstEthToEth(lendingMarkets[market].getCollateral());
     }
 
-    function getLtv(LendingMarketType market) external view returns (uint256) {
+    function getLtv(LendingMarketType market) public view returns (uint256) {
         return getDebt(market).divWadDown(getCollateral(market));
     }
 

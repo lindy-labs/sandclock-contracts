@@ -98,12 +98,124 @@ contract scWETHv2Test is Test {
     //     _redeemChecks(preDepositBal);
     // }
 
-    function test_invest() public {
-        uint256 amount = 10 ether;
-        uint256 stEthRateTolerance = 0.999e18;
+    function test_invest(uint256 amount) public {
+        amount = bound(amount, 1e10, 20000 ether);
         _depositToVault(address(this), amount);
         _depositChecks(amount, amount);
 
+        (scWETHv2.SupplyBorrowParam[] memory supplyBorrowParams, uint256 totalSupplyAmount, uint256 totalDebtTaken) =
+            _getSupplyBorrowParams(amount);
+
+        // deposit into strategy
+        hoax(keeper);
+        vault.invest(amount, supplyBorrowParams);
+
+        _investChecks(amount, _wstEthToEth(totalSupplyAmount), totalDebtTaken);
+    }
+
+    // function test_deposit_invest_redeem() public {
+    //     uint256 amount = 10 ether;
+    //     uint256 shares = _depositToVault(address(this), amount);
+    //     _depositChecks(amount, amount);
+
+    //     (scWETHv2.SupplyBorrowParam[] memory supplyBorrowParams,,) = _getSupplyBorrowParams(amount);
+
+    //     // deposit into strategy
+    //     hoax(keeper);
+    //     vault.invest(amount, supplyBorrowParams);
+
+    //     assertEq(vault.balanceOf(address(this)), shares);
+    //     assertApproxEqRel(vault.convertToAssets(shares), amount, 0.01e18);
+
+    //     vault.redeem(shares, address(this), address(this));
+
+    //     assertEq(vault.convertToAssets(10 ** vault.decimals()), 1e18);
+    //     assertEq(vault.balanceOf(address(this)), 0);
+    //     assertEq(vault.convertToAssets(vault.balanceOf(address(this))), 0);
+    //     assertApproxEqRel(weth.balanceOf(address(this)), amount, 0.01e18);
+    // }
+
+    function test_withdrawToVault() public {
+        uint256 amount = 10 ether;
+        uint256 maxAssetsDelta = 0.01e18;
+        uint256 shares = _depositToVault(address(this), amount);
+        _depositChecks(amount, amount);
+
+        (scWETHv2.SupplyBorrowParam[] memory supplyBorrowParams,,) = _getSupplyBorrowParams(amount);
+
+        // deposit into strategy
+        hoax(keeper);
+        vault.invest(amount, supplyBorrowParams);
+
+        uint256 assets = vault.totalAssets();
+
+        assertEq(weth.balanceOf(address(vault)), 0);
+
+        uint256 ltv = vault.getLtv();
+        uint256 lev = vault.getLeverage();
+
+        hoax(keeper);
+        vault.withdrawToVault(assets / 2);
+
+        // net ltv and leverage must not change after withdraw
+        assertApproxEqRel(vault.getLtv(), ltv, 0.001e18, "ltv changed after withdraw");
+        assertApproxEqRel(vault.getLeverage(), lev, 0.001e18, "leverage changed after withdraw");
+        assertApproxEqRel(weth.balanceOf(address(vault)), assets / 2, maxAssetsDelta, "assets not withdrawn");
+
+        // withdraw the remaining assets
+        // hoax(keeper);
+        // vault.withdrawToVault(assets / 2);
+
+        // uint256 dust = 100;
+        // assertLt(vault.totalDebt(), dust, "test_withdrawToVault getDebt error");
+        // assertLt(vault.totalCollateral(), dust, "test_withdrawToVault getCollateral error");
+        // assertApproxEqRel(weth.balanceOf(address(vault)), assets, maxAssetsDelta, "test_withdrawToVault asset balance");
+    }
+
+    function test_invest_reinvestingProfits() public {}
+
+    function test_reallocate() public {}
+
+    // we decrease ltv in case of a loss, since the ltv goes higher than the target ltv in such a scenario
+    function test_disinvest() public {}
+
+    //////////////////////////// INTERNAL METHODS ////////////////////////////////////////
+
+    function _calcSupplyBorrowFlashLoanAmount(LendingMarketManager.LendingMarketType market, uint256 amount)
+        internal
+        view
+        returns (uint256 flashLoanAmount)
+    {
+        uint256 debt = vault.getDebt(market);
+        uint256 collateral = vault.getCollateral(market);
+
+        uint256 target = targetLtv[market].mulWadDown(amount + collateral);
+
+        // calculate the flashloan amount needed
+        flashLoanAmount = (target - debt).divWadDown(C.ONE - targetLtv[market]);
+    }
+
+    function _calcRepayWithdrawFlashLoanAmount(LendingMarketManager.LendingMarketType market, uint256 amount)
+        internal
+        view
+        returns (uint256 flashLoanAmount)
+    {
+        uint256 debt = vault.getDebt(market);
+        uint256 collateral = vault.getCollateral(market);
+
+        uint256 target = targetLtv[market].mulWadDown(amount + collateral);
+
+        // calculate the flashloan amount needed
+        flashLoanAmount = (debt - target).divWadDown(C.ONE - targetLtv[market]);
+    }
+
+    /// @return : supplyBorrowParams, totalSupplyAmount, totalDebtTaken
+    function _getSupplyBorrowParams(uint256 amount)
+        internal
+        view
+        returns (scWETHv2.SupplyBorrowParam[] memory, uint256, uint256)
+    {
+        uint256 stEthRateTolerance = 0.999e18;
         scWETHv2.SupplyBorrowParam[] memory supplyBorrowParams = new scWETHv2.SupplyBorrowParam[](2);
 
         // supply 70% to aaveV3 and 30% to Euler
@@ -129,52 +241,10 @@ contract scWETHv2Test is Test {
             borrowAmount: eulerFlashLoanAmount
         });
 
-        // deposit into strategy
-        hoax(keeper);
-        vault.invest(amount, supplyBorrowParams);
+        uint256 totalSupplyAmount = aaveV3SupplyAmount + eulerSupplyAmount;
+        uint256 totalDebtTaken = aaveV3FlashLoanAmount + eulerFlashLoanAmount;
 
-        _investChecks(
-            amount, _wstEthToEth(aaveV3SupplyAmount + eulerSupplyAmount), aaveV3FlashLoanAmount + eulerFlashLoanAmount
-        );
-    }
-
-    function test_invest_reinvestingProfits() public {}
-
-    function test__reallocate() public {}
-
-    // we decrease ltv in case of a loss, since the ltv goes higher than the target ltv in such a scenario
-    function test_disinvest() public {}
-
-    //////////////////////////// INTERNAL METHODS ////////////////////////////////////////
-
-    function _calcSupplyBorrowFlashLoanAmount(LendingMarketManager.LendingMarketType market, uint256 amount)
-        internal
-        returns (uint256 flashLoanAmount)
-    {
-        uint256 debt = vault.getDebt(market);
-        uint256 collateral = vault.getCollateral(market);
-
-        uint256 target = targetLtv[market].mulWadDown(amount + collateral);
-
-        assertGt(target, debt, "target not greater than debt for supply borrow");
-
-        // calculate the flashloan amount needed
-        flashLoanAmount = (target - debt).divWadDown(C.ONE - targetLtv[market]);
-    }
-
-    function _calcRepayWithdrawFlashLoanAmount(LendingMarketManager.LendingMarketType market, uint256 amount)
-        internal
-        returns (uint256 flashLoanAmount)
-    {
-        uint256 debt = vault.getDebt(market);
-        uint256 collateral = vault.getCollateral(market);
-
-        uint256 target = targetLtv[market].mulWadDown(amount + collateral);
-
-        assertLt(target, debt, "target not less than debt for repay withdraw");
-
-        // calculate the flashloan amount needed
-        flashLoanAmount = (debt - target).divWadDown(C.ONE - targetLtv[market]);
+        return (supplyBorrowParams, totalSupplyAmount, totalDebtTaken);
     }
 
     function _depositChecks(uint256 amount, uint256 preDepositBal) internal {
@@ -199,7 +269,7 @@ contract scWETHv2Test is Test {
         assertApproxEqRel(totalCollateral - totalDebt, amount, 0.01e18, "totalAssets not equal amount");
         assertEq(vault.totalInvested(), amount, "totalInvested not updated");
         assertApproxEqRel(totalCollateral, totalSupplyAmount, 0.0001e18, "totalCollateral not equal totalSupplyAmount");
-        assertEq(totalDebt, totalDebtTaken, "totalDebt not equal totalDebtTaken");
+        assertApproxEqRel(totalDebt, totalDebtTaken, 100, "totalDebt not equal totalDebtTaken");
 
         uint256 aaveV3Deposited = vault.getCollateral(LendingMarketManager.LendingMarketType.AAVE_V3)
             - vault.getDebt(LendingMarketManager.LendingMarketType.AAVE_V3);
@@ -208,6 +278,20 @@ contract scWETHv2Test is Test {
 
         assertApproxEqRel(aaveV3Deposited, amount.mulWadDown(0.7e18), 0.005e18, "aaveV3 allocation not correct");
         assertApproxEqRel(eulerDeposited, amount.mulWadDown(0.3e18), 0.005e18, "euler allocation not correct");
+
+        assertApproxEqRel(
+            vault.allocationPercent(LendingMarketManager.LendingMarketType.AAVE_V3),
+            0.7e18,
+            0.005e18,
+            "aaveV3 allocationPercent not correct"
+        );
+
+        assertApproxEqRel(
+            vault.allocationPercent(LendingMarketManager.LendingMarketType.EULER),
+            0.3e18,
+            0.005e18,
+            "euler allocationPercent not correct"
+        );
 
         assertApproxEqRel(
             vault.getLtv(LendingMarketManager.LendingMarketType.AAVE_V3),

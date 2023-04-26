@@ -47,8 +47,8 @@ contract scWETHv2 is sc4626, LendingMarketManager, IFlashLoanRecipient {
 
     struct RepayWithdrawParam {
         LendingMarketType market;
-        uint256 repayAmount; //  flashLoanAmount (in WETH)
-        uint256 withdrawAmount; // amount of wstEth to withdraw (amount + flashLoanAmount) (in wstEth)
+        uint256 repayAmount; // flashLoanAmount (in WETH)
+        uint256 withdrawAmount; // amount of wstEth to withdraw from the market (amount + flashLoanAmount) (in wstEth)
     }
 
     struct SupplyBorrowParam {
@@ -273,10 +273,9 @@ contract scWETHv2 is sc4626, LendingMarketManager, IFlashLoanRecipient {
         }
     }
 
-    // /// @notice returns the max loan to value(ltv) ratio for borrowing eth on Aavev3 with wsteth as collateral for the flashloan (1e18 = 100%)
-    // function getMaxLtv() public view returns (uint256) {
-    //     return uint256(IPool(C.AAVE_POOL).getEModeCategoryData(C.AAVE_EMODE_ID).ltv) * 1e14;
-    // }
+    function allocationPercent(LendingMarketType market) external view returns (uint256) {
+        return (getCollateral(market) - getDebt(market)).divWadDown(totalInvested);
+    }
 
     //////////////////// EXTERNAL METHODS //////////////////////////
 
@@ -378,34 +377,16 @@ contract scWETHv2 is sc4626, LendingMarketManager, IFlashLoanRecipient {
 
     //////////////////// INTERNAL METHODS //////////////////////////
 
-    // todo: this calculation is to be done offchain
-    // function _calcFlashLoanAmountRebalancing(Protocol protocol, uint256 totalAmount)
-    //     internal
-    //     view
-    //     returns (uint256 flashLoanAmount, uint256 target, uint256 debt, uint256 supplyAmount)
-    // {
-    //     ProtocolParams memory params = protocolParams[protocol];
-
-    //     supplyAmount = totalAmount.mulWadDown(params.allocationPercent);
-    //     debt = getDebt(protocol);
-    //     uint256 collateral = getCollateral(protocol);
-
-    //     target = uint256(params.targetLtv).mulWadDown(supplyAmount + collateral);
-
-    //     // calculate the flashloan amount needed
-    //     flashLoanAmount = (target > debt ? target - debt : debt - target).divWadDown(C.ONE - params.targetLtv);
-    // }
-
-    function _calcFlashLoanAmountWithdrawing(LendingMarketType market, uint256 totalAmount, uint256 totalCollateral_)
+    function _calcFlashLoanAmountWithdrawing(LendingMarketType market, uint256 totalAmount, uint256 totalInvested_)
         internal
         view
         returns (uint256 flashLoanAmount, uint256 amount)
     {
         LendingMarket memory lendingMarket = lendingMarkets[market];
         uint256 debt = lendingMarket.getDebt();
-        uint256 collateral = lendingMarket.getCollateral();
+        uint256 collateral = _wstEthToEth(lendingMarket.getCollateral());
         // withdraw from each protocol based on the allocation percent
-        amount = totalAmount.mulDivDown(collateral, totalCollateral_);
+        amount = totalAmount.mulDivDown(collateral - debt, totalInvested_);
 
         // calculate the flashloan amount needed
         flashLoanAmount = amount.mulDivDown(debt, collateral - debt);
@@ -416,14 +397,14 @@ contract scWETHv2 is sc4626, LendingMarketManager, IFlashLoanRecipient {
         uint256 flashLoanAmount;
         RepayWithdrawParam[] memory repayWithdrawParams = new RepayWithdrawParam[](n);
 
-        uint256 totalCollateral_ = totalCollateral();
+        uint256 totalInvested_ = totalInvested;
 
         {
             uint256 flashLoanAmount_;
             uint256 amount_;
             for (uint256 i; i < n; i++) {
                 (flashLoanAmount_, amount_) =
-                    _calcFlashLoanAmountWithdrawing(LendingMarketType(i), amount, totalCollateral_);
+                    _calcFlashLoanAmountWithdrawing(LendingMarketType(i), amount, totalInvested_);
 
                 repayWithdrawParams[i] = RepayWithdrawParam(LendingMarketType(i), amount_, flashLoanAmount_ + amount_);
                 flashLoanAmount += flashLoanAmount_;
@@ -447,26 +428,38 @@ contract scWETHv2 is sc4626, LendingMarketManager, IFlashLoanRecipient {
     }
 
     function _supplyBorrow(SupplyBorrowParam[] memory supplyBorrowParams) internal {
-        LendingMarket memory lendingMarket;
         uint256 n = supplyBorrowParams.length;
-        for (uint256 i; i < n; i++) {
-            lendingMarket = lendingMarkets[supplyBorrowParams[i].market];
-            // console.log("supply Amount wstETH", supplyBorrowParams[i].supplyAmount);
-            // console.log("wstEth balance", wstETH.balanceOf(address(this)));
-            lendingMarket.supply(supplyBorrowParams[i].supplyAmount);
-            lendingMarket.borrow(supplyBorrowParams[i].borrowAmount);
-            // console.log("borrow Amount", supplyBorrowParams[i].borrowAmount);
+        if (n != 0) {
+            LendingMarket memory lendingMarket;
+            for (uint256 i; i < n; i++) {
+                lendingMarket = lendingMarkets[supplyBorrowParams[i].market];
+                // console.log("supply Amount wstETH", _ethToWstEth(supplyBorrowParams[i].supplyAmount));
+                // console.log("wstEth balance", wstETH.balanceOf(address(this)));
+                lendingMarket.supply(supplyBorrowParams[i].supplyAmount);
+                lendingMarket.borrow(supplyBorrowParams[i].borrowAmount);
+                // console.log("borrow Amount", supplyBorrowParams[i].borrowAmount);
+            }
         }
     }
 
     function _repayWithdraw(RepayWithdrawParam[] memory repayWithdrawParams) internal {
         // bool withdrawAll = flashLoanAmount >= totalDebt();
-        LendingMarket memory lendingMarket;
         uint256 n = repayWithdrawParams.length;
-        for (uint256 i; i < n; i++) {
-            lendingMarket = lendingMarkets[repayWithdrawParams[i].market];
-            lendingMarket.repay(repayWithdrawParams[i].repayAmount);
-            lendingMarket.withdraw(repayWithdrawParams[i].withdrawAmount);
+        if (n != 0) {
+            LendingMarket memory lendingMarket;
+            for (uint256 i; i < n; i++) {
+                lendingMarket = lendingMarkets[repayWithdrawParams[i].market];
+                if (repayWithdrawParams[i].repayAmount > lendingMarket.getDebt()) {
+                    lendingMarket.repay(type(uint256).max);
+                    lendingMarket.withdraw(type(uint256).max);
+                } else {
+                    console.log("to withdraw", _ethToWstEth(repayWithdrawParams[i].withdrawAmount));
+                    console.log("market balance", lendingMarket.getCollateral());
+
+                    lendingMarket.repay(repayWithdrawParams[i].repayAmount);
+                    lendingMarket.withdraw(_ethToWstEth(repayWithdrawParams[i].withdrawAmount));
+                }
+            }
         }
     }
 
