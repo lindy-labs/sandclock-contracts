@@ -7,24 +7,24 @@ import {
     InvalidSlippageTolerance,
     PleaseUseRedeemMethod,
     InvalidFlashLoanCaller
-} from "../errors/scErrors.sol";
+} from "../../src/errors/scErrors.sol";
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 import {WETH} from "solmate/tokens/WETH.sol";
-import {IPool} from "aave-v3/interfaces/IPool.sol";
-import {IAToken} from "aave-v3/interfaces/IAToken.sol";
-import {IVariableDebtToken} from "aave-v3/interfaces/IVariableDebtToken.sol";
+import {IPool} from "lib/aave-v3-core/contracts/interfaces/IPool.sol";
+import {IAToken} from "lib/aave-v3-core/contracts/interfaces/IAToken.sol";
+import {IVariableDebtToken} from "lib/aave-v3-core/contracts/interfaces/IVariableDebtToken.sol";
 
-import {Constants as C} from "../lib/Constants.sol";
-import {sc4626} from "../sc4626.sol";
-import {ICurvePool} from "../interfaces/curve/ICurvePool.sol";
-import {ILido} from "../interfaces/lido/ILido.sol";
-import {IwstETH} from "../interfaces/lido/IwstETH.sol";
-import {AggregatorV3Interface} from "../interfaces/chainlink/AggregatorV3Interface.sol";
-import {IVault} from "../interfaces/balancer/IVault.sol";
-import {IFlashLoanRecipient} from "../interfaces/balancer/IFlashLoanRecipient.sol";
+import {Constants as C} from "../../src/lib/Constants.sol";
+import {sc4626} from "../../src/sc4626.sol";
+import {ICurvePool} from "../../src/interfaces/curve/ICurvePool.sol";
+import {ILido} from "../../src/interfaces/lido/ILido.sol";
+import {IwstETH} from "../../src/interfaces/lido/IwstETH.sol";
+import {AggregatorV3Interface} from "../../src/interfaces/chainlink/AggregatorV3Interface.sol";
+import {IVault} from "../../src/interfaces/balancer/IVault.sol";
+import {IFlashLoanRecipient} from "../../src/interfaces/balancer/IFlashLoanRecipient.sol";
 
 contract scWETH is sc4626, IFlashLoanRecipient {
     using SafeTransferLib for ERC20;
@@ -208,12 +208,12 @@ contract scWETH is sc4626, IFlashLoanRecipient {
     }
 
     /// @notice returns the net LTV at which we have borrowed till now (1e18 = 100%)
-    function getLtv() public view returns (uint256) {
-        (uint256 totalCollateralBase, uint256 totalDebtBase,,,,) = aavePool.getUserAccountData(address(this));
-
-        if (totalCollateralBase == 0) return 0;
-
-        return totalDebtBase.divWadUp(totalCollateralBase);
+    function getLtv() public view returns (uint256 ltv) {
+        uint256 collateral = getCollateral();
+        if (collateral > 0) {
+            // getDebt / totalSupplied
+            ltv = getDebt().divWadUp(collateral);
+        }
     }
 
     /// @notice returns the max loan to value(ltv) ratio for borrowing eth on Aavev3 with wsteth as collateral for the flashloan (1e18 = 100%)
@@ -276,7 +276,6 @@ contract scWETH is sc4626, IFlashLoanRecipient {
         if (msg.sender != address(balancerVault)) {
             revert InvalidFlashLoanCaller();
         }
-        _isFlashLoanInitiated();
 
         // the amount flashloaned
         uint256 flashLoanAmount = amounts[0];
@@ -361,9 +360,7 @@ contract scWETH is sc4626, IFlashLoanRecipient {
         if (!isDeposit) amount += flashLoanAmount.mulWadDown(C.ONE - slippageTolerance);
 
         // take flashloan
-        _initiateFlashLoan();
         balancerVault.flashLoan(address(this), tokens, amounts, abi.encode(isDeposit, amount));
-        _finalizeFlashLoan();
     }
 
     function _withdrawToVault(uint256 amount) internal {
@@ -382,9 +379,7 @@ contract scWETH is sc4626, IFlashLoanRecipient {
         totalInvested -= amount;
 
         // take flashloan
-        _initiateFlashLoan();
         balancerVault.flashLoan(address(this), tokens, amounts, abi.encode(false, amount));
-        _finalizeFlashLoan();
     }
 
     function _stEthToEth(uint256 stEthAmount) internal view returns (uint256 ethAmount) {
