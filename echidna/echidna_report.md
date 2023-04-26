@@ -1,8 +1,8 @@
 ## Running echidna on-chain fuzzing for scUSDC & scWETH
 
 Running crytic [pre-built](https://github.com/crytic/properties/tree/main/contracts/ERC4626) erc4626 tests with on-chain fuzzing on commit `b7f942f3182716107323f2c1039992104cf3186b` (n=100,000).
-- harness (scUSDC, scWETH)
-- coverage files (scUSDC, scWETH)
+- harness ([scUSDC](https://github.com/lindy-labs/sandclock-contracts/blob/main/test/CryticTest.sol#L26), [scWETH](https://github.com/lindy-labs/sandclock-contracts/blob/main/test/CryticTest.sol#L77))
+- coverage files ([scUSDC](https://github.com/lindy-labs/sandclock-contracts/blob/main/echidna/corpus/covered.1682534671.html), [scWETH](https://github.com/lindy-labs/sandclock-contracts/blob/main/echidna/corpus/covered.1682537438.html))
 
 ```
 $ export ECHIDNA_RPC_URL=
