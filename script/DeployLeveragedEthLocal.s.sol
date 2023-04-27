@@ -8,6 +8,9 @@ import {DeployLeveragedEth} from "./base/DeployLeveragedEth.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 import {MockWETH} from "../test/mocks/MockWETH.sol";
 import {MockUSDC} from "../test/mocks/MockUSDC.sol";
+import {sc4626} from "../src/sc4626.sol";
+import {scWETH} from "../src/steth/scWETH.sol";
+import {scUSDC} from "../src/steth/scUSDC.sol";
 
 contract DeployScript is DeployLeveragedEth, Test {
     using FixedPointMathLib for uint256;
@@ -34,16 +37,22 @@ contract DeployScript is DeployLeveragedEth, Test {
     }
 
     function fixtures() internal {
-        console2.log("\nexecuting steth fixtures\n");
+        console2.log("\nexecuting steth fixtures");
 
         fund();
 
-        deposit(alice, address(wethContract), 10e18);
-        deposit(bob, address(wethContract), 10e18);
+        deposit(wethContract);
+        // deposit(usdcContract);
 
-        harvest();
+        rebalance(wethContract);
+        // rebalance(usdcContract);
 
         redeem(alice);
+    }
+
+    function deposit(sc4626 vaultToken) internal {
+        deposit(alice, address(vaultToken), 10e18);
+        deposit(bob, address(vaultToken), 10e18);
     }
 
     function fund() internal {
@@ -70,11 +79,19 @@ contract DeployScript is DeployLeveragedEth, Test {
         vm.stopPrank();
     }
 
-    function harvest() internal {
-        console2.log("harvesting");
+    function rebalance(scWETH vaultToken) internal {
+        console2.log("rebalancing");
 
         vm.prank(keeper);
-        wethContract.harvest();
+        vaultToken.harvest();
+        vm.stopPrank();
+    }
+
+    function rebalance(scUSDC vaultToken) internal {
+        console2.log("rebalancing");
+
+        vm.prank(keeper);
+        vaultToken.rebalance();
         vm.stopPrank();
     }
 
