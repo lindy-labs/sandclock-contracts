@@ -178,19 +178,48 @@ contract scWETHv2Test is Test {
     }
 
     // we decrease ltv in case of a loss, since the ltv goes higher than the target ltv in such a scenario
-    function test_disinvest() public {
-        uint256 amount = 10 ether;
+    function test_disinvest(uint256 amount) public {
+        amount = bound(amount, boundMinimum, 15000 ether);
         _depositToVault(address(this), amount);
+
+        uint256 minimumDust = amount.mulWadDown(0.01e18);
 
         (scWETHv2.SupplyBorrowParam[] memory supplyBorrowParams,,) = _getInvestParams(amount, 0.7e18, 0.3e18);
 
         hoax(keeper);
         vault.invest(amount, supplyBorrowParams);
 
+        assertLt(weth.balanceOf(address(vault)), minimumDust, "weth dust after invest");
+        assertLt(wstEth.balanceOf(address(vault)), minimumDust, "wstEth dust after invest");
+
         uint256 aaveV3Ltv = vault.getLtv(LendingMarketManager.LendingMarketType.AAVE_V3);
         uint256 eulerLtv = vault.getLtv(LendingMarketManager.LendingMarketType.EULER);
 
-        // ltvs must decrease after disinvest
+        // disinvest to decrease the ltv on each protocol
+        uint256 ltvDecrease = 0.1e18;
+        uint256 newAaveV3Ltv = aaveV3Ltv - ltvDecrease;
+        uint256 newEulerLtv = eulerLtv - ltvDecrease;
+
+        scWETHv2.RepayWithdrawParam[] memory repayWithdrawParams = _getDisInvestParams(newAaveV3Ltv, newEulerLtv);
+
+        hoax(keeper);
+        vault.disinvest(repayWithdrawParams);
+
+        assertApproxEqRel(
+            vault.getLtv(LendingMarketManager.LendingMarketType.AAVE_V3),
+            newAaveV3Ltv,
+            0.0000001e18,
+            "aavev3 ltv not decreased"
+        );
+        assertApproxEqRel(
+            vault.getLtv(LendingMarketManager.LendingMarketType.EULER),
+            newEulerLtv,
+            0.0000001e18,
+            "euler ltv not decreased"
+        );
+
+        assertLt(weth.balanceOf(address(vault)), minimumDust, "weth dust after disinvest");
+        assertLt(wstEth.balanceOf(address(vault)), minimumDust, "wstEth dust after disinvest");
     }
 
     function test_reallocate() public {}
@@ -213,18 +242,18 @@ contract scWETHv2Test is Test {
         flashLoanAmount = (target - debt).divWadDown(C.ONE - targetLtv[market]);
     }
 
-    function _calcRepayWithdrawFlashLoanAmount(LendingMarketManager.LendingMarketType market, uint256 amount)
-        internal
-        view
-        returns (uint256 flashLoanAmount)
-    {
+    function _calcRepayWithdrawFlashLoanAmount(
+        LendingMarketManager.LendingMarketType market,
+        uint256 amount,
+        uint256 ltv
+    ) internal view returns (uint256 flashLoanAmount) {
         uint256 debt = vault.getDebt(market);
         uint256 collateral = vault.getCollateral(market);
 
-        uint256 target = targetLtv[market].mulWadDown(amount + collateral);
+        uint256 target = ltv.mulWadDown(amount + collateral);
 
         // calculate the flashloan amount needed
-        flashLoanAmount = (debt - target).divWadDown(C.ONE - targetLtv[market]);
+        flashLoanAmount = (debt - target).divWadDown(C.ONE - ltv);
     }
 
     /// @return : supplyBorrowParams, totalSupplyAmount, totalDebtTaken
@@ -263,6 +292,30 @@ contract scWETHv2Test is Test {
         uint256 totalDebtTaken = aaveV3FlashLoanAmount + eulerFlashLoanAmount;
 
         return (supplyBorrowParams, totalSupplyAmount, totalDebtTaken);
+    }
+
+    /// @return : repayWithdrawParams
+    function _getDisInvestParams(uint256 newAaveV3Ltv, uint256 newEulerLtv)
+        internal
+        view
+        returns (scWETHv2.RepayWithdrawParam[] memory)
+    {
+        uint256 aaveV3FlashLoanAmount =
+            _calcRepayWithdrawFlashLoanAmount(LendingMarketManager.LendingMarketType.AAVE_V3, 0, newAaveV3Ltv);
+        uint256 eulerFlashLoanAmount =
+            _calcRepayWithdrawFlashLoanAmount(LendingMarketManager.LendingMarketType.EULER, 0, newEulerLtv);
+
+        scWETHv2.RepayWithdrawParam[] memory repayWithdrawParams = new scWETHv2.RepayWithdrawParam[](2);
+
+        repayWithdrawParams[0] = scWETHv2.RepayWithdrawParam(
+            LendingMarketManager.LendingMarketType.AAVE_V3, aaveV3FlashLoanAmount, _ethToWstEth(aaveV3FlashLoanAmount)
+        );
+
+        repayWithdrawParams[1] = scWETHv2.RepayWithdrawParam(
+            LendingMarketManager.LendingMarketType.EULER, eulerFlashLoanAmount, _ethToWstEth(eulerFlashLoanAmount)
+        );
+
+        return repayWithdrawParams;
     }
 
     function _depositChecks(uint256 amount, uint256 preDepositBal) internal {
