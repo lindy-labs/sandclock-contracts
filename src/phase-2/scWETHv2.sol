@@ -274,7 +274,7 @@ contract scWETHv2 is sc4626, LendingMarketManager, IFlashLoanRecipient {
     }
 
     function allocationPercent(LendingMarketType market) external view returns (uint256) {
-        return (getCollateral(market) - getDebt(market)).divWadDown(totalInvested);
+        return (getCollateral(market) - getDebt(market)).divWadDown(totalCollateral() - totalDebt());
     }
 
     //////////////////// EXTERNAL METHODS //////////////////////////
