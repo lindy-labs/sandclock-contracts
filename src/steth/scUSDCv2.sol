@@ -40,6 +40,20 @@ contract scUSDCv2 is sc4626, UsdcWethLendingManager, IFlashLoanRecipient {
     using SafeTransferLib for WETH;
     using FixedPointMathLib for uint256;
 
+    struct ReallocationParams {
+        Protocol protocolId;
+        bool isDownsize;
+        uint256 collateralAmount;
+        uint256 debtAmount;
+    }
+
+    struct RebalanceParams {
+        Protocol protocolId;
+        uint256 supplyAmount;
+        bool leverageUp;
+        uint256 wethAmount;
+    }
+
     error LtvAboveMaxAllowed(Protocol protocolId);
     error FloatBalanceTooSmall(uint256 actual, uint256 required);
 
@@ -48,6 +62,7 @@ contract scUSDCv2 is sc4626, UsdcWethLendingManager, IFlashLoanRecipient {
     event EmergencyExitExecuted(
         address indexed admin, uint256 wethWithdrawn, uint256 debtRepaid, uint256 collateralReleased
     );
+    event Reallocated(Protocol protocolId, bool isDownsize, uint256 collateral, uint256 debt);
     event Rebalanced(Protocol protocolId, uint256 supplied, bool leverageUp, uint256 debt);
     event ProfitSold(uint256 wethSold, uint256 usdcReceived);
 
@@ -127,13 +142,6 @@ contract scUSDCv2 is sc4626, UsdcWethLendingManager, IFlashLoanRecipient {
         emit SlippageToleranceUpdated(msg.sender, _newSlippageTolerance);
     }
 
-    struct ReallocationParams {
-        Protocol protocolId;
-        bool isDownsize;
-        uint256 collateralAmount;
-        uint256 debtAmount;
-    }
-
     /**
      * @notice Reallocate capital between lending markets, ie moves debt and collateral from one protocol to another.
      * @param _params The reallocation parameters. Markets where positions are downsized must be listed first because collateral has to be relased before it is reallocated.
@@ -164,7 +172,7 @@ contract scUSDCv2 is sc4626, UsdcWethLendingManager, IFlashLoanRecipient {
         (ReallocationParams[] memory params) = abi.decode(userData, (ReallocationParams[]));
 
         for (uint8 i = 0; i < params.length; i++) {
-            ProtocolActions memory protocolActions = lendingProtocols[params[i].protocolId];
+            ProtocolActions memory protocolActions = protocolToActions[params[i].protocolId];
 
             if (params[i].isDownsize) {
                 protocolActions.repay(params[i].debtAmount);
@@ -173,16 +181,13 @@ contract scUSDCv2 is sc4626, UsdcWethLendingManager, IFlashLoanRecipient {
                 protocolActions.supply(params[i].collateralAmount);
                 protocolActions.borrow(params[i].debtAmount);
             }
+
+            emit Reallocated(
+                params[i].protocolId, params[i].isDownsize, params[i].collateralAmount, params[i].debtAmount
+            );
         }
 
         weth.safeTransfer(address(balancerVault), flashLoanAmount);
-    }
-
-    struct RebalanceParams {
-        Protocol protocolId;
-        uint256 supplyAmount;
-        bool leverageUp;
-        uint256 wethAmount;
     }
 
     /**
@@ -191,7 +196,7 @@ contract scUSDCv2 is sc4626, UsdcWethLendingManager, IFlashLoanRecipient {
      */
     function rebalance(RebalanceParams[] calldata _params) public {
         for (uint8 i = 0; i < _params.length; i++) {
-            ProtocolActions memory protocolActions = lendingProtocols[_params[i].protocolId];
+            ProtocolActions memory protocolActions = protocolToActions[_params[i].protocolId];
 
             // respect new deposits
             if (_params[i].supplyAmount != 0) {
@@ -270,7 +275,7 @@ contract scUSDCv2 is sc4626, UsdcWethLendingManager, IFlashLoanRecipient {
      */
     function totalCollateral() public view returns (uint256 total) {
         for (uint8 i = 0; i <= uint256(type(Protocol).max); i++) {
-            total += lendingProtocols[Protocol(i)].getCollateral();
+            total += protocolToActions[Protocol(i)].getCollateral();
         }
     }
 
@@ -280,7 +285,7 @@ contract scUSDCv2 is sc4626, UsdcWethLendingManager, IFlashLoanRecipient {
      */
     function totalDebt() public view returns (uint256 total) {
         for (uint8 i = 0; i <= uint256(type(Protocol).max); i++) {
-            total += lendingProtocols[Protocol(i)].getDebt();
+            total += protocolToActions[Protocol(i)].getDebt();
         }
     }
 
@@ -298,21 +303,6 @@ contract scUSDCv2 is sc4626, UsdcWethLendingManager, IFlashLoanRecipient {
      */
     function getProfit() public view returns (uint256) {
         return _calculateWethProfit(wethInvested(), totalDebt());
-    }
-
-    /**
-     * @notice Returns the net LTV at which the vault has borrowed until now.
-     * @return The current LTV (1e18 = 100%).
-     */
-    function getLtv(Protocol _protocol) public view returns (uint256) {
-        uint256 debt = lendingProtocols[_protocol].getDebt();
-
-        if (debt == 0) return 0;
-
-        uint256 debtPriceInUsdc = getUsdcFromWeth(debt);
-
-        // totalDebt / totalSupplied
-        return debtPriceInUsdc.divWadUp(lendingProtocols[_protocol].getCollateral());
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -359,11 +349,11 @@ contract scUSDCv2 is sc4626, UsdcWethLendingManager, IFlashLoanRecipient {
 
         // repay debt and withdraw collateral from each protocol in proportion to their collateral allocation
         for (uint8 i = 0; i <= uint256(type(Protocol).max); i++) {
-            uint256 protocolCollateral = lendingProtocols[Protocol(i)].getCollateral();
+            uint256 protocolCollateral = protocolToActions[Protocol(i)].getCollateral();
             uint256 allocationPct = protocolCollateral.divWadDown(_collateral);
 
-            lendingProtocols[Protocol(i)].repay(withdrawn.mulWadUp(allocationPct));
-            lendingProtocols[Protocol(i)].withdraw(_usdcNeeded.mulWadUp(allocationPct));
+            protocolToActions[Protocol(i)].repay(withdrawn.mulWadUp(allocationPct));
+            protocolToActions[Protocol(i)].withdraw(_usdcNeeded.mulWadUp(allocationPct));
         }
     }
 

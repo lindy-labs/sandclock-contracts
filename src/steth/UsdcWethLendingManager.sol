@@ -36,8 +36,6 @@ abstract contract UsdcWethLendingManager {
         EULER
     }
 
-    // TODO: add ltv func
-
     struct ProtocolActions {
         function(uint256) supply;
         function(uint256) borrow;
@@ -48,7 +46,7 @@ abstract contract UsdcWethLendingManager {
         function() view returns(uint256) getMaxLtv;
     }
 
-    mapping(Protocol => ProtocolActions) lendingProtocols;
+    mapping(Protocol => ProtocolActions) protocolToActions;
 
     ERC20 public immutable usdc;
     WETH public immutable weth;
@@ -98,7 +96,7 @@ abstract contract UsdcWethLendingManager {
         weth.safeApprove(eulerProtocol, type(uint256).max);
         eulerMarkets.enterMarket(0, address(usdc));
 
-        lendingProtocols[Protocol.AAVE_V3] = ProtocolActions(
+        protocolToActions[Protocol.AAVE_V3] = ProtocolActions(
             supplyUsdcOnAave,
             borrowWethOnAave,
             repayDebtOnAave,
@@ -107,7 +105,7 @@ abstract contract UsdcWethLendingManager {
             getDebtOnAave,
             getMaxLtvOnAave
         );
-        lendingProtocols[Protocol.EULER] = ProtocolActions(
+        protocolToActions[Protocol.EULER] = ProtocolActions(
             supplyUsdcOnEuler,
             borrowWethOnEuler,
             repayDebtOnEuler,

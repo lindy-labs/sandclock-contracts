@@ -33,6 +33,7 @@ contract scUSDCv2Test is Test {
     event EmergencyExitExecuted(
         address indexed admin, uint256 wethWithdrawn, uint256 debtRepaid, uint256 collateralReleased
     );
+    event Reallocated(UsdcWethLendingManager.Protocol protocolId, bool isDownsize, uint256 collateral, uint256 debt);
     event Rebalanced(UsdcWethLendingManager.Protocol protocolId, uint256 supplied, bool leverageUp, uint256 debt);
     event ProfitSold(uint256 wethSold, uint256 usdcReceived);
 
@@ -51,7 +52,7 @@ contract scUSDCv2Test is Test {
     ERC20 usdc;
 
     function setUp() public {
-        vm.createFork(vm.envString("RPC_URL_MAINNET"));
+        mainnetFork = vm.createFork(vm.envString("RPC_URL_MAINNET"));
         vm.selectFork(mainnetFork);
         vm.rollFork(16643381);
 
@@ -195,8 +196,8 @@ contract scUSDCv2Test is Test {
 
     function test_rebalance_twoProtocols() public {
         uint256 initialBalance = 1_000_000e6;
-        uint256 debtOnAave = 60 ether;
-        uint256 debtOnEuler = 40 ether;
+        uint256 debtOnAave = 200 ether;
+        uint256 debtOnEuler = 239.125 ether;
         deal(address(usdc), address(vault), initialBalance);
 
         scUSDCv2.RebalanceParams[] memory params = new scUSDCv2.RebalanceParams[](2);
@@ -223,6 +224,76 @@ contract scUSDCv2Test is Test {
 
         assertApproxEqAbs(vault.getDebtOnAave(), debtOnAave, 1, "debtOnAave");
         assertApproxEqAbs(vault.getDebtOnEuler(), debtOnEuler, 1, "debtOnEuler");
+    }
+
+    function test_rebalance_twoProtocolsWithAdditionalDeposits() public {
+        uint256 initialBalance = 1_000_000e6;
+        uint256 debtOnAave = 60 ether;
+        uint256 debtOnEuler = 40 ether;
+        deal(address(usdc), address(vault), initialBalance);
+
+        scUSDCv2.RebalanceParams[] memory params = new scUSDCv2.RebalanceParams[](2);
+        params[0] = scUSDCv2.RebalanceParams({
+            protocolId: UsdcWethLendingManager.Protocol.AAVE_V3,
+            supplyAmount: initialBalance / 2,
+            leverageUp: true,
+            wethAmount: debtOnAave
+        });
+        params[1] = scUSDCv2.RebalanceParams({
+            protocolId: UsdcWethLendingManager.Protocol.EULER,
+            supplyAmount: initialBalance / 2,
+            leverageUp: true,
+            wethAmount: debtOnEuler
+        });
+
+        vault.rebalance(params);
+
+        assertApproxEqAbs(vault.totalCollateral(), initialBalance, 1, "totalCollateral before");
+        assertApproxEqAbs(vault.totalDebt(), debtOnAave + debtOnEuler, 1, "totalDebt before");
+
+        uint256 additionalCollateralOnAave = 50_000e6;
+        uint256 additionalCollateralOnEuler = 100_000e6;
+        uint256 additionalDebtOnAave = 25 ether;
+        uint256 additionalDebtOnEuler = 50 ether;
+        deal(address(usdc), address(vault), additionalCollateralOnAave + additionalCollateralOnEuler);
+        params = new scUSDCv2.RebalanceParams[](2);
+        params[0] = scUSDCv2.RebalanceParams({
+            protocolId: UsdcWethLendingManager.Protocol.AAVE_V3,
+            supplyAmount: additionalCollateralOnAave,
+            leverageUp: true,
+            wethAmount: additionalDebtOnAave
+        });
+        params[1] = scUSDCv2.RebalanceParams({
+            protocolId: UsdcWethLendingManager.Protocol.EULER,
+            supplyAmount: additionalCollateralOnEuler,
+            leverageUp: true,
+            wethAmount: additionalDebtOnEuler
+        });
+
+        vault.rebalance(params);
+
+        assertApproxEqAbs(
+            vault.totalCollateral(),
+            initialBalance + additionalCollateralOnAave + additionalCollateralOnEuler,
+            1,
+            "totalCollateral after"
+        );
+        assertApproxEqAbs(
+            vault.totalDebt(),
+            debtOnAave + debtOnEuler + additionalDebtOnAave + additionalDebtOnEuler,
+            1,
+            "totalDebt after"
+        );
+
+        assertApproxEqAbs(
+            vault.getCollateralOnAave(), initialBalance / 2 + additionalCollateralOnAave, 1, "collateralOnAave after"
+        );
+        assertApproxEqAbs(
+            vault.getCollateralOnEuler(), initialBalance / 2 + additionalCollateralOnEuler, 1, "collateralOnEuler after"
+        );
+
+        assertApproxEqAbs(vault.getDebtOnAave(), debtOnAave + additionalDebtOnAave, 1, "debtOnAave after");
+        assertApproxEqAbs(vault.getDebtOnEuler(), debtOnEuler + additionalDebtOnEuler, 1, "debtOnEuler after");
     }
 
     function test_rebalance_emitsEventForEachProtocol() public {
@@ -410,6 +481,46 @@ contract scUSDCv2Test is Test {
 
         assertApproxEqAbs(vault.getDebtOnAave(), totalDebt / 4, 1, "debtOnAave after");
         assertApproxEqAbs(vault.getDebtOnEuler(), totalDebt * 3 / 4, 1, "debtOnEuler after");
+    }
+
+    function test_reallocateCapital_EmitsEventForEveryAffectedProtocol() public {
+        uint256 totalCollateral = 1_000_000e6;
+        uint256 totalDebt = 100 ether;
+        deal(address(usdc), address(vault), totalCollateral);
+
+        scUSDCv2.RebalanceParams[] memory rebalanceParams = new scUSDCv2.RebalanceParams[](1);
+        rebalanceParams[0] = scUSDCv2.RebalanceParams({
+            protocolId: UsdcWethLendingManager.Protocol.AAVE_V3,
+            supplyAmount: totalCollateral,
+            leverageUp: true,
+            wethAmount: totalDebt
+        });
+
+        vault.rebalance(rebalanceParams);
+
+        // move half from Aave to Euler
+        uint256 collateralToMove = vault.getCollateralOnAave() / 2;
+        uint256 debtToMove = vault.getDebtOnAave() / 2;
+        scUSDCv2.ReallocationParams[] memory reallocateParams = new scUSDCv2.ReallocationParams[](2);
+        reallocateParams[0] = scUSDCv2.ReallocationParams({
+            protocolId: UsdcWethLendingManager.Protocol.AAVE_V3,
+            isDownsize: true,
+            collateralAmount: collateralToMove,
+            debtAmount: debtToMove
+        });
+        reallocateParams[1] = scUSDCv2.ReallocationParams({
+            protocolId: UsdcWethLendingManager.Protocol.EULER,
+            isDownsize: false,
+            collateralAmount: collateralToMove,
+            debtAmount: debtToMove
+        });
+
+        uint256 flashLoanAmount = debtToMove;
+        vm.expectEmit(true, true, true, true);
+        emit Reallocated(UsdcWethLendingManager.Protocol.AAVE_V3, true, collateralToMove, debtToMove);
+        emit Reallocated(UsdcWethLendingManager.Protocol.EULER, false, collateralToMove, debtToMove);
+
+        vault.reallocateCapital(reallocateParams, flashLoanAmount);
     }
 
     function test_reallocateCapital_worksWhenCalledMultipleTimes() public {
