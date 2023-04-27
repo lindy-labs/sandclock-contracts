@@ -350,6 +350,9 @@ contract scUSDCv2 is sc4626, UsdcWethLendingManager, IFlashLoanRecipient {
         // repay debt and withdraw collateral from each protocol in proportion to their collateral allocation
         for (uint8 i = 0; i <= uint256(type(Protocol).max); i++) {
             uint256 protocolCollateral = protocolToActions[Protocol(i)].getCollateral();
+
+            if (protocolCollateral == 0) continue;
+
             uint256 allocationPct = protocolCollateral.divWadDown(_collateral);
 
             protocolToActions[Protocol(i)].repay(withdrawn.mulWadUp(allocationPct));

@@ -671,6 +671,7 @@ contract scUSDCv2Test is Test {
 
     function test_sellProfit_emitsEvent() public {
         uint256 initialBalance = 1_000_000e6;
+        uint256 initialDebt = 100 ether;
         deal(address(usdc), address(vault), initialBalance);
 
         scUSDCv2.RebalanceParams[] memory params = new scUSDCv2.RebalanceParams[](2);
@@ -678,13 +679,13 @@ contract scUSDCv2Test is Test {
             protocolId: UsdcWethLendingManager.Protocol.AAVE_V3,
             supplyAmount: initialBalance / 2,
             leverageUp: true,
-            wethAmount: 50 ether
+            wethAmount: initialDebt / 2
         });
         params[1] = scUSDCv2.RebalanceParams({
             protocolId: UsdcWethLendingManager.Protocol.EULER,
             supplyAmount: initialBalance / 2,
             leverageUp: true,
-            wethAmount: 50 ether
+            wethAmount: initialDebt / 2
         });
 
         vm.prank(keeper);
@@ -703,6 +704,7 @@ contract scUSDCv2Test is Test {
 
     function test_sellProfit_FailsIfAmountReceivedIsLeessThanAmountOutMin() public {
         uint256 initialBalance = 1_000_000e6;
+        uint256 initialDebt = 200 ether;
         deal(address(usdc), address(vault), initialBalance);
 
         scUSDCv2.RebalanceParams[] memory params = new scUSDCv2.RebalanceParams[](2);
@@ -710,13 +712,13 @@ contract scUSDCv2Test is Test {
             protocolId: UsdcWethLendingManager.Protocol.AAVE_V3,
             supplyAmount: initialBalance / 2,
             leverageUp: true,
-            wethAmount: 50 ether
+            wethAmount: initialDebt / 2
         });
         params[1] = scUSDCv2.RebalanceParams({
             protocolId: UsdcWethLendingManager.Protocol.EULER,
             supplyAmount: initialBalance / 2,
             leverageUp: true,
-            wethAmount: 50 ether
+            wethAmount: initialDebt / 2
         });
 
         vm.prank(keeper);
@@ -735,12 +737,100 @@ contract scUSDCv2Test is Test {
 
     /// #withdraw ///
 
-    // TODO: test with 1 protocol
-    // TODO: test with 2 protocols
+    // TODO: either pull from all or from the one with lowest allocation? or have a list of protocols with withdraw order?
 
-    // TODO: either pull from all or from the one with lowest allocation? a field with protocols to withdraw from
+    function test_withdraw_worksWithOneProtocol() public {
+        uint256 initialBalance = 1_000_000e6;
+        deal(address(usdc), alice, initialBalance);
 
-    function test_withdraw_pullsFundsFromAllProtocols() public {
+        vm.startPrank(alice);
+        usdc.approve(address(vault), initialBalance);
+        vault.deposit(initialBalance, alice);
+        vm.stopPrank();
+
+        scUSDCv2.RebalanceParams[] memory params = new scUSDCv2.RebalanceParams[](1);
+        params[0] = scUSDCv2.RebalanceParams({
+            protocolId: UsdcWethLendingManager.Protocol.EULER,
+            supplyAmount: initialBalance,
+            leverageUp: true,
+            wethAmount: 200 ether
+        });
+
+        vault.rebalance(params);
+
+        uint256 withdrawAmount = vault.convertToAssets(vault.balanceOf(alice));
+        vm.prank(alice);
+        vault.withdraw(withdrawAmount, alice, alice);
+
+        assertEq(usdc.balanceOf(alice), withdrawAmount, "alice usdc balance");
+        assertApproxEqAbs(vault.getCollateralOnEuler(), 0, 1, "euler collateral");
+        assertApproxEqAbs(vault.getDebtOnEuler(), 0, 1, "euler debt");
+    }
+
+    function test_withdraw_pullsFundsFromFloatFirst() public {
+        uint256 floatPercentage = 0.1e18; // 10 %
+        vault.setFloatPercentage(floatPercentage);
+        uint256 initialBalance = 1_000_000e6;
+        deal(address(usdc), alice, initialBalance);
+
+        vm.startPrank(alice);
+        usdc.approve(address(vault), initialBalance);
+        vault.deposit(initialBalance, alice);
+        vm.stopPrank();
+
+        scUSDCv2.RebalanceParams[] memory params = new scUSDCv2.RebalanceParams[](1);
+        params[0] = scUSDCv2.RebalanceParams({
+            protocolId: UsdcWethLendingManager.Protocol.EULER,
+            supplyAmount: initialBalance.mulWadDown(1e18 - floatPercentage),
+            leverageUp: true,
+            wethAmount: 200 ether
+        });
+
+        vault.rebalance(params);
+
+        uint256 collateralBefore = vault.totalCollateral();
+        uint256 debtBefore = vault.totalDebt();
+
+        uint256 withdrawAmount = usdc.balanceOf(address(vault));
+        vm.prank(alice);
+        vault.withdraw(withdrawAmount, alice, alice);
+
+        assertEq(usdc.balanceOf(alice), withdrawAmount, "alice usdc balance");
+        assertEq(vault.totalCollateral(), collateralBefore, "collateral not expected to change");
+        assertEq(vault.totalDebt(), debtBefore, "total debt not expected to change");
+    }
+
+    function test_withdraw_pullsFundsFromProtocolWhenFloatIsNotEnough() public {
+        uint256 floatPercentage = 0.1e18; // 10 %
+        vault.setFloatPercentage(floatPercentage);
+        uint256 initialBalance = 1_000_000e6;
+        deal(address(usdc), alice, initialBalance);
+
+        vm.startPrank(alice);
+        usdc.approve(address(vault), initialBalance);
+        vault.deposit(initialBalance, alice);
+        vm.stopPrank();
+
+        scUSDCv2.RebalanceParams[] memory params = new scUSDCv2.RebalanceParams[](1);
+        params[0] = scUSDCv2.RebalanceParams({
+            protocolId: UsdcWethLendingManager.Protocol.EULER,
+            supplyAmount: initialBalance.mulWadDown(1e18 - floatPercentage),
+            leverageUp: true,
+            wethAmount: 200 ether
+        });
+
+        vault.rebalance(params);
+
+        uint256 withdrawAmount = vault.convertToAssets(vault.balanceOf(alice));
+        vm.prank(alice);
+        vault.withdraw(withdrawAmount, alice, alice);
+
+        assertEq(usdc.balanceOf(alice), withdrawAmount, "alice usdc balance");
+        assertApproxEqAbs(vault.totalCollateral(), 0, 1, "collateral not 0");
+        assertApproxEqAbs(vault.totalDebt(), 0, 1, "debt not 0");
+    }
+
+    function test_withdraw_pullsFundsFromAllProtocolsInEqualWeight() public {
         uint256 initialBalance = 1_000_000e6;
         uint256 initialDebt = 100 ether;
         deal(address(usdc), alice, initialBalance);
