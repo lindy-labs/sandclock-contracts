@@ -105,8 +105,9 @@ abstract contract LendingMarketManager {
     /// @notice returns the total assets supplied as collateral (in ETH)
     function totalCollateral() public view returns (uint256 collateral) {
         for (uint256 i = 0; i < totalMarkets(); i++) {
-            collateral += _wstEthToEth(lendingMarkets[LendingMarketType(i)].getCollateral());
+            collateral += lendingMarkets[LendingMarketType(i)].getCollateral();
         }
+        collateral = _wstEthToEth(collateral);
     }
 
     /// @notice returns the total ETH borrowed
