@@ -246,37 +246,37 @@ contract scWETHv2Test is Test {
         );
     }
 
-    function test_reallocate(uint256 amount) public {
-        amount = bound(amount, boundMinimum, 15000 ether);
-        _depositToVault(address(this), amount);
+    // function test_reallocate(uint256 amount) public {
+    //     amount = bound(amount, boundMinimum, 15000 ether);
+    //     _depositToVault(address(this), amount);
 
-        uint256 aaveV3Allocation = 0.7e18;
-        uint256 eulerAllocation = 0.3e18;
+    //     uint256 aaveV3Allocation = 0.7e18;
+    //     uint256 eulerAllocation = 0.3e18;
 
-        (scWETHv2.SupplyBorrowParam[] memory supplyBorrowParams,,) =
-            _getInvestParams(amount, aaveV3Allocation, eulerAllocation);
+    //     (scWETHv2.SupplyBorrowParam[] memory supplyBorrowParams,,) =
+    //         _getInvestParams(amount, aaveV3Allocation, eulerAllocation);
 
-        hoax(keeper);
-        vault.invest(amount, supplyBorrowParams);
+    //     hoax(keeper);
+    //     vault.invest(amount, supplyBorrowParams);
 
-        // reallocate 10% funds from aavev3 to euler
-        uint256 reallocationAmount = amount.mulWadDown(0.1e18);
-        scWETHv2.RepayWithdrawParam[] memory repayWithdrawParamsReallocation = new scWETHv2.RepayWithdrawParam[](1);
-        scWETHv2.SupplyBorrowParam[] memory supplyBorrowParamsReallocation = new scWETHv2.SupplyBorrowParam[](1);
+    //     // reallocate 10% funds from aavev3 to euler
+    //     uint256 reallocationAmount = amount.mulWadDown(0.1e18);
+    //     scWETHv2.RepayWithdrawParam[] memory repayWithdrawParamsReallocation = new scWETHv2.RepayWithdrawParam[](1);
+    //     scWETHv2.SupplyBorrowParam[] memory supplyBorrowParamsReallocation = new scWETHv2.SupplyBorrowParam[](1);
 
-        uint256 aaveV3FlashLoanAmount = _calcRepayWithdrawFlashLoanAmount(
-            LendingMarketManager.LendingMarketType.AAVE_V3,
-            reallocationAmount,
-            targetLtv[LendingMarketManager.LendingMarketType.AAVE_V3]
-        );
-        repayWithdrawParamsReallocation[0] = scWETHv2.RepayWithdrawParam(
-            LendingMarketManager.LendingMarketType.AAVE_V3,
-            aaveV3FlashLoanAmount,
-            _ethToWstEth(amount + aaveV3FlashLoanAmount)
-        );
+    //     uint256 aaveV3FlashLoanAmount = _calcRepayWithdrawFlashLoanAmount(
+    //         LendingMarketManager.LendingMarketType.AAVE_V3,
+    //         reallocationAmount,
+    //         targetLtv[LendingMarketManager.LendingMarketType.AAVE_V3]
+    //     );
+    //     repayWithdrawParamsReallocation[0] = scWETHv2.RepayWithdrawParam(
+    //         LendingMarketManager.LendingMarketType.AAVE_V3,
+    //         aaveV3FlashLoanAmount,
+    //         _ethToWstEth(amount + aaveV3FlashLoanAmount)
+    //     );
 
-        // so after reallocation aaveV3 must have 60% and euler must have 40% funds respectively
-    }
+    //     // so after reallocation aaveV3 must have 60% and euler must have 40% funds respectively
+    // }
 
     function test_invest_reinvestingProfits() public {}
 
