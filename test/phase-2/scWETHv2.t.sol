@@ -199,8 +199,14 @@ contract scWETHv2Test is Test {
         uint256 ltvDecrease = 0.1e18;
         uint256 newAaveV3Ltv = aaveV3Ltv - ltvDecrease;
         uint256 newEulerLtv = eulerLtv - ltvDecrease;
+        uint256 aaveV3Allocation = vault.allocationPercent(LendingMarketManager.LendingMarketType.AAVE_V3);
+        uint256 eulerAllocation = vault.allocationPercent(LendingMarketManager.LendingMarketType.EULER);
 
         scWETHv2.RepayWithdrawParam[] memory repayWithdrawParams = _getDisInvestParams(newAaveV3Ltv, newEulerLtv);
+
+        uint256 assets = vault.totalAssets();
+        uint256 lev = vault.getLeverage();
+        uint256 ltv = vault.getLtv();
 
         hoax(keeper);
         vault.disinvest(repayWithdrawParams);
@@ -217,12 +223,59 @@ contract scWETHv2Test is Test {
             0.0000001e18,
             "euler ltv not decreased"
         );
+        assertApproxEqRel(vault.getLtv(), ltv - ltvDecrease, 0.002e18, "net ltv not decreased");
 
         assertLt(weth.balanceOf(address(vault)), minimumDust, "weth dust after disinvest");
         assertLt(wstEth.balanceOf(address(vault)), minimumDust, "wstEth dust after disinvest");
+        assertApproxEqRel(vault.totalAssets(), assets, 0.001e18, "disinvest must not change total assets");
+        assertGe(lev - vault.getLeverage(), 0.4e18, "leverage not decreased after disinvest");
+
+        // allocations must not change
+        assertApproxEqRel(
+            vault.allocationPercent(LendingMarketManager.LendingMarketType.AAVE_V3),
+            aaveV3Allocation,
+            0.001e18,
+            "aavev3 allocation must not change"
+        );
+        assertApproxEqRel(
+            vault.allocationPercent(LendingMarketManager.LendingMarketType.EULER),
+            eulerAllocation,
+            0.001e18,
+            "euler allocation must not change"
+        );
     }
 
-    function test_reallocate() public {}
+    function test_reallocate(uint256 amount) public {
+        amount = bound(amount, boundMinimum, 15000 ether);
+        _depositToVault(address(this), amount);
+
+        uint256 aaveV3Allocation = 0.7e18;
+        uint256 eulerAllocation = 0.3e18;
+
+        (scWETHv2.SupplyBorrowParam[] memory supplyBorrowParams,,) =
+            _getInvestParams(amount, aaveV3Allocation, eulerAllocation);
+
+        hoax(keeper);
+        vault.invest(amount, supplyBorrowParams);
+
+        // reallocate 10% funds from aavev3 to euler
+        uint256 reallocationAmount = amount.mulWadDown(0.1e18);
+        scWETHv2.RepayWithdrawParam[] memory repayWithdrawParamsReallocation = new scWETHv2.RepayWithdrawParam[](1);
+        scWETHv2.SupplyBorrowParam[] memory supplyBorrowParamsReallocation = new scWETHv2.SupplyBorrowParam[](1);
+
+        uint256 aaveV3FlashLoanAmount = _calcRepayWithdrawFlashLoanAmount(
+            LendingMarketManager.LendingMarketType.AAVE_V3,
+            reallocationAmount,
+            targetLtv[LendingMarketManager.LendingMarketType.AAVE_V3]
+        );
+        repayWithdrawParamsReallocation[0] = scWETHv2.RepayWithdrawParam(
+            LendingMarketManager.LendingMarketType.AAVE_V3,
+            aaveV3FlashLoanAmount,
+            _ethToWstEth(amount + aaveV3FlashLoanAmount)
+        );
+
+        // so after reallocation aaveV3 must have 60% and euler must have 40% funds respectively
+    }
 
     function test_invest_reinvestingProfits() public {}
 
