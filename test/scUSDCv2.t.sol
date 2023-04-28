@@ -894,7 +894,7 @@ contract scUSDCv2Test is Test {
         UsdcWethLendingManager.Protocol[] memory protocolIds = new UsdcWethLendingManager.Protocol[](1);
         protocolIds[0] = UsdcWethLendingManager.Protocol.AAVE_V3;
 
-        scUSDCv2.PositionInfo[] memory info = vault.getPositionInfos(protocolIds);
+        scUSDCv2.LendingPositionInfo[] memory info = vault.getPositionInfos(protocolIds);
 
         assertEq(info.length, 1, "info length");
         assertEq(uint8(info[0].protocolId), uint8(UsdcWethLendingManager.Protocol.AAVE_V3), "protocolId");
@@ -929,7 +929,7 @@ contract scUSDCv2Test is Test {
         protocolIds[0] = UsdcWethLendingManager.Protocol.AAVE_V3;
         protocolIds[1] = UsdcWethLendingManager.Protocol.EULER;
 
-        scUSDCv2.PositionInfo[] memory info = vault.getPositionInfos(protocolIds);
+        scUSDCv2.LendingPositionInfo[] memory info = vault.getPositionInfos(protocolIds);
 
         assertEq(info.length, 2, "info length");
         assertEq(uint8(info[0].protocolId), uint8(UsdcWethLendingManager.Protocol.AAVE_V3), "protocolId not AAVE_V3");
@@ -964,7 +964,7 @@ contract scUSDCv2Test is Test {
         protocolIds[0] = UsdcWethLendingManager.Protocol.AAVE_V3;
         protocolIds[1] = UsdcWethLendingManager.Protocol.EULER;
 
-        scUSDCv2.PositionInfo[] memory info = vault.getPositionInfos(protocolIds);
+        scUSDCv2.LendingPositionInfo[] memory info = vault.getPositionInfos(protocolIds);
 
         assertEq(info.length, 2, "info length");
         assertEq(uint8(info[0].protocolId), uint8(UsdcWethLendingManager.Protocol.AAVE_V3), "protocolId not AAVE_V3");

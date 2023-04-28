@@ -311,7 +311,7 @@ contract scUSDCv2 is sc4626, UsdcWethLendingManager, IFlashLoanRecipient {
     /**
      * @notice Struct to store lending position related information
      */
-    struct PositionInfo {
+    struct LendingPositionInfo {
         Protocol protocolId; // ID of the protocol
         uint256 collateral; // Amount of collateral
         uint256 debt; // Amount of debt
@@ -321,23 +321,23 @@ contract scUSDCv2 is sc4626, UsdcWethLendingManager, IFlashLoanRecipient {
     /**
      * @notice Fetches position-related information for each protocol in the input list
      * @param _protocolIds An array of protocol identifiers for which to fetch position info
-     * @return positionInfos An array of PositionInfo structs containing the position info for each input protocol
+     * @return positionInfos An array of LendingPositionInfo structs containing the position info for each input protocol
      *
-     * @dev Each PositionInfo struct in the output array corresponds to the protocol with the same index in the input array.
+     * @dev Each LendingPositionInfo struct in the output array corresponds to the protocol with the same index in the input array.
      * If the collateral for a position is 0, the LTV for that position is also 0.
      */
     function getPositionInfos(Protocol[] calldata _protocolIds)
         external
         view
-        returns (PositionInfo[] memory positionInfos)
+        returns (LendingPositionInfo[] memory positionInfos)
     {
-        positionInfos = new PositionInfo[](_protocolIds.length);
+        positionInfos = new LendingPositionInfo[](_protocolIds.length);
 
         for (uint8 i = 0; i < _protocolIds.length; i++) {
             Protocol protocolId = _protocolIds[i];
 
             ProtocolActions memory protocolActions = protocolToActions[protocolId];
-            PositionInfo memory positionInfo;
+            LendingPositionInfo memory positionInfo;
 
             positionInfo.protocolId = protocolId;
             positionInfo.collateral = protocolActions.getCollateral();
