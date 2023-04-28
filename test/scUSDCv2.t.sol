@@ -873,6 +873,111 @@ contract scUSDCv2Test is Test {
         assertApproxEqRel(vault.getDebtOnEuler(), endDebt / 2, 0.01e18, "debt on euler");
     }
 
+    /// #getPositionInfo ///
+
+    function test_getPositionInfo_returnsInfoOnOneProtocol() public {
+        uint256 initialBalance = 1_000_000e6;
+        uint256 initialDebt = 100 ether;
+        uint256 expectedLtv = vault.getUsdcFromWeth(initialDebt).divWadUp(initialBalance);
+        deal(address(usdc), address(vault), initialBalance);
+
+        scUSDCv2.RebalanceParams[] memory params = new scUSDCv2.RebalanceParams[](1);
+        params[0] = scUSDCv2.RebalanceParams({
+            protocolId: UsdcWethLendingManager.Protocol.AAVE_V3,
+            supplyAmount: initialBalance,
+            leverageUp: true,
+            wethAmount: initialDebt
+        });
+
+        vault.rebalance(params);
+
+        UsdcWethLendingManager.Protocol[] memory protocolIds = new UsdcWethLendingManager.Protocol[](1);
+        protocolIds[0] = UsdcWethLendingManager.Protocol.AAVE_V3;
+
+        scUSDCv2.PositionInfo[] memory info = vault.getPositionInfos(protocolIds);
+
+        assertEq(info.length, 1, "info length");
+        assertEq(uint8(info[0].protocolId), uint8(UsdcWethLendingManager.Protocol.AAVE_V3), "protocolId");
+        assertEq(info[0].collateral, initialBalance, "supplyAmount");
+        assertEq(info[0].debt, initialDebt, "borrowAmount");
+        assertApproxEqRel(info[0].ltv, expectedLtv, 0.001e18, "ltv");
+    }
+
+    function test_getPositionInfo_returnsInfoOnMultipleProtocols() public {
+        uint256 initialBalance = 1_000_000e6;
+        uint256 initialDebt = 100 ether;
+        uint256 expectedLtv = vault.getUsdcFromWeth(initialDebt / 2).divWadUp(initialBalance / 2);
+        deal(address(usdc), address(vault), initialBalance);
+
+        scUSDCv2.RebalanceParams[] memory params = new scUSDCv2.RebalanceParams[](2);
+        params[0] = scUSDCv2.RebalanceParams({
+            protocolId: UsdcWethLendingManager.Protocol.AAVE_V3,
+            supplyAmount: initialBalance / 2,
+            leverageUp: true,
+            wethAmount: initialDebt / 2
+        });
+        params[1] = scUSDCv2.RebalanceParams({
+            protocolId: UsdcWethLendingManager.Protocol.EULER,
+            supplyAmount: initialBalance / 2,
+            leverageUp: true,
+            wethAmount: initialDebt / 2
+        });
+
+        vault.rebalance(params);
+
+        UsdcWethLendingManager.Protocol[] memory protocolIds = new UsdcWethLendingManager.Protocol[](2);
+        protocolIds[0] = UsdcWethLendingManager.Protocol.AAVE_V3;
+        protocolIds[1] = UsdcWethLendingManager.Protocol.EULER;
+
+        scUSDCv2.PositionInfo[] memory info = vault.getPositionInfos(protocolIds);
+
+        assertEq(info.length, 2, "info length");
+        assertEq(uint8(info[0].protocolId), uint8(UsdcWethLendingManager.Protocol.AAVE_V3), "protocolId not AAVE_V3");
+        assertApproxEqAbs(info[0].collateral, initialBalance / 2, 1, "aave v3 collateral");
+        assertApproxEqAbs(info[0].debt, initialDebt / 2, 1, "aave v3 debt");
+        assertApproxEqRel(info[0].ltv, expectedLtv, 0.001e18, "aave v3 ltv");
+
+        assertEq(uint8(info[1].protocolId), uint8(UsdcWethLendingManager.Protocol.EULER), "protocolId not EULER");
+        assertApproxEqAbs(info[1].collateral, initialBalance / 2, 1, "euler collateral");
+        assertApproxEqAbs(info[1].debt, initialDebt / 2, 1, "euler debt");
+        assertApproxEqRel(info[1].ltv, expectedLtv, 0.001e18, "euler ltv");
+    }
+
+    function test_getPositionInfo_worksWhenProtocolRequestedIsNotUsed() public {
+        uint256 initialBalance = 1_000_000e6;
+        uint256 initialDebt = 100 ether;
+        uint256 expectedLtv = vault.getUsdcFromWeth(initialDebt).divWadUp(initialBalance);
+        deal(address(usdc), address(vault), initialBalance);
+
+        // not using AAVE_V3
+        scUSDCv2.RebalanceParams[] memory params = new scUSDCv2.RebalanceParams[](1);
+        params[0] = scUSDCv2.RebalanceParams({
+            protocolId: UsdcWethLendingManager.Protocol.EULER,
+            supplyAmount: initialBalance,
+            leverageUp: true,
+            wethAmount: initialDebt
+        });
+
+        vault.rebalance(params);
+
+        UsdcWethLendingManager.Protocol[] memory protocolIds = new UsdcWethLendingManager.Protocol[](2);
+        protocolIds[0] = UsdcWethLendingManager.Protocol.AAVE_V3;
+        protocolIds[1] = UsdcWethLendingManager.Protocol.EULER;
+
+        scUSDCv2.PositionInfo[] memory info = vault.getPositionInfos(protocolIds);
+
+        assertEq(info.length, 2, "info length");
+        assertEq(uint8(info[0].protocolId), uint8(UsdcWethLendingManager.Protocol.AAVE_V3), "protocolId not AAVE_V3");
+        assertEq(info[0].collateral, 0, "aave v3 collateral not 0");
+        assertEq(info[0].debt, 0, "aave v3 debt not 0");
+        assertEq(info[0].ltv, 0, "aave v3 ltv not 0");
+
+        assertEq(uint8(info[1].protocolId), uint8(UsdcWethLendingManager.Protocol.EULER), "protocolId not EULER");
+        assertApproxEqAbs(info[1].collateral, initialBalance, 1, "euler collateral");
+        assertApproxEqAbs(info[1].debt, initialDebt, 1, "euler debt");
+        assertApproxEqRel(info[1].ltv, expectedLtv, 0.001e18, "euler ltv");
+    }
+
     /// internal helper functions ///
 
     function _createDefaultUsdcVaultConstructorParams(scWETH scWeth)
