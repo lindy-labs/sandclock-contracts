@@ -104,7 +104,8 @@ abstract contract LendingMarketManager {
 
     /// @notice returns the total assets supplied as collateral (in ETH)
     function totalCollateral() public view returns (uint256 collateral) {
-        for (uint256 i = 0; i < totalMarkets(); i++) {
+        uint256 n = totalMarkets();
+        for (uint256 i = 0; i < n; i++) {
             collateral += lendingMarkets[LendingMarketType(i)].getCollateral();
         }
         collateral = _wstEthToEth(collateral);
@@ -112,7 +113,8 @@ abstract contract LendingMarketManager {
 
     /// @notice returns the total ETH borrowed
     function totalDebt() public view returns (uint256 debt) {
-        for (uint256 i = 0; i < totalMarkets(); i++) {
+        uint256 n = totalMarkets();
+        for (uint256 i = 0; i < n; i++) {
             debt += lendingMarkets[LendingMarketType(i)].getDebt();
         }
     }
@@ -128,6 +130,11 @@ abstract contract LendingMarketManager {
 
     function getLtv(LendingMarketType market) public view returns (uint256) {
         return getDebt(market).divWadDown(getCollateral(market));
+    }
+
+    /// @notice method to get the assets deposited in a particular lending market
+    function getAssets(LendingMarketType market) external view returns (uint256) {
+        return getCollateral(market) - getDebt(market);
     }
 
     //////////////////////////     AAVE V3 ///////////////////////////////

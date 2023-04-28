@@ -65,7 +65,7 @@ contract scWETHv2Test is Test {
         // set vault eth balance to zero
         vm.deal(address(vault), 0);
 
-        targetLtv[LendingMarketManager.LendingMarketType.AAVE_V3] = 0.6e18;
+        targetLtv[LendingMarketManager.LendingMarketType.AAVE_V3] = 0.7e18;
         targetLtv[LendingMarketManager.LendingMarketType.EULER] = 0.5e18;
     }
 
@@ -246,37 +246,116 @@ contract scWETHv2Test is Test {
         );
     }
 
-    // function test_reallocate(uint256 amount) public {
-    //     amount = bound(amount, boundMinimum, 15000 ether);
-    //     _depositToVault(address(this), amount);
+    function test_reallocate() public {
+        uint256 amount = 10 ether;
+        // amount = bound(amount, boundMinimum, 15000 ether);
+        _depositToVault(address(this), amount);
 
-    //     uint256 aaveV3Allocation = 0.7e18;
-    //     uint256 eulerAllocation = 0.3e18;
+        uint256 aaveV3Allocation = 0.7e18;
+        uint256 eulerAllocation = 0.3e18;
 
-    //     (scWETHv2.SupplyBorrowParam[] memory supplyBorrowParams,,) =
-    //         _getInvestParams(amount, aaveV3Allocation, eulerAllocation);
+        (scWETHv2.SupplyBorrowParam[] memory supplyBorrowParams,,) =
+            _getInvestParams(amount, aaveV3Allocation, eulerAllocation);
 
-    //     hoax(keeper);
-    //     vault.invest(amount, supplyBorrowParams);
+        hoax(keeper);
+        vault.invest(amount, supplyBorrowParams);
 
-    //     // reallocate 10% funds from aavev3 to euler
-    //     uint256 reallocationAmount = amount.mulWadDown(0.1e18);
-    //     scWETHv2.RepayWithdrawParam[] memory repayWithdrawParamsReallocation = new scWETHv2.RepayWithdrawParam[](1);
-    //     scWETHv2.SupplyBorrowParam[] memory supplyBorrowParamsReallocation = new scWETHv2.SupplyBorrowParam[](1);
+        uint256 aaveV3Assets = vault.getAssets(LendingMarketManager.LendingMarketType.AAVE_V3);
+        uint256 eulerAssets = vault.getAssets(LendingMarketManager.LendingMarketType.EULER);
+        uint256 totalAssets = vault.totalAssets();
+        uint256 aaveV3Ltv = vault.getLtv(LendingMarketManager.LendingMarketType.AAVE_V3);
+        uint256 eulerLtv = vault.getLtv(LendingMarketManager.LendingMarketType.EULER);
 
-    //     uint256 aaveV3FlashLoanAmount = _calcRepayWithdrawFlashLoanAmount(
-    //         LendingMarketManager.LendingMarketType.AAVE_V3,
-    //         reallocationAmount,
-    //         targetLtv[LendingMarketManager.LendingMarketType.AAVE_V3]
-    //     );
-    //     repayWithdrawParamsReallocation[0] = scWETHv2.RepayWithdrawParam(
-    //         LendingMarketManager.LendingMarketType.AAVE_V3,
-    //         aaveV3FlashLoanAmount,
-    //         _ethToWstEth(amount + aaveV3FlashLoanAmount)
-    //     );
+        // reallocate 10% of the totalAssets from aavev3 to euler
+        uint256 reallocationAmount = amount.mulWadDown(0.1e18); // in weth
 
-    //     // so after reallocation aaveV3 must have 60% and euler must have 40% funds respectively
-    // }
+        scWETHv2.RepayWithdrawParam[] memory repayWithdrawParamsReallocation = new scWETHv2.RepayWithdrawParam[](1);
+        scWETHv2.SupplyBorrowParam[] memory supplyBorrowParamsReallocation = new scWETHv2.SupplyBorrowParam[](1);
+
+        uint256 repayAmount =
+            reallocationAmount.mulDivDown(vault.getDebt(LendingMarketManager.LendingMarketType.AAVE_V3), aaveV3Assets);
+        uint256 withdrawAmount = _ethToWstEth(reallocationAmount + repayAmount);
+
+        repayWithdrawParamsReallocation[0] =
+            scWETHv2.RepayWithdrawParam(LendingMarketManager.LendingMarketType.AAVE_V3, repayAmount, withdrawAmount);
+
+        supplyBorrowParamsReallocation[0] =
+            scWETHv2.SupplyBorrowParam(LendingMarketManager.LendingMarketType.EULER, withdrawAmount, repayAmount);
+
+        // so after reallocation aaveV3 must have 60% and euler must have 40% funds respectively
+        hoax(keeper);
+        vault.reallocate(repayWithdrawParamsReallocation, supplyBorrowParamsReallocation);
+
+        _reallocationChecks(
+            totalAssets,
+            aaveV3Allocation,
+            eulerAllocation,
+            aaveV3Assets,
+            eulerAssets,
+            aaveV3Ltv,
+            eulerLtv,
+            reallocationAmount
+        );
+    }
+
+    function _reallocationChecks(
+        uint256 totalAssets,
+        uint256 inititalAaveV3Allocation,
+        uint256 initialEulerAllocation,
+        uint256 inititalAaveV3Assets,
+        uint256 initialEulerAssets,
+        uint256 initialAaveV3Ltv,
+        uint256 initialEulerLtv,
+        uint256 reallocationAmount
+    ) internal {
+        assertApproxEqRel(
+            vault.allocationPercent(LendingMarketManager.LendingMarketType.AAVE_V3),
+            inititalAaveV3Allocation - 0.1e18,
+            0.001e18,
+            "aavev3 allocation not decreased"
+        );
+
+        assertApproxEqRel(
+            vault.allocationPercent(LendingMarketManager.LendingMarketType.EULER),
+            initialEulerAllocation + 0.1e18,
+            0.001e18,
+            "euler allocation not increased"
+        );
+
+        // assets must decrease by reallocationAmount
+        assertApproxEqRel(
+            vault.getAssets(LendingMarketManager.LendingMarketType.AAVE_V3),
+            inititalAaveV3Assets - reallocationAmount,
+            0.001e18,
+            "aavev3 assets not decreased"
+        );
+
+        // assets must increase by reallocationAmount
+        assertApproxEqRel(
+            vault.getAssets(LendingMarketManager.LendingMarketType.EULER),
+            initialEulerAssets + reallocationAmount,
+            0.001e18,
+            "euler assets not increased"
+        );
+
+        // totalAssets must not change
+        assertApproxEqRel(vault.totalAssets(), totalAssets, 0.001e18, "total assets must not change");
+
+        // ltvs must not change
+        assertApproxEqRel(
+            vault.getLtv(LendingMarketManager.LendingMarketType.AAVE_V3),
+            initialAaveV3Ltv,
+            0.001e18,
+            "aavev3 ltv must not change"
+        );
+
+        assertApproxEqRel(
+            vault.getLtv(LendingMarketManager.LendingMarketType.EULER),
+            initialEulerLtv,
+            0.001e18,
+            "euler ltv must not change"
+        );
+    }
 
     function test_invest_reinvestingProfits() public {}
 
