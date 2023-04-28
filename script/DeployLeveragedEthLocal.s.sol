@@ -52,6 +52,9 @@ contract DeployScript is DeployLeveragedEth, Test {
         profit();
 
         redeem(alice);
+
+        depositForUsers(weth, wethContract);
+        depositForUsers(usdc, usdcContract);
     }
 
     function depositForUsers(ERC20 asset, sc4626 vaultToken) internal {
