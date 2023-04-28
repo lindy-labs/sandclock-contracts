@@ -4,15 +4,15 @@ pragma solidity ^0.8.13;
 import "forge-std/console2.sol";
 import "forge-std/Test.sol";
 
-import { DeployLeveragedEth } from "./base/DeployLeveragedEth.sol";
-import { FixedPointMathLib } from "solmate/utils/FixedPointMathLib.sol";
-import { MockWETH } from "../test/mocks/MockWETH.sol";
-import { MockUSDC } from "../test/mocks/MockUSDC.sol";
-import { sc4626 } from "../src/sc4626.sol";
-import { ERC20 } from "solmate/tokens/ERC20.sol";
-import { scWETH } from "../src/steth/scWETH.sol";
-import { scUSDC } from "../src/steth/scUSDC.sol";
-import { Constants as C } from "../src/lib/Constants.sol";
+import {DeployLeveragedEth} from "./base/DeployLeveragedEth.sol";
+import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
+import {MockWETH} from "../test/mocks/MockWETH.sol";
+import {MockUSDC} from "../test/mocks/MockUSDC.sol";
+import {sc4626} from "../src/sc4626.sol";
+import {ERC20} from "solmate/tokens/ERC20.sol";
+import {scWETH} from "../src/steth/scWETH.sol";
+import {scUSDC} from "../src/steth/scUSDC.sol";
+import {Constants as C} from "../src/lib/Constants.sol";
 
 contract DeployScript is DeployLeveragedEth, Test {
     using FixedPointMathLib for uint256;
@@ -79,13 +79,7 @@ contract DeployScript is DeployLeveragedEth, Test {
         deal(address(usdc), bob, 100e6);
     }
 
-    function deposit(
-        ERC20 asset,
-        sc4626 vault,
-        address from,
-        address to,
-        uint256 amount
-    ) internal {
+    function deposit(ERC20 asset, sc4626 vault, address from, address to, uint256 amount) internal {
         console2.log("depositing", from);
 
         vm.startPrank(from);
@@ -113,10 +107,7 @@ contract DeployScript is DeployLeveragedEth, Test {
     function profit() internal {
         console2.log("generate profit for scUSDC vault");
 
-        (, uint256 borrowAmount) = aavePool.book(
-            address(wethContract),
-            address(weth)
-        );
+        (, uint256 borrowAmount) = aavePool.book(address(wethContract), address(weth));
 
         // Reduce amount of debt so that there is less debt than the original to create profit
         vm.startPrank(address(wethContract));
