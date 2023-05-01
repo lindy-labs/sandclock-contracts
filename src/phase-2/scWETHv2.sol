@@ -42,6 +42,7 @@ contract scWETHv2 is sc4626, LendingMarketManager, IFlashLoanRecipient {
         SupplyBorrowParam[] supplyBorrowParams;
         bool doWstEthToWethSwap; // if true wstEth will be swapped to eth after weth repay and wstEth Withdraw
         bool doWethToWstEthSwap; // if true weth will be swapped to wstEth before wstEth supply and weth borrow
+        uint256 wstEthSwapAmount; // if doWstEthToWethSwap is true, amount of wstEth to swap to weth
         uint256 wethSwapAmount; // if doWethToWstEthSwap is true, amount of weth to swap to wstEth
     }
 
@@ -164,6 +165,7 @@ contract scWETHv2 is sc4626, LendingMarketManager, IFlashLoanRecipient {
             supplyBorrowParams: supplyBorrowParams,
             doWstEthToWethSwap: false,
             doWethToWstEthSwap: true,
+            wstEthSwapAmount: 0,
             wethSwapAmount: totalInvestAmount + totalFlashLoanAmount
         });
 
@@ -192,6 +194,7 @@ contract scWETHv2 is sc4626, LendingMarketManager, IFlashLoanRecipient {
             supplyBorrowParams: new SupplyBorrowParam[](0),
             doWstEthToWethSwap: true,
             doWethToWstEthSwap: false,
+            wstEthSwapAmount: type(uint256).max,
             wethSwapAmount: 0
         });
 
@@ -206,7 +209,11 @@ contract scWETHv2 is sc4626, LendingMarketManager, IFlashLoanRecipient {
     }
 
     /// @notice reallocate funds from one protocol to another (without any slippage)
-    function reallocate(RepayWithdrawParam[] calldata from, SupplyBorrowParam[] calldata to) external onlyKeeper {
+    // @param delta: amount of wstEth to swap to weth
+    function reallocate(RepayWithdrawParam[] calldata from, SupplyBorrowParam[] calldata to, uint256 delta)
+        external
+        onlyKeeper
+    {
         uint256 totalFlashLoanAmount;
         for (uint256 i; i < from.length; i++) {
             totalFlashLoanAmount += from[i].repayAmount;
@@ -215,8 +222,9 @@ contract scWETHv2 is sc4626, LendingMarketManager, IFlashLoanRecipient {
         RebalanceParams memory params = RebalanceParams({
             repayWithdrawParams: from,
             supplyBorrowParams: to,
-            doWstEthToWethSwap: false,
+            doWstEthToWethSwap: true,
             doWethToWstEthSwap: false,
+            wstEthSwapAmount: delta,
             wethSwapAmount: 0
         });
 
@@ -344,7 +352,11 @@ contract scWETHv2 is sc4626, LendingMarketManager, IFlashLoanRecipient {
 
         if (rebalanceParams.doWstEthToWethSwap) {
             // unwrap wstETH
-            uint256 stEthAmount = wstETH.unwrap(wstETH.balanceOf(address(this)));
+            uint256 stEthAmount = wstETH.unwrap(
+                rebalanceParams.wstEthSwapAmount == type(uint256).max
+                    ? wstETH.balanceOf(address(this))
+                    : rebalanceParams.wstEthSwapAmount
+            );
             // stETH to eth
             curvePool.exchange(1, 0, stEthAmount, _stEthToEth(stEthAmount).mulWadDown(slippageTolerance));
             // wrap eth
@@ -367,6 +379,9 @@ contract scWETHv2 is sc4626, LendingMarketManager, IFlashLoanRecipient {
         }
 
         _supplyBorrow(rebalanceParams.supplyBorrowParams);
+
+        // console.log("weth balance", weth.balanceOf(address(this)));
+        // console.log("flashloanAmount", flashLoanAmount);
 
         // payback flashloan
         asset.safeTransfer(address(balancerVault), flashLoanAmount);
@@ -422,7 +437,7 @@ contract scWETHv2 is sc4626, LendingMarketManager, IFlashLoanRecipient {
         totalInvested -= amount;
 
         SupplyBorrowParam[] memory empty;
-        RebalanceParams memory params = RebalanceParams(repayWithdrawParams, empty, true, false, amount);
+        RebalanceParams memory params = RebalanceParams(repayWithdrawParams, empty, true, false, type(uint256).max, 0);
 
         // take flashloan
         balancerVault.flashLoan(address(this), tokens, amounts, abi.encode(params));
@@ -434,11 +449,17 @@ contract scWETHv2 is sc4626, LendingMarketManager, IFlashLoanRecipient {
             LendingMarket memory lendingMarket;
             for (uint256 i; i < n; i++) {
                 lendingMarket = lendingMarkets[supplyBorrowParams[i].market];
-                // console.log("supply Amount wstETH", _ethToWstEth(supplyBorrowParams[i].supplyAmount));
+                // console.log("supply Amount WETH", _wstEthToEth(supplyBorrowParams[i].supplyAmount));
                 // console.log("wstEth balance", wstETH.balanceOf(address(this)));
+                // console.log("weth balance before supply", weth.balanceOf(address(this)));
+
                 lendingMarket.supply(supplyBorrowParams[i].supplyAmount); // supplyAmount must be in wstEth
+                // console.log("weth balance after supply", weth.balanceOf(address(this)));
+
                 lendingMarket.borrow(supplyBorrowParams[i].borrowAmount); // borrowAmount must be in weth
-                    // console.log("borrow Amount", supplyBorrowParams[i].borrowAmount);
+                    // console.log("weth balance after borrow", weth.balanceOf(address(this)));
+
+                // console.log("borrow Amount", supplyBorrowParams[i].borrowAmount);
             }
         }
     }
@@ -454,7 +475,8 @@ contract scWETHv2 is sc4626, LendingMarketManager, IFlashLoanRecipient {
                     lendingMarket.repay(type(uint256).max);
                     lendingMarket.withdraw(type(uint256).max);
                 } else {
-                    // console.log("to withdraw", repayWithdrawParams[i].withdrawAmount);
+                    // console.log("to withdraw", _wstEthToEth(repayWithdrawParams[i].withdrawAmount));
+                    // console.log("to repay", repayWithdrawParams[i].repayAmount);
                     // console.log("market balance", lendingMarket.getCollateral());
 
                     lendingMarket.repay(repayWithdrawParams[i].repayAmount); // repayAmount must be in weth
