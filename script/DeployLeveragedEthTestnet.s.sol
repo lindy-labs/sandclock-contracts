@@ -16,8 +16,6 @@ contract DeployScript is DeployLeveragedEth {
     }
 
     function run() external {
-        deployMockTokens();
-        deployMocks();
         deploy();
     }
 }

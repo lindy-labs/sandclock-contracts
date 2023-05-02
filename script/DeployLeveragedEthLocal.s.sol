@@ -27,8 +27,6 @@ contract DeployScript is DeployLeveragedEth, Test {
             return;
         }
 
-        deployMockTokens();
-        deployMocks();
         deploy();
         fixtures();
     }

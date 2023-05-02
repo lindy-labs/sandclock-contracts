@@ -62,6 +62,7 @@ abstract contract DeployLeveragedEth is CREATE3Script {
 
         vm.startBroadcast(deployerPrivateKey);
 
+        deployMockTokens();
         deployMocks();
 
         scWETH.ConstructorParams memory scWethParams = scWETH.ConstructorParams({
