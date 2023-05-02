@@ -64,4 +64,11 @@ library Constants {
     address public constant EULER_REWARDS_TOKEN = 0xd9Fcd98c322942075A5C3860693e9f4f03AAE07b;
     // vaule used to scale the token's collateral/borrow factors from the euler market
     uint32 constant EULER_CONFIG_FACTOR_SCALE = 4_000_000_000;
+
+    // address of the Aave v2 lending pool
+    address public constant AAVE_V2_LENDING_POOL = 0xB53C1a33016B2DC2fF3653530bfF1848a515c8c5;
+    /// address of the Aave v2 interest bearing USDC (aUSDC) token
+    address public constant AAVE_V2_AUSDC_TOKEN = 0xBcca60bB61934080951369a648Fb03DF4F96263C;
+    // address of the Aave v2 variable debt bearing WETH (variableDebtWETH) token
+    address public constant AAVE_V2_VAR_DEBT_WETH_TOKEN = 0x030bA81f1c18d280636F32af80b9AAd02Cf0854e;
 }

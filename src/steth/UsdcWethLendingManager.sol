@@ -20,6 +20,7 @@ import {IPoolDataProvider} from "aave-v3/interfaces/IPoolDataProvider.sol";
 import {IEulerMarkets, IEulerEToken, IEulerDToken} from "lib/euler-interfaces/contracts/IEuler.sol";
 
 import {Constants as C} from "../lib/Constants.sol";
+import {ILendingPool} from "../interfaces/aave-v2/ILendingPool.sol";
 import {IVault} from "../interfaces/balancer/IVault.sol";
 import {ISwapRouter} from "../interfaces/uniswap/ISwapRouter.sol";
 import {AggregatorV3Interface} from "../interfaces/chainlink/AggregatorV3Interface.sol";
@@ -32,6 +33,7 @@ abstract contract UsdcWethLendingManager {
     using FixedPointMathLib for uint256;
 
     enum Protocol {
+        AAVE_V2,
         AAVE_V3,
         EULER
     }
@@ -50,6 +52,10 @@ abstract contract UsdcWethLendingManager {
 
     ERC20 public immutable usdc;
     WETH public immutable weth;
+
+    ILendingPool public immutable aaveV2Pool;
+    ERC20 public immutable aaveV2UsdcAToken;
+    ERC20 public immutable aaveV2WethVarDebtToken;
 
     IPool public immutable aavePool;
     IPoolDataProvider public immutable aavePoolDataProvider;
@@ -89,6 +95,11 @@ abstract contract UsdcWethLendingManager {
         eulerDWeth = _eulerDWeth;
         eulerRewardsToken = _eulerRewardsToken;
 
+        // TODO: fix this
+        aaveV2Pool = ILendingPool(0x7d2768dE32b0b80b7a3454c06BdAc94A69DDc7A9);
+        aaveV2UsdcAToken = ERC20(0xBcca60bB61934080951369a648Fb03DF4F96263C);
+        aaveV2WethVarDebtToken = ERC20(0xF63B34710400CAd3e044cFfDcAb00a0f32E33eCf);
+
         usdc.safeApprove(address(aavePool), type(uint256).max);
         weth.safeApprove(address(aavePool), type(uint256).max);
 
@@ -96,14 +107,26 @@ abstract contract UsdcWethLendingManager {
         weth.safeApprove(eulerProtocol, type(uint256).max);
         eulerMarkets.enterMarket(0, address(usdc));
 
+        usdc.safeApprove(address(aaveV2Pool), type(uint256).max);
+        weth.safeApprove(address(aaveV2Pool), type(uint256).max);
+
+        protocolToActions[Protocol.AAVE_V2] = ProtocolActions(
+            supplyUsdcOnAaveV2,
+            borrowWethOnAaveV2,
+            repayDebtOnAaveV2,
+            withdrawUsdcOnAaveV2,
+            getCollateralOnAaveV2,
+            getDebtOnAaveV2,
+            getMaxLtvOnAaveV2
+        );
         protocolToActions[Protocol.AAVE_V3] = ProtocolActions(
-            supplyUsdcOnAave,
-            borrowWethOnAave,
-            repayDebtOnAave,
-            withdrawUsdcOnAave,
-            getCollateralOnAave,
-            getDebtOnAave,
-            getMaxLtvOnAave
+            supplyUsdcOnAaveV3,
+            borrowWethOnAaveV3,
+            repayDebtOnAaveV3,
+            withdrawUsdcOnAaveV3,
+            getCollateralOnAaveV3,
+            getDebtOnAaveV3,
+            getMaxLtvOnAaveV3
         );
         protocolToActions[Protocol.EULER] = ProtocolActions(
             supplyUsdcOnEuler,
@@ -117,34 +140,74 @@ abstract contract UsdcWethLendingManager {
     }
 
     /*//////////////////////////////////////////////////////////////
-                            AAVE API
+                            AAVE_V2 API
     //////////////////////////////////////////////////////////////*/
 
-    function supplyUsdcOnAave(uint256 _amount) internal {
+    function supplyUsdcOnAaveV2(uint256 _amount) internal {
+        // aavePool.supply(address(usdc), _amount, address(this), 0);
+        aaveV2Pool.deposit(address(usdc), _amount, address(this), 0);
+    }
+
+    function borrowWethOnAaveV2(uint256 _amount) internal {
+        // aavePool.borrow(address(weth), _amount, C.AAVE_VAR_INTEREST_RATE_MODE, 0, address(this));
+        aaveV2Pool.borrow(address(weth), _amount, C.AAVE_VAR_INTEREST_RATE_MODE, 0, address(this));
+    }
+
+    function repayDebtOnAaveV2(uint256 _amount) internal {
+        // aavePool.repay(address(weth), _amount, C.AAVE_VAR_INTEREST_RATE_MODE, address(this));
+        aaveV2Pool.repay(address(weth), _amount, C.AAVE_VAR_INTEREST_RATE_MODE, address(this));
+    }
+
+    function withdrawUsdcOnAaveV2(uint256 _amount) internal {
+        // aavePool.withdraw(address(usdc), _amount, address(this));
+        aaveV2Pool.withdraw(address(usdc), _amount, address(this));
+    }
+
+    function getCollateralOnAaveV2() public view returns (uint256) {
+        return aaveV2UsdcAToken.balanceOf(address(this));
+    }
+
+    function getDebtOnAaveV2() public view returns (uint256) {
+        return aaveV2WethVarDebtToken.balanceOf(address(this));
+    }
+
+    function getMaxLtvOnAaveV2() public view returns (uint256) {
+        (, uint256 ltv,,,,,,,,) = aavePoolDataProvider.getReserveConfigurationData(address(usdc));
+
+        // ltv is returned as a percentage with 2 decimals (e.g. 80% = 8000) so we need to multiply by 1e14
+        // return ltv * 1e14;
+        return 1e18;
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                            AAVE_V3 API
+    //////////////////////////////////////////////////////////////*/
+
+    function supplyUsdcOnAaveV3(uint256 _amount) internal {
         aavePool.supply(address(usdc), _amount, address(this), 0);
     }
 
-    function borrowWethOnAave(uint256 _amount) internal {
+    function borrowWethOnAaveV3(uint256 _amount) internal {
         aavePool.borrow(address(weth), _amount, C.AAVE_VAR_INTEREST_RATE_MODE, 0, address(this));
     }
 
-    function repayDebtOnAave(uint256 _amount) internal {
+    function repayDebtOnAaveV3(uint256 _amount) internal {
         aavePool.repay(address(weth), _amount, C.AAVE_VAR_INTEREST_RATE_MODE, address(this));
     }
 
-    function withdrawUsdcOnAave(uint256 _amount) internal {
+    function withdrawUsdcOnAaveV3(uint256 _amount) internal {
         aavePool.withdraw(address(usdc), _amount, address(this));
     }
 
-    function getCollateralOnAave() public view returns (uint256) {
+    function getCollateralOnAaveV3() public view returns (uint256) {
         return aaveAUsdc.balanceOf(address(this));
     }
 
-    function getDebtOnAave() public view returns (uint256) {
+    function getDebtOnAaveV3() public view returns (uint256) {
         return aaveVarDWeth.balanceOf(address(this));
     }
 
-    function getMaxLtvOnAave() public view returns (uint256) {
+    function getMaxLtvOnAaveV3() public view returns (uint256) {
         (, uint256 ltv,,,,,,,,) = aavePoolDataProvider.getReserveConfigurationData(address(usdc));
 
         // ltv is returned as a percentage with 2 decimals (e.g. 80% = 8000) so we need to multiply by 1e14
