@@ -96,7 +96,7 @@ contract scUSDCv2Test is Test {
 
         // check approvals
         assertEq(
-            usdc.allowance(address(vault), address(vault.aavePool())), type(uint256).max, "usdc->aave v3 allowance"
+            usdc.allowance(address(vault), address(vault.aaveV3Pool())), type(uint256).max, "usdc->aave v3 allowance"
         );
         assertEq(
             usdc.allowance(address(vault), address(vault.eulerProtocol())), type(uint256).max, "usdc->euler allowance"
@@ -106,7 +106,7 @@ contract scUSDCv2Test is Test {
         );
 
         assertEq(
-            weth.allowance(address(vault), address(vault.aavePool())), type(uint256).max, "weth->aave v3 allowance"
+            weth.allowance(address(vault), address(vault.aaveV3Pool())), type(uint256).max, "weth->aave v3 allowance"
         );
         assertEq(
             weth.allowance(address(vault), address(vault.eulerProtocol())), type(uint256).max, "weth->euler allowance"
@@ -1075,24 +1075,39 @@ contract scUSDCv2Test is Test {
         view
         returns (scUSDCv2.ConstructorParams memory)
     {
+        UsdcWethLendingManager.AaveV3 memory aaveV3 = UsdcWethLendingManager.AaveV3({
+            pool: IPool(C.AAVE_POOL),
+            poolDataProvider: IPoolDataProvider(C.AAVE_POOL_DATA_PROVIDER),
+            aUsdc: IAToken(C.AAVE_AUSDC_TOKEN),
+            varDWeth: ERC20(C.AAVAAVE_VAR_DEBT_WETH_TOKEN)
+        });
+
+        UsdcWethLendingManager.Euler memory euler = UsdcWethLendingManager.Euler({
+            protocol: C.EULER_PROTOCOL,
+            markets: IEulerMarkets(C.EULER_MARKETS),
+            eUsdc: IEulerEToken(C.EULER_EUSDC_TOKEN),
+            dWeth: IEulerDToken(C.EULER_DWETH_TOKEN),
+            rewardsToken: ERC20(C.EULER_REWARDS_TOKEN)
+        });
+
+        UsdcWethLendingManager.AaveV2 memory aaveV2 = UsdcWethLendingManager.AaveV2({
+            pool: ILendingPool(C.AAVE_V2_LENDING_POOL),
+            aUsdc: ERC20(C.AAVE_V2_AUSDC_TOKEN),
+            varDWeth: ERC20(C.AAVE_V2_VAR_DEBT_WETH_TOKEN)
+        });
+
         return scUSDCv2.ConstructorParams({
             admin: address(this),
             keeper: keeper,
             scWETH: scWeth,
             usdc: ERC20(C.USDC),
             weth: WETH(payable(C.WETH)),
-            aavePool: IPool(C.AAVE_POOL),
-            aavePoolDataProvider: IPoolDataProvider(C.AAVE_POOL_DATA_PROVIDER),
-            aaveAUsdc: IAToken(C.AAVE_AUSDC_TOKEN),
-            aaveVarDWeth: ERC20(C.AAVAAVE_VAR_DEBT_WETH_TOKEN),
+            aaveV3: aaveV3,
+            aaveV2: aaveV2,
+            euler: euler,
             uniswapSwapRouter: ISwapRouter(C.UNISWAP_V3_SWAP_ROUTER),
             chainlinkUsdcToEthPriceFeed: AggregatorV3Interface(C.CHAINLINK_USDC_ETH_PRICE_FEED),
-            balancerVault: IVault(C.BALANCER_VAULT),
-            eulerProtocol: C.EULER_PROTOCOL,
-            eulerMarkets: IEulerMarkets(C.EULER_MARKETS),
-            eulerEUsdc: IEulerEToken(C.EULER_EUSDC_TOKEN),
-            eulerDWeth: IEulerDToken(C.EULER_DWETH_TOKEN),
-            eulerRewardsToken: ERC20(C.EULER_REWARDS_TOKEN)
+            balancerVault: IVault(C.BALANCER_VAULT)
         });
     }
 }

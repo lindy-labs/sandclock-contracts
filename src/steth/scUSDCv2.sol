@@ -90,35 +90,17 @@ contract scUSDCv2 is sc4626, UsdcWethLendingManager, IFlashLoanRecipient {
         ERC4626 scWETH;
         ERC20 usdc;
         WETH weth;
-        IPool aavePool;
-        IPoolDataProvider aavePoolDataProvider;
-        IAToken aaveAUsdc;
-        ERC20 aaveVarDWeth;
+        AaveV3 aaveV3;
+        AaveV2 aaveV2;
+        Euler euler;
         ISwapRouter uniswapSwapRouter;
         AggregatorV3Interface chainlinkUsdcToEthPriceFeed;
         IVault balancerVault;
-        address eulerProtocol;
-        IEulerMarkets eulerMarkets;
-        IEulerEToken eulerEUsdc;
-        IEulerDToken eulerDWeth;
-        ERC20 eulerRewardsToken;
     }
 
     constructor(ConstructorParams memory _params)
         sc4626(_params.admin, _params.keeper, _params.usdc, "Sandclock USDC Vault v2", "scUSDCv2")
-        UsdcWethLendingManager(
-            _params.usdc,
-            _params.weth,
-            _params.aavePool,
-            _params.aavePoolDataProvider,
-            _params.aaveAUsdc,
-            _params.aaveVarDWeth,
-            _params.eulerProtocol,
-            _params.eulerMarkets,
-            _params.eulerEUsdc,
-            _params.eulerDWeth,
-            _params.eulerRewardsToken
-        )
+        UsdcWethLendingManager(_params.usdc, _params.weth, _params.aaveV3, _params.aaveV2, _params.euler)
     {
         scWETH = _params.scWETH;
         swapRouter = _params.uniswapSwapRouter;
