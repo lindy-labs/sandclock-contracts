@@ -180,6 +180,31 @@ contract scUSDCv2Test is Test {
         assertApproxEqAbs(vault.getDebtOnAaveV2(), initialDebt, 1, "debt on aave v2");
     }
 
+    function test_rebalance_oneProtocolLeverageDown() public {
+        uint256 initialBalance = 1_000_000e6;
+        uint256 initialDebt = 100 ether;
+        deal(address(usdc), address(vault), initialBalance);
+
+        scUSDCv2.RebalanceParams[] memory params = new scUSDCv2.RebalanceParams[](1);
+        params[0] = _createRebalanceParams(UsdcWethLendingManager.Protocol.AAVE_V2, initialBalance, true, initialDebt);
+
+        vault.rebalance(params);
+
+        assertApproxEqAbs(vault.totalCollateral(), initialBalance, 1, "total collateral");
+        assertApproxEqAbs(vault.totalDebt(), initialDebt, 1, "total debt");
+
+        // leverage down
+        params[0] = _createRebalanceParams(UsdcWethLendingManager.Protocol.AAVE_V2, 0, false, initialDebt / 2);
+
+        vault.rebalance(params);
+
+        assertApproxEqAbs(vault.totalCollateral(), initialBalance, 1, "total collateral");
+        assertApproxEqAbs(vault.totalDebt(), initialDebt / 2, 1, "total debt");
+
+        assertApproxEqAbs(vault.getCollateralOnAaveV2(), initialBalance, 1, "collateral on aave v2");
+        assertApproxEqAbs(vault.getDebtOnAaveV2(), initialDebt / 2, 1, "debt on aave v2");
+    }
+
     function test_rebalance_oneProtocolWithAdditionalDeposits() public {
         uint256 initialBalance = 1_000_000e6;
         uint256 initialDebt = 100 ether;
@@ -291,6 +316,68 @@ contract scUSDCv2Test is Test {
         assertApproxEqAbs(vault.getDebtOnEuler(), debtOnEuler + additionalDebtOnEuler, 1, "debt on euler after");
     }
 
+    function test_rebalance_twoProtocolsLeveragingUpAndDown() public {
+        uint256 initialBalance = 1_000_000e6;
+        uint256 debtOnAaveV3 = 160 ether;
+        uint256 debtOnEuler = 100 ether;
+        deal(address(usdc), address(vault), initialBalance);
+
+        scUSDCv2.RebalanceParams[] memory params = new scUSDCv2.RebalanceParams[](2);
+        params[0] =
+            _createRebalanceParams(UsdcWethLendingManager.Protocol.AAVE_V3, initialBalance / 2, true, debtOnAaveV3);
+        params[1] = _createRebalanceParams(UsdcWethLendingManager.Protocol.EULER, initialBalance / 2, true, debtOnEuler);
+
+        vault.rebalance(params);
+
+        assertApproxEqAbs(vault.totalCollateral(), initialBalance, 1, "total collateral before");
+        assertApproxEqAbs(vault.totalDebt(), debtOnAaveV3 + debtOnEuler, 1, "total debt before");
+
+        uint256 additionalCollateralOnAaveV3 = 50_000e6;
+        uint256 additionalCollateralOnEuler = 0;
+        uint256 additionalDebtOnAaveV3 = 40 ether; // leverage up
+        uint256 debtReductionOnEuler = 80 ether; // leverage down
+        deal(address(usdc), address(vault), additionalCollateralOnAaveV3 + additionalCollateralOnEuler);
+
+        params = new scUSDCv2.RebalanceParams[](2);
+        params[0] = _createRebalanceParams(
+            UsdcWethLendingManager.Protocol.AAVE_V3, additionalCollateralOnAaveV3, true, additionalDebtOnAaveV3
+        );
+        params[1] = _createRebalanceParams(
+            UsdcWethLendingManager.Protocol.EULER, additionalCollateralOnEuler, false, debtReductionOnEuler
+        );
+
+        vault.rebalance(params);
+
+        assertApproxEqAbs(
+            vault.totalCollateral(),
+            initialBalance + additionalCollateralOnAaveV3 + additionalCollateralOnEuler,
+            1,
+            "total collateral after"
+        );
+        assertApproxEqAbs(
+            vault.totalDebt(),
+            debtOnAaveV3 + debtOnEuler + additionalDebtOnAaveV3 - debtReductionOnEuler,
+            1,
+            "total debt after"
+        );
+
+        assertApproxEqAbs(
+            vault.getCollateralOnAaveV3(),
+            initialBalance / 2 + additionalCollateralOnAaveV3,
+            1,
+            "collateral on aave v3 after"
+        );
+        assertApproxEqAbs(
+            vault.getCollateralOnEuler(),
+            initialBalance / 2 + additionalCollateralOnEuler,
+            1,
+            "collateral on euler after"
+        );
+
+        assertApproxEqAbs(vault.getDebtOnAaveV3(), debtOnAaveV3 + additionalDebtOnAaveV3, 1, "debt on aave v3 after");
+        assertApproxEqAbs(vault.getDebtOnEuler(), debtOnEuler - debtReductionOnEuler, 1, "debt on euler after");
+    }
+
     function test_rebalance_threeProtocols() public {
         uint256 initialBalance = 1_200_000e6;
         uint256 debtOnAaveV3 = 140 ether;
@@ -317,6 +404,44 @@ contract scUSDCv2Test is Test {
         assertApproxEqAbs(vault.getDebtOnAaveV3(), debtOnAaveV3, 1, "debt on aave v3");
         assertApproxEqAbs(vault.getDebtOnEuler(), debtOnEuler, 1, "debt on euler");
         assertApproxEqAbs(vault.getDebtOnAaveV2(), debtOnAaveV2, 1, "debt on aave v2");
+    }
+
+    function test_rebalance_threeProtocolsLeveragingDown() public {
+        uint256 initialBalance = 1_200_000e6;
+        uint256 debtOnAaveV3 = 140 ether;
+        uint256 debtOnEuler = 150 ether;
+        uint256 debtOnAaveV2 = 160 ether;
+        uint256 totalDebt = debtOnAaveV3 + debtOnAaveV2 + debtOnEuler;
+        deal(address(usdc), address(vault), initialBalance);
+
+        scUSDCv2.RebalanceParams[] memory params = new scUSDCv2.RebalanceParams[](3);
+        params[0] =
+            _createRebalanceParams(UsdcWethLendingManager.Protocol.AAVE_V3, initialBalance / 3, true, debtOnAaveV3);
+        params[1] = _createRebalanceParams(UsdcWethLendingManager.Protocol.EULER, initialBalance / 3, true, debtOnEuler);
+        params[2] =
+            _createRebalanceParams(UsdcWethLendingManager.Protocol.AAVE_V2, initialBalance / 3, true, debtOnAaveV2);
+
+        vault.rebalance(params);
+
+        assertApproxEqAbs(vault.totalCollateral(), initialBalance, 1, "total collateral");
+        assertApproxEqAbs(vault.totalDebt(), totalDebt, 1, "total debt");
+
+        uint256 debtReductionOnAaveV3 = 40;
+        uint256 debtReductionOnEuler = 50;
+        uint256 debtReductionOnAaveV2 = 60;
+        uint256 totalDebtReduction = debtReductionOnAaveV3 + debtReductionOnEuler + debtReductionOnAaveV2;
+        params[0] = _createRebalanceParams(UsdcWethLendingManager.Protocol.AAVE_V3, 0, false, debtReductionOnAaveV3);
+        params[1] = _createRebalanceParams(UsdcWethLendingManager.Protocol.EULER, 0, false, debtReductionOnEuler);
+        params[2] = _createRebalanceParams(UsdcWethLendingManager.Protocol.AAVE_V2, 0, false, debtReductionOnAaveV2);
+
+        vault.rebalance(params);
+
+        assertApproxEqAbs(vault.totalCollateral(), initialBalance, 1, "total collateral");
+        assertApproxEqAbs(vault.totalDebt(), totalDebt - totalDebtReduction, 1, "total debt");
+
+        assertApproxEqAbs(vault.getDebtOnAaveV3(), debtOnAaveV3 - debtReductionOnAaveV3, 1, "debt on aave v3");
+        assertApproxEqAbs(vault.getDebtOnEuler(), debtOnEuler - debtReductionOnEuler, 1, "debt on euler");
+        assertApproxEqAbs(vault.getDebtOnAaveV2(), debtOnAaveV2 - debtReductionOnAaveV2, 1, "debt on aave v2");
     }
 
     function test_rebalance_emitsEventForEachProtocol() public {
