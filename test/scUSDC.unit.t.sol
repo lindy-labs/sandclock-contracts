@@ -175,6 +175,119 @@ contract scUSDCUnitTest is Test {
         assertEq(usdc.balanceOf(bob), depositAmount, "bob's usdc balance");
     }
 
+    function test_withdraw_CooldownPeriodIsEnforcedOnReceiverOfDeposit() public {
+        uint256 depositAmount = 10000e6;
+        deal(address(usdc), address(alice), depositAmount);
+        vm.warp(1683125673); // set timestamp to a realistic value
+
+        vm.startPrank(alice);
+        usdc.approve(address(vault), type(uint256).max);
+        vault.deposit(depositAmount, bob);
+        vm.stopPrank();
+
+        assertEq(vault.convertToAssets(vault.balanceOf(bob)), depositAmount, "bob's assets in vault");
+
+        vm.startPrank(bob);
+        vm.expectRevert(DepositCooldownNotElapsed.selector);
+        vault.withdraw(depositAmount, bob, bob);
+    }
+
+    function test_withdraw_ReceiverOfDepositIsAbleToWithdrawAfterCooldownExipres() public {
+        uint256 depositAmount = 10000e6;
+        deal(address(usdc), address(alice), depositAmount);
+        vm.warp(1683125673); // set timestamp to a realistic value
+
+        vm.startPrank(alice);
+        usdc.approve(address(vault), type(uint256).max);
+        vault.deposit(depositAmount, bob);
+        vm.stopPrank();
+
+        assertEq(vault.convertToAssets(vault.balanceOf(bob)), depositAmount, "bob's assets in vault");
+
+        vm.warp(block.timestamp + C.DEPOSIT_COOLDOWN_PERIOD);
+
+        vm.startPrank(bob);
+        vault.withdraw(depositAmount, bob, bob);
+
+        assertEq(usdc.balanceOf(bob), depositAmount, "bob's usdc balance");
+    }
+
+    function test_redeem_CooldownPeriodIsEnforcedOnTransfer() public {
+        uint256 depositAmount = 10000e6;
+        deal(address(usdc), address(alice), depositAmount);
+        vm.warp(1683125673); // set timestamp to a realistic value
+
+        vm.startPrank(alice);
+        usdc.approve(address(vault), type(uint256).max);
+        vault.deposit(depositAmount, alice);
+
+        uint256 aliceShares = vault.balanceOf(alice);
+        vault.transfer(bob, aliceShares / 2);
+        vm.stopPrank();
+
+        assertEq(vault.balanceOf(bob), aliceShares / 2, "bob's shares");
+
+        vm.prank(alice);
+        vm.expectRevert(DepositCooldownNotElapsed.selector);
+        vault.redeem(aliceShares / 2, alice, alice);
+
+        vm.prank(bob);
+        vm.expectRevert(DepositCooldownNotElapsed.selector);
+        vault.redeem(aliceShares / 2, bob, bob);
+    }
+
+    function test_redeem_CooldownPeriodIsEnforcedOnTransferFrom() public {
+        uint256 depositAmount = 10000e6;
+        deal(address(usdc), address(alice), depositAmount);
+        vm.warp(1683125673); // set timestamp to a realistic value
+
+        vm.startPrank(alice);
+        usdc.approve(address(vault), type(uint256).max);
+        vault.deposit(depositAmount, alice);
+
+        uint256 aliceShares = vault.balanceOf(alice);
+        vault.approve(bob, aliceShares / 2);
+        vm.stopPrank();
+
+        vm.prank(bob);
+        vault.transferFrom(alice, bob, aliceShares / 2);
+        assertEq(vault.balanceOf(bob), aliceShares / 2, "bob's shares");
+
+        vm.prank(alice);
+        vm.expectRevert(DepositCooldownNotElapsed.selector);
+        vault.redeem(aliceShares / 2, alice, alice);
+
+        vm.prank(bob);
+        vm.expectRevert(DepositCooldownNotElapsed.selector);
+        vault.redeem(aliceShares / 2, bob, bob);
+    }
+
+    function test_redeem_TransferredSharesAreRedeemableAfterCooldownPeriod() public {
+        uint256 depositAmount = 10000e6;
+        deal(address(usdc), address(alice), depositAmount);
+        vm.warp(1683125673); // set timestamp to a realistic value
+
+        vm.startPrank(alice);
+        usdc.approve(address(vault), type(uint256).max);
+        vault.deposit(depositAmount, alice);
+
+        uint256 aliceShares = vault.balanceOf(alice);
+        vault.transfer(bob, aliceShares / 2);
+        vm.stopPrank();
+
+        assertEq(vault.balanceOf(bob), aliceShares / 2, "bob's shares");
+
+        vm.warp(block.timestamp + C.DEPOSIT_COOLDOWN_PERIOD);
+
+        vm.prank(alice);
+        vault.redeem(aliceShares / 2, alice, alice);
+        assertEq(usdc.balanceOf(alice), depositAmount / 2, "alice's usdc balance");
+
+        vm.prank(bob);
+        vault.redeem(aliceShares / 2, bob, bob);
+        assertEq(usdc.balanceOf(bob), depositAmount / 2, "alice's usdc balance");
+    }
+
     function test_getCollateral_AccountsForInterestOnSuppliedUsdc() public {
         uint256 amount = 10000e6;
         deal(address(usdc), address(alice), amount);

@@ -352,12 +352,68 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
     }
 
     /*//////////////////////////////////////////////////////////////
-                            INTERNAL API
+                         ERC4626 OVERRIDES
     //////////////////////////////////////////////////////////////*/
 
-    function afterDeposit(uint256, uint256) internal override {
-        userToDepositTimestamp[msg.sender] = block.timestamp;
+    /// @dev We override the deposit function to add the deposit timestamp.
+    function deposit(uint256 assets, address receiver) public override returns (uint256 shares) {
+        // Check for rounding error since we round down in previewDeposit.
+        require((shares = previewDeposit(assets)) != 0, "ZERO_SHARES");
+
+        // Need to transfer before minting or ERC777s could reenter.
+        asset.safeTransferFrom(msg.sender, address(this), assets);
+
+        _mint(receiver, shares);
+
+        // code added in comparison to ERC4626
+        emit Deposit(msg.sender, receiver, assets, shares);
+
+        userToDepositTimestamp[receiver] = block.timestamp;
     }
+
+    /// @dev We override the withdraw function to add the deposit timestamp.
+    function transfer(address to, uint256 amount) public override returns (bool) {
+        balanceOf[msg.sender] -= amount;
+
+        // Cannot overflow because the sum of all user
+        // balances can't exceed the max uint256 value.
+        unchecked {
+            balanceOf[to] += amount;
+        }
+
+        emit Transfer(msg.sender, to, amount);
+
+        // code added in comparison to ERC20
+        userToDepositTimestamp[to] = userToDepositTimestamp[msg.sender];
+
+        return true;
+    }
+
+    /// @dev We override the withdraw function to add the deposit timestamp.
+    function transferFrom(address from, address to, uint256 amount) public override returns (bool) {
+        uint256 allowed = allowance[from][msg.sender]; // Saves gas for limited approvals.
+
+        if (allowed != type(uint256).max) allowance[from][msg.sender] = allowed - amount;
+
+        balanceOf[from] -= amount;
+
+        // Cannot overflow because the sum of all user
+        // balances can't exceed the max uint256 value.
+        unchecked {
+            balanceOf[to] += amount;
+        }
+
+        emit Transfer(from, to, amount);
+
+        // code added in comparison to ERC20
+        userToDepositTimestamp[to] = userToDepositTimestamp[from];
+
+        return true;
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                            INTERNAL API
+    //////////////////////////////////////////////////////////////*/
 
     function beforeWithdraw(uint256 _assets, uint256) internal override {
         _checkDepositCooldownPeriod();
