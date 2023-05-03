@@ -245,8 +245,7 @@ contract scWETHv2Test is Test {
         );
     }
 
-    function test_reallocate(uint256 amount) public {
-        // uint256 amount = 10 ether;
+    function test_reallocate_fromHigherLtvMarket_toLowerLtvMarket(uint256 amount) public {
         amount = bound(amount, boundMinimum, 15000 ether);
         _depositToVault(address(this), amount);
 
@@ -272,16 +271,14 @@ contract scWETHv2Test is Test {
             scWETHv2.RepayWithdrawParam[] memory repayWithdrawParamsReallocation,
             scWETHv2.SupplyBorrowParam[] memory supplyBorrowParamsReallocation,
             uint256 delta
-        ) = _getReallocationParamsWhenSupplyMarketHasLowerLtvThanWithdrawMarket(
-            reallocationAmount, aaveV3Assets, eulerLtv
-        );
+        ) = _getReallocationParamsWhenMarket1HasHigherLtv(reallocationAmount, aaveV3Assets, eulerLtv);
 
         // so after reallocation aaveV3 must have 60% and euler must have 40% funds respectively
         uint256 deltaWstEth = _ethToWstEth(delta);
         hoax(keeper);
-        vault.reallocate(repayWithdrawParamsReallocation, supplyBorrowParamsReallocation, deltaWstEth);
+        vault.reallocate(repayWithdrawParamsReallocation, supplyBorrowParamsReallocation, deltaWstEth, 0);
 
-        _reallocationChecks(
+        _reallocationChecksWhenMarket1HasHigherLtv(
             totalAssets,
             aaveV3Allocation,
             eulerAllocation,
@@ -290,6 +287,44 @@ contract scWETHv2Test is Test {
             aaveV3Ltv,
             eulerLtv,
             reallocationAmount
+        );
+    }
+
+    function test_reallocate_fromLowerLtvMarket_toHigherLtvMarket(uint256 amount) public {
+        amount = bound(amount, boundMinimum, 15000 ether);
+        _depositToVault(address(this), amount);
+
+        uint256 aaveV3Allocation = 0.7e18;
+        uint256 eulerAllocation = 0.3e18;
+
+        (scWETHv2.SupplyBorrowParam[] memory supplyBorrowParams,,) =
+            _getInvestParams(amount, aaveV3Allocation, eulerAllocation);
+
+        hoax(keeper);
+        vault.invest(amount, supplyBorrowParams);
+
+        uint256 aaveV3Assets = vault.getAssets(LendingMarketManager.LendingMarketType.AAVE_V3);
+        uint256 eulerAssets = vault.getAssets(LendingMarketManager.LendingMarketType.EULER);
+        uint256 totalAssets = vault.totalAssets();
+        uint256 aaveV3Ltv = vault.getLtv(LendingMarketManager.LendingMarketType.AAVE_V3);
+        uint256 eulerLtv = vault.getLtv(LendingMarketManager.LendingMarketType.EULER);
+
+        // reallocate 10% of the totalAssets from euler to aaveV3
+        uint256 reallocationAmount = amount.mulWadDown(0.1e18); // in weth
+
+        (
+            scWETHv2.RepayWithdrawParam[] memory repayWithdrawParamsReallocation,
+            scWETHv2.SupplyBorrowParam[] memory supplyBorrowParamsReallocation,
+            uint256 delta
+        ) = _getReallocationParamsWhenMarket1HasLowerLtv(reallocationAmount, eulerAssets, aaveV3Ltv);
+
+        // so after reallocation aaveV3 must have 80% and euler must have 20% funds respectively
+        uint256 deltaWstEth = _ethToWstEth(delta);
+        hoax(keeper);
+        vault.reallocate(repayWithdrawParamsReallocation, supplyBorrowParamsReallocation, deltaWstEth, 0);
+
+        _reallocationChecksWhenMarket1HasLowerLtv(
+            totalAssets, aaveV3Assets, eulerAssets, aaveV3Ltv, eulerLtv, reallocationAmount
         );
     }
 
@@ -327,7 +362,7 @@ contract scWETHv2Test is Test {
 
     // market1 is the market we withdraw assets from
     // and market2 is the market we supply those assets to
-    function _getReallocationParamsWhenSupplyMarketHasLowerLtvThanWithdrawMarket(
+    function _getReallocationParamsWhenMarket1HasHigherLtv(
         uint256 reallocationAmount,
         uint256 market1Assets,
         uint256 market2Ltv
@@ -346,12 +381,39 @@ contract scWETHv2Test is Test {
         // since the ltv of the second market euler is less than the first market aaveV3
         // we cannot supply the withdraw amount and borrow the repay Amount since that will increase the ltv of euler
         uint256 delta = (repayAmount - market2Ltv.mulWadDown(withdrawAmount)).divWadDown(1e18 - market2Ltv);
-        console.log("Delta", delta);
-        uint256 market2SupplyAmount = _ethToWstEth(withdrawAmount - delta);
+        uint256 market2SupplyAmount = withdrawAmount - delta;
         uint256 market2BorrowAmount = repayAmount - delta;
 
         supplyBorrowParamsReallocation[0] = scWETHv2.SupplyBorrowParam(
-            LendingMarketManager.LendingMarketType.EULER, market2SupplyAmount, market2BorrowAmount
+            LendingMarketManager.LendingMarketType.EULER, _ethToWstEth(market2SupplyAmount), market2BorrowAmount
+        );
+
+        return (repayWithdrawParamsReallocation, supplyBorrowParamsReallocation, delta);
+    }
+
+    function _getReallocationParamsWhenMarket1HasLowerLtv(
+        uint256 reallocationAmount,
+        uint256 market1Assets,
+        uint256 market2Ltv
+    ) internal view returns (scWETHv2.RepayWithdrawParam[] memory, scWETHv2.SupplyBorrowParam[] memory, uint256) {
+        scWETHv2.RepayWithdrawParam[] memory repayWithdrawParamsReallocation = new scWETHv2.RepayWithdrawParam[](1);
+        scWETHv2.SupplyBorrowParam[] memory supplyBorrowParamsReallocation = new scWETHv2.SupplyBorrowParam[](1);
+
+        uint256 repayAmount =
+            reallocationAmount.mulDivDown(vault.getDebt(LendingMarketManager.LendingMarketType.EULER), market1Assets);
+        uint256 withdrawAmount = reallocationAmount + repayAmount;
+
+        repayWithdrawParamsReallocation[0] = scWETHv2.RepayWithdrawParam(
+            LendingMarketManager.LendingMarketType.EULER, repayAmount, _ethToWstEth(withdrawAmount)
+        );
+
+        uint256 market2SupplyAmount = repayAmount.divWadDown(market2Ltv);
+        uint256 market2BorrowAmount = repayAmount;
+
+        uint256 delta = withdrawAmount - market2SupplyAmount;
+
+        supplyBorrowParamsReallocation[0] = scWETHv2.SupplyBorrowParam(
+            LendingMarketManager.LendingMarketType.AAVE_V3, _ethToWstEth(market2SupplyAmount), market2BorrowAmount
         );
 
         return (repayWithdrawParamsReallocation, supplyBorrowParamsReallocation, delta);
@@ -489,7 +551,7 @@ contract scWETHv2Test is Test {
         );
     }
 
-    function _reallocationChecks(
+    function _reallocationChecksWhenMarket1HasHigherLtv(
         uint256 totalAssets,
         uint256 inititalAaveV3Allocation,
         uint256 initialEulerAllocation,
@@ -503,14 +565,14 @@ contract scWETHv2Test is Test {
             vault.allocationPercent(LendingMarketManager.LendingMarketType.AAVE_V3),
             inititalAaveV3Allocation - 0.1e18,
             0.005e18,
-            "aavev3 allocation not decreased"
+            "aavev3 allocation error"
         );
 
         assertApproxEqRel(
             vault.allocationPercent(LendingMarketManager.LendingMarketType.EULER),
             initialEulerAllocation + 0.1e18,
             0.005e18,
-            "euler allocation not increased"
+            "euler allocation error"
         );
 
         // assets must decrease by reallocationAmount
@@ -525,6 +587,53 @@ contract scWETHv2Test is Test {
         assertApproxEqRel(
             vault.getAssets(LendingMarketManager.LendingMarketType.EULER),
             initialEulerAssets + reallocationAmount,
+            0.001e18,
+            "euler assets not increased"
+        );
+
+        // totalAssets must not change
+        assertApproxEqRel(vault.totalAssets(), totalAssets, 0.001e18, "total assets must not change");
+
+        // ltvs must not change
+        assertApproxEqRel(
+            vault.getLtv(LendingMarketManager.LendingMarketType.AAVE_V3),
+            initialAaveV3Ltv,
+            0.001e18,
+            "aavev3 ltv must not change"
+        );
+
+        assertApproxEqRel(
+            vault.getLtv(LendingMarketManager.LendingMarketType.EULER),
+            initialEulerLtv,
+            0.001e18,
+            "euler ltv must not change"
+        );
+    }
+
+    function _reallocationChecksWhenMarket1HasLowerLtv(
+        uint256 totalAssets,
+        uint256 inititalAaveV3Assets,
+        uint256 initialEulerAssets,
+        uint256 initialAaveV3Ltv,
+        uint256 initialEulerLtv,
+        uint256 reallocationAmount
+    ) internal {
+        // note: after reallocating from a lower ltv market to a higher ltv market
+        // there is some float remaining in the contract due to the difference in ltv
+        uint256 float = weth.balanceOf(address(vault));
+
+        // assets must decrease by reallocationAmount
+        assertApproxEqRel(
+            vault.getAssets(LendingMarketManager.LendingMarketType.AAVE_V3) + float,
+            inititalAaveV3Assets + reallocationAmount,
+            0.001e18,
+            "aavev3 assets not decreased"
+        );
+
+        // assets must increase by reallocationAmount
+        assertApproxEqRel(
+            vault.getAssets(LendingMarketManager.LendingMarketType.EULER),
+            initialEulerAssets - reallocationAmount,
             0.001e18,
             "euler assets not increased"
         );
