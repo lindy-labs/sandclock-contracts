@@ -11,7 +11,7 @@ import {MockUSDC} from "../test/mocks/MockUSDC.sol";
 
 contract DeployScript is DeployLeveragedEth {
     function deployMockTokens() internal override {
-        weth = new MockWETH();
+        weth = MockWETH(payable(0xA4584d62299915a288bfe223D298db41cB0c9f7f));
         usdc = MockUSDC(0x30e2B7a907997fDC5a71E377Ece54FAae9F5392D);
     }
 
