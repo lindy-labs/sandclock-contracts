@@ -40,8 +40,8 @@ contract scWETHv2 is sc4626, LendingMarketManager, IFlashLoanRecipient {
     struct RebalanceParams {
         RepayWithdrawParam[] repayWithdrawParams;
         SupplyBorrowParam[] supplyBorrowParams;
-        uint256 wstEthSwapAmount; // amount of wstEth to swap to weth (0 if not required, type(uint).max for all wstEth Balance)
-        uint256 wethSwapAmount; //  amount of weth to swap to wstEth (keep 0 if not required)
+        uint256 wstEthSwapAmount; // amount of wstEth to swap to weth (0 = not required, type(uint).max = all wstEth Balance)
+        uint256 wethSwapAmount; //  amount of weth to swap to wstEth (0 = not required)
     }
 
     struct RepayWithdrawParam {
@@ -66,6 +66,8 @@ contract scWETHv2 is sc4626, LendingMarketManager, IFlashLoanRecipient {
         WETH weth;
         AggregatorV3Interface stEthToEthPriceFeed;
         IVault balancerVault;
+        AaveV3 aaveV3;
+        Euler euler;
     }
 
     // total invested during last harvest/rebalance
@@ -85,7 +87,9 @@ contract scWETHv2 is sc4626, LendingMarketManager, IFlashLoanRecipient {
             _params.weth,
             _params.stEthToEthPriceFeed,
             _params.curveEthStEthPool,
-            _params.balancerVault
+            _params.balancerVault,
+            _params.aaveV3,
+            _params.euler
         )
     {
         if (_params.slippageTolerance > C.ONE) revert InvalidSlippageTolerance();
@@ -232,20 +236,6 @@ contract scWETHv2 is sc4626, LendingMarketManager, IFlashLoanRecipient {
         balancerVault.flashLoan(address(this), tokens, amounts, abi.encode(params));
     }
 
-    // /// @dev ultimate method for rebalancing the position
-    // function rebalance(uint256 totalFlashLoanAmount, RebalanceParams memory params) external onlyKeeper {
-    //     // if (params.amount > asset.balanceOf(address(this))) revert InsufficientDepositBalance();
-
-    //     address[] memory tokens = new address[](1);
-    //     tokens[0] = address(weth);
-
-    //     uint256[] memory amounts = new uint256[](1);
-    //     amounts[0] = totalFlashLoanAmount;
-
-    //     // take flashloan
-    //     balancerVault.flashLoan(address(this), tokens, amounts, abi.encode(params));
-    // }
-
     //////////////////// VIEW METHODS //////////////////////////
 
     /// @notice returns the total assets (WETH) held by the strategy
@@ -258,6 +248,23 @@ contract scWETHv2 is sc4626, LendingMarketManager, IFlashLoanRecipient {
 
         // add float
         assets += asset.balanceOf(address(this));
+    }
+
+    /// @notice returns the total assets supplied as collateral (in ETH)
+    function totalCollateral() public view returns (uint256 collateral) {
+        uint256 n = totalMarkets();
+        for (uint256 i = 0; i < n; i++) {
+            collateral += lendingMarkets[LendingMarketType(i)].getCollateral();
+        }
+        collateral = _wstEthToEth(collateral);
+    }
+
+    /// @notice returns the total ETH borrowed
+    function totalDebt() public view returns (uint256 debt) {
+        uint256 n = totalMarkets();
+        for (uint256 i = 0; i < n; i++) {
+            debt += lendingMarkets[LendingMarketType(i)].getDebt();
+        }
     }
 
     /// @notice returns the net leverage that the strategy is using right now (1e18 = 100%)
@@ -491,3 +498,10 @@ contract scWETHv2 is sc4626, LendingMarketManager, IFlashLoanRecipient {
         _withdrawToVault(missing);
     }
 }
+
+// todo:
+// euler rewards
+// 0x swapping
+// enforcing min float
+// adding AAVE V2 & Compound III
+// refactor tests for other 2 protocols
