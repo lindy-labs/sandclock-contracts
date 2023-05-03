@@ -9,6 +9,8 @@ library Constants {
     uint256 public constant AAVE_VAR_INTEREST_RATE_MODE = 2;
     // enable efficeincy mode on Aave (used to allow greater LTV when asset and debt tokens are correlated in price)
     uint8 public constant AAVE_EMODE_ID = 1;
+    // minimum amount of time between a user depositing and withdrawing
+    uint256 public constant DEPOSIT_COOLDOWN_PERIOD = 1 hours;
 
     /*//////////////////////////////////////////////////////////////
                           MAINNET ADDRESSES

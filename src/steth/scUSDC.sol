@@ -53,15 +53,13 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
     );
     event ProfitSold(uint256 wethSold, uint256 usdcReceived);
 
-    WETH public immutable weth;
+    // delta threshold for rebalancing in percentage
+    uint256 constant DEBT_DELTA_THRESHOLD = 0.01e18;
 
-    // minimum amount of time that must elapse between deposit and withdrawal
-    uint256 public immutable depositCooldownPeriod = 1 hours;
     // user to last deposit timestamp mapping
     mapping(address => uint256) public userToDepositTimestamp;
 
-    // delta threshold for rebalancing in percentage
-    uint256 constant DEBT_DELTA_THRESHOLD = 0.01e18;
+    WETH public immutable weth;
 
     // main aave contract for interaction with the protocol
     IPool public immutable aavePool;
@@ -391,7 +389,7 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
     }
 
     function _checkDepositCooldownPeriod() internal view {
-        if (block.timestamp < userToDepositTimestamp[msg.sender] + depositCooldownPeriod) {
+        if (block.timestamp < userToDepositTimestamp[msg.sender] + C.DEPOSIT_COOLDOWN_PERIOD) {
             revert DepositCooldownNotElapsed();
         }
     }

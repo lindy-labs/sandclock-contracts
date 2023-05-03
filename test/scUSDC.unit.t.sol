@@ -13,6 +13,7 @@ import {IAToken} from "aave-v3/interfaces/IAToken.sol";
 import {IPoolDataProvider} from "aave-v3/interfaces/IPoolDataProvider.sol";
 
 import "../src/errors/scErrors.sol";
+import {Constants as C} from "../src/lib/Constants.sol";
 import {scUSDC} from "../src/steth/scUSDC.sol";
 import {ISwapRouter} from "../src/interfaces/uniswap/ISwapRouter.sol";
 import {AggregatorV3Interface} from "../src/interfaces/chainlink/AggregatorV3Interface.sol";
@@ -116,7 +117,7 @@ contract scUSDCUnitTest is Test {
         vm.prank(keeper);
         vault.rebalance();
 
-        vm.warp(block.timestamp + vault.depositCooldownPeriod());
+        vm.warp(block.timestamp + C.DEPOSIT_COOLDOWN_PERIOD);
         vm.startPrank(alice);
         uint256 withdrawAmount = 1000e6;
         vault.withdraw(withdrawAmount, alice, alice);
@@ -151,14 +152,14 @@ contract scUSDCUnitTest is Test {
         vault.deposit(depositAmount, alice);
         vm.stopPrank();
 
-        vm.warp(block.timestamp + vault.depositCooldownPeriod() / 2);
+        vm.warp(block.timestamp + C.DEPOSIT_COOLDOWN_PERIOD / 2);
 
         vm.startPrank(bob);
         usdc.approve(address(vault), type(uint256).max);
         vault.deposit(depositAmount, bob);
         vm.stopPrank();
 
-        vm.warp(block.timestamp + vault.depositCooldownPeriod() / 2);
+        vm.warp(block.timestamp + C.DEPOSIT_COOLDOWN_PERIOD / 2);
 
         vm.prank(alice);
         vault.withdraw(depositAmount, alice, alice);
@@ -168,7 +169,7 @@ contract scUSDCUnitTest is Test {
         vm.expectRevert(DepositCooldownNotElapsed.selector);
         vault.withdraw(depositAmount, bob, bob);
 
-        vm.warp(block.timestamp + vault.depositCooldownPeriod() / 2);
+        vm.warp(block.timestamp + C.DEPOSIT_COOLDOWN_PERIOD / 2);
 
         vault.withdraw(depositAmount, bob, bob);
         assertEq(usdc.balanceOf(bob), depositAmount, "bob's usdc balance");

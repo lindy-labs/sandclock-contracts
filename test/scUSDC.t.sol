@@ -989,6 +989,6 @@ contract scUSDCTest is Test {
         vm.stopPrank();
 
         // complete the deposit cooldown period
-        vm.warp(block.timestamp + vault.depositCooldownPeriod());
+        vm.warp(block.timestamp + C.DEPOSIT_COOLDOWN_PERIOD);
     }
 }
