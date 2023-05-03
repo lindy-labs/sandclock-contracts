@@ -12,6 +12,7 @@ import {IPool} from "aave-v3/interfaces/IPool.sol";
 import {IAToken} from "aave-v3/interfaces/IAToken.sol";
 import {IPoolDataProvider} from "aave-v3/interfaces/IPoolDataProvider.sol";
 
+import "../src/errors/scErrors.sol";
 import {scUSDC} from "../src/steth/scUSDC.sol";
 import {ISwapRouter} from "../src/interfaces/uniswap/ISwapRouter.sol";
 import {AggregatorV3Interface} from "../src/interfaces/chainlink/AggregatorV3Interface.sol";
@@ -32,6 +33,7 @@ contract scUSDCUnitTest is Test {
 
     address constant keeper = address(0x05);
     address constant alice = address(0x06);
+    address constant bob = address(0x07);
 
     scUSDC vault;
     ERC4626 wethVault;
@@ -114,9 +116,10 @@ contract scUSDCUnitTest is Test {
         vm.prank(keeper);
         vault.rebalance();
 
+        vm.warp(block.timestamp + vault.depositCooldownPeriod());
         vm.startPrank(alice);
         uint256 withdrawAmount = 1000e6;
-        vault.withdraw(1000e6, alice, alice);
+        vault.withdraw(withdrawAmount, alice, alice);
         vm.stopPrank();
 
         assertEq(usdc.balanceOf(alice), withdrawAmount, "alice usdc balance");
@@ -124,6 +127,51 @@ contract scUSDCUnitTest is Test {
         assertEq(vault.getDebt(), uint256(6.435e18).mulWadDown(0.9e18), "debt");
         assertEq(vault.getUsdcBalance(), (depositAmount - withdrawAmount).mulWadUp(vault.floatPercentage()), "float");
         assertApproxEqAbs(vault.totalAssets(), (depositAmount - withdrawAmount), 1, "total assets");
+    }
+
+    function test_withdraw_FailsIfCooldownPeriodIsActive() public {
+        uint256 depositAmount = 10000e6;
+        deal(address(usdc), address(alice), depositAmount);
+
+        vm.startPrank(alice);
+        usdc.approve(address(vault), type(uint256).max);
+        vault.deposit(depositAmount, alice);
+
+        vm.expectRevert(DepositCooldownNotElapsed.selector);
+        vault.withdraw(1000e6, alice, alice);
+    }
+
+    function test_withdraw_CooldownPeriodIsDifferentForEachUser() public {
+        uint256 depositAmount = 10000e6;
+        deal(address(usdc), address(alice), depositAmount);
+        deal(address(usdc), address(bob), depositAmount);
+
+        vm.startPrank(alice);
+        usdc.approve(address(vault), type(uint256).max);
+        vault.deposit(depositAmount, alice);
+        vm.stopPrank();
+
+        vm.warp(block.timestamp + vault.depositCooldownPeriod() / 2);
+
+        vm.startPrank(bob);
+        usdc.approve(address(vault), type(uint256).max);
+        vault.deposit(depositAmount, bob);
+        vm.stopPrank();
+
+        vm.warp(block.timestamp + vault.depositCooldownPeriod() / 2);
+
+        vm.prank(alice);
+        vault.withdraw(depositAmount, alice, alice);
+        assertEq(usdc.balanceOf(alice), depositAmount, "alice's usdc balance");
+
+        vm.startPrank(bob);
+        vm.expectRevert(DepositCooldownNotElapsed.selector);
+        vault.withdraw(depositAmount, bob, bob);
+
+        vm.warp(block.timestamp + vault.depositCooldownPeriod() / 2);
+
+        vault.withdraw(depositAmount, bob, bob);
+        assertEq(usdc.balanceOf(bob), depositAmount, "bob's usdc balance");
     }
 
     function test_getCollateral_AccountsForInterestOnSuppliedUsdc() public {

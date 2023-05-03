@@ -7,7 +7,8 @@ import {
     InvalidFlashLoanCaller,
     VaultNotUnderwater,
     NoProfitsToSell,
-    EndUsdcBalanceTooLow
+    EndUsdcBalanceTooLow,
+    DepositCooldownNotElapsed
 } from "../errors/scErrors.sol";
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
@@ -53,6 +54,11 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
     event ProfitSold(uint256 wethSold, uint256 usdcReceived);
 
     WETH public immutable weth;
+
+    // minimum amount of time that must elapse between deposit and withdrawal
+    uint256 public immutable depositCooldownPeriod = 1 hours;
+    // user to last deposit timestamp mapping
+    mapping(address => uint256) public userToDepositTimestamp;
 
     // delta threshold for rebalancing in percentage
     uint256 constant DEBT_DELTA_THRESHOLD = 0.01e18;
@@ -351,7 +357,13 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
                             INTERNAL API
     //////////////////////////////////////////////////////////////*/
 
+    function afterDeposit(uint256, uint256) internal override {
+        userToDepositTimestamp[msg.sender] = block.timestamp;
+    }
+
     function beforeWithdraw(uint256 _assets, uint256) internal override {
+        _checkDepositCooldownPeriod();
+
         uint256 initialBalance = getUsdcBalance();
         if (initialBalance >= _assets) return;
 
@@ -376,6 +388,12 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
 
         // if we still need more usdc, we need to repay debt and withdraw collateral
         _repayDebtAndReleaseCollateral(debt, collateral, invested, usdcNeeded);
+    }
+
+    function _checkDepositCooldownPeriod() internal view {
+        if (block.timestamp < userToDepositTimestamp[msg.sender] + depositCooldownPeriod) {
+            revert DepositCooldownNotElapsed();
+        }
     }
 
     function _repayDebtAndReleaseCollateral(uint256 _debt, uint256 _collateral, uint256 _invested, uint256 _usdcNeeded)

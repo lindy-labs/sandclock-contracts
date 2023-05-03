@@ -118,14 +118,7 @@ contract scUSDCTest is Test {
 
     function testFuzz_deposit(uint256 amount) public {
         amount = bound(amount, 1, 1e18);
-        deal(address(usdc), alice, amount);
-
-        vm.startPrank(alice);
-        usdc.approve(address(vault), type(uint256).max);
-
-        vault.deposit(amount, alice);
-
-        vm.stopPrank();
+        _depositToVault(alice, amount);
 
         assertEq(vault.convertToAssets(vault.balanceOf(alice)), amount, "balance");
     }
@@ -551,12 +544,7 @@ contract scUSDCTest is Test {
 
     function test_withdraw_UsesAssetsFromFloatFirst() public {
         uint256 deposit = 10000e6;
-        deal(address(usdc), alice, deposit);
-
-        vm.startPrank(alice);
-        usdc.approve(address(vault), type(uint256).max);
-        vault.deposit(deposit, alice);
-        vm.stopPrank();
+        _depositToVault(alice, deposit);
 
         vault.setFloatPercentage(0.5e18);
         vm.prank(keeper);
@@ -580,13 +568,7 @@ contract scUSDCTest is Test {
     }
 
     function test_withdraw_UsesAssetsFromProfitsSecond() public {
-        uint256 deposit = 10000e6;
-        deal(address(usdc), alice, deposit);
-
-        vm.startPrank(alice);
-        usdc.approve(address(vault), type(uint256).max);
-        vault.deposit(deposit, alice);
-        vm.stopPrank();
+        _depositToVault(alice, 10_000e6);
 
         vm.prank(keeper);
         vault.rebalance();
@@ -612,15 +594,8 @@ contract scUSDCTest is Test {
     }
 
     function test_withdraw_UsesAssetsFromProfitsOnlyWhenFloatIs0() public {
-        uint256 deposit = 10000e6;
-        deal(address(usdc), alice, deposit);
-
         vault.setFloatPercentage(0);
-
-        vm.startPrank(alice);
-        usdc.approve(address(vault), type(uint256).max);
-        vault.deposit(deposit, alice);
-        vm.stopPrank();
+        _depositToVault(alice, 10000e6);
 
         vm.prank(keeper);
         vault.rebalance();
@@ -648,13 +623,7 @@ contract scUSDCTest is Test {
     }
 
     function test_withdraw_UsesAssetsFromCollateralLast() public {
-        uint256 deposit = 10000e6;
-        deal(address(usdc), alice, deposit);
-
-        vm.startPrank(alice);
-        usdc.approve(address(vault), type(uint256).max);
-        vault.deposit(deposit, alice);
-        vm.stopPrank();
+        _depositToVault(alice, 10000e6);
 
         vm.prank(keeper);
         vault.rebalance();
@@ -680,13 +649,7 @@ contract scUSDCTest is Test {
     }
 
     function test_withdraw_WorksWhenWithdrawingMaxAvailable() public {
-        uint256 deposit = 10000e6;
-        deal(address(usdc), alice, deposit);
-
-        vm.startPrank(alice);
-        usdc.approve(address(vault), type(uint256).max);
-        vault.deposit(deposit, alice);
-        vm.stopPrank();
+        _depositToVault(alice, 10_000e6);
 
         vm.prank(keeper);
         vault.rebalance();
@@ -720,14 +683,7 @@ contract scUSDCTest is Test {
         vault = new scUSDC(params);
 
         vault.setFloatPercentage(0);
-
-        uint256 deposit = 10000e6;
-        deal(address(usdc), alice, deposit);
-
-        vm.startPrank(alice);
-        usdc.approve(address(vault), type(uint256).max);
-        vault.deposit(deposit, alice);
-        vm.stopPrank();
+        _depositToVault(alice, 10000e6);
 
         vm.prank(keeper);
         vault.rebalance();
@@ -751,13 +707,7 @@ contract scUSDCTest is Test {
     }
 
     function test_withdraw_FailsIfAmountOutIsLessThanMinWhenSellingProfits() public {
-        uint256 deposit = 1_000_000e6;
-        deal(address(usdc), alice, deposit);
-
-        vm.startPrank(alice);
-        usdc.approve(address(vault), type(uint256).max);
-        vault.deposit(deposit, alice);
-        vm.stopPrank();
+        _depositToVault(alice, 1_000_000e6);
 
         vm.prank(keeper);
         vault.rebalance();
@@ -776,13 +726,8 @@ contract scUSDCTest is Test {
     }
 
     function test_withdraw_WorksWhenVaultIsUnderwater() public {
-        uint256 deposit = 10000e6;
-        deal(address(usdc), alice, deposit);
-
-        vm.startPrank(alice);
-        usdc.approve(address(vault), type(uint256).max);
-        vault.deposit(deposit, alice);
-        vm.stopPrank();
+        uint256 deposit = 10_000e6;
+        _depositToVault(alice, deposit);
 
         vm.prank(keeper);
         vault.rebalance();
@@ -808,13 +753,7 @@ contract scUSDCTest is Test {
     }
 
     function test_withdraw_FailsIfWithdrawingMoreWhenVaultIsUnderwater() public {
-        uint256 deposit = 10000e6;
-        deal(address(usdc), alice, deposit);
-
-        vm.startPrank(alice);
-        usdc.approve(address(vault), type(uint256).max);
-        vault.deposit(deposit, alice);
-        vm.stopPrank();
+        _depositToVault(alice, 10_000e6);
 
         vm.prank(keeper);
         vault.rebalance();
@@ -832,13 +771,7 @@ contract scUSDCTest is Test {
 
     function testFuzz_withdraw(uint256 amount) public {
         amount = bound(amount, 1, 10_000_000e6); // upper limit constrained by weth available on aave
-        deal(address(usdc), alice, amount);
-
-        vm.startPrank(alice);
-
-        usdc.approve(address(vault), type(uint256).max);
-        vault.deposit(amount, alice);
-        vm.stopPrank();
+        _depositToVault(alice, amount);
 
         vm.prank(keeper);
         vault.rebalance();
@@ -858,14 +791,7 @@ contract scUSDCTest is Test {
     function testFuzz_withdraw_WhenInProfit(uint256 amount) public {
         uint256 lowerBound = vault.rebalanceMinimum().divWadUp(1e18 - vault.floatPercentage());
         amount = bound(amount, lowerBound, 10_000_000e6); // upper limit constrained by weth available on aave
-        deal(address(usdc), alice, amount);
-
-        vm.startPrank(alice);
-
-        usdc.approve(address(vault), type(uint256).max);
-        vault.deposit(amount, alice);
-
-        vm.stopPrank();
+        _depositToVault(alice, amount);
 
         vm.prank(keeper);
         vault.rebalance();
@@ -893,14 +819,7 @@ contract scUSDCTest is Test {
     function testFuzz_redeem_WhenInProfit(uint256 amount) public {
         uint256 lowerBound = vault.rebalanceMinimum().divWadUp(1e18 - vault.floatPercentage());
         amount = bound(amount, lowerBound, 10_000_000e6); // upper limit constrained by weth available on aave
-        deal(address(usdc), alice, amount);
-
-        vm.startPrank(alice);
-
-        usdc.approve(address(vault), type(uint256).max);
-        vault.deposit(amount, alice);
-
-        vm.stopPrank();
+        _depositToVault(alice, amount);
 
         vm.prank(keeper);
         vault.rebalance();
@@ -951,13 +870,7 @@ contract scUSDCTest is Test {
     }
 
     function test_exitAllPositions_FailsIfVaultIsNotUnderawater() public {
-        uint256 deposit = 1_000_000e6;
-        deal(address(usdc), alice, deposit);
-
-        vm.startPrank(alice);
-        usdc.approve(address(vault), type(uint256).max);
-        vault.deposit(deposit, alice);
-        vm.stopPrank();
+        _depositToVault(alice, 1_000_000e6);
 
         vm.prank(keeper);
         vault.rebalance();
@@ -967,13 +880,7 @@ contract scUSDCTest is Test {
     }
 
     function test_exitAllPositions_RepaysDebtAndReleasesCollateral() public {
-        uint256 deposit = 1_000_000e6;
-        deal(address(usdc), alice, deposit);
-
-        vm.startPrank(alice);
-        usdc.approve(address(vault), type(uint256).max);
-        vault.deposit(deposit, alice);
-        vm.stopPrank();
+        _depositToVault(alice, 1_000_000e6);
 
         vm.prank(keeper);
         vault.rebalance();
@@ -992,13 +899,7 @@ contract scUSDCTest is Test {
     }
 
     function test_exitAllPositions_EmitsEventOnSuccess() public {
-        uint256 deposit = 1_000_000e6;
-        deal(address(usdc), alice, deposit);
-
-        vm.startPrank(alice);
-        usdc.approve(address(vault), type(uint256).max);
-        vault.deposit(deposit, alice);
-        vm.stopPrank();
+        _depositToVault(alice, 1_000_000e6);
 
         vm.prank(keeper);
         vault.rebalance();
@@ -1017,13 +918,7 @@ contract scUSDCTest is Test {
     }
 
     function test_exitAllPositions_FailsIfEndBalanceIsLowerThanMin() public {
-        uint256 deposit = 1_000_000e6;
-        deal(address(usdc), alice, deposit);
-
-        vm.startPrank(alice);
-        usdc.approve(address(vault), type(uint256).max);
-        vault.deposit(deposit, alice);
-        vm.stopPrank();
+        _depositToVault(alice, 1_000_000e6);
 
         vm.prank(keeper);
         vault.rebalance();
@@ -1083,5 +978,17 @@ contract scUSDCTest is Test {
             chainlinkUsdcToEthPriceFeed: AggregatorV3Interface(C.CHAINLINK_USDC_ETH_PRICE_FEED),
             balancerVault: IVault(C.BALANCER_VAULT)
         });
+    }
+
+    function _depositToVault(address _from, uint256 _amount) internal {
+        deal(address(usdc), _from, _amount);
+
+        vm.startPrank(_from);
+        usdc.approve(address(vault), type(uint256).max);
+        vault.deposit(_amount, _from);
+        vm.stopPrank();
+
+        // complete the deposit cooldown period
+        vm.warp(block.timestamp + vault.depositCooldownPeriod());
     }
 }
