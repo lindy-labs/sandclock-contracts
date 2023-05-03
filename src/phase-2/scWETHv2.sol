@@ -40,10 +40,8 @@ contract scWETHv2 is sc4626, LendingMarketManager, IFlashLoanRecipient {
     struct RebalanceParams {
         RepayWithdrawParam[] repayWithdrawParams;
         SupplyBorrowParam[] supplyBorrowParams;
-        bool doWstEthToWethSwap; // if true wstEth will be swapped to eth after weth repay and wstEth Withdraw
-        bool doWethToWstEthSwap; // if true weth will be swapped to wstEth before wstEth supply and weth borrow
-        uint256 wstEthSwapAmount; // if doWstEthToWethSwap is true, amount of wstEth to swap to weth
-        uint256 wethSwapAmount; // if doWethToWstEthSwap is true, amount of weth to swap to wstEth
+        uint256 wstEthSwapAmount; // amount of wstEth to swap to weth (0 if not required, type(uint).max for all wstEth Balance)
+        uint256 wethSwapAmount; //  amount of weth to swap to wstEth (keep 0 if not required)
     }
 
     struct RepayWithdrawParam {
@@ -163,8 +161,6 @@ contract scWETHv2 is sc4626, LendingMarketManager, IFlashLoanRecipient {
         RebalanceParams memory params = RebalanceParams({
             repayWithdrawParams: new RepayWithdrawParam[](0),
             supplyBorrowParams: supplyBorrowParams,
-            doWstEthToWethSwap: false,
-            doWethToWstEthSwap: true,
             wstEthSwapAmount: 0,
             wethSwapAmount: totalInvestAmount + totalFlashLoanAmount
         });
@@ -192,8 +188,6 @@ contract scWETHv2 is sc4626, LendingMarketManager, IFlashLoanRecipient {
         RebalanceParams memory params = RebalanceParams({
             repayWithdrawParams: repayWithdrawParams,
             supplyBorrowParams: new SupplyBorrowParam[](0),
-            doWstEthToWethSwap: true,
-            doWethToWstEthSwap: false,
             wstEthSwapAmount: type(uint256).max,
             wethSwapAmount: 0
         });
@@ -209,11 +203,13 @@ contract scWETHv2 is sc4626, LendingMarketManager, IFlashLoanRecipient {
     }
 
     /// @notice reallocate funds from one protocol to another (without any slippage)
-    // @param delta: amount of wstEth to swap to weth
-    function reallocate(RepayWithdrawParam[] calldata from, SupplyBorrowParam[] calldata to, uint256 delta)
-        external
-        onlyKeeper
-    {
+    // @param wstEthSwapAmount: amount of wstEth to swap to weth
+    function reallocate(
+        RepayWithdrawParam[] calldata from,
+        SupplyBorrowParam[] calldata to,
+        uint256 wstEthSwapAmount,
+        uint256 wethSwapAmount
+    ) external onlyKeeper {
         uint256 totalFlashLoanAmount;
         for (uint256 i; i < from.length; i++) {
             totalFlashLoanAmount += from[i].repayAmount;
@@ -222,10 +218,8 @@ contract scWETHv2 is sc4626, LendingMarketManager, IFlashLoanRecipient {
         RebalanceParams memory params = RebalanceParams({
             repayWithdrawParams: from,
             supplyBorrowParams: to,
-            doWstEthToWethSwap: true,
-            doWethToWstEthSwap: false,
-            wstEthSwapAmount: delta,
-            wethSwapAmount: 0
+            wstEthSwapAmount: wstEthSwapAmount,
+            wethSwapAmount: wethSwapAmount
         });
 
         address[] memory tokens = new address[](1);
@@ -350,7 +344,7 @@ contract scWETHv2 is sc4626, LendingMarketManager, IFlashLoanRecipient {
         // repay and withdraw first
         _repayWithdraw(rebalanceParams.repayWithdrawParams);
 
-        if (rebalanceParams.doWstEthToWethSwap) {
+        if (rebalanceParams.wstEthSwapAmount != 0) {
             // unwrap wstETH
             uint256 stEthAmount = wstETH.unwrap(
                 rebalanceParams.wstEthSwapAmount == type(uint256).max
@@ -363,7 +357,7 @@ contract scWETHv2 is sc4626, LendingMarketManager, IFlashLoanRecipient {
             weth.deposit{value: address(this).balance}();
         }
 
-        if (rebalanceParams.doWethToWstEthSwap) {
+        if (rebalanceParams.wethSwapAmount != 0) {
             // unwrap eth
             weth.withdraw(rebalanceParams.wethSwapAmount);
             // stake to lido / eth => stETH
@@ -437,7 +431,7 @@ contract scWETHv2 is sc4626, LendingMarketManager, IFlashLoanRecipient {
         totalInvested -= amount;
 
         SupplyBorrowParam[] memory empty;
-        RebalanceParams memory params = RebalanceParams(repayWithdrawParams, empty, true, false, type(uint256).max, 0);
+        RebalanceParams memory params = RebalanceParams(repayWithdrawParams, empty, type(uint256).max, 0);
 
         // take flashloan
         balancerVault.flashLoan(address(this), tokens, amounts, abi.encode(params));
