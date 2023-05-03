@@ -39,12 +39,23 @@ abstract contract LendingMarketManager {
         function() view returns(uint256) getDebt;
     }
 
+    struct AaveV3 {
+        address pool;
+        address aWstEth;
+        address varDWeth;
+    }
+
+    struct Euler {
+        address protocol;
+        address markets;
+        address eWstEth;
+        address dWeth;
+    }
+
     // Lido staking contract (stETH)
     ILido public immutable stEth;
-
     IwstETH public immutable wstETH;
     WETH public immutable weth;
-
     // Chainlink pricefeed (stETH -> ETH)
     AggregatorV3Interface public stEThToEthPriceFeed;
 
@@ -52,6 +63,15 @@ abstract contract LendingMarketManager {
     ICurvePool public immutable curvePool;
     // Balancer vault for flashloans
     IVault public immutable balancerVault;
+
+    IPool aaveV3pool;
+    IAToken aaveV3aWstEth;
+    ERC20 aaveV3varDWeth;
+
+    address public immutable eulerProtocol;
+    IEulerMarkets public immutable eulerMarkets;
+    IEulerEToken public immutable eulerEWstEth;
+    IEulerDToken public immutable eulerDWeth;
 
     // mapping from lending market id to protocol params
     mapping(LendingMarketType => LendingMarket) lendingMarkets;
@@ -62,7 +82,9 @@ abstract contract LendingMarketManager {
         WETH _weth,
         AggregatorV3Interface _stEthToEthPriceFeed,
         ICurvePool _curvePool,
-        IVault _balancerVault
+        IVault _balancerVault,
+        AaveV3 memory aaveV3,
+        Euler memory euler
     ) {
         stEth = _stEth;
         wstETH = _wstEth;
@@ -71,17 +93,26 @@ abstract contract LendingMarketManager {
         curvePool = _curvePool;
         balancerVault = _balancerVault;
 
+        aaveV3pool = IPool(aaveV3.pool);
+        aaveV3aWstEth = IAToken(aaveV3.aWstEth);
+        aaveV3varDWeth = ERC20(aaveV3.varDWeth);
+
+        eulerProtocol = euler.protocol;
+        eulerMarkets = IEulerMarkets(euler.markets);
+        eulerEWstEth = IEulerEToken(euler.eWstEth);
+        eulerDWeth = IEulerDToken(euler.dWeth);
+
         ERC20(address(stEth)).safeApprove(address(wstETH), type(uint256).max);
         ERC20(address(stEth)).safeApprove(address(curvePool), type(uint256).max);
-        ERC20(address(wstETH)).safeApprove(C.AAVE_POOL, type(uint256).max);
-        ERC20(address(weth)).safeApprove(C.AAVE_POOL, type(uint256).max);
-        ERC20(address(wstETH)).safeApprove(C.EULER, type(uint256).max);
-        ERC20(address(weth)).safeApprove(C.EULER, type(uint256).max);
+        ERC20(address(wstETH)).safeApprove(aaveV3.pool, type(uint256).max);
+        ERC20(address(weth)).safeApprove(aaveV3.pool, type(uint256).max);
+        ERC20(address(wstETH)).safeApprove(euler.protocol, type(uint256).max);
+        ERC20(address(weth)).safeApprove(euler.protocol, type(uint256).max);
 
         // Enter the euler collateral market (collateral's address, *not* the eToken address) ,
-        IEulerMarkets(C.EULER_MARKETS).enterMarket(0, address(wstETH));
+        IEulerMarkets(euler.markets).enterMarket(0, address(wstETH));
         // set e-mode on aave-v3 for increased borrowing capacity to 90% of collateral
-        IPool(C.AAVE_POOL).setUserEMode(C.AAVE_EMODE_ID);
+        IPool(aaveV3.pool).setUserEMode(C.AAVE_EMODE_ID);
 
         lendingMarkets[LendingMarketType.AAVE_V3] = LendingMarket(
             supplyWstEthAAVEV3,
@@ -102,23 +133,6 @@ abstract contract LendingMarketManager {
         return uint256(type(LendingMarketType).max) + 1;
     }
 
-    /// @notice returns the total assets supplied as collateral (in ETH)
-    function totalCollateral() public view returns (uint256 collateral) {
-        uint256 n = totalMarkets();
-        for (uint256 i = 0; i < n; i++) {
-            collateral += lendingMarkets[LendingMarketType(i)].getCollateral();
-        }
-        collateral = _wstEthToEth(collateral);
-    }
-
-    /// @notice returns the total ETH borrowed
-    function totalDebt() public view returns (uint256 debt) {
-        uint256 n = totalMarkets();
-        for (uint256 i = 0; i < n; i++) {
-            debt += lendingMarkets[LendingMarketType(i)].getDebt();
-        }
-    }
-
     function getDebt(LendingMarketType market) public view returns (uint256) {
         return lendingMarkets[market].getDebt();
     }
@@ -137,59 +151,59 @@ abstract contract LendingMarketManager {
         return getCollateral(market) - getDebt(market);
     }
 
-    //////////////////////////     AAVE V3 ///////////////////////////////
+    ////////////////////////// AAVE V3 ///////////////////////////////
     ///  @notice supply wstETH to AAVE V3
     /// @param amount amount of wstETH to supply
     function supplyWstEthAAVEV3(uint256 amount) internal {
-        IPool(C.AAVE_POOL).supply(address(wstETH), amount, address(this), 0);
+        IPool(aaveV3pool).supply(address(wstETH), amount, address(this), 0);
     }
 
     function borrowWethAAVEV3(uint256 amount) internal {
-        IPool(C.AAVE_POOL).borrow(address(weth), amount, C.AAVE_VAR_INTEREST_RATE_MODE, 0, address(this));
+        IPool(aaveV3pool).borrow(address(weth), amount, C.AAVE_VAR_INTEREST_RATE_MODE, 0, address(this));
     }
 
     function repayWethAAVEV3(uint256 amount) internal {
-        IPool(C.AAVE_POOL).repay(address(weth), amount, C.AAVE_VAR_INTEREST_RATE_MODE, address(this));
+        IPool(aaveV3pool).repay(address(weth), amount, C.AAVE_VAR_INTEREST_RATE_MODE, address(this));
     }
 
     /// @notice withdraw wstETH from AAVE V3
     /// @param amount amount of wstETH to withdraw
     function withdrawWstEthAAVEV3(uint256 amount) internal {
-        IPool(C.AAVE_POOL).withdraw(address(wstETH), amount, address(this));
+        IPool(aaveV3pool).withdraw(address(wstETH), amount, address(this));
     }
 
     function getCollateralAAVEV3() internal view returns (uint256) {
-        return IAToken(C.AAVE_AWSTETH_TOKEN).balanceOf(address(this));
+        return IAToken(aaveV3aWstEth).balanceOf(address(this));
     }
 
     function getDebtAAVEV3() internal view returns (uint256) {
-        return ERC20(C.AAVAAVE_VAR_DEBT_WETH_TOKEN).balanceOf(address(this));
+        return ERC20(aaveV3varDWeth).balanceOf(address(this));
     }
 
     ///////////////////////////////// EULER /////////////////////////////////
 
     function supplyWstEthEuler(uint256 amount) internal {
-        IEulerEToken(C.EULER_ETOKEN_WSTETH).deposit(0, amount);
+        IEulerEToken(eulerEWstEth).deposit(0, amount);
     }
 
     function borrowWethEuler(uint256 amount) internal {
-        IEulerDToken(C.EULER_DTOKEN_WETH).borrow(0, amount);
+        IEulerDToken(eulerDWeth).borrow(0, amount);
     }
 
     function repayWethEuler(uint256 amount) internal {
-        IEulerDToken(C.EULER_DTOKEN_WETH).repay(0, amount);
+        IEulerDToken(eulerDWeth).repay(0, amount);
     }
 
     function withdrawWstEthEuler(uint256 amount) internal {
-        IEulerEToken(C.EULER_ETOKEN_WSTETH).withdraw(0, amount);
+        IEulerEToken(eulerEWstEth).withdraw(0, amount);
     }
 
     function getCollateralEuler() internal view returns (uint256) {
-        return IEulerEToken(C.EULER_ETOKEN_WSTETH).balanceOfUnderlying(address(this));
+        return IEulerEToken(eulerEWstEth).balanceOfUnderlying(address(this));
     }
 
     function getDebtEuler() internal view returns (uint256) {
-        return IEulerDToken(C.EULER_DTOKEN_WETH).balanceOf(address(this));
+        return IEulerDToken(eulerDWeth).balanceOf(address(this));
     }
 
     //////////////////////// ORACLE METHODS ///////////////////////////////

@@ -15,7 +15,6 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 import {Constants as C} from "../../src/lib/Constants.sol";
 import {scWETHv2} from "../../src/phase-2/scWETHv2.sol";
 import {LendingMarketManager} from "../../src/phase-2/LendingMarketManager.sol";
-import {MockLendingMarketManager} from "../mock/MockLendingMarketManager.sol";
 import {WETH} from "solmate/tokens/WETH.sol";
 import {ILido} from "../../src/interfaces/lido/ILido.sol";
 import {IwstETH} from "../../src/interfaces/lido/IwstETH.sol";
@@ -667,6 +666,19 @@ contract scWETHv2Test is Test {
     }
 
     function _createDefaultWethv2VaultConstructorParams() internal view returns (scWETHv2.ConstructorParams memory) {
+        LendingMarketManager.AaveV3 memory aaveV3 = LendingMarketManager.AaveV3({
+            pool: C.AAVE_POOL,
+            aWstEth: C.AAVE_AWSTETH_TOKEN,
+            varDWeth: C.AAVAAVE_VAR_DEBT_WETH_TOKEN
+        });
+
+        LendingMarketManager.Euler memory euler = LendingMarketManager.Euler({
+            protocol: C.EULER,
+            markets: C.EULER_MARKETS,
+            eWstEth: C.EULER_ETOKEN_WSTETH,
+            dWeth: C.EULER_DTOKEN_WETH
+        });
+
         return scWETHv2.ConstructorParams({
             admin: admin,
             keeper: keeper,
@@ -676,7 +688,9 @@ contract scWETHv2Test is Test {
             wstEth: IwstETH(C.WSTETH),
             weth: WETH(payable(C.WETH)),
             stEthToEthPriceFeed: AggregatorV3Interface(C.CHAINLINK_STETH_ETH_PRICE_FEED),
-            balancerVault: IVault(C.BALANCER_VAULT)
+            balancerVault: IVault(C.BALANCER_VAULT),
+            aaveV3: aaveV3,
+            euler: euler
         });
     }
 
