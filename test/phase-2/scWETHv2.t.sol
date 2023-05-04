@@ -110,7 +110,7 @@ contract scWETHv2Test is Test {
 
         // deposit into strategy
         hoax(keeper);
-        vault.invest(amount, supplyBorrowParams);
+        vault.investAndHarvest(amount, supplyBorrowParams);
 
         _investChecks(
             amount, _wstEthToEth(totalSupplyAmount), totalDebtTaken, aaveV3AllocationPercent, eulerAllocationPercent
@@ -126,7 +126,7 @@ contract scWETHv2Test is Test {
 
         // deposit into strategy
         hoax(keeper);
-        vault.invest(amount, supplyBorrowParams);
+        vault.investAndHarvest(amount, supplyBorrowParams);
 
         assertApproxEqRel(vault.totalAssets(), amount, 0.01e18, "totalAssets error");
         assertEq(vault.balanceOf(address(this)), shares, "shares error");
@@ -150,7 +150,7 @@ contract scWETHv2Test is Test {
 
         // deposit into strategy
         hoax(keeper);
-        vault.invest(amount, supplyBorrowParams);
+        vault.investAndHarvest(amount, supplyBorrowParams);
 
         uint256 assets = vault.totalAssets();
 
@@ -187,7 +187,7 @@ contract scWETHv2Test is Test {
         (scWETHv2.SupplyBorrowParam[] memory supplyBorrowParams,,) = _getInvestParams(amount, 0.7e18, 0.3e18);
 
         hoax(keeper);
-        vault.invest(amount, supplyBorrowParams);
+        vault.investAndHarvest(amount, supplyBorrowParams);
 
         assertLt(weth.balanceOf(address(vault)), minimumDust, "weth dust after invest");
         assertLt(wstEth.balanceOf(address(vault)), minimumDust, "wstEth dust after invest");
@@ -256,7 +256,7 @@ contract scWETHv2Test is Test {
             _getInvestParams(amount, aaveV3Allocation, eulerAllocation);
 
         hoax(keeper);
-        vault.invest(amount, supplyBorrowParams);
+        vault.investAndHarvest(amount, supplyBorrowParams);
 
         uint256 aaveV3Assets = vault.getAssets(LendingMarketManager.LendingMarketType.AAVE_V3);
         uint256 eulerAssets = vault.getAssets(LendingMarketManager.LendingMarketType.EULER);
@@ -301,7 +301,7 @@ contract scWETHv2Test is Test {
             _getInvestParams(amount, aaveV3Allocation, eulerAllocation);
 
         hoax(keeper);
-        vault.invest(amount, supplyBorrowParams);
+        vault.investAndHarvest(amount, supplyBorrowParams);
 
         uint256 aaveV3Assets = vault.getAssets(LendingMarketManager.LendingMarketType.AAVE_V3);
         uint256 eulerAssets = vault.getAssets(LendingMarketManager.LendingMarketType.EULER);
@@ -719,4 +719,21 @@ contract scWETHv2Test is Test {
         uint256 stEthAmount = wstEth.getStETHByWstETH(wstEthAmount);
         ethAmount = _stEthToEth(stEthAmount);
     }
+
+    function _simulate_stEthStakingInterest(uint256 timePeriod, uint256 stEthStakingInterest) internal {
+        // fast forward time to simulate supply and borrow interests
+        vm.warp(block.timestamp + timePeriod);
+        uint256 prevBalance = read_storage_uint(address(stEth), keccak256(abi.encodePacked("lido.Lido.beaconBalance")));
+        vm.store(
+            address(stEth),
+            keccak256(abi.encodePacked("lido.Lido.beaconBalance")),
+            bytes32(prevBalance.mulWadDown(stEthStakingInterest))
+        );
+    }
+
+    function read_storage_uint(address addr, bytes32 key) internal view returns (uint256) {
+        return abi.decode(abi.encode(vm.load(addr, key)), (uint256));
+    }
+
+    receive() external payable {}
 }

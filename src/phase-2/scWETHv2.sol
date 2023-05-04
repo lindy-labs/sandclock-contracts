@@ -114,14 +114,16 @@ contract scWETHv2 is sc4626, LendingMarketManager, IFlashLoanRecipient {
 
     /////////////////// ADMIN/KEEPER METHODS //////////////////////////////////
 
-    /// @notice harvest profits and rebalance the position by investing profits back into the strategy
+    /// @notice invest funds into the strategy and harvest profits if any
     /// @dev for the first deposit, deposits everything into the strategy.
-    /// @dev reduces the getLtv() back to the target ltv
     /// @dev also mints performance fee tokens to the treasury
-    function harvest(SupplyBorrowParam[] calldata supplyBorrowParams) external {
+    function investAndHarvest(uint256 totalInvestAmount, SupplyBorrowParam[] calldata supplyBorrowParams)
+        external
+        onlyKeeper
+    {
         // reinvest
         // todo: use float here instead of full asset balance
-        invest(asset.balanceOf(address(this)), supplyBorrowParams);
+        invest(totalInvestAmount, supplyBorrowParams);
 
         // store the old total
         uint256 oldTotalInvested = totalInvested;
@@ -154,7 +156,7 @@ contract scWETHv2 is sc4626, LendingMarketManager, IFlashLoanRecipient {
     /// @notice invest funds into the strategy (or reinvesting profits)
     /// @param totalInvestAmount : amount of weth to invest into the strategy
     /// @param supplyBorrowParams : protocols to invest into and their respective amounts
-    function invest(uint256 totalInvestAmount, SupplyBorrowParam[] calldata supplyBorrowParams) public onlyKeeper {
+    function invest(uint256 totalInvestAmount, SupplyBorrowParam[] calldata supplyBorrowParams) internal {
         if (totalInvestAmount > asset.balanceOf(address(this))) revert InsufficientDepositBalance();
 
         uint256 totalFlashLoanAmount;
