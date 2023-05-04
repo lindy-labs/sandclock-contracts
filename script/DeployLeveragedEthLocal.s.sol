@@ -115,7 +115,7 @@ contract DeployScript is DeployLeveragedEth, Test {
         deal(address(weth), address(wethContract), 100e18);
         aavePool.repay(
             address(weth),
-            borrowAmount,
+            borrowAmount / 2,
             C.AAVE_VAR_INTEREST_RATE_MODE, // does not impact mock
             address(wethContract) // does not impact mock
         );
