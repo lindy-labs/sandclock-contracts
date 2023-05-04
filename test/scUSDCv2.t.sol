@@ -123,6 +123,26 @@ contract scUSDCv2Test is Test {
         assertEq(weth.allowance(address(vault), address(vault.scWETH())), type(uint256).max, "weth->scWETH allowance");
     }
 
+    /// #setUsdcToEthPriceFeed
+
+    function test_setUsdcToEthPriceFeed_FailsIfCallerIsNotAdmin() public {
+        vm.prank(alice);
+        vm.expectRevert(CallerNotAdmin.selector);
+        vault.setUsdcToEthPriceFeed(AggregatorV3Interface(address(0)));
+    }
+
+    function test_setUsdcToEthPriceFeed_FailsIfNewPriceFeedIsZeroAddress() public {
+        vm.expectRevert(PriceFeedZeroAddress.selector);
+        vault.setUsdcToEthPriceFeed(AggregatorV3Interface(address(0)));
+    }
+
+    function test_setUsdcToEthPriceFeed_ChangesThePriceFeed() public {
+        AggregatorV3Interface _newPriceFeed = AggregatorV3Interface(address(0x1));
+        vault.setUsdcToEthPriceFeed(_newPriceFeed);
+
+        assertEq(address(vault.usdcToEthPriceFeed()), address(_newPriceFeed), "price feed has not changed");
+    }
+
     /// #rebalance ///
 
     function test_rebalance_FailsIfCallerIsNotKeeper() public {

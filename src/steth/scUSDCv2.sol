@@ -8,7 +8,8 @@ import {
     InvalidFlashLoanCaller,
     VaultNotUnderwater,
     NoProfitsToSell,
-    FlashLoanAmountZero
+    FlashLoanAmountZero,
+    PriceFeedZeroAddress
 } from "../errors/scErrors.sol";
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
@@ -74,7 +75,7 @@ contract scUSDCv2 is sc4626, UsdcWethLendingManager, IFlashLoanRecipient {
     ISwapRouter public immutable swapRouter;
 
     // Chainlink pricefeed (USDC -> WETH)
-    AggregatorV3Interface public immutable usdcToEthPriceFeed;
+    AggregatorV3Interface public usdcToEthPriceFeed;
 
     // Balancer vault for flashloans
     IVault public immutable balancerVault;
@@ -126,6 +127,16 @@ contract scUSDCv2 is sc4626, UsdcWethLendingManager, IFlashLoanRecipient {
         slippageTolerance = _newSlippageTolerance;
 
         emit SlippageToleranceUpdated(msg.sender, _newSlippageTolerance);
+    }
+
+    /**
+     * @notice Set the chainlink price feed for USDC -> WETH.
+     * @param _newPriceFeed The new price feed.
+     */
+    function setUsdcToEthPriceFeed(AggregatorV3Interface _newPriceFeed) external onlyAdmin {
+        if (address(_newPriceFeed) == address(0)) revert PriceFeedZeroAddress();
+
+        usdcToEthPriceFeed = _newPriceFeed;
     }
 
     /**

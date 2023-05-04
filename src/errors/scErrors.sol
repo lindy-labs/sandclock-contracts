@@ -15,3 +15,4 @@ error CallerNotKeeper();
 error NoProfitsToSell();
 error EndUsdcBalanceTooLow();
 error FlashLoanAmountZero();
+error PriceFeedZeroAddress();
