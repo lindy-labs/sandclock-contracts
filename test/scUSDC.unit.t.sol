@@ -222,18 +222,8 @@ contract scUSDCUnitTest is Test {
         vault.deposit(depositAmount, alice);
 
         uint256 aliceShares = vault.balanceOf(alice);
+        vm.expectRevert(DepositCooldownNotElapsed.selector);
         vault.transfer(bob, aliceShares / 2);
-        vm.stopPrank();
-
-        assertEq(vault.balanceOf(bob), aliceShares / 2, "bob's shares");
-
-        vm.prank(alice);
-        vm.expectRevert(DepositCooldownNotElapsed.selector);
-        vault.redeem(aliceShares / 2, alice, alice);
-
-        vm.prank(bob);
-        vm.expectRevert(DepositCooldownNotElapsed.selector);
-        vault.redeem(aliceShares / 2, bob, bob);
     }
 
     function test_redeem_CooldownPeriodIsEnforcedOnTransferFrom() public {
@@ -250,16 +240,8 @@ contract scUSDCUnitTest is Test {
         vm.stopPrank();
 
         vm.prank(bob);
+        vm.expectRevert(DepositCooldownNotElapsed.selector);
         vault.transferFrom(alice, bob, aliceShares / 2);
-        assertEq(vault.balanceOf(bob), aliceShares / 2, "bob's shares");
-
-        vm.prank(alice);
-        vm.expectRevert(DepositCooldownNotElapsed.selector);
-        vault.redeem(aliceShares / 2, alice, alice);
-
-        vm.prank(bob);
-        vm.expectRevert(DepositCooldownNotElapsed.selector);
-        vault.redeem(aliceShares / 2, bob, bob);
     }
 
     function test_redeem_TransferredSharesAreRedeemableAfterCooldownPeriod() public {
@@ -272,12 +254,11 @@ contract scUSDCUnitTest is Test {
         vault.deposit(depositAmount, alice);
 
         uint256 aliceShares = vault.balanceOf(alice);
+        vm.warp(block.timestamp + C.DEPOSIT_COOLDOWN_PERIOD);
         vault.transfer(bob, aliceShares / 2);
         vm.stopPrank();
 
         assertEq(vault.balanceOf(bob), aliceShares / 2, "bob's shares");
-
-        vm.warp(block.timestamp + C.DEPOSIT_COOLDOWN_PERIOD);
 
         vm.prank(alice);
         vault.redeem(aliceShares / 2, alice, alice);

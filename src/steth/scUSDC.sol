@@ -56,8 +56,8 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
     // delta threshold for rebalancing in percentage
     uint256 constant DEBT_DELTA_THRESHOLD = 0.01e18;
 
-    // user to last deposit timestamp mapping
-    mapping(address => uint256) public userToDepositTimestamp;
+    // owner to last deposit timestamp mapping
+    mapping(address => uint256) public ownerToDepositTimestamp;
 
     WETH public immutable weth;
 
@@ -365,14 +365,17 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
 
         _mint(receiver, shares);
 
-        // code added in comparison to ERC4626
-        emit Deposit(msg.sender, receiver, assets, shares);
+        // code line added in comparison to ERC4626
+        ownerToDepositTimestamp[receiver] = block.timestamp;
 
-        userToDepositTimestamp[receiver] = block.timestamp;
+        emit Deposit(msg.sender, receiver, assets, shares);
     }
 
     /// @dev We override the withdraw function to add the deposit timestamp.
     function transfer(address to, uint256 amount) public override returns (bool) {
+        // code line added in comparison to ERC20
+        _checkDepositCooldownPeriod(msg.sender);
+
         balanceOf[msg.sender] -= amount;
 
         // Cannot overflow because the sum of all user
@@ -383,14 +386,14 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
 
         emit Transfer(msg.sender, to, amount);
 
-        // code added in comparison to ERC20
-        userToDepositTimestamp[to] = userToDepositTimestamp[msg.sender];
-
         return true;
     }
 
     /// @dev We override the withdraw function to add the deposit timestamp.
     function transferFrom(address from, address to, uint256 amount) public override returns (bool) {
+        // code line added in comparison to ERC20
+        _checkDepositCooldownPeriod(from);
+
         uint256 allowed = allowance[from][msg.sender]; // Saves gas for limited approvals.
 
         if (allowed != type(uint256).max) allowance[from][msg.sender] = allowed - amount;
@@ -405,9 +408,6 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
 
         emit Transfer(from, to, amount);
 
-        // code added in comparison to ERC20
-        userToDepositTimestamp[to] = userToDepositTimestamp[from];
-
         return true;
     }
 
@@ -416,7 +416,7 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
     //////////////////////////////////////////////////////////////*/
 
     function beforeWithdraw(uint256 _assets, uint256) internal override {
-        _checkDepositCooldownPeriod();
+        _checkDepositCooldownPeriod(msg.sender);
 
         uint256 initialBalance = getUsdcBalance();
         if (initialBalance >= _assets) return;
@@ -444,8 +444,8 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
         _repayDebtAndReleaseCollateral(debt, collateral, invested, usdcNeeded);
     }
 
-    function _checkDepositCooldownPeriod() internal view {
-        if (block.timestamp < userToDepositTimestamp[msg.sender] + C.DEPOSIT_COOLDOWN_PERIOD) {
+    function _checkDepositCooldownPeriod(address _owner) internal view {
+        if (block.timestamp < ownerToDepositTimestamp[_owner] + C.DEPOSIT_COOLDOWN_PERIOD) {
             revert DepositCooldownNotElapsed();
         }
     }
