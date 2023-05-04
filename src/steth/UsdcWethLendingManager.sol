@@ -147,6 +147,10 @@ abstract contract UsdcWethLendingManager {
         );
     }
 
+    function getMaxLtv(Protocol _protocolId) public view returns (uint256) {
+        return protocolToActions[_protocolId].getMaxLtv();
+    }
+
     /*//////////////////////////////////////////////////////////////
                             AAVE_V2 API
     //////////////////////////////////////////////////////////////*/
@@ -167,15 +171,15 @@ abstract contract UsdcWethLendingManager {
         aaveV2Pool.withdraw(address(usdc), _amount, address(this));
     }
 
-    function getCollateralOnAaveV2() public view returns (uint256) {
+    function getCollateralOnAaveV2() internal view returns (uint256) {
         return aaveV2AUsdc.balanceOf(address(this));
     }
 
-    function getDebtOnAaveV2() public view returns (uint256) {
+    function getDebtOnAaveV2() internal view returns (uint256) {
         return aaveV2VarDWeth.balanceOf(address(this));
     }
 
-    function getMaxLtvOnAaveV2() public view returns (uint256) {
+    function getMaxLtvOnAaveV2() internal view returns (uint256) {
         // TODO: fix this
         (, uint256 ltv,,,,,,,,) = aaveV3PoolDataProvider.getReserveConfigurationData(address(usdc));
 
@@ -204,15 +208,15 @@ abstract contract UsdcWethLendingManager {
         aaveV3Pool.withdraw(address(usdc), _amount, address(this));
     }
 
-    function getCollateralOnAaveV3() public view returns (uint256) {
+    function getCollateralOnAaveV3() internal view returns (uint256) {
         return aaveV3AUsdc.balanceOf(address(this));
     }
 
-    function getDebtOnAaveV3() public view returns (uint256) {
+    function getDebtOnAaveV3() internal view returns (uint256) {
         return aaveV3VarDWeth.balanceOf(address(this));
     }
 
-    function getMaxLtvOnAaveV3() public view returns (uint256) {
+    function getMaxLtvOnAaveV3() internal view returns (uint256) {
         (, uint256 ltv,,,,,,,,) = aaveV3PoolDataProvider.getReserveConfigurationData(address(usdc));
 
         // ltv is returned as a percentage with 2 decimals (e.g. 80% = 8000) so we need to multiply by 1e14
@@ -239,15 +243,15 @@ abstract contract UsdcWethLendingManager {
         eulerEUsdc.withdraw(0, _amount);
     }
 
-    function getCollateralOnEuler() public view returns (uint256) {
+    function getCollateralOnEuler() internal view returns (uint256) {
         return eulerEUsdc.balanceOfUnderlying(address(this));
     }
 
-    function getDebtOnEuler() public view returns (uint256) {
+    function getDebtOnEuler() internal view returns (uint256) {
         return eulerDWeth.balanceOf(address(this));
     }
 
-    function getMaxLtvOnEuler() public view returns (uint256) {
+    function getMaxLtvOnEuler() internal view returns (uint256) {
         uint256 collateralFactor = eulerMarkets.underlyingToAssetConfig(address(usdc)).collateralFactor;
         uint256 borrowFactor = eulerMarkets.underlyingToAssetConfig(address(weth)).borrowFactor;
 

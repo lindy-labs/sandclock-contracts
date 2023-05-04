@@ -308,7 +308,7 @@ contract scUSDCv2 is sc4626, UsdcWethLendingManager, IFlashLoanRecipient {
      * @dev Each LendingPositionInfo struct in the output array corresponds to the protocol with the same index in the input array.
      * If the collateral for a position is 0, the LTV for that position is also 0.
      */
-    function getPositionInfos(Protocol[] calldata _protocolIds)
+    function getLendingPositionsInfo(Protocol[] calldata _protocolIds)
         external
         view
         returns (LendingPositionInfo[] memory positionInfos)
