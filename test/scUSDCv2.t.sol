@@ -86,6 +86,8 @@ contract scUSDCv2Test is Test {
         vm.deal(address(vault), 0);
         // set float percentage to 0 for most tests
         vault.setFloatPercentage(0);
+        // assign keeper role to deployer
+        vault.grantRole(vault.KEEPER_ROLE(), address(this));
     }
 
     /// #constructor ///
@@ -123,7 +125,19 @@ contract scUSDCv2Test is Test {
 
     /// #rebalance ///
 
-    function test_rebalance_onlyAaveV3() public {
+    function test_rebalance_FailsIfCallerIsNotKeeper() public {
+        uint256 initialBalance = 1_000_000e6;
+        deal(address(usdc), address(vault), initialBalance);
+
+        scUSDCv2.RebalanceParams[] memory params = new scUSDCv2.RebalanceParams[](1);
+        params[0] = _createRebalanceParams(UsdcWethLendingManager.Protocol.AAVE_V3, initialBalance, true, 0);
+
+        vm.prank(alice);
+        vm.expectRevert(CallerNotKeeper.selector);
+        vault.rebalance(params);
+    }
+
+    function test_rebalance_BorrowOnlyOnAaveV3() public {
         uint256 initialBalance = 1_000_000e6;
         uint256 initialDebt = 100 ether;
         deal(address(usdc), address(vault), initialBalance);
@@ -137,7 +151,7 @@ contract scUSDCv2Test is Test {
         assertEq(vault.totalCollateral(), initialBalance, "total collateral");
     }
 
-    function test_rebalance_onlyEuler() public {
+    function test_rebalance_BorrowOnlyOnEuler() public {
         uint256 initialBalance = 1_000_000e6;
         uint256 initialDebt = 100 ether;
         deal(address(usdc), address(vault), initialBalance);
@@ -154,7 +168,7 @@ contract scUSDCv2Test is Test {
         _assertLendingPosition(UsdcWethLendingManager.Protocol.EULER, initialBalance, initialDebt);
     }
 
-    function test_rebalance_onlyAaveV2() public {
+    function test_rebalance_BorrowOnlyOnAaveV2() public {
         uint256 initialBalance = 1_000_000e6;
         uint256 initialDebt = 100 ether;
         deal(address(usdc), address(vault), initialBalance);
@@ -172,7 +186,7 @@ contract scUSDCv2Test is Test {
         _assertLendingPosition(UsdcWethLendingManager.Protocol.EULER, 0, 0);
     }
 
-    function test_rebalance_oneProtocolLeverageDown() public {
+    function test_rebalance_OneProtocolLeverageDown() public {
         uint256 initialBalance = 1_000_000e6;
         uint256 initialDebt = 100 ether;
         deal(address(usdc), address(vault), initialBalance);
@@ -196,7 +210,31 @@ contract scUSDCv2Test is Test {
         _assertLendingPosition(UsdcWethLendingManager.Protocol.AAVE_V2, initialBalance, initialDebt / 2);
     }
 
-    function test_rebalance_oneProtocolWithAdditionalDeposits() public {
+    function test_rebalance_OneProtocolLeverageUp() public {
+        uint256 initialBalance = 1_000_000e6;
+        uint256 initialDebt = 100 ether;
+        deal(address(usdc), address(vault), initialBalance);
+
+        scUSDCv2.RebalanceParams[] memory params = new scUSDCv2.RebalanceParams[](1);
+        params[0] = _createRebalanceParams(UsdcWethLendingManager.Protocol.AAVE_V2, initialBalance, true, initialDebt);
+
+        vault.rebalance(params);
+
+        assertApproxEqAbs(vault.totalCollateral(), initialBalance, 1, "total collateral");
+        assertApproxEqAbs(vault.totalDebt(), initialDebt, 1, "total debt");
+
+        // leverage down
+        params[0] = _createRebalanceParams(UsdcWethLendingManager.Protocol.AAVE_V2, 0, true, initialDebt / 2);
+
+        vault.rebalance(params);
+
+        assertApproxEqAbs(vault.totalCollateral(), initialBalance, 1, "total collateral");
+        assertApproxEqAbs(vault.totalDebt(), initialDebt * 3 / 2, 1, "total debt");
+
+        _assertLendingPosition(UsdcWethLendingManager.Protocol.AAVE_V2, initialBalance, initialDebt * 3 / 2);
+    }
+
+    function test_rebalance_OneProtocolWithAdditionalDeposits() public {
         uint256 initialBalance = 1_000_000e6;
         uint256 initialDebt = 100 ether;
         deal(address(usdc), address(vault), initialBalance);
@@ -222,7 +260,7 @@ contract scUSDCv2Test is Test {
         assertEq(vault.totalDebt(), initialDebt + additionalDebt, "total debt after");
     }
 
-    function test_rebalance_twoProtocols() public {
+    function test_rebalance_TwoProtocols() public {
         uint256 initialBalance = 1_000_000e6;
         uint256 debtOnAaveV3 = 200 ether;
         uint256 debtOnEuler = 239.125 ether;
@@ -242,7 +280,7 @@ contract scUSDCv2Test is Test {
         _assertLendingPosition(UsdcWethLendingManager.Protocol.EULER, initialBalance / 2, debtOnEuler);
     }
 
-    function test_rebalance_twoProtocolsWithAdditionalDeposits() public {
+    function test_rebalance_TwoProtocolsWithAdditionalDeposits() public {
         uint256 initialBalance = 1_000_000e6;
         uint256 debtOnAaveV3 = 60 ether;
         uint256 debtOnEuler = 40 ether;
@@ -299,7 +337,7 @@ contract scUSDCv2Test is Test {
         );
     }
 
-    function test_rebalance_twoProtocolsLeveragingUpAndDown() public {
+    function test_rebalance_TwoProtocolsLeveragingUpAndDown() public {
         uint256 initialBalance = 1_000_000e6;
         uint256 debtOnAaveV3 = 160 ether;
         uint256 debtOnEuler = 100 ether;
@@ -356,7 +394,7 @@ contract scUSDCv2Test is Test {
         );
     }
 
-    function test_rebalance_threeProtocols() public {
+    function test_rebalance_ThreeProtocols() public {
         uint256 initialBalance = 1_200_000e6;
         uint256 debtOnAaveV3 = 140 ether;
         uint256 debtOnEuler = 150 ether;
@@ -380,7 +418,7 @@ contract scUSDCv2Test is Test {
         _assertLendingPosition(UsdcWethLendingManager.Protocol.EULER, initialBalance / 3, debtOnEuler);
     }
 
-    function test_rebalance_threeProtocolsLeveragingDown() public {
+    function test_rebalance_ThreeProtocolsLeveragingDown() public {
         uint256 initialBalance = 1_200_000e6;
         uint256 debtOnAaveV3 = 140 ether;
         uint256 debtOnEuler = 150 ether;
@@ -424,7 +462,7 @@ contract scUSDCv2Test is Test {
         );
     }
 
-    function test_rebalance_emitsEventForEachProtocol() public {
+    function test_rebalance_EmitsEventForEachProtocol() public {
         uint256 initialBalance = 1_500_000e6;
         deal(address(usdc), address(vault), initialBalance);
 
@@ -441,7 +479,7 @@ contract scUSDCv2Test is Test {
         vault.rebalance(params);
     }
 
-    function test_rebalance_failsWhenBorrowingOverMaxLtv() public {
+    function test_rebalance_FailsWhenBorrowingOverMaxLtv() public {
         uint256 initialBalance = 1_000_000e6;
         deal(address(usdc), address(vault), initialBalance);
         uint256 maxLtv = vault.getMaxLtv(UsdcWethLendingManager.Protocol.EULER);
@@ -458,7 +496,7 @@ contract scUSDCv2Test is Test {
         vault.rebalance(params);
     }
 
-    function test_rebalance_enforcesFloatAmountToRemainInVault() public {
+    function test_rebalance_EnforcesFloatAmountToRemainInVault() public {
         uint256 initialBalance = 1_000_000e6;
         deal(address(usdc), address(vault), initialBalance);
         uint256 floatPercentage = 0.02e18; // 2%
@@ -478,7 +516,22 @@ contract scUSDCv2Test is Test {
 
     /// #reallocateCapital ///
 
-    function test_reallocateCapital_moveEverythingFromOneProtocolToAnother() public {
+    function test_reallocateCapital_FailsIfCallerIsNotKeeper() public {
+        scUSDCv2.ReallocationParams[] memory reallocateParams = new scUSDCv2.ReallocationParams[](1);
+
+        vm.prank(alice);
+        vm.expectRevert(CallerNotKeeper.selector);
+        vault.reallocateCapital(reallocateParams, 0);
+    }
+
+    function test_reallocateCapital_FailsIfFlashLoanParameterIsZero() public {
+        scUSDCv2.ReallocationParams[] memory reallocateParams = new scUSDCv2.ReallocationParams[](1);
+
+        vm.expectRevert(FlashLoanAmountZero.selector);
+        vault.reallocateCapital(reallocateParams, 0);
+    }
+
+    function test_reallocateCapital_MoveEverythingFromOneProtocolToAnother() public {
         uint256 totalCollateral = 1_000_000e6;
         uint256 totalDebt = 100 ether;
         deal(address(usdc), address(vault), totalCollateral);
@@ -528,7 +581,7 @@ contract scUSDCv2Test is Test {
         _assertLendingPosition(UsdcWethLendingManager.Protocol.EULER, totalCollateral, totalDebt);
     }
 
-    function test_reallocateCapital_moveHalfFromOneProtocolToAnother() public {
+    function test_reallocateCapital_MoveHalfFromOneProtocolToAnother() public {
         uint256 totalCollateral = 1_000_000e6;
         uint256 totalDebt = 100 ether;
         deal(address(usdc), address(vault), totalCollateral);
@@ -613,7 +666,7 @@ contract scUSDCv2Test is Test {
         vault.reallocateCapital(reallocateParams, flashLoanAmount);
     }
 
-    function test_reallocateCapital_worksWhenCalledMultipleTimes() public {
+    function test_reallocateCapital_WorksWhenCalledMultipleTimes() public {
         uint256 totalCollateral = 1_000_000e6;
         uint256 totalDebt = 100 ether;
         deal(address(usdc), address(vault), totalCollateral);
@@ -711,7 +764,7 @@ contract scUSDCv2Test is Test {
         vault.sellProfit(0);
     }
 
-    function test_sellProfit_onlySellsProfit() public {
+    function test_sellProfit_DisinvestsAndDoesNotChageCollateralOrDebt() public {
         uint256 initialBalance = 1_000_000e6;
         deal(address(usdc), address(vault), initialBalance);
 
@@ -737,7 +790,7 @@ contract scUSDCv2Test is Test {
         assertApproxEqRel(vault.wethInvested(), initialWethInvested, 0.001e18, "sold more than actual profit");
     }
 
-    function test_sellProfit_emitsEvent() public {
+    function test_sellProfit_EmitsEvent() public {
         uint256 initialBalance = 1_000_000e6;
         uint256 initialDebt = 100 ether;
         deal(address(usdc), address(vault), initialBalance);
@@ -789,7 +842,7 @@ contract scUSDCv2Test is Test {
 
     /// #withdraw ///
 
-    function test_withdraw_worksWithOneProtocol() public {
+    function test_withdraw_WorksWithOneProtocol() public {
         uint256 initialBalance = 1_000_000e6;
         deal(address(usdc), alice, initialBalance);
 
@@ -810,7 +863,7 @@ contract scUSDCv2Test is Test {
         assertEq(usdc.balanceOf(alice), withdrawAmount, "alice usdc balance");
     }
 
-    function test_withdraw_pullsFundsFromFloatFirst() public {
+    function test_withdraw_PullsFundsFromFloatFirst() public {
         uint256 floatPercentage = 0.1e18; // 10 %
         vault.setFloatPercentage(floatPercentage);
         uint256 initialBalance = 1_000_000e6;
@@ -840,7 +893,7 @@ contract scUSDCv2Test is Test {
         assertEq(vault.totalDebt(), debtBefore, "total debt not expected to change");
     }
 
-    function test_withdraw_pullsFundsFromProtocolWhenFloatIsNotEnough() public {
+    function test_withdraw_PullsFundsFromProtocolWhenFloatIsNotEnough() public {
         uint256 floatPercentage = 0.1e18; // 10 %
         vault.setFloatPercentage(floatPercentage);
         uint256 initialBalance = 1_000_000e6;
@@ -867,7 +920,7 @@ contract scUSDCv2Test is Test {
         assertApproxEqAbs(vault.totalDebt(), 0, 1, "debt not 0");
     }
 
-    function test_withdraw_pullsFundsFromAllProtocolsInEqualWeight() public {
+    function test_withdraw_PullsFundsFromAllProtocolsInEqualWeight() public {
         uint256 initialBalance = 1_000_000e6;
         uint256 initialDebt = 100 ether;
         deal(address(usdc), alice, initialBalance);
@@ -908,7 +961,7 @@ contract scUSDCv2Test is Test {
 
     /// #getLendingPositionsInfo ///
 
-    function test_getLendingPositionsInfo_returnsInfoOnOneProtocol() public {
+    function test_getLendingPositionsInfo_ReturnsInfoOnOneProtocol() public {
         uint256 initialBalance = 1_000_000e6;
         uint256 initialDebt = 100 ether;
         uint256 expectedLtv = vault.getUsdcFromWeth(initialDebt).divWadUp(initialBalance);
@@ -931,7 +984,7 @@ contract scUSDCv2Test is Test {
         assertApproxEqRel(positions[0].ltv, expectedLtv, 0.001e18, "ltv");
     }
 
-    function test_getLendingPositionsInfo_returnsInfoOnMultipleProtocols() public {
+    function test_getLendingPositionsInfo_ReturnsInfoOnMultipleProtocols() public {
         uint256 initialBalance = 1_000_000e6;
         uint256 initialDebt = 100 ether;
         uint256 expectedLtv = vault.getUsdcFromWeth(initialDebt / 2).divWadUp(initialBalance / 2);
@@ -965,7 +1018,7 @@ contract scUSDCv2Test is Test {
         assertApproxEqRel(positions[1].ltv, expectedLtv, 0.001e18, "euler ltv");
     }
 
-    function test_getLendingPositionsInfo_worksWhenProtocolRequestedIsNotUsed() public {
+    function test_getLendingPositionsInfo_WorksWhenProtocolRequestedIsNotUsed() public {
         uint256 initialBalance = 1_000_000e6;
         uint256 initialDebt = 100 ether;
         uint256 expectedLtv = vault.getUsdcFromWeth(initialDebt).divWadUp(initialBalance);

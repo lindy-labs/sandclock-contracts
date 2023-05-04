@@ -7,7 +7,8 @@ import {
     InvalidSlippageTolerance,
     InvalidFlashLoanCaller,
     VaultNotUnderwater,
-    NoProfitsToSell
+    NoProfitsToSell,
+    FlashLoanAmountZero
 } from "../errors/scErrors.sol";
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
@@ -28,11 +29,11 @@ import {IFlashLoanRecipient} from "../interfaces/balancer/IFlashLoanRecipient.so
 import {sc4626} from "../sc4626.sol";
 import {UsdcWethLendingManager} from "./UsdcWethLendingManager.sol";
 
-// TODO: add modifiers to all functions where applicable
 // TODO: add function for harvesting EULER reward tokens
 // TODO: add function to change price feed
 // TODO: add AAVE v2 support
 // TODO: add exit all positions
+// TODO: add WP-L7 fix
 /**
  * @title Sandclock USDC Vault
  * @notice A vault that allows users to earn interest on their USDC deposits from leveraged WETH staking.
@@ -132,7 +133,9 @@ contract scUSDCv2 is sc4626, UsdcWethLendingManager, IFlashLoanRecipient {
      * @param _params The reallocation parameters. Markets where positions are downsized must be listed first because collateral has to be relased before it is reallocated.
      * @param _flashLoanAmount The amount of WETH to flashloan from Balancer. Has to be at least equal to amount of WETH debt moved between lending markets.
      */
-    function reallocateCapital(ReallocationParams[] calldata _params, uint256 _flashLoanAmount) public {
+    function reallocateCapital(ReallocationParams[] calldata _params, uint256 _flashLoanAmount) external onlyKeeper {
+        if (_flashLoanAmount == 0) revert FlashLoanAmountZero();
+
         address[] memory tokens = new address[](1);
         tokens[0] = address(weth);
 
@@ -149,9 +152,7 @@ contract scUSDCv2 is sc4626, UsdcWethLendingManager, IFlashLoanRecipient {
     {
         _isFlashLoanInitiated();
 
-        if (msg.sender != address(balancerVault)) {
-            revert InvalidFlashLoanCaller();
-        }
+        if (msg.sender != address(balancerVault)) revert InvalidFlashLoanCaller();
 
         uint256 flashLoanAmount = amounts[0];
         (ReallocationParams[] memory params) = abi.decode(userData, (ReallocationParams[]));
@@ -179,7 +180,7 @@ contract scUSDCv2 is sc4626, UsdcWethLendingManager, IFlashLoanRecipient {
      * @notice Rebalance the vault's positions.
      * @dev Called to increase or decrease the WETH debt to maintain the LTV (loan to value).
      */
-    function rebalance(RebalanceParams[] calldata _params) public {
+    function rebalance(RebalanceParams[] calldata _params) public onlyKeeper {
         for (uint8 i = 0; i < _params.length; i++) {
             ProtocolActions memory protocolActions = protocolToActions[_params[i].protocolId];
 
