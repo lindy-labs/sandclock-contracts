@@ -81,8 +81,9 @@ abstract contract DeployLeveragedEth is CREATE3Script {
             balancerVault: balancerVault
         });
 
+        console2.log("");
         wethContract = new scWETH(scWethParams);
-        console2.log("\nscWETH: ", address(wethContract));
+        console2.log("scWETH: ", address(wethContract));
 
         scUSDC.ConstructorParams memory scUsdcParams = scUSDC.ConstructorParams({
             admin: address(this),
