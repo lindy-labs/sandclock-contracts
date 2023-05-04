@@ -82,6 +82,7 @@ abstract contract DeployLeveragedEth is CREATE3Script {
         });
 
         wethContract = new scWETH(scWethParams);
+        console2.log("scWETH: ", address(wethContract));
 
         scUSDC.ConstructorParams memory scUsdcParams = scUSDC.ConstructorParams({
             admin: address(this),
@@ -99,6 +100,7 @@ abstract contract DeployLeveragedEth is CREATE3Script {
         });
 
         usdcContract = new scUSDC(scUsdcParams);
+        console2.log("scUSDC: ", address(usdcContract));
 
         vm.stopBroadcast();
     }
