@@ -14,6 +14,7 @@ import {IEulerMarkets, IEulerEToken, IEulerDToken} from "lib/euler-interfaces/co
 
 import {Constants as C} from "../src/lib/Constants.sol";
 import {ILendingPool} from "../src/interfaces/aave-v2/ILendingPool.sol";
+import {IProtocolDataProvider} from "../src/interfaces/aave-v2/IProtocolDataProvider.sol";
 import {sc4626} from "../src/sc4626.sol";
 import {scUSDCv2} from "../src/steth/scUSDCv2.sol";
 import {UsdcWethLendingManager} from "../src/steth/UsdcWethLendingManager.sol";
@@ -1074,6 +1075,26 @@ contract scUSDCv2Test is Test {
         assertApproxEqAbs(positions[1].debt, initialDebt, 1, "euler debt");
     }
 
+    /// #getMaxLtv ///
+
+    function test_getMaxLtv_AaveV3() public {
+        uint256 maxLtv = vault.getMaxLtv(UsdcWethLendingManager.Protocol.AAVE_V3);
+
+        assertEq(maxLtv, 0.74e18, "max ltv");
+    }
+
+    function test_getMaxLtv_AaveV2() public {
+        uint256 maxLtv = vault.getMaxLtv(UsdcWethLendingManager.Protocol.AAVE_V2);
+
+        assertEq(maxLtv, 0.8e18, "max ltv");
+    }
+
+    function test_getMaxLtv_Euler() public {
+        uint256 maxLtv = vault.getMaxLtv(UsdcWethLendingManager.Protocol.EULER);
+
+        assertEq(maxLtv, 0.819e18, "max ltv");
+    }
+
     /// internal helper functions ///
 
     function _createDefaultUsdcVaultConstructorParams(scWETH scWeth)
@@ -1098,6 +1119,7 @@ contract scUSDCv2Test is Test {
 
         UsdcWethLendingManager.AaveV2 memory aaveV2 = UsdcWethLendingManager.AaveV2({
             pool: ILendingPool(C.AAVE_V2_LENDING_POOL),
+            protocolDataProvider: IProtocolDataProvider(C.AAVE_V2_PROTOCOL_DATA_PROVIDER),
             aUsdc: ERC20(C.AAVE_V2_AUSDC_TOKEN),
             varDWeth: ERC20(C.AAVE_V2_VAR_DEBT_WETH_TOKEN)
         });

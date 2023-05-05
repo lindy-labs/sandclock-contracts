@@ -67,6 +67,8 @@ library Constants {
 
     // address of the Aave v2 lending pool
     address public constant AAVE_V2_LENDING_POOL = 0x7d2768dE32b0b80b7a3454c06BdAc94A69DDc7A9;
+    // address of the Aave v2 protocol data provider
+    address public constant AAVE_V2_PROTOCOL_DATA_PROVIDER = 0x057835Ad21a177dbdd3090bB1CAE03EaCF78Fc6d;
     /// address of the Aave v2 interest bearing USDC (aUSDC) token
     address public constant AAVE_V2_AUSDC_TOKEN = 0xBcca60bB61934080951369a648Fb03DF4F96263C;
     // address of the Aave v2 variable debt bearing WETH (variableDebtWETH) token

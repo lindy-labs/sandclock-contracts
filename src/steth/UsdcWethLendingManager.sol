@@ -21,6 +21,7 @@ import {IEulerMarkets, IEulerEToken, IEulerDToken} from "lib/euler-interfaces/co
 
 import {Constants as C} from "../lib/Constants.sol";
 import {ILendingPool} from "../interfaces/aave-v2/ILendingPool.sol";
+import {IProtocolDataProvider} from "../interfaces/aave-v2/IProtocolDataProvider.sol";
 import {IVault} from "../interfaces/balancer/IVault.sol";
 import {ISwapRouter} from "../interfaces/uniswap/ISwapRouter.sol";
 import {AggregatorV3Interface} from "../interfaces/chainlink/AggregatorV3Interface.sol";
@@ -47,7 +48,7 @@ abstract contract UsdcWethLendingManager {
         function() view returns(uint256) getDebt;
         function() view returns(uint256) getMaxLtv;
     }
-    
+
     /**
      * @notice Struct to store lending position related information
      */
@@ -57,13 +58,13 @@ abstract contract UsdcWethLendingManager {
         uint256 debt; // Amount of debt
     }
 
-
     mapping(Protocol => ProtocolActions) protocolToActions;
 
     ERC20 public immutable usdc;
     WETH public immutable weth;
 
     ILendingPool public immutable aaveV2Pool;
+    IProtocolDataProvider public immutable aaveV2ProtocolDataProvider;
     ERC20 public immutable aaveV2AUsdc;
     ERC20 public immutable aaveV2VarDWeth;
 
@@ -95,6 +96,7 @@ abstract contract UsdcWethLendingManager {
 
     struct AaveV2 {
         ILendingPool pool;
+        IProtocolDataProvider protocolDataProvider;
         ERC20 aUsdc;
         ERC20 varDWeth;
     }
@@ -115,6 +117,7 @@ abstract contract UsdcWethLendingManager {
         eulerRewardsToken = _euler.rewardsToken;
 
         aaveV2Pool = _aaveV2.pool;
+        aaveV2ProtocolDataProvider = _aaveV2.protocolDataProvider;
         aaveV2AUsdc = _aaveV2.aUsdc;
         aaveV2VarDWeth = _aaveV2.varDWeth;
 
@@ -168,6 +171,7 @@ abstract contract UsdcWethLendingManager {
      * @dev Each LendingPositionInfo struct in the output array corresponds to the protocol with the same index in the input array.
      * If the collateral for a position is 0, the LTV for that position is also 0.
      */
+
     function getLendingPositionsInfo(Protocol[] calldata _protocolIds)
         external
         view
@@ -184,7 +188,7 @@ abstract contract UsdcWethLendingManager {
             positionInfo.protocolId = protocolId;
             positionInfo.collateral = protocolActions.getCollateral();
             positionInfo.debt = protocolActions.getDebt();
-            
+
             positionInfos[i] = positionInfo;
         }
     }
@@ -218,12 +222,12 @@ abstract contract UsdcWethLendingManager {
     }
 
     function getMaxLtvOnAaveV2() internal view returns (uint256) {
-        // TODO: fix this
-        (, uint256 ltv,,,,,,,,) = aaveV3PoolDataProvider.getReserveConfigurationData(address(usdc));
+        (, uint256 ltv,,,,,,,,) = aaveV2ProtocolDataProvider.getReserveConfigurationData(address(usdc));
+        // IProtocolDataProvider(0x057835Ad21a177dbdd3090bB1CAE03EaCF78Fc6d)
 
         // ltv is returned as a percentage with 2 decimals (e.g. 80% = 8000) so we need to multiply by 1e14
         // return ltv * 1e14;
-        return 1e18;
+        return ltv * 1e14;
     }
 
     /*//////////////////////////////////////////////////////////////

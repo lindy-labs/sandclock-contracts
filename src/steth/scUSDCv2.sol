@@ -31,9 +31,7 @@ import {sc4626} from "../sc4626.sol";
 import {UsdcWethLendingManager} from "./UsdcWethLendingManager.sol";
 
 // TODO: add function for harvesting EULER reward tokens
-// TODO: add AAVE v2 support
 // TODO: add exit all positions
-// TODO: add WP-L7 fix
 /**
  * @title Sandclock USDC Vault
  * @notice A vault that allows users to earn interest on their USDC deposits from leveraged WETH staking.
