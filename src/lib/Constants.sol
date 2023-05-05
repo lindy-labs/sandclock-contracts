@@ -58,4 +58,7 @@ library Constants {
 
     // address of the 0x swap router contract
     address public constant ZEROX_ROUTER = 0xDef1C0ded9bec7F1a1670819833240f027b25EfF;
+
+    // Compound v3
+    address public constant COMPOUND_V3_COMET_WETH = 0xA17581A9E3356d9A858b789D68B4d866e593aE94;
 }

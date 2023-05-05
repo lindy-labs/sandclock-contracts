@@ -20,6 +20,7 @@ import {IwstETH} from "../interfaces/lido/IwstETH.sol";
 import {AggregatorV3Interface} from "../interfaces/chainlink/AggregatorV3Interface.sol";
 import {IVault} from "../interfaces/balancer/IVault.sol";
 import {IFlashLoanRecipient} from "../interfaces/balancer/IFlashLoanRecipient.sol";
+import {IComet} from "../interfaces/compound-v3/IComet.sol";
 
 abstract contract LendingMarketManager {
     using SafeTransferLib for ERC20;
@@ -27,7 +28,8 @@ abstract contract LendingMarketManager {
 
     enum LendingMarketType {
         AAVE_V3,
-        EULER
+        EULER,
+        COMPOUND_V3
     }
 
     struct LendingMarket {
@@ -52,6 +54,10 @@ abstract contract LendingMarketManager {
         address dWeth;
     }
 
+    struct Compound {
+        address comet;
+    }
+
     // Lido staking contract (stETH)
     ILido public immutable stEth;
     IwstETH public immutable wstETH;
@@ -73,6 +79,8 @@ abstract contract LendingMarketManager {
     IEulerEToken public immutable eulerEWstEth;
     IEulerDToken public immutable eulerDWeth;
 
+    IComet public immutable compoundV3Comet;
+
     // mapping from lending market id to protocol params
     mapping(LendingMarketType => LendingMarket) lendingMarkets;
 
@@ -84,7 +92,8 @@ abstract contract LendingMarketManager {
         ICurvePool _curvePool,
         IVault _balancerVault,
         AaveV3 memory aaveV3,
-        Euler memory euler
+        Euler memory euler,
+        Compound memory compound
     ) {
         stEth = _stEth;
         wstETH = _wstEth;
@@ -102,12 +111,16 @@ abstract contract LendingMarketManager {
         eulerEWstEth = IEulerEToken(euler.eWstEth);
         eulerDWeth = IEulerDToken(euler.dWeth);
 
+        compoundV3Comet = IComet(compound.comet);
+
         ERC20(address(stEth)).safeApprove(address(wstETH), type(uint256).max);
         ERC20(address(stEth)).safeApprove(address(curvePool), type(uint256).max);
         ERC20(address(wstETH)).safeApprove(aaveV3.pool, type(uint256).max);
         ERC20(address(weth)).safeApprove(aaveV3.pool, type(uint256).max);
         ERC20(address(wstETH)).safeApprove(euler.protocol, type(uint256).max);
         ERC20(address(weth)).safeApprove(euler.protocol, type(uint256).max);
+        ERC20(address(wstETH)).safeApprove(compound.comet, type(uint256).max);
+        ERC20(address(weth)).safeApprove(compound.comet, type(uint256).max);
 
         // Enter the euler collateral market (collateral's address, *not* the eToken address) ,
         IEulerMarkets(euler.markets).enterMarket(0, address(wstETH));
@@ -125,6 +138,15 @@ abstract contract LendingMarketManager {
 
         lendingMarkets[LendingMarketType.EULER] = LendingMarket(
             supplyWstEthEuler, borrowWethEuler, repayWethEuler, withdrawWstEthEuler, getCollateralEuler, getDebtEuler
+        );
+
+        lendingMarkets[LendingMarketType.COMPOUND_V3] = LendingMarket(
+            supplyWstEthCompound,
+            borrowWethCompound,
+            repayWethCompound,
+            withdrawWstEthCompound,
+            getCollateralCompound,
+            getDebtCompound
         );
     }
 
@@ -204,6 +226,31 @@ abstract contract LendingMarketManager {
 
     function getDebtEuler() internal view returns (uint256) {
         return IEulerDToken(eulerDWeth).balanceOf(address(this));
+    }
+
+    //////////////////////// Compound V3 ////////////////////////////////
+    function supplyWstEthCompound(uint256 amount) internal {
+        compoundV3Comet.supply(address(wstETH), amount);
+    }
+
+    function borrowWethCompound(uint256 amount) internal {
+        compoundV3Comet.withdraw(address(weth), amount);
+    }
+
+    function repayWethCompound(uint256 amount) internal {
+        compoundV3Comet.supply(address(weth), amount);
+    }
+
+    function withdrawWstEthCompound(uint256 amount) internal {
+        compoundV3Comet.withdraw(address(wstETH), amount);
+    }
+
+    function getCollateralCompound() internal view returns (uint256) {
+        return compoundV3Comet.userCollateral(address(this), address(wstETH)).balance;
+    }
+
+    function getDebtCompound() internal view returns (uint256) {
+        return compoundV3Comet.borrowBalanceOf(address(this));
     }
 
     //////////////////////// ORACLE METHODS ///////////////////////////////

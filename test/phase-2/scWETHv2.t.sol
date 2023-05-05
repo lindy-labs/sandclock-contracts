@@ -166,6 +166,7 @@ contract scWETHv2Test is Test {
         assertApproxEqRel(vault.getLtv(), ltv, 0.001e18, "ltv changed after withdraw");
         assertApproxEqRel(vault.getLeverage(), lev, 0.001e18, "leverage changed after withdraw");
         assertApproxEqRel(weth.balanceOf(address(vault)), assets / 2, maxAssetsDelta, "assets not withdrawn");
+        assertApproxEqRel(vault.totalInvested(), amount - (assets / 2), 0.001e18, "totalInvested not reduced");
 
         // withdraw the remaining assets
         hoax(keeper);
@@ -175,6 +176,7 @@ contract scWETHv2Test is Test {
         assertLt(vault.totalDebt(), dust, "test_withdrawToVault getDebt error");
         assertLt(vault.totalCollateral(), dust, "test_withdrawToVault getCollateral error");
         assertApproxEqRel(weth.balanceOf(address(vault)), assets, maxAssetsDelta, "test_withdrawToVault asset balance");
+        assertApproxEqRel(vault.totalInvested(), amount - assets, 0.001e18, "totalInvested not reduced");
     }
 
     // we decrease ltv in case of a loss, since the ltv goes higher than the target ltv in such a scenario
@@ -328,7 +330,75 @@ contract scWETHv2Test is Test {
         );
     }
 
-    function test_invest_reinvestingProfits() public {}
+    function test_invest_reinvestingProfits_performanceFees() public {
+        vault.setTreasury(treasury);
+        uint256 amount = 1000 ether;
+        _depositToVault(address(this), amount);
+
+        (scWETHv2.SupplyBorrowParam[] memory supplyBorrowParams,,) = _getInvestParams(amount, 0.7e18, 0.3e18);
+
+        hoax(keeper);
+        vault.investAndHarvest(amount, supplyBorrowParams);
+
+        uint256 altv = vault.getLtv(LendingMarketManager.LendingMarketType.AAVE_V3);
+        uint256 eulerLtv = vault.getLtv(LendingMarketManager.LendingMarketType.EULER);
+        uint256 ltv = vault.getLtv();
+
+        _simulate_stEthStakingInterest(365 days, 1.071e18);
+
+        assertLt(vault.getLtv(), ltv, "ltv must decrease after simulated profits");
+        assertLt(
+            vault.getLtv(LendingMarketManager.LendingMarketType.AAVE_V3),
+            altv,
+            "aavev3 ltv must decrease after simulated profits"
+        );
+        assertLt(
+            vault.getLtv(LendingMarketManager.LendingMarketType.EULER),
+            eulerLtv,
+            "euler ltv must decrease after simulated profits"
+        );
+
+        uint256 aaveV3FlashLoanAmount =
+            _calcSupplyBorrowFlashLoanAmount(LendingMarketManager.LendingMarketType.AAVE_V3, 0);
+        uint256 eulerFlashLoanAmount = _calcSupplyBorrowFlashLoanAmount(LendingMarketManager.LendingMarketType.EULER, 0);
+
+        uint256 stEthRateTolerance = 0.999e18;
+        uint256 aaveV3SupplyAmount = _ethToWstEth(aaveV3FlashLoanAmount).mulWadDown(stEthRateTolerance);
+        uint256 eulerSupplyAmount = _ethToWstEth(eulerFlashLoanAmount).mulWadDown(stEthRateTolerance);
+
+        supplyBorrowParams[0] = scWETHv2.SupplyBorrowParam({
+            market: LendingMarketManager.LendingMarketType.AAVE_V3,
+            supplyAmount: aaveV3SupplyAmount,
+            borrowAmount: aaveV3FlashLoanAmount
+        });
+        supplyBorrowParams[1] = scWETHv2.SupplyBorrowParam({
+            market: LendingMarketManager.LendingMarketType.EULER,
+            supplyAmount: eulerSupplyAmount,
+            borrowAmount: eulerFlashLoanAmount
+        });
+
+        hoax(keeper);
+        vault.investAndHarvest(0, supplyBorrowParams);
+
+        assertApproxEqRel(
+            altv,
+            vault.getLtv(LendingMarketManager.LendingMarketType.AAVE_V3),
+            0.0015e18,
+            "aavev3 ltvs not reset after reinvest"
+        );
+
+        assertApproxEqRel(
+            eulerLtv,
+            vault.getLtv(LendingMarketManager.LendingMarketType.EULER),
+            0.0015e18,
+            "euler ltvs not reset after reinvest"
+        );
+        assertApproxEqRel(ltv, vault.getLtv(), 0.005e18, "net ltv not reset after reinvest");
+
+        uint256 balance = vault.convertToAssets(vault.balanceOf(treasury));
+        uint256 profit = vault.totalProfit();
+        assertApproxEqRel(balance, profit.mulWadDown(vault.performanceFee()), 0.015e18);
+    }
 
     //////////////////////////// INTERNAL METHODS ////////////////////////////////////////
 
@@ -549,6 +619,8 @@ contract scWETHv2Test is Test {
             0.005e18,
             "euler ltv not correct"
         );
+
+        assertEq(amount, vault.totalInvested(), "totalInvested not updated");
     }
 
     function _reallocationChecksWhenMarket1HasHigherLtv(
@@ -679,6 +751,8 @@ contract scWETHv2Test is Test {
             dWeth: C.EULER_DTOKEN_WETH
         });
 
+        LendingMarketManager.Compound memory compound = LendingMarketManager.Compound({comet: C.COMPOUND_V3_COMET_WETH});
+
         return scWETHv2.ConstructorParams({
             admin: admin,
             keeper: keeper,
@@ -690,7 +764,8 @@ contract scWETHv2Test is Test {
             stEthToEthPriceFeed: AggregatorV3Interface(C.CHAINLINK_STETH_ETH_PRICE_FEED),
             balancerVault: IVault(C.BALANCER_VAULT),
             aaveV3: aaveV3,
-            euler: euler
+            euler: euler,
+            compound: compound
         });
     }
 
