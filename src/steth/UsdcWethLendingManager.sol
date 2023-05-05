@@ -47,6 +47,16 @@ abstract contract UsdcWethLendingManager {
         function() view returns(uint256) getDebt;
         function() view returns(uint256) getMaxLtv;
     }
+    
+    /**
+     * @notice Struct to store lending position related information
+     */
+    struct LendingPositionInfo {
+        Protocol protocolId; // ID of the protocol
+        uint256 collateral; // Amount of collateral
+        uint256 debt; // Amount of debt
+    }
+
 
     mapping(Protocol => ProtocolActions) protocolToActions;
 
@@ -149,6 +159,34 @@ abstract contract UsdcWethLendingManager {
 
     function getMaxLtv(Protocol _protocolId) public view returns (uint256) {
         return protocolToActions[_protocolId].getMaxLtv();
+    }
+    /**
+     * @notice Fetches position-related information for each protocol in the input list
+     * @param _protocolIds An array of protocol identifiers for which to fetch position info
+     * @return positionInfos An array of LendingPositionInfo structs containing the position info for each input protocol
+     *
+     * @dev Each LendingPositionInfo struct in the output array corresponds to the protocol with the same index in the input array.
+     * If the collateral for a position is 0, the LTV for that position is also 0.
+     */
+    function getLendingPositionsInfo(Protocol[] calldata _protocolIds)
+        external
+        view
+        returns (LendingPositionInfo[] memory positionInfos)
+    {
+        positionInfos = new LendingPositionInfo[](_protocolIds.length);
+
+        for (uint8 i = 0; i < _protocolIds.length; i++) {
+            Protocol protocolId = _protocolIds[i];
+
+            ProtocolActions memory protocolActions = protocolToActions[protocolId];
+
+            LendingPositionInfo memory positionInfo;
+            positionInfo.protocolId = protocolId;
+            positionInfo.collateral = protocolActions.getCollateral();
+            positionInfo.debt = protocolActions.getDebt();
+            
+            positionInfos[i] = positionInfo;
+        }
     }
 
     /*//////////////////////////////////////////////////////////////

@@ -31,7 +31,6 @@ import {sc4626} from "../sc4626.sol";
 import {UsdcWethLendingManager} from "./UsdcWethLendingManager.sol";
 
 // TODO: add function for harvesting EULER reward tokens
-// TODO: add function to change price feed
 // TODO: add AAVE v2 support
 // TODO: add exit all positions
 // TODO: add WP-L7 fix
@@ -300,50 +299,6 @@ contract scUSDCv2 is sc4626, UsdcWethLendingManager, IFlashLoanRecipient {
      */
     function getProfit() public view returns (uint256) {
         return _calculateWethProfit(wethInvested(), totalDebt());
-    }
-
-    /**
-     * @notice Struct to store lending position related information
-     */
-    struct LendingPositionInfo {
-        Protocol protocolId; // ID of the protocol
-        uint256 collateral; // Amount of collateral
-        uint256 debt; // Amount of debt
-        uint256 ltv; // Loan-to-Value (LTV) ratio
-    }
-
-    /**
-     * @notice Fetches position-related information for each protocol in the input list
-     * @param _protocolIds An array of protocol identifiers for which to fetch position info
-     * @return positionInfos An array of LendingPositionInfo structs containing the position info for each input protocol
-     *
-     * @dev Each LendingPositionInfo struct in the output array corresponds to the protocol with the same index in the input array.
-     * If the collateral for a position is 0, the LTV for that position is also 0.
-     */
-    function getLendingPositionsInfo(Protocol[] calldata _protocolIds)
-        external
-        view
-        returns (LendingPositionInfo[] memory positionInfos)
-    {
-        positionInfos = new LendingPositionInfo[](_protocolIds.length);
-
-        for (uint8 i = 0; i < _protocolIds.length; i++) {
-            Protocol protocolId = _protocolIds[i];
-
-            ProtocolActions memory protocolActions = protocolToActions[protocolId];
-            LendingPositionInfo memory positionInfo;
-
-            positionInfo.protocolId = protocolId;
-            positionInfo.collateral = protocolActions.getCollateral();
-            positionInfo.debt = protocolActions.getDebt();
-
-            // calculate ltv
-            if (positionInfo.collateral != 0) {
-                positionInfo.ltv = getUsdcFromWeth(positionInfo.debt).divWadUp(positionInfo.collateral);
-            }
-
-            positionInfos[i] = positionInfo;
-        }
     }
 
     /*//////////////////////////////////////////////////////////////
