@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.13;
 
-import "forge-std/console2.sol";
 import {
     InvalidTargetLtv,
     InvalidSlippageTolerance,
@@ -223,10 +222,8 @@ abstract contract UsdcWethLendingManager {
 
     function getMaxLtvOnAaveV2() internal view returns (uint256) {
         (, uint256 ltv,,,,,,,,) = aaveV2ProtocolDataProvider.getReserveConfigurationData(address(usdc));
-        // IProtocolDataProvider(0x057835Ad21a177dbdd3090bB1CAE03EaCF78Fc6d)
 
         // ltv is returned as a percentage with 2 decimals (e.g. 80% = 8000) so we need to multiply by 1e14
-        // return ltv * 1e14;
         return ltv * 1e14;
     }
 

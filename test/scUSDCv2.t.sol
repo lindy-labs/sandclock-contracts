@@ -1095,6 +1095,134 @@ contract scUSDCv2Test is Test {
         assertEq(maxLtv, 0.819e18, "max ltv");
     }
 
+    /// #exitAllPositions ///
+
+    function test_exitAllPositions_FailsIfCallerNotAdmin() public {
+        vm.prank(alice);
+        vm.expectRevert(CallerNotAdmin.selector);
+        vault.exitAllPositions(0);
+    }
+
+    function test_exitAllPositions_FailsIfVaultIsNotUnderawater() public {
+        uint256 initialBalance = 1_000_000e6;
+        deal(address(usdc), address(vault), initialBalance);
+
+        scUSDCv2.RebalanceParams[] memory params = new scUSDCv2.RebalanceParams[](1);
+        params[0] = _createRebalanceParams(UsdcWethLendingManager.Protocol.EULER, initialBalance, true, 200 ether);
+
+        vault.rebalance(params);
+
+        vm.expectRevert(VaultNotUnderwater.selector);
+        vault.exitAllPositions(0);
+    }
+
+    function test_exitAllPositions_RepaysDebtAndReleasesCollateralOnOneProtocol() public {
+        uint256 initialBalance = 1_000_000e6;
+        deal(address(usdc), address(vault), initialBalance);
+
+        scUSDCv2.RebalanceParams[] memory params = new scUSDCv2.RebalanceParams[](1);
+        params[0] = _createRebalanceParams(UsdcWethLendingManager.Protocol.EULER, initialBalance, true, 200 ether);
+
+        vault.rebalance(params);
+
+        // simulate 50% loss
+        uint256 wethInvested = weth.balanceOf(address(wethVault));
+        deal(address(weth), address(wethVault), wethInvested / 2);
+
+        uint256 totalBefore = vault.totalAssets();
+
+        assertFalse(vault.flashLoanInitiated(), "flash loan initiated");
+
+        vault.exitAllPositions(0);
+
+        assertFalse(vault.flashLoanInitiated(), "flash loan initiated");
+
+        assertApproxEqRel(vault.usdcBalance(), totalBefore, 0.01e18, "vault usdc balance");
+        assertEq(vault.totalCollateral(), 0, "vault collateral");
+        assertEq(vault.totalDebt(), 0, "vault debt");
+    }
+
+    function test_exitAllPositions_RepaysDebtAndReleasesCollateralOnAllProtocols() public {
+        uint256 initialCollateralPerProtocol = 500_000e6;
+        uint256 initialDebtPerProtocol = 100 ether;
+        deal(address(usdc), address(vault), initialCollateralPerProtocol * 3);
+
+        scUSDCv2.RebalanceParams[] memory params = new scUSDCv2.RebalanceParams[](3);
+        params[0] = _createRebalanceParams(
+            UsdcWethLendingManager.Protocol.AAVE_V3, initialCollateralPerProtocol, true, initialDebtPerProtocol
+        );
+        params[1] = _createRebalanceParams(
+            UsdcWethLendingManager.Protocol.AAVE_V2, initialCollateralPerProtocol, true, initialDebtPerProtocol
+        );
+        params[2] = _createRebalanceParams(
+            UsdcWethLendingManager.Protocol.EULER, initialCollateralPerProtocol, true, initialDebtPerProtocol
+        );
+
+        vault.rebalance(params);
+
+        // simulate 50% loss
+        uint256 wethInvested = weth.balanceOf(address(wethVault));
+        deal(address(weth), address(wethVault), wethInvested / 2);
+
+        uint256 totalBefore = vault.totalAssets();
+
+        vault.exitAllPositions(0);
+
+        assertApproxEqRel(vault.usdcBalance(), totalBefore, 0.01e18, "vault usdc balance");
+        assertEq(vault.totalCollateral(), 0, "vault collateral");
+        assertEq(vault.totalDebt(), 0, "vault debt");
+    }
+
+    function test_exitAllPositions_EmitsEventOnSuccess() public {
+        uint256 initialCollateralPerProtocol = 500_000e6;
+        uint256 initialDebtPerProtocol = 100 ether;
+        deal(address(usdc), address(vault), initialCollateralPerProtocol * 3);
+
+        scUSDCv2.RebalanceParams[] memory params = new scUSDCv2.RebalanceParams[](3);
+        params[0] = _createRebalanceParams(
+            UsdcWethLendingManager.Protocol.AAVE_V3, initialCollateralPerProtocol, true, initialDebtPerProtocol
+        );
+        params[1] = _createRebalanceParams(
+            UsdcWethLendingManager.Protocol.AAVE_V2, initialCollateralPerProtocol, true, initialDebtPerProtocol
+        );
+        params[2] = _createRebalanceParams(
+            UsdcWethLendingManager.Protocol.EULER, initialCollateralPerProtocol, true, initialDebtPerProtocol
+        );
+
+        vault.rebalance(params);
+
+        // simulate 50% loss
+        uint256 wethInvested = weth.balanceOf(address(wethVault));
+        deal(address(weth), address(wethVault), wethInvested / 2);
+
+        uint256 invested = vault.wethInvested();
+        uint256 debt = vault.totalDebt();
+        uint256 collateral = vault.totalCollateral();
+
+        vm.expectEmit(true, true, true, true);
+        emit EmergencyExitExecuted(address(this), invested, debt, collateral);
+        vault.exitAllPositions(0);
+    }
+
+    function test_exitAllPositions_FailsIfEndBalanceIsLowerThanMin() public {
+        uint256 initialBalance = 1_000_000e6;
+        deal(address(usdc), address(vault), initialBalance);
+
+        scUSDCv2.RebalanceParams[] memory params = new scUSDCv2.RebalanceParams[](1);
+        params[0] = _createRebalanceParams(UsdcWethLendingManager.Protocol.EULER, initialBalance, true, 200 ether);
+
+        vault.rebalance(params);
+
+        // simulate 50% loss
+        uint256 wethInvested = weth.balanceOf(address(wethVault));
+        deal(address(weth), address(wethVault), wethInvested / 2);
+
+        uint256 invalidEndUsdcBalanceMin = vault.totalAssets().mulWadDown(1.05e18);
+
+        vm.expectRevert(EndUsdcBalanceTooLow.selector);
+        vault.exitAllPositions(invalidEndUsdcBalanceMin);
+    }
+
     /// internal helper functions ///
 
     function _createDefaultUsdcVaultConstructorParams(scWETH scWeth)

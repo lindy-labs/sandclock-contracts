@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.13;
 
-import "forge-std/console2.sol";
 import {
     InvalidTargetLtv,
     InvalidSlippageTolerance,
@@ -9,7 +8,8 @@ import {
     VaultNotUnderwater,
     NoProfitsToSell,
     FlashLoanAmountZero,
-    PriceFeedZeroAddress
+    PriceFeedZeroAddress,
+    EndUsdcBalanceTooLow
 } from "../errors/scErrors.sol";
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
@@ -31,7 +31,7 @@ import {sc4626} from "../sc4626.sol";
 import {UsdcWethLendingManager} from "./UsdcWethLendingManager.sol";
 
 // TODO: add function for harvesting EULER reward tokens
-// TODO: add exit all positions
+// TODO: update documentation
 /**
  * @title Sandclock USDC Vault
  * @notice A vault that allows users to earn interest on their USDC deposits from leveraged WETH staking.
@@ -41,6 +41,11 @@ contract scUSDCv2 is sc4626, UsdcWethLendingManager, IFlashLoanRecipient {
     using SafeTransferLib for ERC20;
     using SafeTransferLib for WETH;
     using FixedPointMathLib for uint256;
+
+    enum FlashLoanType {
+        Reallocate,
+        ExitAllPositions
+    }
 
     struct ReallocationParams {
         Protocol protocolId;
@@ -137,54 +142,6 @@ contract scUSDCv2 is sc4626, UsdcWethLendingManager, IFlashLoanRecipient {
     }
 
     /**
-     * @notice Reallocate capital between lending markets, ie moves debt and collateral from one protocol to another.
-     * @param _params The reallocation parameters. Markets where positions are downsized must be listed first because collateral has to be relased before it is reallocated.
-     * @param _flashLoanAmount The amount of WETH to flashloan from Balancer. Has to be at least equal to amount of WETH debt moved between lending markets.
-     */
-    function reallocateCapital(ReallocationParams[] calldata _params, uint256 _flashLoanAmount) external onlyKeeper {
-        if (_flashLoanAmount == 0) revert FlashLoanAmountZero();
-
-        address[] memory tokens = new address[](1);
-        tokens[0] = address(weth);
-
-        uint256[] memory amounts = new uint256[](1);
-        amounts[0] = _flashLoanAmount;
-
-        _initiateFlashLoan();
-        balancerVault.flashLoan(address(this), tokens, amounts, abi.encode(_params));
-        _finalizeFlashLoan();
-    }
-
-    function receiveFlashLoan(address[] memory, uint256[] memory amounts, uint256[] memory, bytes memory userData)
-        external
-    {
-        _isFlashLoanInitiated();
-
-        if (msg.sender != address(balancerVault)) revert InvalidFlashLoanCaller();
-
-        uint256 flashLoanAmount = amounts[0];
-        (ReallocationParams[] memory params) = abi.decode(userData, (ReallocationParams[]));
-
-        for (uint8 i = 0; i < params.length; i++) {
-            ProtocolActions memory protocolActions = protocolToActions[params[i].protocolId];
-
-            if (params[i].isDownsize) {
-                protocolActions.repay(params[i].debtAmount);
-                protocolActions.withdraw(params[i].collateralAmount);
-            } else {
-                protocolActions.supply(params[i].collateralAmount);
-                protocolActions.borrow(params[i].debtAmount);
-            }
-
-            emit Reallocated(
-                params[i].protocolId, params[i].isDownsize, params[i].collateralAmount, params[i].debtAmount
-            );
-        }
-
-        weth.safeTransfer(address(balancerVault), flashLoanAmount);
-    }
-
-    /**
      * @notice Rebalance the vault's positions.
      * @dev Called to increase or decrease the WETH debt to maintain the LTV (loan to value).
      */
@@ -237,6 +194,73 @@ contract scUSDCv2 is sc4626, UsdcWethLendingManager, IFlashLoanRecipient {
         uint256 usdcReceived = _swapWethForUsdc(withdrawn, _usdcAmountOutMin);
 
         emit ProfitSold(withdrawn, usdcReceived);
+    }
+
+    /**
+     * @notice Reallocate capital between lending markets, ie moves debt and collateral from one protocol to another.
+     * @param _params The reallocation parameters. Markets where positions are downsized must be listed first because collateral has to be relased before it is reallocated.
+     * @param _flashLoanAmount The amount of WETH to flashloan from Balancer. Has to be at least equal to amount of WETH debt moved between lending markets.
+     */
+    function reallocateCapital(ReallocationParams[] calldata _params, uint256 _flashLoanAmount) external onlyKeeper {
+        if (_flashLoanAmount == 0) revert FlashLoanAmountZero();
+
+        address[] memory tokens = new address[](1);
+        tokens[0] = address(weth);
+
+        uint256[] memory amounts = new uint256[](1);
+        amounts[0] = _flashLoanAmount;
+
+        _initiateFlashLoan();
+        balancerVault.flashLoan(address(this), tokens, amounts, abi.encode(FlashLoanType.Reallocate, _params));
+        _finalizeFlashLoan();
+    }
+
+    /**
+     * @notice Emergency exit to release collateral if the vault is underwater.
+     * @param _endUsdcBalanceMin The minimum USDC balance to end with after all positions are closed.
+     */
+    function exitAllPositions(uint256 _endUsdcBalanceMin) external onlyAdmin {
+        uint256 debt = totalDebt();
+
+        if (wethInvested() >= debt) {
+            revert VaultNotUnderwater();
+        }
+
+        uint256 wethBalance = scWETH.redeem(scWETH.balanceOf(address(this)), address(this), address(this));
+        uint256 collateral = totalCollateral();
+
+        address[] memory tokens = new address[](1);
+        tokens[0] = address(weth);
+
+        uint256[] memory amounts = new uint256[](1);
+        amounts[0] = debt - wethBalance;
+
+        _initiateFlashLoan();
+        balancerVault.flashLoan(address(this), tokens, amounts, abi.encode(FlashLoanType.ExitAllPositions));
+        _finalizeFlashLoan();
+
+        if (usdcBalance() < _endUsdcBalanceMin) revert EndUsdcBalanceTooLow();
+
+        emit EmergencyExitExecuted(msg.sender, wethBalance, debt, collateral);
+    }
+
+    function receiveFlashLoan(address[] memory, uint256[] memory amounts, uint256[] memory, bytes memory userData)
+        external
+    {
+        _isFlashLoanInitiated();
+
+        if (msg.sender != address(balancerVault)) revert InvalidFlashLoanCaller();
+
+        uint256 flashLoanAmount = amounts[0];
+        FlashLoanType flashLoanType = abi.decode(userData, (FlashLoanType));
+
+        if (flashLoanType == FlashLoanType.ExitAllPositions) {
+            _exitAllPositionsFlash(flashLoanAmount);
+        } else {
+            (, ReallocationParams[] memory params) = abi.decode(userData, (FlashLoanType, ReallocationParams[]));
+            _reallocateCapital(params);
+            weth.safeTransfer(address(balancerVault), flashLoanAmount);
+        }
     }
 
     function totalAssets() public view override returns (uint256) {
@@ -302,6 +326,56 @@ contract scUSDCv2 is sc4626, UsdcWethLendingManager, IFlashLoanRecipient {
     /*//////////////////////////////////////////////////////////////
                             INTERNAL API
     //////////////////////////////////////////////////////////////*/
+
+    function _reallocateCapital(ReallocationParams[] memory _params) internal {
+        for (uint8 i = 0; i < _params.length; i++) {
+            ProtocolActions memory protocolActions = protocolToActions[_params[i].protocolId];
+
+            if (_params[i].isDownsize) {
+                protocolActions.repay(_params[i].debtAmount);
+                protocolActions.withdraw(_params[i].collateralAmount);
+            } else {
+                protocolActions.supply(_params[i].collateralAmount);
+                protocolActions.borrow(_params[i].debtAmount);
+            }
+
+            emit Reallocated(
+                _params[i].protocolId, _params[i].isDownsize, _params[i].collateralAmount, _params[i].debtAmount
+            );
+        }
+    }
+
+    function _exitAllPositionsFlash(uint256 _flashLoanAmount) internal {
+        for (uint8 i = 0; i <= uint256(type(Protocol).max); i++) {
+            ProtocolActions memory protocolActions = protocolToActions[Protocol(i)];
+            uint256 debt = protocolActions.getDebt();
+            uint256 collateral = protocolActions.getCollateral();
+
+            if (debt > 0) {
+                protocolActions.repay(debt);
+                protocolActions.withdraw(collateral);
+            }
+        }
+
+        asset.approve(address(swapRouter), type(uint256).max);
+
+        ISwapRouter.ExactOutputSingleParams memory params = ISwapRouter.ExactOutputSingleParams({
+            tokenIn: address(asset),
+            tokenOut: address(weth),
+            fee: 500,
+            recipient: address(this),
+            deadline: block.timestamp,
+            amountOut: _flashLoanAmount,
+            amountInMaximum: type(uint256).max, // ignore slippage
+            sqrtPriceLimitX96: 0
+        });
+
+        swapRouter.exactOutputSingle(params);
+
+        asset.approve(address(swapRouter), 0);
+
+        weth.safeTransfer(address(balancerVault), _flashLoanAmount);
+    }
 
     function beforeWithdraw(uint256 _assets, uint256) internal override {
         uint256 initialBalance = usdcBalance();
