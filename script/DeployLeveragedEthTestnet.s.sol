@@ -9,8 +9,11 @@ import {GoerliConstants as C} from "../src/lib/GoerliConstants.sol";
 
 contract DeployScript is DeployLeveragedEth {
     function deployMockTokens() internal override {
-        weth = MockWETH(payable(C.WETH));
-        usdc = MockUSDC(C.USDC);
+        // weth = MockWETH(payable(C.WETH));
+        // usdc = MockUSDC(C.USDC);
+
+        weth = new MockWETH();
+        usdc = new MockUSDC();
     }
 
     function run() external {
