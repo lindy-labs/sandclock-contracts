@@ -50,7 +50,7 @@ library Constants {
     address public constant BALANCER_VAULT = 0xBA12222222228d8Ba445958a75a0704d566BF2C8;
 
     // address of the 0x swap router contract
-    address public constant ZEROX_ROUTER = 0xDef1C0ded9bec7F1a1670819833240f027b25EfF;
+    address public constant ZERO_EX_ROUTER = 0xDef1C0ded9bec7F1a1670819833240f027b25EfF;
 
     // address of the EULER protocol contract
     address public constant EULER_PROTOCOL = 0x27182842E098f60e3D576794A5bFFb0777E025d3;

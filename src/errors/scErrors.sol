@@ -16,3 +16,4 @@ error NoProfitsToSell();
 error EndUsdcBalanceTooLow();
 error FlashLoanAmountZero();
 error PriceFeedZeroAddress();
+error EulerSwapFailed();

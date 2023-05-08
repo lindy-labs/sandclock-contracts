@@ -38,6 +38,15 @@ contract scUSDCv2Test is Test {
     event Reallocated(UsdcWethLendingManager.Protocol protocolId, bool isDownsize, uint256 collateral, uint256 debt);
     event Rebalanced(UsdcWethLendingManager.Protocol protocolId, uint256 supplied, bool leverageUp, uint256 debt);
     event ProfitSold(uint256 wethSold, uint256 usdcReceived);
+    event EulerRewardsSold(uint256 eulerSold, uint256 usdcReceived);
+
+    uint256 constant EUL_SWAP_BLOCK = 16744453; // block at which EUL->USDC swap data was fetched
+    uint256 constant EUL_AMOUNT = 1_000e18;
+    // data obtained from 0x api for swapping 1000 eul for ~7883 usdc
+    // https://api.0x.org/swap/v1/quote?buyToken=USDC&sellToken=0xd9Fcd98c322942075A5C3860693e9f4f03AAE07b&sellAmount=1000000000000000000000
+    bytes constant EUL_SWAP_DATA =
+        hex"6af479b2000000000000000000000000000000000000000000000000000000000000008000000000000000000000000000000000000000000000003635c9adc5dea0000000000000000000000000000000000000000000000000000000000001d16e269100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000042d9fcd98c322942075a5c3860693e9f4f03aae07b002710c02aaa39b223fe8d0a0e5c4f27ead9083c756cc2000064a0b86991c6218b36c1d19d4a2e9eb0ce3606eb48000000000000000000000000000000000000000000000000000000000000869584cd00000000000000000000000010000000000000000000000000000000000000110000000000000000000000000000000000000000000000e6464241aa64013c9d";
+    uint256 constant EUL_SWAP_USDC_RECEIVED = 7883_963202;
 
     uint256 mainnetFork;
     uint256 constant ethWstEthMaxLtv = 0.7735e18;
@@ -61,6 +70,10 @@ contract scUSDCv2Test is Test {
         usdc = ERC20(C.USDC);
         weth = WETH(payable(C.WETH));
 
+        _deployAndSetUpVault();
+    }
+
+    function _deployAndSetUpVault() internal {
         scWETH.ConstructorParams memory scWethParams = scWETH.ConstructorParams({
             admin: address(this),
             keeper: keeper,
@@ -1223,6 +1236,65 @@ contract scUSDCv2Test is Test {
         vault.exitAllPositions(invalidEndUsdcBalanceMin);
     }
 
+    /// #sellEulerRewards ///
+
+    function test_sellEulerRewards_FailsIfCallerIsNotKeeper() public {
+        vm.startPrank(alice);
+        vm.expectRevert(CallerNotKeeper.selector);
+        vault.sellEulerRewards(bytes("0"), 0);
+    }
+
+    function test_sellEulerRewards_SwapsEulerForUsdc() public {
+        vm.rollFork(EUL_SWAP_BLOCK);
+        // redeploy vault
+        _deployAndSetUpVault();
+
+        uint256 initialUsdcBalance = 2_000e6;
+        deal(address(usdc), address(vault), initialUsdcBalance);
+        deal(address(vault.eulerRewardsToken()), address(vault), EUL_AMOUNT);
+
+        assertEq(vault.eulerRewardsToken().balanceOf(address(vault)), EUL_AMOUNT, "euler balance");
+        assertEq(vault.usdcBalance(), initialUsdcBalance, "usdc balance");
+        assertEq(vault.totalAssets(), initialUsdcBalance, "total assets");
+
+        vault.sellEulerRewards(EUL_SWAP_DATA, 0);
+
+        assertEq(vault.eulerRewardsToken().balanceOf(address(vault)), 0, "vault euler balance");
+        assertEq(vault.totalAssets(), initialUsdcBalance + EUL_SWAP_USDC_RECEIVED, "vault total assets");
+        assertEq(vault.usdcBalance(), initialUsdcBalance + EUL_SWAP_USDC_RECEIVED, "vault usdc balance");
+    }
+
+    function test_sellEulerRewards_EmitsEventOnSuccessfulSwap() public {
+        vm.rollFork(EUL_SWAP_BLOCK);
+        _deployAndSetUpVault();
+        deal(address(vault.eulerRewardsToken()), address(vault), EUL_AMOUNT);
+
+        vm.expectEmit(true, true, true, true);
+        emit EulerRewardsSold(EUL_AMOUNT, EUL_SWAP_USDC_RECEIVED);
+
+        vault.sellEulerRewards(EUL_SWAP_DATA, 0);
+    }
+
+    function test_sellEulerRewards_FailsIfUsdcAmountReceivedIsLessThanMin() public {
+        vm.rollFork(EUL_SWAP_BLOCK);
+        _deployAndSetUpVault();
+        deal(address(vault.eulerRewardsToken()), address(vault), EUL_AMOUNT);
+
+        vm.expectRevert(EndUsdcBalanceTooLow.selector);
+        vault.sellEulerRewards(EUL_SWAP_DATA, EUL_SWAP_USDC_RECEIVED + 1);
+    }
+
+    function test_sellEulerRewards_FailsIfSwapIsNotSucessful() public {
+        vm.rollFork(EUL_SWAP_BLOCK);
+        _deployAndSetUpVault();
+        deal(address(vault.eulerRewardsToken()), address(vault), EUL_AMOUNT);
+
+        bytes memory invalidSwapData = hex"6af479b20000";
+
+        vm.expectRevert(EulerSwapFailed.selector);
+        vault.sellEulerRewards(invalidSwapData, 0);
+    }
+
     /// internal helper functions ///
 
     function _createDefaultUsdcVaultConstructorParams(scWETH scWeth)
@@ -1258,6 +1330,7 @@ contract scUSDCv2Test is Test {
             scWETH: scWeth,
             usdc: ERC20(C.USDC),
             weth: WETH(payable(C.WETH)),
+            zeroExRouter: C.ZERO_EX_ROUTER,
             aaveV3: aaveV3,
             aaveV2: aaveV2,
             euler: euler,

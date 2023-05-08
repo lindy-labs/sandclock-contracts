@@ -9,7 +9,8 @@ import {
     NoProfitsToSell,
     FlashLoanAmountZero,
     PriceFeedZeroAddress,
-    EndUsdcBalanceTooLow
+    EndUsdcBalanceTooLow,
+    EulerSwapFailed
 } from "../errors/scErrors.sol";
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
@@ -30,7 +31,6 @@ import {IFlashLoanRecipient} from "../interfaces/balancer/IFlashLoanRecipient.so
 import {sc4626} from "../sc4626.sol";
 import {UsdcWethLendingManager} from "./UsdcWethLendingManager.sol";
 
-// TODO: add function for harvesting EULER reward tokens
 // TODO: update documentation
 /**
  * @title Sandclock USDC Vault
@@ -72,9 +72,13 @@ contract scUSDCv2 is sc4626, UsdcWethLendingManager, IFlashLoanRecipient {
     event Reallocated(Protocol protocolId, bool isDownsize, uint256 collateral, uint256 debt);
     event Rebalanced(Protocol protocolId, uint256 supplied, bool leverageUp, uint256 debt);
     event ProfitSold(uint256 wethSold, uint256 usdcReceived);
+    event EulerRewardsSold(uint256 eulerSold, uint256 usdcReceived);
 
     // Uniswap V3 router
     ISwapRouter public immutable swapRouter;
+
+    // Ox router address
+    address public immutable zeroExRouter;
 
     // Chainlink pricefeed (USDC -> WETH)
     AggregatorV3Interface public usdcToEthPriceFeed;
@@ -94,6 +98,7 @@ contract scUSDCv2 is sc4626, UsdcWethLendingManager, IFlashLoanRecipient {
         ERC4626 scWETH;
         ERC20 usdc;
         WETH weth;
+        address zeroExRouter;
         AaveV3 aaveV3;
         AaveV2 aaveV2;
         Euler euler;
@@ -108,6 +113,7 @@ contract scUSDCv2 is sc4626, UsdcWethLendingManager, IFlashLoanRecipient {
     {
         scWETH = _params.scWETH;
         swapRouter = _params.uniswapSwapRouter;
+        zeroExRouter = _params.zeroExRouter;
         usdcToEthPriceFeed = _params.chainlinkUsdcToEthPriceFeed;
         balancerVault = _params.balancerVault;
 
@@ -261,6 +267,24 @@ contract scUSDCv2 is sc4626, UsdcWethLendingManager, IFlashLoanRecipient {
             _reallocateCapital(params);
             weth.safeTransfer(address(balancerVault), flashLoanAmount);
         }
+    }
+
+    /// note: euler rewards are claimed externally, we only swap them here using 0xrouter
+    function sellEulerRewards(bytes calldata _swapData, uint256 _usdcAmountOutMin) external onlyKeeper {
+        uint256 eulerBalance = eulerRewardsToken.balanceOf(address(this));
+
+        if (eulerBalance == 0) return;
+
+        eulerRewardsToken.safeApprove(zeroExRouter, eulerBalance);
+        uint256 initialBalance = usdcBalance();
+
+        (bool success,) = zeroExRouter.call{value: 0}(_swapData);
+        if (!success) revert EulerSwapFailed();
+
+        uint256 usdcReceived = usdcBalance() - initialBalance;
+        if (usdcReceived < _usdcAmountOutMin) revert EndUsdcBalanceTooLow();
+
+        emit EulerRewardsSold(eulerBalance - eulerRewardsToken.balanceOf(address(this)), usdcReceived);
     }
 
     function totalAssets() public view override returns (uint256) {
