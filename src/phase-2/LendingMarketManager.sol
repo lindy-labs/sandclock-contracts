@@ -39,6 +39,7 @@ abstract contract LendingMarketManager {
         function(uint256) withdraw;
         function() view returns(uint256) getCollateral;
         function() view returns(uint256) getDebt;
+        function() view returns(uint) getMaxLtv;
     }
 
     struct AaveV3 {
@@ -133,11 +134,18 @@ abstract contract LendingMarketManager {
             repayWethAAVEV3,
             withdrawWstEthAAVEV3,
             getCollateralAAVEV3,
-            getDebtAAVEV3
+            getDebtAAVEV3,
+            maxLtvAAVEV3
         );
 
         lendingMarkets[LendingMarketType.EULER] = LendingMarket(
-            supplyWstEthEuler, borrowWethEuler, repayWethEuler, withdrawWstEthEuler, getCollateralEuler, getDebtEuler
+            supplyWstEthEuler,
+            borrowWethEuler,
+            repayWethEuler,
+            withdrawWstEthEuler,
+            getCollateralEuler,
+            getDebtEuler,
+            maxLtvEuler
         );
 
         lendingMarkets[LendingMarketType.COMPOUND_V3] = LendingMarket(
@@ -146,7 +154,8 @@ abstract contract LendingMarketManager {
             repayWethCompound,
             withdrawWstEthCompound,
             getCollateralCompound,
-            getDebtCompound
+            getDebtCompound,
+            maxLtvCompound
         );
     }
 
@@ -166,6 +175,10 @@ abstract contract LendingMarketManager {
 
     function getLtv(LendingMarketType market) public view returns (uint256) {
         return getDebt(market).divWadDown(getCollateral(market));
+    }
+
+    function getMaxLtv(LendingMarketType market) public view returns (uint256) {
+        return lendingMarkets[market].getMaxLtv();
     }
 
     /// @notice method to get the assets deposited in a particular lending market
@@ -202,6 +215,10 @@ abstract contract LendingMarketManager {
         return ERC20(aaveV3varDWeth).balanceOf(address(this));
     }
 
+    function maxLtvAAVEV3() internal view returns (uint256) {
+        return uint256(aaveV3pool.getEModeCategoryData(C.AAVE_EMODE_ID).ltv) * 1e14;
+    }
+
     ///////////////////////////////// EULER /////////////////////////////////
 
     function supplyWstEthEuler(uint256 amount) internal {
@@ -228,6 +245,16 @@ abstract contract LendingMarketManager {
         return IEulerDToken(eulerDWeth).balanceOf(address(this));
     }
 
+    function maxLtvEuler() internal view returns (uint256) {
+        uint256 collateralFactor = eulerMarkets.underlyingToAssetConfig(address(wstETH)).collateralFactor;
+        uint256 borrowFactor = eulerMarkets.underlyingToAssetConfig(address(weth)).borrowFactor;
+
+        uint256 scaledCollateralFactor = collateralFactor.divWadDown(C.EULER_CONFIG_FACTOR_SCALE);
+        uint256 scaledBorrowFactor = borrowFactor.divWadDown(C.EULER_CONFIG_FACTOR_SCALE);
+
+        return scaledCollateralFactor.mulWadDown(scaledBorrowFactor);
+    }
+
     //////////////////////// Compound V3 ////////////////////////////////
     function supplyWstEthCompound(uint256 amount) internal {
         compoundV3Comet.supply(address(wstETH), amount);
@@ -251,6 +278,10 @@ abstract contract LendingMarketManager {
 
     function getDebtCompound() internal view returns (uint256) {
         return compoundV3Comet.borrowBalanceOf(address(this));
+    }
+
+    function maxLtvCompound() internal view returns (uint256) {
+        return compoundV3Comet.getAssetInfoByAddress(address(wstETH)).borrowCollateralFactor;
     }
 
     //////////////////////// ORACLE METHODS ///////////////////////////////

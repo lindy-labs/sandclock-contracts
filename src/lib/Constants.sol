@@ -47,6 +47,8 @@ library Constants {
     address public constant EULER_ETOKEN_WSTETH = 0xbd1bd5C956684f7EB79DA40f582cbE1373A1D593;
     // Euler debt token weth
     address public constant EULER_DTOKEN_WETH = 0x62e28f054efc24b26A794F5C1249B6349454352C;
+    // vaule used to scale the token's collateral/borrow factors from the euler market
+    uint32 constant EULER_CONFIG_FACTOR_SCALE = 4_000_000_000;
 
     // adress of the Chainlink aggregator for the USDC/eth price feed
     address public constant CHAINLINK_USDC_ETH_PRICE_FEED = 0x986b5E1e1755e3C2440e960477f25201B0a8bbD4;

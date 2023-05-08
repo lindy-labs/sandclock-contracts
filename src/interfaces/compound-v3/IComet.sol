@@ -7,6 +7,17 @@ interface IComet {
         uint128 _reserved;
     }
 
+    struct AssetInfo {
+        uint8 offset;
+        address asset;
+        address priceFeed;
+        uint64 scale;
+        uint64 borrowCollateralFactor;
+        uint64 liquidateCollateralFactor;
+        uint64 liquidationFactor;
+        uint128 supplyCap;
+    }
+
     /**
      * @notice Supply an amount of asset to the protocol
      * @param asset The asset to supply
@@ -37,4 +48,6 @@ interface IComet {
     function borrowBalanceOf(address account) external view returns (uint256);
 
     function userCollateral(address account, address asset) external view returns (UserCollateral memory);
+
+    function getAssetInfoByAddress(address asset) external view returns (AssetInfo memory);
 }
