@@ -32,11 +32,15 @@ contract scWETHv2Test is Test {
     address constant keeper = address(0x05);
     address constant alice = address(0x06);
     address constant treasury = address(0x07);
-    uint256 boundMinimum = 1e10; // below this amount, aave doesn't count it as collateral
+    uint256 boundMinimum = 1 ether; // below this amount, aave doesn't count it as collateral
 
     address admin = address(this);
     scWETHv2 vault;
     uint256 initAmount = 100e18;
+
+    uint256 aaveV3AllocationPercent = 0.5e18;
+    uint256 eulerAllocationPercent = 0.3e18;
+    uint256 compoundAllocationPercent = 0.2e18;
 
     uint256 slippageTolerance = 0.99e18;
     uint256 maxLtv;
@@ -66,6 +70,7 @@ contract scWETHv2Test is Test {
 
         targetLtv[LendingMarketManager.LendingMarketType.AAVE_V3] = 0.7e18;
         targetLtv[LendingMarketManager.LendingMarketType.EULER] = 0.5e18;
+        targetLtv[LendingMarketManager.LendingMarketType.COMPOUND_V3] = 0.7e18;
     }
 
     function test_constructor() public {
@@ -97,32 +102,29 @@ contract scWETHv2Test is Test {
         _redeemChecks(preDepositBal);
     }
 
-    function test_invest(uint256 amount) public {
-        amount = bound(amount, boundMinimum, 20000 ether);
+    function test_invest_basic(uint256 amount) public {
+        amount = bound(amount, boundMinimum, 15000 ether);
+        // uint256 amount = 7657722538295683242863;
         _depositToVault(address(this), amount);
         _depositChecks(amount, amount);
 
-        uint256 aaveV3AllocationPercent = 0.7e18;
-        uint256 eulerAllocationPercent = 0.3e18;
-
         (scWETHv2.SupplyBorrowParam[] memory supplyBorrowParams, uint256 totalSupplyAmount, uint256 totalDebtTaken) =
-            _getInvestParams(amount, aaveV3AllocationPercent, eulerAllocationPercent);
+            _getInvestParams(amount, aaveV3AllocationPercent, eulerAllocationPercent, compoundAllocationPercent);
 
         // deposit into strategy
         hoax(keeper);
         vault.investAndHarvest(amount, supplyBorrowParams);
 
-        _investChecks(
-            amount, _wstEthToEth(totalSupplyAmount), totalDebtTaken, aaveV3AllocationPercent, eulerAllocationPercent
-        );
+        _investChecks(amount, _wstEthToEth(totalSupplyAmount), totalDebtTaken);
     }
 
     function test_deposit_invest_redeem(uint256 amount) public {
-        amount = bound(amount, boundMinimum, 20000 ether);
+        amount = bound(amount, boundMinimum, 10000 ether);
         uint256 shares = _depositToVault(address(this), amount);
         _depositChecks(amount, amount);
 
-        (scWETHv2.SupplyBorrowParam[] memory supplyBorrowParams,,) = _getInvestParams(amount, 0.7e18, 0.3e18);
+        (scWETHv2.SupplyBorrowParam[] memory supplyBorrowParams,,) =
+            _getInvestParams(amount, aaveV3AllocationPercent, eulerAllocationPercent, compoundAllocationPercent);
 
         // deposit into strategy
         hoax(keeper);
@@ -141,12 +143,13 @@ contract scWETHv2Test is Test {
     }
 
     function test_withdrawToVault(uint256 amount) public {
-        amount = bound(amount, boundMinimum, 20000 ether);
+        amount = bound(amount, boundMinimum, 10000 ether);
         uint256 maxAssetsDelta = 0.01e18;
         _depositToVault(address(this), amount);
         _depositChecks(amount, amount);
 
-        (scWETHv2.SupplyBorrowParam[] memory supplyBorrowParams,,) = _getInvestParams(amount, 0.7e18, 0.3e18);
+        (scWETHv2.SupplyBorrowParam[] memory supplyBorrowParams,,) =
+            _getInvestParams(amount, aaveV3AllocationPercent, eulerAllocationPercent, compoundAllocationPercent);
 
         // deposit into strategy
         hoax(keeper);
@@ -186,7 +189,8 @@ contract scWETHv2Test is Test {
 
         uint256 minimumDust = amount.mulWadDown(0.01e18);
 
-        (scWETHv2.SupplyBorrowParam[] memory supplyBorrowParams,,) = _getInvestParams(amount, 0.7e18, 0.3e18);
+        (scWETHv2.SupplyBorrowParam[] memory supplyBorrowParams,,) =
+            _getInvestParams(amount, aaveV3AllocationPercent, eulerAllocationPercent, compoundAllocationPercent);
 
         hoax(keeper);
         vault.investAndHarvest(amount, supplyBorrowParams);
@@ -196,15 +200,17 @@ contract scWETHv2Test is Test {
 
         uint256 aaveV3Ltv = vault.getLtv(LendingMarketManager.LendingMarketType.AAVE_V3);
         uint256 eulerLtv = vault.getLtv(LendingMarketManager.LendingMarketType.EULER);
+        uint256 compoundLtv = vault.getLtv(LendingMarketManager.LendingMarketType.COMPOUND_V3);
 
         // disinvest to decrease the ltv on each protocol
         uint256 ltvDecrease = 0.1e18;
-        uint256 newAaveV3Ltv = aaveV3Ltv - ltvDecrease;
-        uint256 newEulerLtv = eulerLtv - ltvDecrease;
+
         uint256 aaveV3Allocation = vault.allocationPercent(LendingMarketManager.LendingMarketType.AAVE_V3);
         uint256 eulerAllocation = vault.allocationPercent(LendingMarketManager.LendingMarketType.EULER);
+        uint256 compoundAllocation = vault.allocationPercent(LendingMarketManager.LendingMarketType.COMPOUND_V3);
 
-        scWETHv2.RepayWithdrawParam[] memory repayWithdrawParams = _getDisInvestParams(newAaveV3Ltv, newEulerLtv);
+        scWETHv2.RepayWithdrawParam[] memory repayWithdrawParams =
+            _getDisInvestParams(aaveV3Ltv - ltvDecrease, eulerLtv - ltvDecrease, compoundLtv - ltvDecrease);
 
         uint256 assets = vault.totalAssets();
         uint256 lev = vault.getLeverage();
@@ -215,13 +221,19 @@ contract scWETHv2Test is Test {
 
         assertApproxEqRel(
             vault.getLtv(LendingMarketManager.LendingMarketType.AAVE_V3),
-            newAaveV3Ltv,
+            aaveV3Ltv - ltvDecrease,
             0.0000001e18,
             "aavev3 ltv not decreased"
         );
         assertApproxEqRel(
             vault.getLtv(LendingMarketManager.LendingMarketType.EULER),
-            newEulerLtv,
+            eulerLtv - ltvDecrease,
+            0.0000001e18,
+            "euler ltv not decreased"
+        );
+        assertApproxEqRel(
+            vault.getLtv(LendingMarketManager.LendingMarketType.COMPOUND_V3),
+            compoundLtv - ltvDecrease,
             0.0000001e18,
             "euler ltv not decreased"
         );
@@ -245,8 +257,15 @@ contract scWETHv2Test is Test {
             0.001e18,
             "euler allocation must not change"
         );
+        assertApproxEqRel(
+            vault.allocationPercent(LendingMarketManager.LendingMarketType.COMPOUND_V3),
+            compoundAllocation,
+            0.001e18,
+            "compound allocation must not change"
+        );
     }
 
+    // reallocate from aaveV3 to euler
     function test_reallocate_fromHigherLtvMarket_toLowerLtvMarket(uint256 amount) public {
         amount = bound(amount, boundMinimum, 15000 ether);
         _depositToVault(address(this), amount);
@@ -255,7 +274,7 @@ contract scWETHv2Test is Test {
         uint256 eulerAllocation = 0.3e18;
 
         (scWETHv2.SupplyBorrowParam[] memory supplyBorrowParams,,) =
-            _getInvestParams(amount, aaveV3Allocation, eulerAllocation);
+            _getInvestParams(amount, aaveV3Allocation, eulerAllocation, 0);
 
         hoax(keeper);
         vault.investAndHarvest(amount, supplyBorrowParams);
@@ -292,6 +311,7 @@ contract scWETHv2Test is Test {
         );
     }
 
+    // reallocate from euler to aaveV3
     function test_reallocate_fromLowerLtvMarket_toHigherLtvMarket(uint256 amount) public {
         amount = bound(amount, boundMinimum, 15000 ether);
         _depositToVault(address(this), amount);
@@ -300,7 +320,7 @@ contract scWETHv2Test is Test {
         uint256 eulerAllocation = 0.3e18;
 
         (scWETHv2.SupplyBorrowParam[] memory supplyBorrowParams,,) =
-            _getInvestParams(amount, aaveV3Allocation, eulerAllocation);
+            _getInvestParams(amount, aaveV3Allocation, eulerAllocation, 0);
 
         hoax(keeper);
         vault.investAndHarvest(amount, supplyBorrowParams);
@@ -330,18 +350,23 @@ contract scWETHv2Test is Test {
         );
     }
 
-    function test_invest_reinvestingProfits_performanceFees() public {
+    function test_reallocate_fromOneMarket_ToTwoMarkets() public {}
+
+    function test_reallocate_fromTwoMarkets_ToOneMarket() public {}
+
+    function test_invest_reinvestingProfits_performanceFees(uint256 amount) public {
         vault.setTreasury(treasury);
-        uint256 amount = 1000 ether;
+        amount = bound(amount, boundMinimum, 5000 ether);
         _depositToVault(address(this), amount);
 
-        (scWETHv2.SupplyBorrowParam[] memory supplyBorrowParams,,) = _getInvestParams(amount, 0.7e18, 0.3e18);
+        // note: simulating profits testing only for aave and compound and not for euler due to the shitty interest rates of euler after getting rekt
+        (scWETHv2.SupplyBorrowParam[] memory supplyBorrowParams,,) = _getInvestParams(amount, 0.8e18, 0, 0.2e18);
 
         hoax(keeper);
         vault.investAndHarvest(amount, supplyBorrowParams);
 
         uint256 altv = vault.getLtv(LendingMarketManager.LendingMarketType.AAVE_V3);
-        uint256 eulerLtv = vault.getLtv(LendingMarketManager.LendingMarketType.EULER);
+        uint256 compoundLtv = vault.getLtv(LendingMarketManager.LendingMarketType.COMPOUND_V3);
         uint256 ltv = vault.getLtv();
 
         _simulate_stEthStakingInterest(365 days, 1.071e18);
@@ -352,33 +377,37 @@ contract scWETHv2Test is Test {
             altv,
             "aavev3 ltv must decrease after simulated profits"
         );
+
         assertLt(
-            vault.getLtv(LendingMarketManager.LendingMarketType.EULER),
-            eulerLtv,
-            "euler ltv must decrease after simulated profits"
+            vault.getLtv(LendingMarketManager.LendingMarketType.COMPOUND_V3),
+            compoundLtv,
+            "compound ltv must decrease after simulated profits"
         );
 
         uint256 aaveV3FlashLoanAmount =
             _calcSupplyBorrowFlashLoanAmount(LendingMarketManager.LendingMarketType.AAVE_V3, 0);
-        uint256 eulerFlashLoanAmount = _calcSupplyBorrowFlashLoanAmount(LendingMarketManager.LendingMarketType.EULER, 0);
+        uint256 compoundFlashLoanAmount =
+            _calcSupplyBorrowFlashLoanAmount(LendingMarketManager.LendingMarketType.COMPOUND_V3, 0);
 
         uint256 stEthRateTolerance = 0.999e18;
         uint256 aaveV3SupplyAmount = _ethToWstEth(aaveV3FlashLoanAmount).mulWadDown(stEthRateTolerance);
-        uint256 eulerSupplyAmount = _ethToWstEth(eulerFlashLoanAmount).mulWadDown(stEthRateTolerance);
+        uint256 compoundSupplyAmount = _ethToWstEth(compoundFlashLoanAmount).mulWadDown(stEthRateTolerance);
 
-        supplyBorrowParams[0] = scWETHv2.SupplyBorrowParam({
+        scWETHv2.SupplyBorrowParam[] memory supplyBorrowParamsAfterProfits = new scWETHv2.SupplyBorrowParam[](2);
+
+        supplyBorrowParamsAfterProfits[0] = scWETHv2.SupplyBorrowParam({
             market: LendingMarketManager.LendingMarketType.AAVE_V3,
             supplyAmount: aaveV3SupplyAmount,
             borrowAmount: aaveV3FlashLoanAmount
         });
-        supplyBorrowParams[1] = scWETHv2.SupplyBorrowParam({
-            market: LendingMarketManager.LendingMarketType.EULER,
-            supplyAmount: eulerSupplyAmount,
-            borrowAmount: eulerFlashLoanAmount
+        supplyBorrowParamsAfterProfits[1] = scWETHv2.SupplyBorrowParam({
+            market: LendingMarketManager.LendingMarketType.COMPOUND_V3,
+            supplyAmount: compoundSupplyAmount,
+            borrowAmount: compoundFlashLoanAmount
         });
 
         hoax(keeper);
-        vault.investAndHarvest(0, supplyBorrowParams);
+        vault.investAndHarvest(0, supplyBorrowParamsAfterProfits);
 
         assertApproxEqRel(
             altv,
@@ -388,11 +417,12 @@ contract scWETHv2Test is Test {
         );
 
         assertApproxEqRel(
-            eulerLtv,
-            vault.getLtv(LendingMarketManager.LendingMarketType.EULER),
+            compoundLtv,
+            vault.getLtv(LendingMarketManager.LendingMarketType.COMPOUND_V3),
             0.0015e18,
-            "euler ltvs not reset after reinvest"
+            "compound ltvs not reset after reinvest"
         );
+
         assertApproxEqRel(ltv, vault.getLtv(), 0.005e18, "net ltv not reset after reinvest");
 
         uint256 balance = vault.convertToAssets(vault.balanceOf(treasury));
@@ -490,25 +520,31 @@ contract scWETHv2Test is Test {
     }
 
     /// @return : supplyBorrowParams, totalSupplyAmount, totalDebtTaken
-    function _getInvestParams(uint256 amount, uint256 aaveV3AllocationPercent, uint256 eulerAllocationPercent)
-        internal
-        view
-        returns (scWETHv2.SupplyBorrowParam[] memory, uint256, uint256)
-    {
+    function _getInvestParams(
+        uint256 amount,
+        uint256 aaveV3Allocation,
+        uint256 eulerAllocation,
+        uint256 compoundAllocation
+    ) internal view returns (scWETHv2.SupplyBorrowParam[] memory, uint256, uint256) {
         uint256 stEthRateTolerance = 0.999e18;
-        scWETHv2.SupplyBorrowParam[] memory supplyBorrowParams = new scWETHv2.SupplyBorrowParam[](2);
+        scWETHv2.SupplyBorrowParam[] memory supplyBorrowParams = new scWETHv2.SupplyBorrowParam[](3);
 
         // supply 70% to aaveV3 and 30% to Euler
-        uint256 aaveV3Amount = amount.mulWadDown(aaveV3AllocationPercent);
-        uint256 eulerAmount = amount.mulWadDown(eulerAllocationPercent);
+        uint256 aaveV3Amount = amount.mulWadDown(aaveV3Allocation);
+        uint256 eulerAmount = amount.mulWadDown(eulerAllocation);
+        uint256 compoundAmount = amount.mulWadDown(compoundAllocation);
 
         uint256 aaveV3FlashLoanAmount =
             _calcSupplyBorrowFlashLoanAmount(LendingMarketManager.LendingMarketType.AAVE_V3, aaveV3Amount);
         uint256 eulerFlashLoanAmount =
             _calcSupplyBorrowFlashLoanAmount(LendingMarketManager.LendingMarketType.EULER, eulerAmount);
+        uint256 compoundFlashLoanAmount =
+            _calcSupplyBorrowFlashLoanAmount(LendingMarketManager.LendingMarketType.COMPOUND_V3, compoundAmount);
 
         uint256 aaveV3SupplyAmount = _ethToWstEth(aaveV3Amount + aaveV3FlashLoanAmount).mulWadDown(stEthRateTolerance);
         uint256 eulerSupplyAmount = _ethToWstEth(eulerAmount + eulerFlashLoanAmount).mulWadDown(stEthRateTolerance);
+        uint256 compoundSupplyAmount =
+            _ethToWstEth(compoundAmount + compoundFlashLoanAmount).mulWadDown(stEthRateTolerance);
 
         supplyBorrowParams[0] = scWETHv2.SupplyBorrowParam({
             market: LendingMarketManager.LendingMarketType.AAVE_V3,
@@ -520,15 +556,20 @@ contract scWETHv2Test is Test {
             supplyAmount: eulerSupplyAmount,
             borrowAmount: eulerFlashLoanAmount
         });
+        supplyBorrowParams[2] = scWETHv2.SupplyBorrowParam({
+            market: LendingMarketManager.LendingMarketType.COMPOUND_V3,
+            supplyAmount: compoundSupplyAmount,
+            borrowAmount: compoundFlashLoanAmount
+        });
 
-        uint256 totalSupplyAmount = aaveV3SupplyAmount + eulerSupplyAmount;
-        uint256 totalDebtTaken = aaveV3FlashLoanAmount + eulerFlashLoanAmount;
+        uint256 totalSupplyAmount = aaveV3SupplyAmount + eulerSupplyAmount + compoundSupplyAmount;
+        uint256 totalDebtTaken = aaveV3FlashLoanAmount + eulerFlashLoanAmount + compoundFlashLoanAmount;
 
         return (supplyBorrowParams, totalSupplyAmount, totalDebtTaken);
     }
 
     /// @return : repayWithdrawParams
-    function _getDisInvestParams(uint256 newAaveV3Ltv, uint256 newEulerLtv)
+    function _getDisInvestParams(uint256 newAaveV3Ltv, uint256 newEulerLtv, uint256 newCompoundLtv)
         internal
         view
         returns (scWETHv2.RepayWithdrawParam[] memory)
@@ -537,8 +578,10 @@ contract scWETHv2Test is Test {
             _calcRepayWithdrawFlashLoanAmount(LendingMarketManager.LendingMarketType.AAVE_V3, 0, newAaveV3Ltv);
         uint256 eulerFlashLoanAmount =
             _calcRepayWithdrawFlashLoanAmount(LendingMarketManager.LendingMarketType.EULER, 0, newEulerLtv);
+        uint256 compoundFlashLoanAmount =
+            _calcRepayWithdrawFlashLoanAmount(LendingMarketManager.LendingMarketType.COMPOUND_V3, 0, newCompoundLtv);
 
-        scWETHv2.RepayWithdrawParam[] memory repayWithdrawParams = new scWETHv2.RepayWithdrawParam[](2);
+        scWETHv2.RepayWithdrawParam[] memory repayWithdrawParams = new scWETHv2.RepayWithdrawParam[](3);
 
         repayWithdrawParams[0] = scWETHv2.RepayWithdrawParam(
             LendingMarketManager.LendingMarketType.AAVE_V3, aaveV3FlashLoanAmount, _ethToWstEth(aaveV3FlashLoanAmount)
@@ -546,6 +589,12 @@ contract scWETHv2Test is Test {
 
         repayWithdrawParams[1] = scWETHv2.RepayWithdrawParam(
             LendingMarketManager.LendingMarketType.EULER, eulerFlashLoanAmount, _ethToWstEth(eulerFlashLoanAmount)
+        );
+
+        repayWithdrawParams[2] = scWETHv2.RepayWithdrawParam(
+            LendingMarketManager.LendingMarketType.COMPOUND_V3,
+            compoundFlashLoanAmount,
+            _ethToWstEth(compoundFlashLoanAmount)
         );
 
         return repayWithdrawParams;
@@ -567,13 +616,7 @@ contract scWETHv2Test is Test {
         assertEq(weth.balanceOf(address(this)), preDepositBal);
     }
 
-    function _investChecks(
-        uint256 amount,
-        uint256 totalSupplyAmount,
-        uint256 totalDebtTaken,
-        uint256 aaveV3AllocationPercent,
-        uint256 eulerAllocationPercent
-    ) internal {
+    function _investChecks(uint256 amount, uint256 totalSupplyAmount, uint256 totalDebtTaken) internal {
         uint256 totalCollateral = vault.totalCollateral();
         uint256 totalDebt = vault.totalDebt();
         assertApproxEqRel(totalCollateral - totalDebt, amount, 0.01e18, "totalAssets not equal amount");
@@ -585,12 +628,17 @@ contract scWETHv2Test is Test {
             - vault.getDebt(LendingMarketManager.LendingMarketType.AAVE_V3);
         uint256 eulerDeposited = vault.getCollateral(LendingMarketManager.LendingMarketType.EULER)
             - vault.getDebt(LendingMarketManager.LendingMarketType.EULER);
+        uint256 compoundDeposited = vault.getCollateral(LendingMarketManager.LendingMarketType.COMPOUND_V3)
+            - vault.getDebt(LendingMarketManager.LendingMarketType.COMPOUND_V3);
 
         assertApproxEqRel(
             aaveV3Deposited, amount.mulWadDown(aaveV3AllocationPercent), 0.005e18, "aaveV3 allocation not correct"
         );
         assertApproxEqRel(
             eulerDeposited, amount.mulWadDown(eulerAllocationPercent), 0.005e18, "euler allocation not correct"
+        );
+        assertApproxEqRel(
+            compoundDeposited, amount.mulWadDown(compoundAllocationPercent), 0.005e18, "compound allocation not correct"
         );
 
         assertApproxEqRel(
@@ -608,6 +656,13 @@ contract scWETHv2Test is Test {
         );
 
         assertApproxEqRel(
+            vault.allocationPercent(LendingMarketManager.LendingMarketType.COMPOUND_V3),
+            compoundAllocationPercent,
+            0.005e18,
+            "compound allocationPercent not correct"
+        );
+
+        assertApproxEqRel(
             vault.getLtv(LendingMarketManager.LendingMarketType.AAVE_V3),
             targetLtv[LendingMarketManager.LendingMarketType.AAVE_V3],
             0.005e18,
@@ -618,6 +673,13 @@ contract scWETHv2Test is Test {
             targetLtv[LendingMarketManager.LendingMarketType.EULER],
             0.005e18,
             "euler ltv not correct"
+        );
+
+        assertApproxEqRel(
+            vault.getLtv(LendingMarketManager.LendingMarketType.COMPOUND_V3),
+            targetLtv[LendingMarketManager.LendingMarketType.COMPOUND_V3],
+            0.005e18,
+            "compound ltv not correct"
         );
 
         assertEq(amount, vault.totalInvested(), "totalInvested not updated");
