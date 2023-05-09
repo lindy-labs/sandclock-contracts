@@ -33,8 +33,9 @@ import {UsdcWethLendingManager} from "./UsdcWethLendingManager.sol";
 
 // TODO: update documentation
 /**
- * @title Sandclock USDC Vault
+ * @title Sandclock USDC Vault Version 2
  * @notice A vault that allows users to earn interest on their USDC deposits from leveraged WETH staking.
+ * @notice The vault uses multiple money markets to earn yield on USDC deposits and borrow WETH to stake.
  * @dev This vault uses Sandclock's leveraged WETH staking vault - scWETH.
  */
 contract scUSDCv2 is sc4626, UsdcWethLendingManager, IFlashLoanRecipient {
@@ -42,11 +43,17 @@ contract scUSDCv2 is sc4626, UsdcWethLendingManager, IFlashLoanRecipient {
     using SafeTransferLib for WETH;
     using FixedPointMathLib for uint256;
 
+    /**
+     * @notice Enum indicating the purpose of a flashloan.
+     */
     enum FlashLoanType {
         Reallocate,
         ExitAllPositions
     }
 
+    /**
+     * @notice Struct containing parameters for moving funds between money markets.
+     */
     struct ReallocationParams {
         Protocol protocolId;
         bool isDownsize;
@@ -54,6 +61,9 @@ contract scUSDCv2 is sc4626, UsdcWethLendingManager, IFlashLoanRecipient {
         uint256 debtAmount;
     }
 
+    /**
+     * @notice Struct containing parameters for rebalancing the loans taken on multiple money markets (protocols).
+     */
     struct RebalanceParams {
         Protocol protocolId;
         uint256 supplyAmount;
@@ -148,8 +158,8 @@ contract scUSDCv2 is sc4626, UsdcWethLendingManager, IFlashLoanRecipient {
     }
 
     /**
-     * @notice Rebalance the vault's positions.
-     * @dev Called to increase or decrease the WETH debt to maintain the LTV (loan to value).
+     * @notice Rebalance the vault's positions/loans in multiple money markets.
+     * @dev Called to increase or decrease the WETH debt to maintain the LTV (loan to value) and avoid liquidation.
      */
     function rebalance(RebalanceParams[] calldata _params) public onlyKeeper {
         for (uint8 i = 0; i < _params.length; i++) {
@@ -183,6 +193,7 @@ contract scUSDCv2 is sc4626, UsdcWethLendingManager, IFlashLoanRecipient {
             );
         }
 
+        // enforce float to be above the minimum required
         uint256 float = usdcBalance();
         uint256 floatRequired = totalAssets().mulWadDown(floatPercentage);
 
@@ -191,6 +202,11 @@ contract scUSDCv2 is sc4626, UsdcWethLendingManager, IFlashLoanRecipient {
         }
     }
 
+    /**
+     * @notice Sells WETH profits (swaps to USDC).
+     * @dev As the vault generates yield by staking WETH, the profits are in WETH.
+     * @param _usdcAmountOutMin The minimum amount of USDC to receive.
+     */
     function sellProfit(uint256 _usdcAmountOutMin) public onlyKeeper {
         uint256 profit = _calculateWethProfit(wethInvested(), totalDebt());
 
@@ -203,7 +219,8 @@ contract scUSDCv2 is sc4626, UsdcWethLendingManager, IFlashLoanRecipient {
     }
 
     /**
-     * @notice Reallocate capital between lending markets, ie moves debt and collateral from one protocol to another.
+     * @notice Reallocate capital between lending markets, ie moves debt and collateral positions from one protocol (money market) to another.
+     * @dev To move the funds between lending markets, the vault uses flashloans to repay debt and release collateral in one money market enabling it to be moved to anoter mm.
      * @param _params The reallocation parameters. Markets where positions are downsized must be listed first because collateral has to be relased before it is reallocated.
      * @param _flashLoanAmount The amount of WETH to flashloan from Balancer. Has to be at least equal to amount of WETH debt moved between lending markets.
      */
@@ -223,6 +240,8 @@ contract scUSDCv2 is sc4626, UsdcWethLendingManager, IFlashLoanRecipient {
 
     /**
      * @notice Emergency exit to release collateral if the vault is underwater.
+     * @dev In unlikely situation that the vault makes a loss on ETH staked, the total debt would be higher than ETH available to "unstake",
+     *  which can lead to withdrawals being blocked. To handle this situation, the vault can close all positions in all money markets and release all of the assets (realize all losses).
      * @param _endUsdcBalanceMin The minimum USDC balance to end with after all positions are closed.
      */
     function exitAllPositions(uint256 _endUsdcBalanceMin) external onlyAdmin {
@@ -250,6 +269,14 @@ contract scUSDCv2 is sc4626, UsdcWethLendingManager, IFlashLoanRecipient {
         emit EmergencyExitExecuted(msg.sender, wethBalance, debt, collateral);
     }
 
+    /**
+     * @notice Handles flashloan callbacks.
+     * @dev Called by Balancer's vault in 2 situations:
+     * 1. When the vault is underwater and the vault needs to exit all positions.
+     * 2. When the vault needs to reallocate capital between lending markets.
+     * @param amounts single elment array containing the amount of WETH being flashloaned.
+     * @param userData The encoded data that was passed to the flashloan.
+     */
     function receiveFlashLoan(address[] memory, uint256[] memory amounts, uint256[] memory, bytes memory userData)
         external
     {
@@ -264,12 +291,18 @@ contract scUSDCv2 is sc4626, UsdcWethLendingManager, IFlashLoanRecipient {
             _exitAllPositionsFlash(flashLoanAmount);
         } else {
             (, ReallocationParams[] memory params) = abi.decode(userData, (FlashLoanType, ReallocationParams[]));
-            _reallocateCapital(params);
-            weth.safeTransfer(address(balancerVault), flashLoanAmount);
+            _reallocateCapitalFlash(params);
         }
+
+        weth.safeTransfer(address(balancerVault), flashLoanAmount);
     }
 
-    /// note: euler rewards are claimed externally, we only swap them here using 0xrouter
+    /**
+     * @notice Sell Euler rewards (EUL) for USDC.
+     * @dev Euler rewards are claimed externally, we only swap them here using 0xrouter.
+     * @param _swapData The swap data for 0xrouter.
+     * @param _usdcAmountOutMin The minimum amount of USDC to receive for the swap.
+     */
     function sellEulerRewards(bytes calldata _swapData, uint256 _usdcAmountOutMin) external onlyKeeper {
         uint256 eulerBalance = eulerRewardsToken.balanceOf(address(this));
 
@@ -282,19 +315,32 @@ contract scUSDCv2 is sc4626, UsdcWethLendingManager, IFlashLoanRecipient {
         uint256 usdcReceived = usdcBalance() - initialBalance;
         if (usdcReceived < _usdcAmountOutMin) revert EndUsdcBalanceTooLow();
 
+        eulerRewardsToken.safeApprove(zeroExRouter, 0);
+
         emit EulerRewardsSold(eulerBalance - eulerRewardsToken.balanceOf(address(this)), usdcReceived);
     }
 
+    /**
+     * @notice total claimable assets of the vault in USDC.
+     */
     function totalAssets() public view override returns (uint256) {
         return _calculateTotalAssets(usdcBalance(), totalCollateral(), wethInvested(), totalDebt());
     }
 
+    /**
+     * @notice Returns the USDC fair value of the WETH amount.
+     * @param _wethAmount The amount of WETH.
+     */
     function getUsdcFromWeth(uint256 _wethAmount) public view returns (uint256) {
         (, int256 usdcPriceInWeth,,,) = usdcToEthPriceFeed.latestRoundData();
 
         return _wethAmount.divWadDown(uint256(usdcPriceInWeth) * C.WETH_USDC_DECIMALS_DIFF);
     }
 
+    /**
+     * @notice Returns the WETH fair value of the USDC amount.
+     * @param _usdcAmount The amount of USDC.
+     */
     function getWethFromUsdc(uint256 _usdcAmount) public view returns (uint256) {
         (, int256 usdcPriceInWeth,,,) = usdcToEthPriceFeed.latestRoundData();
 
@@ -303,15 +349,13 @@ contract scUSDCv2 is sc4626, UsdcWethLendingManager, IFlashLoanRecipient {
 
     /**
      * @notice Returns the USDC balance of the vault.
-     * @return The USDC balance.
      */
     function usdcBalance() public view returns (uint256) {
         return asset.balanceOf(address(this));
     }
 
     /**
-     * @notice Returns the total USDC supplied as collateral to Aave.
-     * @return total supplied USDC amount.
+     * @notice Returns the total USDC supplied as collateral in all money markets.
      */
     function totalCollateral() public view returns (uint256 total) {
         for (uint8 i = 0; i <= uint256(type(Protocol).max); i++) {
@@ -320,8 +364,7 @@ contract scUSDCv2 is sc4626, UsdcWethLendingManager, IFlashLoanRecipient {
     }
 
     /**
-     * @notice Returns the total WETH borrowed on Aave.
-     * @return total borrowed WETH amount.
+     * @notice Returns the total WETH borrowed in all money markets.
      */
     function totalDebt() public view returns (uint256 total) {
         for (uint8 i = 0; i <= uint256(type(Protocol).max); i++) {
@@ -330,16 +373,15 @@ contract scUSDCv2 is sc4626, UsdcWethLendingManager, IFlashLoanRecipient {
     }
 
     /**
-     * @notice Returns the amount of WETH invested in the leveraged WETH vault.
-     * @return The WETH invested amount.
+     * @notice Returns the amount of WETH invested (staked) in the leveraged WETH vault.
      */
     function wethInvested() public view returns (uint256) {
         return scWETH.convertToAssets(scWETH.balanceOf(address(this)));
     }
 
     /**
-     * @notice Returns the amount of profit made by the vault.
-     * @return The profit amount in WETH.
+     * @notice Returns the amount of profit (in WETH) made by the vault.
+     * @dev The profit is calculated as the difference between the current WETH staked and the WETH owed.
      */
     function getProfit() public view returns (uint256) {
         return _calculateWethProfit(wethInvested(), totalDebt());
@@ -349,7 +391,7 @@ contract scUSDCv2 is sc4626, UsdcWethLendingManager, IFlashLoanRecipient {
                             INTERNAL API
     //////////////////////////////////////////////////////////////*/
 
-    function _reallocateCapital(ReallocationParams[] memory _params) internal {
+    function _reallocateCapitalFlash(ReallocationParams[] memory _params) internal {
         for (uint8 i = 0; i < _params.length; i++) {
             ProtocolActions memory protocolActions = protocolToActions[_params[i].protocolId];
 
@@ -395,8 +437,6 @@ contract scUSDCv2 is sc4626, UsdcWethLendingManager, IFlashLoanRecipient {
         swapRouter.exactOutputSingle(params);
 
         asset.approve(address(swapRouter), 0);
-
-        weth.safeTransfer(address(balancerVault), _flashLoanAmount);
     }
 
     function beforeWithdraw(uint256 _assets, uint256) internal override {

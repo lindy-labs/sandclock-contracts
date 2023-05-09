@@ -1331,17 +1331,18 @@ contract scUSDCv2Test is Test {
 
         uint256 initialUsdcBalance = 2_000e6;
         deal(address(usdc), address(vault), initialUsdcBalance);
-        deal(address(vault.eulerRewardsToken()), address(vault), EUL_AMOUNT);
+        deal(address(vault.eulerRewardsToken()), address(vault), EUL_AMOUNT * 2);
 
-        assertEq(vault.eulerRewardsToken().balanceOf(address(vault)), EUL_AMOUNT, "euler balance");
+        assertEq(vault.eulerRewardsToken().balanceOf(address(vault)), EUL_AMOUNT * 2, "euler balance");
         assertEq(vault.usdcBalance(), initialUsdcBalance, "usdc balance");
         assertEq(vault.totalAssets(), initialUsdcBalance, "total assets");
 
         vault.sellEulerRewards(EUL_SWAP_DATA, 0);
 
-        assertEq(vault.eulerRewardsToken().balanceOf(address(vault)), 0, "vault euler balance");
+        assertEq(vault.eulerRewardsToken().balanceOf(address(vault)), EUL_AMOUNT, "vault euler balance");
         assertEq(vault.totalAssets(), initialUsdcBalance + EUL_SWAP_USDC_RECEIVED, "vault total assets");
         assertEq(vault.usdcBalance(), initialUsdcBalance + EUL_SWAP_USDC_RECEIVED, "vault usdc balance");
+        assertEq(vault.eulerRewardsToken().allowance(address(vault), vault.zeroExRouter()), 0, "0x eul allowance");
     }
 
     function test_sellEulerRewards_EmitsEventOnSuccessfulSwap() public {
