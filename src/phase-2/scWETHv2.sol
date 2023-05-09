@@ -208,7 +208,7 @@ contract scWETHv2 is sc4626, LendingMarketManager, IFlashLoanRecipient {
         balancerVault.flashLoan(address(this), tokens, amounts, abi.encode(params));
     }
 
-    /// @notice reallocate funds from one protocol to another (without any slippage)
+    /// @notice reallocate funds between protocols (without any slippage)
     // @param wstEthSwapAmount: amount of wstEth to swap to weth
     function reallocate(
         RepayWithdrawParam[] calldata from,
@@ -487,5 +487,4 @@ contract scWETHv2 is sc4626, LendingMarketManager, IFlashLoanRecipient {
 // euler rewards
 // 0x swapping
 // enforcing min float
-// adding AAVE V2 & Compound III
-// refactor tests for other 2 protocols
+// refactor tests for Compound V3
