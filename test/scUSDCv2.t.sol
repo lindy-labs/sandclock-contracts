@@ -615,6 +615,40 @@ contract scUSDCv2Test is Test {
         _assertLendingPosition(UsdcWethLendingManager.Protocol.EULER, totalCollateral, totalDebt);
     }
 
+    function test_reallocateCapital_FailsIfThereIsNoDownsizeOnAtLeastOnProtocol() public {
+        uint256 totalCollateral = 1_000_000e6;
+        uint256 totalDebt = 100 ether;
+        deal(address(usdc), address(vault), totalCollateral);
+
+        scUSDCv2.RebalanceParams[] memory rebalanceParams = new scUSDCv2.RebalanceParams[](1);
+        rebalanceParams[0] =
+            _createRebalanceParams(UsdcWethLendingManager.Protocol.AAVE_V3, totalCollateral, true, 100 ether);
+
+        vault.rebalance(rebalanceParams);
+
+        assertApproxEqAbs(vault.totalCollateral(), totalCollateral, 1, "total collateral before");
+        assertApproxEqAbs(vault.totalDebt(), totalDebt, 1, "total debt before");
+
+        _assertLendingPosition(UsdcWethLendingManager.Protocol.AAVE_V3, totalCollateral, totalDebt);
+        _assertLendingPosition(UsdcWethLendingManager.Protocol.AAVE_V2, 0, 0);
+        _assertLendingPosition(UsdcWethLendingManager.Protocol.EULER, 0, 0);
+
+        // move everything from Aave to Euler
+        uint256 collateralToMove = totalCollateral / 2;
+        uint256 debtToMove = totalDebt / 2;
+        scUSDCv2.ReallocationParams[] memory reallocateParams = new scUSDCv2.ReallocationParams[](1);
+        reallocateParams[0] = scUSDCv2.ReallocationParams({
+            protocolId: UsdcWethLendingManager.Protocol.EULER,
+            isDownsize: false,
+            collateralAmount: collateralToMove,
+            debtAmount: debtToMove
+        });
+
+        uint256 flashLoanAmount = debtToMove;
+        vm.expectRevert();
+        vault.reallocateCapital(reallocateParams, flashLoanAmount);
+    }
+
     function test_reallocateCapital_MoveHalfFromOneProtocolToAnother() public {
         uint256 totalCollateral = 1_000_000e6;
         uint256 totalDebt = 100 ether;
@@ -927,7 +961,7 @@ contract scUSDCv2Test is Test {
         assertEq(vault.totalDebt(), debtBefore, "total debt not expected to change");
     }
 
-    function test_withdraw_PullsFundsFromProtocolWhenFloatIsNotEnough() public {
+    function test_withdraw_PullsFundsFromSellingProfitSecond() public {
         uint256 floatPercentage = 0.1e18; // 10 %
         vault.setFloatPercentage(floatPercentage);
         uint256 initialBalance = 1_000_000e6;
@@ -945,13 +979,59 @@ contract scUSDCv2Test is Test {
 
         vault.rebalance(params);
 
+        // add 100% profit to the weth vault
+        uint256 initialWethInvested = vault.wethInvested();
+        deal(address(weth), address(wethVault), initialWethInvested * 2);
+
+        uint256 collateralBefore = vault.totalCollateral();
+        uint256 debtBefore = vault.totalDebt();
+
+        uint256 profit = vault.getProfit();
+        uint256 expectedUsdcFromProfitSelling = vault.getUsdcFromWeth(profit);
+        uint256 initialFloat = vault.usdcBalance();
+        // withdraw double the float amount
+        uint256 withdrawAmount = initialFloat * 2;
+        vm.prank(alice);
+        vault.withdraw(withdrawAmount, alice, alice);
+
+        assertEq(usdc.balanceOf(alice), withdrawAmount, "alice usdc balance");
+        assertApproxEqAbs(vault.getProfit(), 0, 1, "profit not sold");
+        assertApproxEqAbs(vault.totalCollateral(), collateralBefore, 1, "collateral not expected to change");
+        assertApproxEqAbs(vault.totalDebt(), debtBefore, 1, "debt not expected to change");
+        assertApproxEqRel(vault.usdcBalance(), expectedUsdcFromProfitSelling - initialFloat, 0.01e18, "float remaining");
+    }
+
+    function test_withdraw_PullsFundsFromInvestedWhenFloatAndProfitSellingIsNotEnough() public {
+        uint256 floatPercentage = 0.1e18; // 10 %
+        vault.setFloatPercentage(floatPercentage);
+        uint256 initialBalance = 1_000_000e6;
+        deal(address(usdc), alice, initialBalance);
+
+        vm.startPrank(alice);
+        usdc.approve(address(vault), initialBalance);
+        vault.deposit(initialBalance, alice);
+        vm.stopPrank();
+
+        scUSDCv2.RebalanceParams[] memory params = new scUSDCv2.RebalanceParams[](1);
+        params[0] = _createRebalanceParams(
+            UsdcWethLendingManager.Protocol.EULER, initialBalance.mulWadDown(1e18 - floatPercentage), true, 200 ether
+        );
+
+        vault.rebalance(params);
+
+        // add 50% profit to the weth vault
+        uint256 initialWethInvested = vault.wethInvested();
+        deal(address(weth), address(wethVault), initialWethInvested.mulWadDown(1.5e18));
+
+        uint256 totalAssetsBefore = vault.totalAssets();
+
         uint256 withdrawAmount = vault.convertToAssets(vault.balanceOf(alice));
         vm.prank(alice);
         vault.withdraw(withdrawAmount, alice, alice);
 
         assertEq(usdc.balanceOf(alice), withdrawAmount, "alice usdc balance");
-        assertApproxEqAbs(vault.totalCollateral(), 0, 1, "collateral not 0");
-        assertApproxEqAbs(vault.totalDebt(), 0, 1, "debt not 0");
+        assertApproxEqAbs(vault.getProfit(), 0, 1, "profit not sold");
+        assertTrue(vault.totalAssets().divWadDown(totalAssetsBefore) < 0.005e18, "too much leftovers");
     }
 
     function test_withdraw_PullsFundsFromAllProtocolsInEqualWeight() public {
@@ -1293,6 +1373,34 @@ contract scUSDCv2Test is Test {
 
         vm.expectRevert(EulerSwapFailed.selector);
         vault.sellEulerRewards(invalidSwapData, 0);
+    }
+
+    /// #setSlippageTolerance ///
+
+    function test_setSlippageTolerance_FailsIfCallerIsNotAdmin() public {
+        uint256 tolerance = 0.01e18;
+
+        vm.startPrank(alice);
+        vm.expectRevert(CallerNotAdmin.selector);
+        vault.setSlippageTolerance(tolerance);
+    }
+
+    function test_setSlippageTolerance_FailsIfSlippageToleranceGreaterThanOne() public {
+        uint256 tolerance = 1e18 + 1;
+
+        vm.expectRevert(InvalidSlippageTolerance.selector);
+        vault.setSlippageTolerance(tolerance);
+    }
+
+    function test_setSlippageTolearnce_UpdatesSlippageTolerance() public {
+        uint256 newTolerance = 0.01e18;
+
+        vm.expectEmit(true, true, true, true);
+        emit SlippageToleranceUpdated(address(this), newTolerance);
+
+        vault.setSlippageTolerance(newTolerance);
+
+        assertEq(vault.slippageTolerance(), newTolerance, "slippage tolerance");
     }
 
     /// internal helper functions ///
