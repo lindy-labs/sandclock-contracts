@@ -32,6 +32,8 @@ contract scWETHv2 is sc4626, LendingMarketManager, IFlashLoanRecipient {
     using SafeTransferLib for ERC20;
     using FixedPointMathLib for uint256;
 
+    error FloatBalanceTooSmall(uint256 actual, uint256 required);
+
     event SlippageToleranceUpdated(address indexed admin, uint256 newSlippageTolerance);
     event ExchangeProxyAddressUpdated(address indexed user, address newAddress);
     event NewTargetLtvApplied(address indexed admin, uint256 newTargetLtv);
@@ -127,7 +129,7 @@ contract scWETHv2 is sc4626, LendingMarketManager, IFlashLoanRecipient {
 
         // store the old total
         uint256 oldTotalInvested = totalInvested;
-        uint256 assets = totalAssets();
+        uint256 assets = totalCollateral() - totalDebt();
 
         // todo: harvest euler rewards
 
@@ -383,6 +385,8 @@ contract scWETHv2 is sc4626, LendingMarketManager, IFlashLoanRecipient {
 
         // payback flashloan
         asset.safeTransfer(address(balancerVault), flashLoanAmount);
+
+        _enforceFloat();
     }
 
     // need to be able to receive eth
@@ -471,20 +475,33 @@ contract scWETHv2 is sc4626, LendingMarketManager, IFlashLoanRecipient {
         }
     }
 
+    /// @notice enforce float to be above the minimum required
+    function _enforceFloat() internal view {
+        uint256 float = asset.balanceOf(address(this));
+        uint256 floatRequired = minimumFloatAmount;
+        if (float < floatRequired) {
+            revert FloatBalanceTooSmall(float, floatRequired);
+        }
+    }
+
     function beforeWithdraw(uint256 assets, uint256) internal override {
         uint256 float = asset.balanceOf(address(this));
         if (assets <= float) {
             return;
         }
 
-        uint256 missing = (assets - float);
+        uint256 minimumFloat = minimumFloatAmount;
+        uint256 floatRequired = float < minimumFloat ? minimumFloat - float : 0;
+        uint256 missing = assets + floatRequired - float;
 
         _withdrawToVault(missing);
     }
 }
 
 // todo:
-// euler rewards
-// 0x swapping
-// enforcing min float
-// refactor tests for Compound V3
+// events
+// add full test coverage
+// euler rewards & 0x swapping
+// gas optimizations
+// call with nenad to make contract function signatures similar
+// LendingContract delegatecall

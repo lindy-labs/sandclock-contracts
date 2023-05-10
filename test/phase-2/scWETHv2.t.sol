@@ -32,7 +32,7 @@ contract scWETHv2Test is Test {
     address constant keeper = address(0x05);
     address constant alice = address(0x06);
     address constant treasury = address(0x07);
-    uint256 boundMinimum = 1 ether; // below this amount, aave doesn't count it as collateral
+    uint256 boundMinimum = 1.5 ether; // below this amount, aave doesn't count it as collateral
 
     address admin = address(this);
     scWETHv2 vault;
@@ -48,6 +48,7 @@ contract scWETHv2Test is Test {
     ILido stEth;
     IwstETH wstEth;
     AggregatorV3Interface public stEThToEthPriceFeed;
+    uint256 minimumFloatAmount;
 
     mapping(LendingMarketManager.LendingMarketType => uint256) targetLtv;
 
@@ -64,6 +65,7 @@ contract scWETHv2Test is Test {
         stEth = vault.stEth();
         wstEth = vault.wstETH();
         stEThToEthPriceFeed = vault.stEThToEthPriceFeed();
+        minimumFloatAmount = vault.minimumFloatAmount();
 
         // set vault eth balance to zero
         vm.deal(address(vault), 0);
@@ -95,6 +97,7 @@ contract scWETHv2Test is Test {
 
         vault.deposit(amount, address(this));
 
+        _floatCheck();
         _depositChecks(amount, preDepositBal);
 
         vault.redeem(vault.balanceOf(address(this)), address(this), address(this));
@@ -104,18 +107,20 @@ contract scWETHv2Test is Test {
 
     function test_invest_basic(uint256 amount) public {
         amount = bound(amount, boundMinimum, 15000 ether);
-        // uint256 amount = 7657722538295683242863;
         _depositToVault(address(this), amount);
         _depositChecks(amount, amount);
 
+        uint256 investAmount = amount - minimumFloatAmount;
+
         (scWETHv2.SupplyBorrowParam[] memory supplyBorrowParams, uint256 totalSupplyAmount, uint256 totalDebtTaken) =
-            _getInvestParams(amount, aaveV3AllocationPercent, eulerAllocationPercent, compoundAllocationPercent);
+            _getInvestParams(investAmount, aaveV3AllocationPercent, eulerAllocationPercent, compoundAllocationPercent);
 
         // deposit into strategy
         hoax(keeper);
-        vault.investAndHarvest(amount, supplyBorrowParams);
+        vault.investAndHarvest(investAmount, supplyBorrowParams);
+        _floatCheck();
 
-        _investChecks(amount, _wstEthToEth(totalSupplyAmount), totalDebtTaken);
+        _investChecks(investAmount, _wstEthToEth(totalSupplyAmount), totalDebtTaken);
     }
 
     function test_deposit_invest_redeem(uint256 amount) public {
@@ -123,12 +128,14 @@ contract scWETHv2Test is Test {
         uint256 shares = _depositToVault(address(this), amount);
         _depositChecks(amount, amount);
 
+        uint256 investAmount = amount - minimumFloatAmount;
+
         (scWETHv2.SupplyBorrowParam[] memory supplyBorrowParams,,) =
-            _getInvestParams(amount, aaveV3AllocationPercent, eulerAllocationPercent, compoundAllocationPercent);
+            _getInvestParams(investAmount, aaveV3AllocationPercent, eulerAllocationPercent, compoundAllocationPercent);
 
         // deposit into strategy
         hoax(keeper);
-        vault.investAndHarvest(amount, supplyBorrowParams);
+        vault.investAndHarvest(investAmount, supplyBorrowParams);
 
         assertApproxEqRel(vault.totalAssets(), amount, 0.01e18, "totalAssets error");
         assertEq(vault.balanceOf(address(this)), shares, "shares error");
@@ -148,16 +155,19 @@ contract scWETHv2Test is Test {
         _depositToVault(address(this), amount);
         _depositChecks(amount, amount);
 
+        uint256 investAmount = amount - minimumFloatAmount;
+
         (scWETHv2.SupplyBorrowParam[] memory supplyBorrowParams,,) =
-            _getInvestParams(amount, aaveV3AllocationPercent, eulerAllocationPercent, compoundAllocationPercent);
+            _getInvestParams(investAmount, aaveV3AllocationPercent, eulerAllocationPercent, compoundAllocationPercent);
 
         // deposit into strategy
         hoax(keeper);
-        vault.investAndHarvest(amount, supplyBorrowParams);
+        vault.investAndHarvest(investAmount, supplyBorrowParams);
 
-        uint256 assets = vault.totalAssets();
+        uint256 assets = vault.totalCollateral() - vault.totalDebt();
+        uint256 floatBalance = amount - investAmount;
 
-        assertEq(weth.balanceOf(address(vault)), 0);
+        assertEq(weth.balanceOf(address(vault)), floatBalance, "float amount error");
 
         uint256 ltv = vault.getLtv();
         uint256 lev = vault.getLeverage();
@@ -165,21 +175,29 @@ contract scWETHv2Test is Test {
         hoax(keeper);
         vault.withdrawToVault(assets / 2);
 
+        _floatCheck();
+
         // net ltv and leverage must not change after withdraw
         assertApproxEqRel(vault.getLtv(), ltv, 0.001e18, "ltv changed after withdraw");
         assertApproxEqRel(vault.getLeverage(), lev, 0.001e18, "leverage changed after withdraw");
-        assertApproxEqRel(weth.balanceOf(address(vault)), assets / 2, maxAssetsDelta, "assets not withdrawn");
-        assertApproxEqRel(vault.totalInvested(), amount - (assets / 2), 0.001e18, "totalInvested not reduced");
+        assertApproxEqRel(
+            weth.balanceOf(address(vault)) - floatBalance, assets / 2, maxAssetsDelta, "assets not withdrawn"
+        );
+        assertApproxEqRel(vault.totalInvested(), investAmount - (assets / 2), 0.001e18, "totalInvested not reduced");
 
         // withdraw the remaining assets
         hoax(keeper);
         vault.withdrawToVault(assets / 2);
 
+        _floatCheck();
+
         uint256 dust = 100;
         assertLt(vault.totalDebt(), dust, "test_withdrawToVault getDebt error");
         assertLt(vault.totalCollateral(), dust, "test_withdrawToVault getCollateral error");
-        assertApproxEqRel(weth.balanceOf(address(vault)), assets, maxAssetsDelta, "test_withdrawToVault asset balance");
-        assertApproxEqRel(vault.totalInvested(), amount - assets, 0.001e18, "totalInvested not reduced");
+        assertApproxEqRel(
+            weth.balanceOf(address(vault)) - floatBalance, assets, maxAssetsDelta, "test_withdrawToVault asset balance"
+        );
+        assertApproxEqRel(vault.totalInvested(), investAmount - assets, 0.001e18, "totalInvested not reduced");
     }
 
     // we decrease ltv in case of a loss, since the ltv goes higher than the target ltv in such a scenario
@@ -187,13 +205,15 @@ contract scWETHv2Test is Test {
         amount = bound(amount, boundMinimum, 10000 ether);
         _depositToVault(address(this), amount);
 
-        uint256 minimumDust = amount.mulWadDown(0.01e18);
+        uint256 investAmount = amount - minimumFloatAmount;
+
+        uint256 minimumDust = amount.mulWadDown(0.01e18) + (amount - investAmount);
 
         (scWETHv2.SupplyBorrowParam[] memory supplyBorrowParams,,) =
-            _getInvestParams(amount, aaveV3AllocationPercent, eulerAllocationPercent, compoundAllocationPercent);
+            _getInvestParams(investAmount, aaveV3AllocationPercent, eulerAllocationPercent, compoundAllocationPercent);
 
         hoax(keeper);
-        vault.investAndHarvest(amount, supplyBorrowParams);
+        vault.investAndHarvest(investAmount, supplyBorrowParams);
 
         assertLt(weth.balanceOf(address(vault)), minimumDust, "weth dust after invest");
         assertLt(wstEth.balanceOf(address(vault)), minimumDust, "wstEth dust after invest");
@@ -218,6 +238,8 @@ contract scWETHv2Test is Test {
 
         hoax(keeper);
         vault.disinvest(repayWithdrawParams);
+
+        _floatCheck();
 
         assertApproxEqRel(
             vault.getLtv(LendingMarketManager.LendingMarketType.AAVE_V3),
@@ -270,14 +292,16 @@ contract scWETHv2Test is Test {
         amount = bound(amount, boundMinimum, 15000 ether);
         _depositToVault(address(this), amount);
 
+        uint256 investAmount = amount - minimumFloatAmount;
+
         uint256 aaveV3Allocation = 0.7e18;
         uint256 eulerAllocation = 0.3e18;
 
         (scWETHv2.SupplyBorrowParam[] memory supplyBorrowParams,,) =
-            _getInvestParams(amount, aaveV3Allocation, eulerAllocation, 0);
+            _getInvestParams(investAmount, aaveV3Allocation, eulerAllocation, 0);
 
         hoax(keeper);
-        vault.investAndHarvest(amount, supplyBorrowParams);
+        vault.investAndHarvest(investAmount, supplyBorrowParams);
 
         uint256 aaveV3Assets = vault.getAssets(LendingMarketManager.LendingMarketType.AAVE_V3);
         uint256 eulerAssets = vault.getAssets(LendingMarketManager.LendingMarketType.EULER);
@@ -286,7 +310,7 @@ contract scWETHv2Test is Test {
         uint256 eulerLtv = vault.getLtv(LendingMarketManager.LendingMarketType.EULER);
 
         // reallocate 10% of the totalAssets from aavev3 to euler
-        uint256 reallocationAmount = amount.mulWadDown(0.1e18); // in weth
+        uint256 reallocationAmount = investAmount.mulWadDown(0.1e18); // in weth
 
         (
             scWETHv2.RepayWithdrawParam[] memory repayWithdrawParamsReallocation,
@@ -298,6 +322,8 @@ contract scWETHv2Test is Test {
         uint256 deltaWstEth = _ethToWstEth(delta);
         hoax(keeper);
         vault.reallocate(repayWithdrawParamsReallocation, supplyBorrowParamsReallocation, deltaWstEth, 0);
+
+        _floatCheck();
 
         _reallocationChecksWhenMarket1HasHigherLtv(
             totalAssets,
@@ -316,14 +342,16 @@ contract scWETHv2Test is Test {
         amount = bound(amount, boundMinimum, 15000 ether);
         _depositToVault(address(this), amount);
 
+        uint256 investAmount = amount - minimumFloatAmount;
+
         uint256 aaveV3Allocation = 0.7e18;
         uint256 eulerAllocation = 0.3e18;
 
         (scWETHv2.SupplyBorrowParam[] memory supplyBorrowParams,,) =
-            _getInvestParams(amount, aaveV3Allocation, eulerAllocation, 0);
+            _getInvestParams(investAmount, aaveV3Allocation, eulerAllocation, 0);
 
         hoax(keeper);
-        vault.investAndHarvest(amount, supplyBorrowParams);
+        vault.investAndHarvest(investAmount, supplyBorrowParams);
 
         uint256 aaveV3Assets = vault.getAssets(LendingMarketManager.LendingMarketType.AAVE_V3);
         uint256 eulerAssets = vault.getAssets(LendingMarketManager.LendingMarketType.EULER);
@@ -332,7 +360,7 @@ contract scWETHv2Test is Test {
         uint256 eulerLtv = vault.getLtv(LendingMarketManager.LendingMarketType.EULER);
 
         // reallocate 10% of the totalAssets from euler to aaveV3
-        uint256 reallocationAmount = amount.mulWadDown(0.1e18); // in weth
+        uint256 reallocationAmount = investAmount.mulWadDown(0.1e18); // in weth
 
         (
             scWETHv2.RepayWithdrawParam[] memory repayWithdrawParamsReallocation,
@@ -345,6 +373,8 @@ contract scWETHv2Test is Test {
         hoax(keeper);
         vault.reallocate(repayWithdrawParamsReallocation, supplyBorrowParamsReallocation, deltaWstEth, 0);
 
+        _floatCheck();
+
         _reallocationChecksWhenMarket1HasLowerLtv(
             totalAssets, aaveV3Assets, eulerAssets, aaveV3Ltv, eulerLtv, reallocationAmount
         );
@@ -355,11 +385,13 @@ contract scWETHv2Test is Test {
         amount = bound(amount, boundMinimum, 10000 ether);
         _depositToVault(address(this), amount);
 
+        uint256 investAmount = amount - minimumFloatAmount;
+
         (scWETHv2.SupplyBorrowParam[] memory supplyBorrowParams,,) =
-            _getInvestParams(amount, aaveV3AllocationPercent, eulerAllocationPercent, compoundAllocationPercent);
+            _getInvestParams(investAmount, aaveV3AllocationPercent, eulerAllocationPercent, compoundAllocationPercent);
 
         hoax(keeper);
-        vault.investAndHarvest(amount, supplyBorrowParams);
+        vault.investAndHarvest(investAmount, supplyBorrowParams);
 
         uint256 aaveV3Assets = vault.getAssets(LendingMarketManager.LendingMarketType.AAVE_V3);
         uint256 eulerAssets = vault.getAssets(LendingMarketManager.LendingMarketType.EULER);
@@ -369,7 +401,7 @@ contract scWETHv2Test is Test {
         uint256 eulerLtv = vault.getLtv(LendingMarketManager.LendingMarketType.EULER);
         uint256 compoundLtv = vault.getLtv(LendingMarketManager.LendingMarketType.COMPOUND_V3);
 
-        uint256 reallocationAmount = amount.mulWadDown(0.1e18); // in weth
+        uint256 reallocationAmount = investAmount.mulWadDown(0.1e18); // in weth
 
         (
             scWETHv2.RepayWithdrawParam[] memory repayWithdrawParamsReallocation,
@@ -391,11 +423,13 @@ contract scWETHv2Test is Test {
         amount = bound(amount, boundMinimum, 10000 ether);
         _depositToVault(address(this), amount);
 
+        uint256 investAmount = amount - minimumFloatAmount;
+
         (scWETHv2.SupplyBorrowParam[] memory supplyBorrowParams,,) =
-            _getInvestParams(amount, aaveV3AllocationPercent, eulerAllocationPercent, compoundAllocationPercent);
+            _getInvestParams(investAmount, aaveV3AllocationPercent, eulerAllocationPercent, compoundAllocationPercent);
 
         hoax(keeper);
-        vault.investAndHarvest(amount, supplyBorrowParams);
+        vault.investAndHarvest(investAmount, supplyBorrowParams);
 
         uint256 aaveV3Assets = vault.getAssets(LendingMarketManager.LendingMarketType.AAVE_V3);
         uint256 eulerAssets = vault.getAssets(LendingMarketManager.LendingMarketType.EULER);
@@ -405,7 +439,7 @@ contract scWETHv2Test is Test {
         uint256 eulerLtv = vault.getLtv(LendingMarketManager.LendingMarketType.EULER);
         uint256 compoundLtv = vault.getLtv(LendingMarketManager.LendingMarketType.COMPOUND_V3);
 
-        uint256 reallocationAmount = amount.mulWadDown(0.1e18); // in weth
+        uint256 reallocationAmount = investAmount.mulWadDown(0.1e18); // in weth
 
         (
             scWETHv2.RepayWithdrawParam[] memory repayWithdrawParamsReallocation,
@@ -427,11 +461,13 @@ contract scWETHv2Test is Test {
         amount = bound(amount, boundMinimum, 5000 ether);
         _depositToVault(address(this), amount);
 
+        uint256 investAmount = amount - minimumFloatAmount;
+
         // note: simulating profits testing only for aave and compound and not for euler due to the shitty interest rates of euler after getting rekt
-        (scWETHv2.SupplyBorrowParam[] memory supplyBorrowParams,,) = _getInvestParams(amount, 0.8e18, 0, 0.2e18);
+        (scWETHv2.SupplyBorrowParam[] memory supplyBorrowParams,,) = _getInvestParams(investAmount, 0.8e18, 0, 0.2e18);
 
         hoax(keeper);
-        vault.investAndHarvest(amount, supplyBorrowParams);
+        vault.investAndHarvest(investAmount, supplyBorrowParams);
 
         uint256 altv = vault.getLtv(LendingMarketManager.LendingMarketType.AAVE_V3);
         uint256 compoundLtv = vault.getLtv(LendingMarketManager.LendingMarketType.COMPOUND_V3);
@@ -476,6 +512,8 @@ contract scWETHv2Test is Test {
 
         hoax(keeper);
         vault.investAndHarvest(0, supplyBorrowParamsAfterProfits);
+
+        _floatCheck();
 
         assertApproxEqRel(
             altv,
@@ -842,8 +880,6 @@ contract scWETHv2Test is Test {
             0.005e18,
             "compound ltv not correct"
         );
-
-        assertEq(amount, vault.totalInvested(), "totalInvested not updated");
     }
 
     function _reallocationChecksWhenMarket1HasHigherLtv(
@@ -919,7 +955,7 @@ contract scWETHv2Test is Test {
 
         // assets must increase by reallocationAmount
         assertApproxEqRel(
-            vault.getAssets(LendingMarketManager.LendingMarketType.AAVE_V3) + float,
+            vault.getAssets(LendingMarketManager.LendingMarketType.AAVE_V3) + float - minimumFloatAmount,
             inititalAaveV3Assets + reallocationAmount,
             0.001e18,
             "aavev3 assets not increased"
@@ -969,7 +1005,7 @@ contract scWETHv2Test is Test {
         // assets must increase by reallocationAmount
         assertApproxEqRel(
             vault.getAssets(LendingMarketManager.LendingMarketType.AAVE_V3)
-                + vault.getAssets(LendingMarketManager.LendingMarketType.COMPOUND_V3) + float,
+                + vault.getAssets(LendingMarketManager.LendingMarketType.COMPOUND_V3) + float - minimumFloatAmount,
             inititalAaveV3Assets + initialCompoundAssets + reallocationAmount,
             0.001e18,
             "aavev3 & compound assets not increased"
@@ -1075,6 +1111,10 @@ contract scWETHv2Test is Test {
             0.001e18,
             "compound ltv must not change"
         );
+    }
+
+    function _floatCheck() internal {
+        assertGe(weth.balanceOf(address(vault)), minimumFloatAmount, "float not maintained");
     }
 
     function _depositToVault(address user, uint256 amount) internal returns (uint256 shares) {
