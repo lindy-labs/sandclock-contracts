@@ -38,6 +38,9 @@ contract scWETHv2 is sc4626, LendingMarketManager, IFlashLoanRecipient {
     event ExchangeProxyAddressUpdated(address indexed user, address newAddress);
     event NewTargetLtvApplied(address indexed admin, uint256 newTargetLtv);
     event Harvest(uint256 profitSinceLastHarvest, uint256 performanceFee);
+    event Invested(uint256 amount, SupplyBorrowParam[] supplyBorrowParams);
+    event DisInvested(RepayWithdrawParam[] repayWithdrawParams);
+    event Reallocated(RepayWithdrawParam[] from, SupplyBorrowParam[] to);
 
     struct RebalanceParams {
         RepayWithdrawParam[] repayWithdrawParams;
@@ -185,6 +188,8 @@ contract scWETHv2 is sc4626, LendingMarketManager, IFlashLoanRecipient {
         _initiateFlashLoan();
         balancerVault.flashLoan(address(this), tokens, amounts, abi.encode(params));
         _finalizeFlashLoan();
+
+        emit Invested(totalInvestAmount, supplyBorrowParams);
     }
 
     /// @notice disinvest from lending markets in case of a loss
@@ -212,6 +217,8 @@ contract scWETHv2 is sc4626, LendingMarketManager, IFlashLoanRecipient {
         _initiateFlashLoan();
         balancerVault.flashLoan(address(this), tokens, amounts, abi.encode(params));
         _finalizeFlashLoan();
+
+        emit DisInvested(repayWithdrawParams);
     }
 
     /// @notice reallocate funds between protocols (without any slippage)
@@ -244,6 +251,8 @@ contract scWETHv2 is sc4626, LendingMarketManager, IFlashLoanRecipient {
         _initiateFlashLoan();
         balancerVault.flashLoan(address(this), tokens, amounts, abi.encode(params));
         _finalizeFlashLoan();
+
+        emit Reallocated(from, to);
     }
 
     //////////////////// VIEW METHODS //////////////////////////
@@ -509,7 +518,6 @@ contract scWETHv2 is sc4626, LendingMarketManager, IFlashLoanRecipient {
 }
 
 // todo:
-// events
 // add full test coverage
 // euler rewards & 0x swapping
 // gas optimizations
