@@ -29,6 +29,7 @@ abstract contract sc4626 is ERC4626, AccessControl {
     bool flashLoanInitiated;
     uint256 public performanceFee = 0.1e18;
     uint256 public floatPercentage = 0.01e18;
+    uint256 public minimumFloatAmount = 1 ether;
     address public treasury;
 
     /// Role allowed to harvest/reinvest
@@ -36,6 +37,7 @@ abstract contract sc4626 is ERC4626, AccessControl {
 
     event PerformanceFeeUpdated(address indexed user, uint256 newPerformanceFee);
     event FloatPercentageUpdated(address indexed user, uint256 newFloatPercentage);
+    event FloatAmountUpdated(address indexed user, uint256 newFloatAmount);
     event TreasuryUpdated(address indexed user, address newTreasury);
 
     modifier onlyAdmin() {
@@ -58,6 +60,11 @@ abstract contract sc4626 is ERC4626, AccessControl {
         require(newFloatPercentage <= 1e18, "float percentage too high");
         floatPercentage = newFloatPercentage;
         emit FloatPercentageUpdated(msg.sender, newFloatPercentage);
+    }
+
+    function setMinimumFloatAmount(uint256 newFloatAmount) external onlyAdmin {
+        minimumFloatAmount = newFloatAmount;
+        emit FloatAmountUpdated(msg.sender, newFloatAmount);
     }
 
     function setTreasury(address newTreasury) external onlyAdmin {
