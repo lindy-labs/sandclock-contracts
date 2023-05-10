@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.13;
 
+import "forge-std/console2.sol";
 import {
     InvalidTargetLtv,
     InvalidSlippageTolerance,
@@ -27,7 +28,8 @@ import {AggregatorV3Interface} from "../interfaces/chainlink/AggregatorV3Interfa
 import {IFlashLoanRecipient} from "../interfaces/balancer/IFlashLoanRecipient.sol";
 import {sc4626} from "../sc4626.sol";
 
-abstract contract UsdcWethLendingManager {
+// TODO: celan up imports
+contract UsdcWethLendingManager {
     using SafeTransferLib for ERC20;
     using SafeTransferLib for WETH;
     using FixedPointMathLib for uint256;
@@ -38,16 +40,6 @@ abstract contract UsdcWethLendingManager {
         EULER
     }
 
-    struct ProtocolActions {
-        function(uint256) supply;
-        function(uint256) borrow;
-        function(uint256) repay;
-        function(uint256) withdraw;
-        function() view returns(uint256) getCollateral;
-        function() view returns(uint256) getDebt;
-        function() view returns(uint256) getMaxLtv;
-    }
-
     /**
      * @notice Struct to store lending position related information
      */
@@ -56,8 +48,6 @@ abstract contract UsdcWethLendingManager {
         uint256 collateral; // Amount of collateral
         uint256 debt; // Amount of debt
     }
-
-    mapping(Protocol => ProtocolActions) protocolToActions;
 
     ERC20 public immutable usdc;
     WETH public immutable weth;
@@ -119,49 +109,90 @@ abstract contract UsdcWethLendingManager {
         aaveV2ProtocolDataProvider = _aaveV2.protocolDataProvider;
         aaveV2AUsdc = _aaveV2.aUsdc;
         aaveV2VarDWeth = _aaveV2.varDWeth;
-
-        usdc.safeApprove(address(aaveV3Pool), type(uint256).max);
-        weth.safeApprove(address(aaveV3Pool), type(uint256).max);
-
-        usdc.safeApprove(eulerProtocol, type(uint256).max);
-        weth.safeApprove(eulerProtocol, type(uint256).max);
-        eulerMarkets.enterMarket(0, address(usdc));
-
-        usdc.safeApprove(address(aaveV2Pool), type(uint256).max);
-        weth.safeApprove(address(aaveV2Pool), type(uint256).max);
-
-        protocolToActions[Protocol.AAVE_V2] = ProtocolActions(
-            supplyUsdcOnAaveV2,
-            borrowWethOnAaveV2,
-            repayDebtOnAaveV2,
-            withdrawUsdcOnAaveV2,
-            getCollateralOnAaveV2,
-            getDebtOnAaveV2,
-            getMaxLtvOnAaveV2
-        );
-        protocolToActions[Protocol.AAVE_V3] = ProtocolActions(
-            supplyUsdcOnAaveV3,
-            borrowWethOnAaveV3,
-            repayDebtOnAaveV3,
-            withdrawUsdcOnAaveV3,
-            getCollateralOnAaveV3,
-            getDebtOnAaveV3,
-            getMaxLtvOnAaveV3
-        );
-        protocolToActions[Protocol.EULER] = ProtocolActions(
-            supplyUsdcOnEuler,
-            borrowWethOnEuler,
-            repayDebtOnEuler,
-            withdrawUsdcOnEuler,
-            getCollateralOnEuler,
-            getDebtOnEuler,
-            getMaxLtvOnEuler
-        );
     }
 
-    function getMaxLtv(Protocol _protocolId) public view returns (uint256) {
-        return protocolToActions[_protocolId].getMaxLtv();
+    function supply(Protocol _protocolId, uint256 _amount) external {
+        if (_protocolId == Protocol.AAVE_V2) {
+            aaveV2Pool.deposit(address(usdc), _amount, address(this), 0);
+        } else if (_protocolId == Protocol.AAVE_V3) {
+            aaveV3Pool.supply(address(usdc), _amount, address(this), 0);
+        } else {
+            eulerEUsdc.deposit(0, _amount);
+        }
     }
+
+    function borrow(Protocol _protocolId, uint256 _amount) external {
+        if (_protocolId == Protocol.AAVE_V2) {
+            aaveV2Pool.borrow(address(weth), _amount, C.AAVE_VAR_INTEREST_RATE_MODE, 0, address(this));
+        } else if (_protocolId == Protocol.AAVE_V3) {
+            aaveV3Pool.borrow(address(weth), _amount, C.AAVE_VAR_INTEREST_RATE_MODE, 0, address(this));
+        } else {
+            eulerDWeth.borrow(0, _amount);
+        }
+    }
+
+    function repay(Protocol _protocolId, uint256 _amount) external {
+        if (_protocolId == Protocol.AAVE_V2) {
+            aaveV2Pool.repay(address(weth), _amount, C.AAVE_VAR_INTEREST_RATE_MODE, address(this));
+        } else if (_protocolId == Protocol.AAVE_V3) {
+            aaveV3Pool.repay(address(weth), _amount, C.AAVE_VAR_INTEREST_RATE_MODE, address(this));
+        } else {
+            eulerDWeth.repay(0, _amount);
+        }
+    }
+
+    function withdraw(Protocol _protocolId, uint256 _amount) external {
+        if (_protocolId == Protocol.AAVE_V2) {
+            aaveV2Pool.withdraw(address(usdc), _amount, address(this));
+        } else if (_protocolId == Protocol.AAVE_V3) {
+            aaveV3Pool.withdraw(address(usdc), _amount, address(this));
+        } else {
+            eulerEUsdc.withdraw(0, _amount);
+        }
+    }
+
+    function getCollateral(Protocol _protocolId, address _account) public view returns (uint256 collateral) {
+        if (_protocolId == Protocol.AAVE_V2) {
+            collateral = aaveV2AUsdc.balanceOf(_account);
+        } else if (_protocolId == Protocol.AAVE_V3) {
+            collateral = aaveV3AUsdc.balanceOf(_account);
+        } else {
+            collateral = eulerEUsdc.balanceOfUnderlying(_account);
+        }
+    }
+
+    function getDebt(Protocol _protocolId, address _account) public view returns (uint256 debt) {
+        if (_protocolId == Protocol.AAVE_V2) {
+            debt = aaveV2VarDWeth.balanceOf(_account);
+        } else if (_protocolId == Protocol.AAVE_V3) {
+            debt = aaveV3VarDWeth.balanceOf(_account);
+        } else {
+            debt = eulerDWeth.balanceOf(_account);
+        }
+    }
+
+    function getMaxLtv(Protocol _protocolId) public view returns (uint256 maxLtv) {
+        if (_protocolId == Protocol.AAVE_V2) {
+            (, uint256 ltv,,,,,,,,) = aaveV2ProtocolDataProvider.getReserveConfigurationData(address(usdc));
+
+            // ltv is returned as a percentage with 2 decimals (e.g. 80% = 8000) so we need to multiply by 1e14
+            maxLtv = ltv * 1e14;
+        } else if (_protocolId == Protocol.AAVE_V3) {
+            (, uint256 ltv,,,,,,,,) = aaveV3PoolDataProvider.getReserveConfigurationData(address(usdc));
+
+            // ltv is returned as a percentage with 2 decimals (e.g. 80% = 8000) so we need to multiply by 1e14
+            maxLtv = ltv * 1e14;
+        } else {
+            uint256 collateralFactor = eulerMarkets.underlyingToAssetConfig(address(usdc)).collateralFactor;
+            uint256 borrowFactor = eulerMarkets.underlyingToAssetConfig(address(weth)).borrowFactor;
+
+            uint256 scaledCollateralFactor = collateralFactor.divWadDown(C.EULER_CONFIG_FACTOR_SCALE);
+            uint256 scaledBorrowFactor = borrowFactor.divWadDown(C.EULER_CONFIG_FACTOR_SCALE);
+
+            maxLtv = scaledCollateralFactor.mulWadDown(scaledBorrowFactor);
+        }
+    }
+
     /**
      * @notice Fetches position-related information for each protocol in the input list
      * @param _protocolIds An array of protocol identifiers for which to fetch position info
@@ -171,7 +202,7 @@ abstract contract UsdcWethLendingManager {
      * If the collateral for a position is 0, the LTV for that position is also 0.
      */
 
-    function getLendingPositionsInfo(Protocol[] calldata _protocolIds)
+    function getLendingPositionsInfo(Protocol[] calldata _protocolIds, address _account)
         external
         view
         returns (LendingPositionInfo[] memory positionInfos)
@@ -181,122 +212,12 @@ abstract contract UsdcWethLendingManager {
         for (uint8 i = 0; i < _protocolIds.length; i++) {
             Protocol protocolId = _protocolIds[i];
 
-            ProtocolActions memory protocolActions = protocolToActions[protocolId];
-
             LendingPositionInfo memory positionInfo;
             positionInfo.protocolId = protocolId;
-            positionInfo.collateral = protocolActions.getCollateral();
-            positionInfo.debt = protocolActions.getDebt();
+            positionInfo.collateral = getCollateral(protocolId, _account);
+            positionInfo.debt = getDebt(protocolId, _account);
 
             positionInfos[i] = positionInfo;
         }
-    }
-
-    /*//////////////////////////////////////////////////////////////
-                            AAVE_V2 API
-    //////////////////////////////////////////////////////////////*/
-
-    function supplyUsdcOnAaveV2(uint256 _amount) internal {
-        aaveV2Pool.deposit(address(usdc), _amount, address(this), 0);
-    }
-
-    function borrowWethOnAaveV2(uint256 _amount) internal {
-        aaveV2Pool.borrow(address(weth), _amount, C.AAVE_VAR_INTEREST_RATE_MODE, 0, address(this));
-    }
-
-    function repayDebtOnAaveV2(uint256 _amount) internal {
-        aaveV2Pool.repay(address(weth), _amount, C.AAVE_VAR_INTEREST_RATE_MODE, address(this));
-    }
-
-    function withdrawUsdcOnAaveV2(uint256 _amount) internal {
-        aaveV2Pool.withdraw(address(usdc), _amount, address(this));
-    }
-
-    function getCollateralOnAaveV2() internal view returns (uint256) {
-        return aaveV2AUsdc.balanceOf(address(this));
-    }
-
-    function getDebtOnAaveV2() internal view returns (uint256) {
-        return aaveV2VarDWeth.balanceOf(address(this));
-    }
-
-    function getMaxLtvOnAaveV2() internal view returns (uint256) {
-        (, uint256 ltv,,,,,,,,) = aaveV2ProtocolDataProvider.getReserveConfigurationData(address(usdc));
-
-        // ltv is returned as a percentage with 2 decimals (e.g. 80% = 8000) so we need to multiply by 1e14
-        return ltv * 1e14;
-    }
-
-    /*//////////////////////////////////////////////////////////////
-                            AAVE_V3 API
-    //////////////////////////////////////////////////////////////*/
-
-    function supplyUsdcOnAaveV3(uint256 _amount) internal {
-        aaveV3Pool.supply(address(usdc), _amount, address(this), 0);
-    }
-
-    function borrowWethOnAaveV3(uint256 _amount) internal {
-        aaveV3Pool.borrow(address(weth), _amount, C.AAVE_VAR_INTEREST_RATE_MODE, 0, address(this));
-    }
-
-    function repayDebtOnAaveV3(uint256 _amount) internal {
-        aaveV3Pool.repay(address(weth), _amount, C.AAVE_VAR_INTEREST_RATE_MODE, address(this));
-    }
-
-    function withdrawUsdcOnAaveV3(uint256 _amount) internal {
-        aaveV3Pool.withdraw(address(usdc), _amount, address(this));
-    }
-
-    function getCollateralOnAaveV3() internal view returns (uint256) {
-        return aaveV3AUsdc.balanceOf(address(this));
-    }
-
-    function getDebtOnAaveV3() internal view returns (uint256) {
-        return aaveV3VarDWeth.balanceOf(address(this));
-    }
-
-    function getMaxLtvOnAaveV3() internal view returns (uint256) {
-        (, uint256 ltv,,,,,,,,) = aaveV3PoolDataProvider.getReserveConfigurationData(address(usdc));
-
-        // ltv is returned as a percentage with 2 decimals (e.g. 80% = 8000) so we need to multiply by 1e14
-        return ltv * 1e14;
-    }
-
-    /*//////////////////////////////////////////////////////////////
-                            EULER API
-    //////////////////////////////////////////////////////////////*/
-
-    function supplyUsdcOnEuler(uint256 _amount) internal {
-        eulerEUsdc.deposit(0, _amount);
-    }
-
-    function borrowWethOnEuler(uint256 _amount) internal {
-        eulerDWeth.borrow(0, _amount);
-    }
-
-    function repayDebtOnEuler(uint256 _amount) internal {
-        eulerDWeth.repay(0, _amount);
-    }
-
-    function withdrawUsdcOnEuler(uint256 _amount) internal {
-        eulerEUsdc.withdraw(0, _amount);
-    }
-
-    function getCollateralOnEuler() internal view returns (uint256) {
-        return eulerEUsdc.balanceOfUnderlying(address(this));
-    }
-
-    function getDebtOnEuler() internal view returns (uint256) {
-        return eulerDWeth.balanceOf(address(this));
-    }
-
-    function getMaxLtvOnEuler() internal view returns (uint256) {
-        uint256 collateralFactor = eulerMarkets.underlyingToAssetConfig(address(usdc)).collateralFactor;
-        uint256 borrowFactor = eulerMarkets.underlyingToAssetConfig(address(weth)).borrowFactor;
-
-        uint256 scaledCollateralFactor = collateralFactor.divWadDown(C.EULER_CONFIG_FACTOR_SCALE);
-        uint256 scaledBorrowFactor = borrowFactor.divWadDown(C.EULER_CONFIG_FACTOR_SCALE);
-
-        return scaledCollateralFactor.mulWadDown(scaledBorrowFactor);
     }
 }

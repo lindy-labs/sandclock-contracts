@@ -49,18 +49,16 @@ contract scUSDCv2Test is Test {
     uint256 constant EUL_SWAP_USDC_RECEIVED = 7883_963202;
 
     uint256 mainnetFork;
-    uint256 constant ethWstEthMaxLtv = 0.7735e18;
-    uint256 constant slippageTolerance = 0.999e18;
-    uint256 constant flashLoanLtv = 0.5e18;
 
     address constant keeper = address(0x05);
     address constant alice = address(0x06);
 
-    scUSDCv2 vault;
-    scWETH wethVault;
-
     WETH weth;
     ERC20 usdc;
+
+    UsdcWethLendingManager lendingManager;
+    scWETH wethVault;
+    scUSDCv2 vault;
 
     function setUp() public {
         mainnetFork = vm.createFork(vm.envString("RPC_URL_MAINNET"));
@@ -70,38 +68,9 @@ contract scUSDCv2Test is Test {
         usdc = ERC20(C.USDC);
         weth = WETH(payable(C.WETH));
 
+        _deployLendingManager();
+        _deployScWeth();
         _deployAndSetUpVault();
-    }
-
-    function _deployAndSetUpVault() internal {
-        scWETH.ConstructorParams memory scWethParams = scWETH.ConstructorParams({
-            admin: address(this),
-            keeper: keeper,
-            targetLtv: 0.7e18,
-            slippageTolerance: 0.99e18,
-            aavePool: IPool(C.AAVE_POOL),
-            aaveAwstEth: IAToken(C.AAVE_AWSTETH_TOKEN),
-            aaveVarDWeth: ERC20(C.AAVAAVE_VAR_DEBT_WETH_TOKEN),
-            curveEthStEthPool: ICurvePool(C.CURVE_ETH_STETH_POOL),
-            stEth: ILido(C.STETH),
-            wstEth: IwstETH(C.WSTETH),
-            weth: WETH(payable(C.WETH)),
-            stEthToEthPriceFeed: AggregatorV3Interface(C.CHAINLINK_STETH_ETH_PRICE_FEED),
-            balancerVault: IVault(C.BALANCER_VAULT)
-        });
-
-        wethVault = new scWETH(scWethParams);
-
-        scUSDCv2.ConstructorParams memory params = _createDefaultUsdcVaultConstructorParams(wethVault);
-
-        vault = new scUSDCv2(params);
-
-        // set vault eth balance to zero
-        vm.deal(address(vault), 0);
-        // set float percentage to 0 for most tests
-        vault.setFloatPercentage(0);
-        // assign keeper role to deployer
-        vault.grantRole(vault.KEEPER_ROLE(), address(this));
     }
 
     /// #constructor ///
@@ -112,23 +81,35 @@ contract scUSDCv2Test is Test {
 
         // check approvals
         assertEq(
-            usdc.allowance(address(vault), address(vault.aaveV3Pool())), type(uint256).max, "usdc->aave v3 allowance"
+            usdc.allowance(address(vault), address(lendingManager.aaveV3Pool())),
+            type(uint256).max,
+            "usdc->aave v3 allowance"
         );
         assertEq(
-            usdc.allowance(address(vault), address(vault.eulerProtocol())), type(uint256).max, "usdc->euler allowance"
+            usdc.allowance(address(vault), address(lendingManager.eulerProtocol())),
+            type(uint256).max,
+            "usdc->euler allowance"
         );
         assertEq(
-            usdc.allowance(address(vault), address(vault.aaveV2Pool())), type(uint256).max, "usdc->aave v2 allowance"
+            usdc.allowance(address(vault), address(lendingManager.aaveV2Pool())),
+            type(uint256).max,
+            "usdc->aave v2 allowance"
         );
 
         assertEq(
-            weth.allowance(address(vault), address(vault.aaveV3Pool())), type(uint256).max, "weth->aave v3 allowance"
+            weth.allowance(address(vault), address(lendingManager.aaveV3Pool())),
+            type(uint256).max,
+            "weth->aave v3 allowance"
         );
         assertEq(
-            weth.allowance(address(vault), address(vault.eulerProtocol())), type(uint256).max, "weth->euler allowance"
+            weth.allowance(address(vault), address(lendingManager.eulerProtocol())),
+            type(uint256).max,
+            "weth->euler allowance"
         );
         assertEq(
-            weth.allowance(address(vault), address(vault.aaveV2Pool())), type(uint256).max, "weth->aave v2 allowance"
+            weth.allowance(address(vault), address(lendingManager.aaveV2Pool())),
+            type(uint256).max,
+            "weth->aave v2 allowance"
         );
 
         assertEq(
@@ -516,7 +497,7 @@ contract scUSDCv2Test is Test {
     function test_rebalance_FailsWhenBorrowingOverMaxLtv() public {
         uint256 initialBalance = 1_000_000e6;
         deal(address(usdc), address(vault), initialBalance);
-        uint256 maxLtv = vault.getMaxLtv(UsdcWethLendingManager.Protocol.EULER);
+        uint256 maxLtv = lendingManager.getMaxLtv(UsdcWethLendingManager.Protocol.EULER);
         uint256 tooLargeBorrowAmount = vault.getWethFromUsdc(initialBalance).mulWadUp(maxLtv + 0.01e18);
 
         scUSDCv2.RebalanceParams[] memory params = new scUSDCv2.RebalanceParams[](1);
@@ -1057,6 +1038,7 @@ contract scUSDCv2Test is Test {
         uint256 endDebt = initialDebt / 2;
         vm.prank(alice);
         vault.withdraw(withdrawAmount, alice, alice);
+        console2.log("withdraw complete");
 
         assertApproxEqRel(usdc.balanceOf(alice), withdrawAmount, 0.01e18, "alice usdc balance");
 
@@ -1071,121 +1053,6 @@ contract scUSDCv2Test is Test {
         assertApproxEqRel(collateralOnEuler, endCollateral / 2, 0.01e18, "collateral on euler");
         assertApproxEqRel(debtOnAaveV3, endDebt / 2, 0.01e18, "debt on aave v3");
         assertApproxEqRel(debtOnEuler, endDebt / 2, 0.01e18, "debt on euler");
-    }
-
-    /// #getLendingPositionsInfo ///
-
-    function test_getLendingPositionsInfo_ReturnsInfoOnOneProtocol() public {
-        uint256 initialBalance = 1_000_000e6;
-        uint256 initialDebt = 100 ether;
-        deal(address(usdc), address(vault), initialBalance);
-
-        scUSDCv2.RebalanceParams[] memory params = new scUSDCv2.RebalanceParams[](1);
-        params[0] = _createRebalanceParams(UsdcWethLendingManager.Protocol.AAVE_V3, initialBalance, true, initialDebt);
-
-        vault.rebalance(params);
-
-        UsdcWethLendingManager.Protocol[] memory protocolIds = new UsdcWethLendingManager.Protocol[](1);
-        protocolIds[0] = UsdcWethLendingManager.Protocol.AAVE_V3;
-
-        scUSDCv2.LendingPositionInfo[] memory positions = vault.getLendingPositionsInfo(protocolIds);
-
-        assertEq(positions.length, 1, "positions info length");
-        assertEq(uint8(positions[0].protocolId), uint8(UsdcWethLendingManager.Protocol.AAVE_V3), "protocolId");
-        assertEq(positions[0].collateral, initialBalance, "supplyAmount");
-        assertEq(positions[0].debt, initialDebt, "borrowAmount");
-    }
-
-    function test_getLendingPositionsInfo_ReturnsInfoOnMultipleProtocols() public {
-        uint256 initialBalance = 1_500_000e6;
-        uint256 initialDebtPerProtocol = 100 ether;
-        deal(address(usdc), address(vault), initialBalance);
-
-        scUSDCv2.RebalanceParams[] memory params = new scUSDCv2.RebalanceParams[](3);
-        params[0] = _createRebalanceParams(
-            UsdcWethLendingManager.Protocol.AAVE_V3, initialBalance / 3, true, initialDebtPerProtocol
-        );
-        params[1] = _createRebalanceParams(
-            UsdcWethLendingManager.Protocol.AAVE_V2, initialBalance / 3, true, initialDebtPerProtocol
-        );
-        params[2] = _createRebalanceParams(
-            UsdcWethLendingManager.Protocol.EULER, initialBalance / 3, true, initialDebtPerProtocol
-        );
-
-        vault.rebalance(params);
-
-        UsdcWethLendingManager.Protocol[] memory protocolIds = new UsdcWethLendingManager.Protocol[](3);
-        protocolIds[0] = UsdcWethLendingManager.Protocol.AAVE_V3;
-        protocolIds[1] = UsdcWethLendingManager.Protocol.EULER;
-        protocolIds[2] = UsdcWethLendingManager.Protocol.AAVE_V2;
-
-        scUSDCv2.LendingPositionInfo[] memory positions = vault.getLendingPositionsInfo(protocolIds);
-
-        assertEq(positions.length, 3, "positions info length");
-        assertEq(
-            uint8(positions[0].protocolId), uint8(UsdcWethLendingManager.Protocol.AAVE_V3), "protocolId not AAVE_V3"
-        );
-        assertApproxEqAbs(positions[0].collateral, initialBalance / 3, 1, "aave v3 collateral");
-        assertApproxEqAbs(positions[0].debt, initialDebtPerProtocol, 1, "aave v3 debt");
-
-        assertEq(uint8(positions[1].protocolId), uint8(UsdcWethLendingManager.Protocol.EULER), "protocolId not EULER");
-        assertApproxEqAbs(positions[1].collateral, initialBalance / 3, 1, "euler collateral");
-        assertApproxEqAbs(positions[1].debt, initialDebtPerProtocol, 1, "euler debt");
-
-        assertEq(
-            uint8(positions[2].protocolId), uint8(UsdcWethLendingManager.Protocol.AAVE_V2), "protocolId not AAVE_V2"
-        );
-        assertApproxEqAbs(positions[2].collateral, initialBalance / 3, 1, "aave v2 collateral");
-        assertApproxEqAbs(positions[2].debt, initialDebtPerProtocol, 1, "aave v2 debt");
-    }
-
-    function test_getLendingPositionsInfo_WorksWhenProtocolRequestedIsNotUsed() public {
-        uint256 initialBalance = 1_000_000e6;
-        uint256 initialDebt = 100 ether;
-        deal(address(usdc), address(vault), initialBalance);
-
-        // not using AAVE_V3
-        scUSDCv2.RebalanceParams[] memory params = new scUSDCv2.RebalanceParams[](1);
-        params[0] = _createRebalanceParams(UsdcWethLendingManager.Protocol.EULER, initialBalance, true, initialDebt);
-
-        vault.rebalance(params);
-
-        UsdcWethLendingManager.Protocol[] memory protocolIds = new UsdcWethLendingManager.Protocol[](2);
-        protocolIds[0] = UsdcWethLendingManager.Protocol.AAVE_V3;
-        protocolIds[1] = UsdcWethLendingManager.Protocol.EULER;
-
-        scUSDCv2.LendingPositionInfo[] memory positions = vault.getLendingPositionsInfo(protocolIds);
-
-        assertEq(positions.length, 2, "positions info length");
-        assertEq(
-            uint8(positions[0].protocolId), uint8(UsdcWethLendingManager.Protocol.AAVE_V3), "protocolId not AAVE_V3"
-        );
-        assertEq(positions[0].collateral, 0, "aave v3 collateral not 0");
-        assertEq(positions[0].debt, 0, "aave v3 debt not 0");
-
-        assertEq(uint8(positions[1].protocolId), uint8(UsdcWethLendingManager.Protocol.EULER), "protocolId not EULER");
-        assertApproxEqAbs(positions[1].collateral, initialBalance, 1, "euler collateral");
-        assertApproxEqAbs(positions[1].debt, initialDebt, 1, "euler debt");
-    }
-
-    /// #getMaxLtv ///
-
-    function test_getMaxLtv_AaveV3() public {
-        uint256 maxLtv = vault.getMaxLtv(UsdcWethLendingManager.Protocol.AAVE_V3);
-
-        assertEq(maxLtv, 0.74e18, "max ltv");
-    }
-
-    function test_getMaxLtv_AaveV2() public {
-        uint256 maxLtv = vault.getMaxLtv(UsdcWethLendingManager.Protocol.AAVE_V2);
-
-        assertEq(maxLtv, 0.8e18, "max ltv");
-    }
-
-    function test_getMaxLtv_Euler() public {
-        uint256 maxLtv = vault.getMaxLtv(UsdcWethLendingManager.Protocol.EULER);
-
-        assertEq(maxLtv, 0.819e18, "max ltv");
     }
 
     /// #exitAllPositions ///
@@ -1326,29 +1193,37 @@ contract scUSDCv2Test is Test {
 
     function test_sellEulerRewards_SwapsEulerForUsdc() public {
         vm.rollFork(EUL_SWAP_BLOCK);
-        // redeploy vault
+        // redeploy vaults
+        _deployLendingManager();
+        _deployScWeth();
         _deployAndSetUpVault();
 
         uint256 initialUsdcBalance = 2_000e6;
         deal(address(usdc), address(vault), initialUsdcBalance);
-        deal(address(vault.eulerRewardsToken()), address(vault), EUL_AMOUNT * 2);
+        deal(address(lendingManager.eulerRewardsToken()), address(vault), EUL_AMOUNT * 2);
 
-        assertEq(vault.eulerRewardsToken().balanceOf(address(vault)), EUL_AMOUNT * 2, "euler balance");
+        assertEq(lendingManager.eulerRewardsToken().balanceOf(address(vault)), EUL_AMOUNT * 2, "euler balance");
         assertEq(vault.usdcBalance(), initialUsdcBalance, "usdc balance");
         assertEq(vault.totalAssets(), initialUsdcBalance, "total assets");
 
         vault.sellEulerRewards(EUL_SWAP_DATA, 0);
 
-        assertEq(vault.eulerRewardsToken().balanceOf(address(vault)), EUL_AMOUNT, "vault euler balance");
+        assertEq(lendingManager.eulerRewardsToken().balanceOf(address(vault)), EUL_AMOUNT, "vault euler balance");
         assertEq(vault.totalAssets(), initialUsdcBalance + EUL_SWAP_USDC_RECEIVED, "vault total assets");
         assertEq(vault.usdcBalance(), initialUsdcBalance + EUL_SWAP_USDC_RECEIVED, "vault usdc balance");
-        assertEq(vault.eulerRewardsToken().allowance(address(vault), vault.zeroExRouter()), 0, "0x eul allowance");
+        assertEq(
+            lendingManager.eulerRewardsToken().allowance(address(vault), vault.zeroExRouter()), 0, "0x eul allowance"
+        );
     }
 
     function test_sellEulerRewards_EmitsEventOnSuccessfulSwap() public {
         vm.rollFork(EUL_SWAP_BLOCK);
+        // redeploy vaults
+        _deployLendingManager();
+        _deployScWeth();
         _deployAndSetUpVault();
-        deal(address(vault.eulerRewardsToken()), address(vault), EUL_AMOUNT);
+
+        deal(address(lendingManager.eulerRewardsToken()), address(vault), EUL_AMOUNT);
 
         vm.expectEmit(true, true, true, true);
         emit EulerRewardsSold(EUL_AMOUNT, EUL_SWAP_USDC_RECEIVED);
@@ -1358,8 +1233,12 @@ contract scUSDCv2Test is Test {
 
     function test_sellEulerRewards_FailsIfUsdcAmountReceivedIsLessThanMin() public {
         vm.rollFork(EUL_SWAP_BLOCK);
+        // redeploy vaults
+        _deployLendingManager();
+        _deployScWeth();
         _deployAndSetUpVault();
-        deal(address(vault.eulerRewardsToken()), address(vault), EUL_AMOUNT);
+
+        deal(address(lendingManager.eulerRewardsToken()), address(vault), EUL_AMOUNT);
 
         vm.expectRevert(EndUsdcBalanceTooLow.selector);
         vault.sellEulerRewards(EUL_SWAP_DATA, EUL_SWAP_USDC_RECEIVED + 1);
@@ -1367,8 +1246,12 @@ contract scUSDCv2Test is Test {
 
     function test_sellEulerRewards_FailsIfSwapIsNotSucessful() public {
         vm.rollFork(EUL_SWAP_BLOCK);
+        // redeploy vaults
+        _deployLendingManager();
+        _deployScWeth();
         _deployAndSetUpVault();
-        deal(address(vault.eulerRewardsToken()), address(vault), EUL_AMOUNT);
+
+        deal(address(lendingManager.eulerRewardsToken()), address(vault), EUL_AMOUNT);
 
         bytes memory invalidSwapData = hex"6af479b20000";
 
@@ -1406,11 +1289,7 @@ contract scUSDCv2Test is Test {
 
     /// internal helper functions ///
 
-    function _createDefaultUsdcVaultConstructorParams(scWETH scWeth)
-        internal
-        view
-        returns (scUSDCv2.ConstructorParams memory)
-    {
+    function _deployLendingManager() internal {
         UsdcWethLendingManager.AaveV3 memory aaveV3 = UsdcWethLendingManager.AaveV3({
             pool: IPool(C.AAVE_POOL),
             poolDataProvider: IPoolDataProvider(C.AAVE_POOL_DATA_PROVIDER),
@@ -1433,20 +1312,51 @@ contract scUSDCv2Test is Test {
             varDWeth: ERC20(C.AAVE_V2_VAR_DEBT_WETH_TOKEN)
         });
 
-        return scUSDCv2.ConstructorParams({
+        lendingManager = new UsdcWethLendingManager(usdc, weth, aaveV3, aaveV2, euler);
+    }
+
+    function _deployScWeth() internal {
+        scWETH.ConstructorParams memory scWethParams = scWETH.ConstructorParams({
             admin: address(this),
             keeper: keeper,
-            scWETH: scWeth,
+            targetLtv: 0.7e18,
+            slippageTolerance: 0.99e18,
+            aavePool: IPool(C.AAVE_POOL),
+            aaveAwstEth: IAToken(C.AAVE_AWSTETH_TOKEN),
+            aaveVarDWeth: ERC20(C.AAVAAVE_VAR_DEBT_WETH_TOKEN),
+            curveEthStEthPool: ICurvePool(C.CURVE_ETH_STETH_POOL),
+            stEth: ILido(C.STETH),
+            wstEth: IwstETH(C.WSTETH),
+            weth: WETH(payable(C.WETH)),
+            stEthToEthPriceFeed: AggregatorV3Interface(C.CHAINLINK_STETH_ETH_PRICE_FEED),
+            balancerVault: IVault(C.BALANCER_VAULT)
+        });
+
+        wethVault = new scWETH(scWethParams);
+    }
+
+    function _deployAndSetUpVault() internal {
+        scUSDCv2.ConstructorParams memory params = scUSDCv2.ConstructorParams({
+            admin: address(this),
+            keeper: keeper,
+            scWETH: wethVault,
+            lendingManager: lendingManager,
             usdc: ERC20(C.USDC),
             weth: WETH(payable(C.WETH)),
             zeroExRouter: C.ZERO_EX_ROUTER,
-            aaveV3: aaveV3,
-            aaveV2: aaveV2,
-            euler: euler,
             uniswapSwapRouter: ISwapRouter(C.UNISWAP_V3_SWAP_ROUTER),
             chainlinkUsdcToEthPriceFeed: AggregatorV3Interface(C.CHAINLINK_USDC_ETH_PRICE_FEED),
             balancerVault: IVault(C.BALANCER_VAULT)
         });
+
+        vault = new scUSDCv2(params);
+
+        // set vault eth balance to zero
+        vm.deal(address(vault), 0);
+        // set float percentage to 0 for most tests
+        vault.setFloatPercentage(0);
+        // assign keeper role to deployer
+        vault.grantRole(vault.KEEPER_ROLE(), address(this));
     }
 
     function _createRebalanceParams(
@@ -1482,7 +1392,8 @@ contract scUSDCv2Test is Test {
     {
         UsdcWethLendingManager.Protocol[] memory protocols = new UsdcWethLendingManager.Protocol[](1);
         protocols[0] = _protocolId;
-        scUSDCv2.LendingPositionInfo[] memory loanInfo = vault.getLendingPositionsInfo(protocols);
+        UsdcWethLendingManager.LendingPositionInfo[] memory loanInfo =
+            lendingManager.getLendingPositionsInfo(protocols, address(vault));
 
         collateral = loanInfo[0].collateral;
         debt = loanInfo[0].debt;
@@ -1493,10 +1404,8 @@ contract scUSDCv2Test is Test {
             return "Aave v3";
         } else if (_protocolId == UsdcWethLendingManager.Protocol.AAVE_V2) {
             return "Aave v2";
-        } else if (_protocolId == UsdcWethLendingManager.Protocol.EULER) {
+        } else {
             return "Euler";
         }
-
-        revert("unknown protocol id");
     }
 }

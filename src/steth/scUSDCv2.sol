@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.13;
 
+import "forge-std/console2.sol";
 import {
     InvalidTargetLtv,
     InvalidSlippageTolerance,
@@ -31,14 +32,15 @@ import {IFlashLoanRecipient} from "../interfaces/balancer/IFlashLoanRecipient.so
 import {sc4626} from "../sc4626.sol";
 import {UsdcWethLendingManager} from "./UsdcWethLendingManager.sol";
 
-// TODO: update documentation
+// TODO: update documentation on lending manager
+// TODO: remove structs for gas optimization and further contract size reduction
 /**
- * @title Sandclock USDC Vault Version 2
+ * @title Sandclock USDC Vault version 2
  * @notice A vault that allows users to earn interest on their USDC deposits from leveraged WETH staking.
- * @notice The vault uses multiple money markets to earn yield on USDC deposits and borrow WETH to stake.
+ * @notice The v2 vault uses multiple money markets to earn yield on USDC deposits and borrow WETH to stake.
  * @dev This vault uses Sandclock's leveraged WETH staking vault - scWETH.
  */
-contract scUSDCv2 is sc4626, UsdcWethLendingManager, IFlashLoanRecipient {
+contract scUSDCv2 is sc4626, IFlashLoanRecipient {
     using SafeTransferLib for ERC20;
     using SafeTransferLib for WETH;
     using FixedPointMathLib for uint256;
@@ -55,7 +57,7 @@ contract scUSDCv2 is sc4626, UsdcWethLendingManager, IFlashLoanRecipient {
      * @notice Struct containing parameters for moving funds between money markets.
      */
     struct ReallocationParams {
-        Protocol protocolId;
+        UsdcWethLendingManager.Protocol protocolId;
         bool isDownsize;
         uint256 collateralAmount;
         uint256 debtAmount;
@@ -65,13 +67,13 @@ contract scUSDCv2 is sc4626, UsdcWethLendingManager, IFlashLoanRecipient {
      * @notice Struct containing parameters for rebalancing the loans taken on multiple money markets (protocols).
      */
     struct RebalanceParams {
-        Protocol protocolId;
+        UsdcWethLendingManager.Protocol protocolId;
         uint256 supplyAmount;
         bool leverageUp;
         uint256 wethAmount;
     }
 
-    error LtvAboveMaxAllowed(Protocol protocolId);
+    error LtvAboveMaxAllowed(UsdcWethLendingManager.Protocol protocolId);
     error FloatBalanceTooSmall(uint256 actual, uint256 required);
 
     event NewTargetLtvApplied(address indexed admin, uint256 newTargetLtv);
@@ -79,10 +81,12 @@ contract scUSDCv2 is sc4626, UsdcWethLendingManager, IFlashLoanRecipient {
     event EmergencyExitExecuted(
         address indexed admin, uint256 wethWithdrawn, uint256 debtRepaid, uint256 collateralReleased
     );
-    event Reallocated(Protocol protocolId, bool isDownsize, uint256 collateral, uint256 debt);
-    event Rebalanced(Protocol protocolId, uint256 supplied, bool leverageUp, uint256 debt);
+    event Reallocated(UsdcWethLendingManager.Protocol protocolId, bool isDownsize, uint256 collateral, uint256 debt);
+    event Rebalanced(UsdcWethLendingManager.Protocol protocolId, uint256 supplied, bool leverageUp, uint256 debt);
     event ProfitSold(uint256 wethSold, uint256 usdcReceived);
     event EulerRewardsSold(uint256 eulerSold, uint256 usdcReceived);
+
+    WETH public immutable weth;
 
     // Uniswap V3 router
     ISwapRouter public immutable swapRouter;
@@ -102,16 +106,17 @@ contract scUSDCv2 is sc4626, UsdcWethLendingManager, IFlashLoanRecipient {
     // leveraged (w)eth vault
     ERC4626 public immutable scWETH;
 
+    // lending manager contract used to interact with different money markets
+    UsdcWethLendingManager public immutable lendingManager;
+
     struct ConstructorParams {
         address admin;
         address keeper;
         ERC4626 scWETH;
         ERC20 usdc;
         WETH weth;
+        UsdcWethLendingManager lendingManager;
         address zeroExRouter;
-        AaveV3 aaveV3;
-        AaveV2 aaveV2;
-        Euler euler;
         ISwapRouter uniswapSwapRouter;
         AggregatorV3Interface chainlinkUsdcToEthPriceFeed;
         IVault balancerVault;
@@ -119,16 +124,27 @@ contract scUSDCv2 is sc4626, UsdcWethLendingManager, IFlashLoanRecipient {
 
     constructor(ConstructorParams memory _params)
         sc4626(_params.admin, _params.keeper, _params.usdc, "Sandclock USDC Vault v2", "scUSDCv2")
-        UsdcWethLendingManager(_params.usdc, _params.weth, _params.aaveV3, _params.aaveV2, _params.euler)
     {
         scWETH = _params.scWETH;
-        swapRouter = _params.uniswapSwapRouter;
+        weth = _params.weth;
+        lendingManager = _params.lendingManager;
         zeroExRouter = _params.zeroExRouter;
+        swapRouter = _params.uniswapSwapRouter;
         usdcToEthPriceFeed = _params.chainlinkUsdcToEthPriceFeed;
         balancerVault = _params.balancerVault;
 
         weth.safeApprove(address(swapRouter), type(uint256).max);
         weth.safeApprove(address(scWETH), type(uint256).max);
+
+        asset.safeApprove(address(lendingManager.aaveV2Pool()), type(uint256).max);
+        weth.safeApprove(address(lendingManager.aaveV2Pool()), type(uint256).max);
+
+        asset.safeApprove(address(lendingManager.aaveV3Pool()), type(uint256).max);
+        weth.safeApprove(address(lendingManager.aaveV3Pool()), type(uint256).max);
+
+        asset.safeApprove(lendingManager.eulerProtocol(), type(uint256).max);
+        weth.safeApprove(lendingManager.eulerProtocol(), type(uint256).max);
+        lendingManager.eulerMarkets().enterMarket(0, address(asset));
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -161,31 +177,29 @@ contract scUSDCv2 is sc4626, UsdcWethLendingManager, IFlashLoanRecipient {
      * @notice Rebalance the vault's positions/loans in multiple money markets.
      * @dev Called to increase or decrease the WETH debt to maintain the LTV (loan to value) and avoid liquidation.
      */
-    function rebalance(RebalanceParams[] calldata _params) public onlyKeeper {
+    function rebalance(RebalanceParams[] calldata _params) external onlyKeeper {
         for (uint8 i = 0; i < _params.length; i++) {
-            ProtocolActions memory protocolActions = protocolToActions[_params[i].protocolId];
-
             // respect new deposits
             if (_params[i].supplyAmount != 0) {
-                protocolActions.supply(_params[i].supplyAmount);
+                _supply(uint8(_params[i].protocolId), _params[i].supplyAmount);
             }
 
             // borrow and invest or disinvest and repay
             if (_params[i].leverageUp) {
-                uint256 maxLtv = protocolActions.getMaxLtv();
-                uint256 expectedLtv = getUsdcFromWeth(protocolActions.getDebt() + _params[i].wethAmount).divWadUp(
-                    protocolActions.getCollateral()
-                );
+                uint256 maxLtv = lendingManager.getMaxLtv(_params[i].protocolId);
+                uint256 collateral = lendingManager.getCollateral(_params[i].protocolId, address(this));
+                uint256 debt = lendingManager.getDebt(_params[i].protocolId, address(this));
+                uint256 expectedLtv = getUsdcFromWeth(debt + _params[i].wethAmount).divWadUp(collateral);
 
                 if (expectedLtv >= maxLtv) {
-                    revert LtvAboveMaxAllowed(Protocol(_params[i].protocolId));
+                    revert LtvAboveMaxAllowed(UsdcWethLendingManager.Protocol(_params[i].protocolId));
                 }
 
-                protocolActions.borrow(_params[i].wethAmount);
+                _borrow(uint8(_params[i].protocolId), _params[i].wethAmount);
                 scWETH.deposit(_params[i].wethAmount, address(this));
             } else {
                 uint256 withdrawn = _disinvest(_params[i].wethAmount);
-                protocolActions.repay(withdrawn);
+                _repay(uint8(_params[i].protocolId), withdrawn);
             }
 
             emit Rebalanced(
@@ -200,22 +214,6 @@ contract scUSDCv2 is sc4626, UsdcWethLendingManager, IFlashLoanRecipient {
         if (float < floatRequired) {
             revert FloatBalanceTooSmall(float, floatRequired);
         }
-    }
-
-    /**
-     * @notice Sells WETH profits (swaps to USDC).
-     * @dev As the vault generates yield by staking WETH, the profits are in WETH.
-     * @param _usdcAmountOutMin The minimum amount of USDC to receive.
-     */
-    function sellProfit(uint256 _usdcAmountOutMin) public onlyKeeper {
-        uint256 profit = _calculateWethProfit(wethInvested(), totalDebt());
-
-        if (profit == 0) revert NoProfitsToSell();
-
-        uint256 withdrawn = _disinvest(profit);
-        uint256 usdcReceived = _swapWethForUsdc(withdrawn, _usdcAmountOutMin);
-
-        emit ProfitSold(withdrawn, usdcReceived);
     }
 
     /**
@@ -236,6 +234,22 @@ contract scUSDCv2 is sc4626, UsdcWethLendingManager, IFlashLoanRecipient {
         _initiateFlashLoan();
         balancerVault.flashLoan(address(this), tokens, amounts, abi.encode(FlashLoanType.Reallocate, _params));
         _finalizeFlashLoan();
+    }
+
+    /**
+     * @notice Sells WETH profits (swaps to USDC).
+     * @dev As the vault generates yield by staking WETH, the profits are in WETH.
+     * @param _usdcAmountOutMin The minimum amount of USDC to receive.
+     */
+    function sellProfit(uint256 _usdcAmountOutMin) external onlyKeeper {
+        uint256 profit = _calculateWethProfit(wethInvested(), totalDebt());
+
+        if (profit == 0) revert NoProfitsToSell();
+
+        uint256 withdrawn = _disinvest(profit);
+        uint256 usdcReceived = _swapWethForUsdc(withdrawn, _usdcAmountOutMin);
+
+        emit ProfitSold(withdrawn, usdcReceived);
     }
 
     /**
@@ -304,9 +318,9 @@ contract scUSDCv2 is sc4626, UsdcWethLendingManager, IFlashLoanRecipient {
      * @param _usdcAmountOutMin The minimum amount of USDC to receive for the swap.
      */
     function sellEulerRewards(bytes calldata _swapData, uint256 _usdcAmountOutMin) external onlyKeeper {
-        uint256 eulerBalance = eulerRewardsToken.balanceOf(address(this));
+        uint256 eulerBalance = lendingManager.eulerRewardsToken().balanceOf(address(this));
 
-        eulerRewardsToken.safeApprove(zeroExRouter, eulerBalance);
+        lendingManager.eulerRewardsToken().safeApprove(zeroExRouter, eulerBalance);
         uint256 initialBalance = usdcBalance();
 
         (bool success,) = zeroExRouter.call{value: 0}(_swapData);
@@ -315,9 +329,9 @@ contract scUSDCv2 is sc4626, UsdcWethLendingManager, IFlashLoanRecipient {
         uint256 usdcReceived = usdcBalance() - initialBalance;
         if (usdcReceived < _usdcAmountOutMin) revert EndUsdcBalanceTooLow();
 
-        eulerRewardsToken.safeApprove(zeroExRouter, 0);
+        lendingManager.eulerRewardsToken().safeApprove(zeroExRouter, 0);
 
-        emit EulerRewardsSold(eulerBalance - eulerRewardsToken.balanceOf(address(this)), usdcReceived);
+        emit EulerRewardsSold(eulerBalance - lendingManager.eulerRewardsToken().balanceOf(address(this)), usdcReceived);
     }
 
     /**
@@ -358,8 +372,8 @@ contract scUSDCv2 is sc4626, UsdcWethLendingManager, IFlashLoanRecipient {
      * @notice Returns the total USDC supplied as collateral in all money markets.
      */
     function totalCollateral() public view returns (uint256 total) {
-        for (uint8 i = 0; i <= uint256(type(Protocol).max); i++) {
-            total += protocolToActions[Protocol(i)].getCollateral();
+        for (uint8 i = 0; i <= uint256(type(UsdcWethLendingManager.Protocol).max); i++) {
+            total += lendingManager.getCollateral(UsdcWethLendingManager.Protocol(i), address(this));
         }
     }
 
@@ -367,8 +381,8 @@ contract scUSDCv2 is sc4626, UsdcWethLendingManager, IFlashLoanRecipient {
      * @notice Returns the total WETH borrowed in all money markets.
      */
     function totalDebt() public view returns (uint256 total) {
-        for (uint8 i = 0; i <= uint256(type(Protocol).max); i++) {
-            total += protocolToActions[Protocol(i)].getDebt();
+        for (uint8 i = 0; i <= uint256(type(UsdcWethLendingManager.Protocol).max); i++) {
+            total += lendingManager.getDebt(UsdcWethLendingManager.Protocol(i), address(this));
         }
     }
 
@@ -391,16 +405,38 @@ contract scUSDCv2 is sc4626, UsdcWethLendingManager, IFlashLoanRecipient {
                             INTERNAL API
     //////////////////////////////////////////////////////////////*/
 
+    function _supply(uint8 _protocolId, uint256 _amount) internal {
+        _lendingManagerDelegateCall(UsdcWethLendingManager.supply.selector, _protocolId, _amount);
+    }
+
+    function _borrow(uint8 _protocolId, uint256 _amount) internal {
+        _lendingManagerDelegateCall(UsdcWethLendingManager.borrow.selector, _protocolId, _amount);
+    }
+
+    function _repay(uint8 _protocolId, uint256 _amount) internal {
+        _lendingManagerDelegateCall(UsdcWethLendingManager.repay.selector, _protocolId, _amount);
+    }
+
+    function _withdraw(uint8 _protocolId, uint256 _amount) internal {
+        _lendingManagerDelegateCall(UsdcWethLendingManager.withdraw.selector, _protocolId, _amount);
+    }
+
+    /// @dev Need to use "delegatecall" to interact with lending protocols through the lending manager contract.
+    function _lendingManagerDelegateCall(bytes4 _selector, uint8 _protocolId, uint256 _amount) internal {
+        (bool success, bytes memory result) =
+            address(lendingManager).delegatecall(abi.encodeWithSelector(_selector, _protocolId, _amount));
+
+        if (!success) revert(string(result));
+    }
+
     function _reallocateCapitalFlash(ReallocationParams[] memory _params) internal {
         for (uint8 i = 0; i < _params.length; i++) {
-            ProtocolActions memory protocolActions = protocolToActions[_params[i].protocolId];
-
             if (_params[i].isDownsize) {
-                protocolActions.repay(_params[i].debtAmount);
-                protocolActions.withdraw(_params[i].collateralAmount);
+                _repay(uint8(_params[i].protocolId), _params[i].debtAmount);
+                _withdraw(uint8(_params[i].protocolId), _params[i].collateralAmount);
             } else {
-                protocolActions.supply(_params[i].collateralAmount);
-                protocolActions.borrow(_params[i].debtAmount);
+                _supply(uint8(_params[i].protocolId), _params[i].collateralAmount);
+                _borrow(uint8(_params[i].protocolId), _params[i].debtAmount);
             }
 
             emit Reallocated(
@@ -410,14 +446,13 @@ contract scUSDCv2 is sc4626, UsdcWethLendingManager, IFlashLoanRecipient {
     }
 
     function _exitAllPositionsFlash(uint256 _flashLoanAmount) internal {
-        for (uint8 i = 0; i <= uint256(type(Protocol).max); i++) {
-            ProtocolActions memory protocolActions = protocolToActions[Protocol(i)];
-            uint256 debt = protocolActions.getDebt();
-            uint256 collateral = protocolActions.getCollateral();
+        for (uint8 i = 0; i <= uint256(type(UsdcWethLendingManager.Protocol).max); i++) {
+            uint256 debt = lendingManager.getDebt(UsdcWethLendingManager.Protocol(i), address(this));
+            uint256 collateral = lendingManager.getCollateral(UsdcWethLendingManager.Protocol(i), address(this));
 
             if (debt > 0) {
-                protocolActions.repay(debt);
-                protocolActions.withdraw(collateral);
+                _repay(i, debt);
+                _withdraw(i, collateral);
             }
         }
 
@@ -478,15 +513,15 @@ contract scUSDCv2 is sc4626, UsdcWethLendingManager, IFlashLoanRecipient {
         uint256 withdrawn = _disinvest(wethNeeded);
 
         // repay debt and withdraw collateral from each protocol in proportion to their collateral allocation
-        for (uint8 i = 0; i <= uint256(type(Protocol).max); i++) {
-            uint256 protocolCollateral = protocolToActions[Protocol(i)].getCollateral();
+        for (uint8 i = 0; i <= uint256(type(UsdcWethLendingManager.Protocol).max); i++) {
+            uint256 collateral = lendingManager.getCollateral(UsdcWethLendingManager.Protocol(i), address(this));
 
-            if (protocolCollateral == 0) continue;
+            if (collateral == 0) continue;
 
-            uint256 allocationPct = protocolCollateral.divWadDown(_collateral);
+            uint256 allocationPct = collateral.divWadDown(_collateral);
 
-            protocolToActions[Protocol(i)].repay(withdrawn.mulWadUp(allocationPct));
-            protocolToActions[Protocol(i)].withdraw(_usdcNeeded.mulWadUp(allocationPct));
+            _repay(i, withdrawn.mulWadUp(allocationPct));
+            _withdraw(i, _usdcNeeded.mulWadUp(allocationPct));
         }
     }
 
