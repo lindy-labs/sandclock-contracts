@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity ^0.8.13;
 
-import "forge-std/console2.sol";
-
 import {CREATE3Script} from "./base/CREATE3Script.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {WETH} from "solmate/tokens/WETH.sol";
@@ -25,11 +23,12 @@ contract DeployScript is CREATE3Script {
     WETH weth = WETH(payable(C.WETH));
     ERC20 usdc = ERC20(C.USDC);
     ISwapRouter uniswapRouter = ISwapRouter(C.UNISWAP_V3_SWAP_ROUTER);
+    uint256 deployerPrivateKey = uint256(vm.envBytes32("PRIVATE_KEY"));
+    address deployerAddress = vm.addr(deployerPrivateKey);
 
     constructor() CREATE3Script(vm.envString("VERSION")) {}
 
     function run() external returns (scWETH scWeth, scUSDC scUsdc) {
-        uint256 deployerPrivateKey = uint256(vm.envBytes32("PRIVATE_KEY"));
         address keeper = vm.envAddress("KEEPER");
 
         vm.startBroadcast(deployerPrivateKey);
@@ -73,7 +72,7 @@ contract DeployScript is CREATE3Script {
         scUsdc = new scUSDC(scUsdcParams);
 
         swapETHForUSDC(0.01 ether);
-        deposit(scUsdc, usdc, usdc.balanceOf(address(this))); // 0.01 ether worth of USDC
+        deposit(scUsdc, usdc, usdc.balanceOf(address(deployerAddress))); // 0.01 ether worth of USDC
 
         vm.stopBroadcast();
     }
@@ -84,35 +83,29 @@ contract DeployScript is CREATE3Script {
     }
 
     function swapETHForUSDC(uint256 amount) internal {
-        // Transfer ETH into WETH
         weth.deposit{value: amount}();
 
-        // Approve Uniswap V3 router to spend WETH
         weth.approve(address(uniswapRouter), amount);
 
-        // Define the path; ETH -> USDC
         address[] memory tokenPath = new address[](2);
         tokenPath[0] = address(weth);
         tokenPath[1] = address(usdc);
 
-        // Define the amounts; In this example, we swap the exact input of ETH for a minimum amount of USDC
         uint256[] memory amountsMin = new uint256[](2);
         amountsMin[0] = amount;
         amountsMin[1] = 0;
 
-        // Construct the swap parameters
         ISwapRouter.ExactInputSingleParams memory params = ISwapRouter.ExactInputSingleParams({
             tokenIn: tokenPath[0],
             tokenOut: tokenPath[1],
             fee: 500, // 0.05%
-            recipient: address(this),
+            recipient: deployerAddress,
             deadline: block.timestamp + 1000,
             amountIn: amount,
             amountOutMinimum: amountsMin[1],
             sqrtPriceLimitX96: 0
         });
 
-        // Perform the swap
         uniswapRouter.exactInputSingle(params);
     }
 }
