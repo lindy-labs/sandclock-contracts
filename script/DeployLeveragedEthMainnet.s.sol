@@ -105,7 +105,7 @@ contract DeployScript is CREATE3Script {
             tokenIn: tokenPath[0],
             tokenOut: tokenPath[1],
             fee: 500, // 0.05%
-            recipient: msg.sender,
+            recipient: address(this),
             deadline: block.timestamp + 1000,
             amountIn: amount,
             amountOutMinimum: amountsMin[1],
