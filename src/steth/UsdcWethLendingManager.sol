@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.13;
 
-import "forge-std/console2.sol";
 import {
     InvalidTargetLtv,
     InvalidSlippageTolerance,
@@ -11,9 +10,9 @@ import {
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {WETH} from "solmate/tokens/WETH.sol";
-import {ERC4626} from "solmate/mixins/ERC4626.sol";
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
+
 import {IPool} from "aave-v3/interfaces/IPool.sol";
 import {IAToken} from "aave-v3/interfaces/IAToken.sol";
 import {IPoolDataProvider} from "aave-v3/interfaces/IPoolDataProvider.sol";
@@ -22,11 +21,6 @@ import {IEulerMarkets, IEulerEToken, IEulerDToken} from "lib/euler-interfaces/co
 import {Constants as C} from "../lib/Constants.sol";
 import {ILendingPool} from "../interfaces/aave-v2/ILendingPool.sol";
 import {IProtocolDataProvider} from "../interfaces/aave-v2/IProtocolDataProvider.sol";
-import {IVault} from "../interfaces/balancer/IVault.sol";
-import {ISwapRouter} from "../interfaces/uniswap/ISwapRouter.sol";
-import {AggregatorV3Interface} from "../interfaces/chainlink/AggregatorV3Interface.sol";
-import {IFlashLoanRecipient} from "../interfaces/balancer/IFlashLoanRecipient.sol";
-import {sc4626} from "../sc4626.sol";
 
 // TODO: celan up imports
 contract UsdcWethLendingManager {

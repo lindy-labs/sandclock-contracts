@@ -15,17 +15,7 @@ import {IEulerMarkets, IEulerEToken, IEulerDToken} from "lib/euler-interfaces/co
 import {Constants as C} from "../src/lib/Constants.sol";
 import {ILendingPool} from "../src/interfaces/aave-v2/ILendingPool.sol";
 import {IProtocolDataProvider} from "../src/interfaces/aave-v2/IProtocolDataProvider.sol";
-import {sc4626} from "../src/sc4626.sol";
-import {scUSDCv2} from "../src/steth/scUSDCv2.sol";
 import {UsdcWethLendingManager} from "../src/steth/UsdcWethLendingManager.sol";
-import {scWETH} from "../src/steth/scWETH.sol";
-import {ISwapRouter} from "../src/interfaces/uniswap/ISwapRouter.sol";
-import {AggregatorV3Interface} from "../src/interfaces/chainlink/AggregatorV3Interface.sol";
-import {IVault} from "../src/interfaces/balancer/IVault.sol";
-import {ICurvePool} from "../src/interfaces/curve/ICurvePool.sol";
-import {ILido} from "../src/interfaces/lido/ILido.sol";
-import {IwstETH} from "../src/interfaces/lido/IwstETH.sol";
-import "../src/errors/scErrors.sol";
 
 contract UsdcWethLendingManagerTest is Test {
     using FixedPointMathLib for uint256;
