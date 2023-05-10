@@ -17,12 +17,19 @@ import {Constants as C} from "../lib/Constants.sol";
 import {ILendingPool} from "../interfaces/aave-v2/ILendingPool.sol";
 import {IProtocolDataProvider} from "../interfaces/aave-v2/IProtocolDataProvider.sol";
 
-// TODO: update documentation
+/**
+ * @title Usdc/Weth Lending Manager
+ * @notice This contract facilitates lending WETH against USDC collateral on Aave V2, Aave V3 and Euler.
+ * @dev This contract is primarily meant to be used by the Sandclock USDC Vault v2 (scUSDCv2) contract, but other accounts/contracts can also use it.
+ */
 contract UsdcWethLendingManager {
     using SafeTransferLib for ERC20;
     using SafeTransferLib for WETH;
     using FixedPointMathLib for uint256;
 
+    /**
+     * @notice Enum representing the supported lending protocols.
+     */
     enum Protocol {
         AAVE_V2,
         AAVE_V3,
@@ -32,24 +39,29 @@ contract UsdcWethLendingManager {
     ERC20 public immutable usdc;
     WETH public immutable weth;
 
+    // address of the 0x router contract used for EUL -> USDC swaps
     address public immutable zeroExRouter;
 
+    // Aave V2 contracts references
     ILendingPool public immutable aaveV2Pool;
     IProtocolDataProvider public immutable aaveV2ProtocolDataProvider;
     ERC20 public immutable aaveV2AUsdc;
     ERC20 public immutable aaveV2VarDWeth;
 
+    // Aave V3 contracts references
     IPool public immutable aaveV3Pool;
     IPoolDataProvider public immutable aaveV3PoolDataProvider;
     IAToken public immutable aaveV3AUsdc;
     ERC20 public immutable aaveV3VarDWeth;
 
+    // Euler contracts references
     address public immutable eulerProtocol;
     IEulerMarkets public immutable eulerMarkets;
     IEulerEToken public immutable eulerEUsdc;
     IEulerDToken public immutable eulerDWeth;
     ERC20 public immutable eulerRewardsToken;
 
+    /// @dev used only as a consturcotr param
     struct AaveV3 {
         IPool pool;
         IPoolDataProvider poolDataProvider;
@@ -57,6 +69,7 @@ contract UsdcWethLendingManager {
         ERC20 varDWeth;
     }
 
+    /// @dev used only as a consturcotr param
     struct Euler {
         address protocol;
         IEulerMarkets markets;
@@ -65,6 +78,7 @@ contract UsdcWethLendingManager {
         ERC20 rewardsToken;
     }
 
+    /// @dev used only as a consturcotr param
     struct AaveV2 {
         ILendingPool pool;
         IProtocolDataProvider protocolDataProvider;
@@ -101,6 +115,12 @@ contract UsdcWethLendingManager {
         aaveV2VarDWeth = _aaveV2.varDWeth;
     }
 
+    /**
+     * @notice Supply USDC to the specified lending protocol.
+     * @dev Must be called with 'delegatecall'.
+     * @param _protocolId The lending protocol to supply to.
+     * @param _amount The amount of USDC to supply.
+     */
     function supply(Protocol _protocolId, uint256 _amount) external {
         if (_protocolId == Protocol.AAVE_V2) {
             aaveV2Pool.deposit(address(usdc), _amount, address(this), 0);
@@ -111,6 +131,12 @@ contract UsdcWethLendingManager {
         }
     }
 
+    /**
+     * @notice Borrow WETH from the specified lending protocol.
+     * @dev Must be called with 'delegatecall'.
+     * @param _protocolId The lending protocol to borrow from.
+     * @param _amount The amount of WETH to borrow.
+     */
     function borrow(Protocol _protocolId, uint256 _amount) external {
         if (_protocolId == Protocol.AAVE_V2) {
             aaveV2Pool.borrow(address(weth), _amount, C.AAVE_VAR_INTEREST_RATE_MODE, 0, address(this));
@@ -121,6 +147,12 @@ contract UsdcWethLendingManager {
         }
     }
 
+    /**
+     * @notice Repay WETH debt to the specified lending protocol.
+     * @dev Must be called with 'delegatecall'.
+     * @param _protocolId The lending protocol to repay to.
+     * @param _amount The amount of WETH to repay.
+     */
     function repay(Protocol _protocolId, uint256 _amount) external {
         if (_protocolId == Protocol.AAVE_V2) {
             aaveV2Pool.repay(address(weth), _amount, C.AAVE_VAR_INTEREST_RATE_MODE, address(this));
@@ -131,6 +163,12 @@ contract UsdcWethLendingManager {
         }
     }
 
+    /**
+     * @notice Withdraw supplied USDC from the specified lending protocol.
+     * @dev Must be called with 'delegatecall'.
+     * @param _protocolId The lending protocol to withdraw from.
+     * @param _amount The amount of USDC to withdraw.
+     */
     function withdraw(Protocol _protocolId, uint256 _amount) external {
         if (_protocolId == Protocol.AAVE_V2) {
             aaveV2Pool.withdraw(address(usdc), _amount, address(this));
@@ -141,6 +179,11 @@ contract UsdcWethLendingManager {
         }
     }
 
+    /**
+     * @notice Get the amount of USDC collateral supplied to the specified lending protocol.
+     * @param _protocolId The lending protocol to check.
+     * @param _account The account to check.
+     */
     function getCollateral(Protocol _protocolId, address _account) public view returns (uint256 collateral) {
         if (_protocolId == Protocol.AAVE_V2) {
             collateral = aaveV2AUsdc.balanceOf(_account);
@@ -151,11 +194,20 @@ contract UsdcWethLendingManager {
         }
     }
 
+    /**
+     * @notice Get the total amount of USDC collateral supplied to all lending protocols.
+     * @param _account The account to check.
+     */
     function getTotalCollateral(address _account) public view returns (uint256) {
         return getCollateral(Protocol.AAVE_V2, _account) + getCollateral(Protocol.AAVE_V3, _account)
             + getCollateral(Protocol.EULER, _account);
     }
 
+    /**
+     * @notice Get the amount of WETH debt borrowed from the specified lending protocol.
+     * @param _protocolId The lending protocol to check.
+     * @param _account The account to check.
+     */
     function getDebt(Protocol _protocolId, address _account) public view returns (uint256 debt) {
         if (_protocolId == Protocol.AAVE_V2) {
             debt = aaveV2VarDWeth.balanceOf(_account);
@@ -166,11 +218,19 @@ contract UsdcWethLendingManager {
         }
     }
 
+    /**
+     * @notice Get the total amount of WETH debt borrowed from all lending protocols.
+     * @param _account The account to check.
+     */
     function getTotalDebt(address _account) public view returns (uint256) {
         return getDebt(Protocol.AAVE_V2, _account) + getDebt(Protocol.AAVE_V3, _account)
             + getDebt(Protocol.EULER, _account);
     }
 
+    /**
+     * @notice Get the maximum loan-to-value ratio on the specified lending protocol for USDC/WETH loans.
+     * @param _protocolId The lending protocol to check.
+     */
     function getMaxLtv(Protocol _protocolId) public view returns (uint256 maxLtv) {
         if (_protocolId == Protocol.AAVE_V2) {
             (, uint256 ltv,,,,,,,,) = aaveV2ProtocolDataProvider.getReserveConfigurationData(address(usdc));
@@ -194,11 +254,9 @@ contract UsdcWethLendingManager {
     }
 
     /**
-     * @notice Fetches collateral and debt amounts for each protocol in the input list
-     * @param _protocolIds An array of protocol identifiers for which to fetch the data
-     * @param _account The account for which to fetch the data
-     * @return collateralPositions An array of collateral positions for each protocol in the input list
-     * @return debtPositions An array of debt positions for each protocol in the input list
+     * @notice Fetches collateral and debt amounts for each lending protocol in the input list.
+     * @param _protocolIds An array of protocol identifiers for which to fetch the data.
+     * @param _account The account for which to fetch the data.
      */
 
     function getCollateralAndDebtPositions(Protocol[] calldata _protocolIds, address _account)
@@ -216,8 +274,9 @@ contract UsdcWethLendingManager {
     }
 
     /**
-     * @notice Sell Euler token (EUL) for USDC.
-     * @param _swapData The swap data for 0xrouter.
+     * @notice Sell Euler token (EUL) for USDC using 0x router contract.
+     * @param _swapData The swap data for 0x router.
+     *
      * @param _usdcAmountOutMin The minimum amount of USDC to receive for the swap.
      */
     function sellEulerRewards(bytes calldata _swapData, uint256 _usdcAmountOutMin)
@@ -225,14 +284,14 @@ contract UsdcWethLendingManager {
         returns (uint256 eulerSold, uint256 usdcReceived)
     {
         uint256 eulerBalance = eulerRewardsToken.balanceOf(address(this));
-        uint256 initialUsdcBalance = usdc.balanceOf(address(this));
+        uint256 usdcBalance = usdc.balanceOf(address(this));
 
         eulerRewardsToken.safeApprove(C.ZERO_EX_ROUTER, eulerBalance);
 
         (bool success,) = C.ZERO_EX_ROUTER.call{value: 0}(_swapData);
         if (!success) revert EulerSwapFailed();
 
-        usdcReceived = usdc.balanceOf(address(this)) - initialUsdcBalance;
+        usdcReceived = usdc.balanceOf(address(this)) - usdcBalance;
         eulerSold = eulerBalance - eulerRewardsToken.balanceOf(address(this));
 
         if (usdcReceived < _usdcAmountOutMin) revert AmountReceivedBelowMin();
