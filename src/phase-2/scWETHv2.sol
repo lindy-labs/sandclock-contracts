@@ -176,20 +176,6 @@ contract scWETHv2 is sc4626, LendingMarketManager, IFlashLoanRecipient {
         assets += asset.balanceOf(address(this));
     }
 
-    /// @notice returns the total wstETH supplied as collateral (in ETH)
-    function totalCollateral() public view override returns (uint256 collateral) {
-        for (uint256 i = 0; i < totalMarkets(); i++) {
-            collateral += lendingMarkets[LendingMarketType(i)].getCollateral();
-        }
-    }
-
-    /// @notice returns the total ETH borrowed
-    function totalDebt() public view override returns (uint256 debt) {
-        for (uint256 i = 0; i < totalMarkets(); i++) {
-            debt += lendingMarkets[LendingMarketType(i)].getDebt();
-        }
-    }
-
     /// @notice returns the net leverage that the strategy is using right now (1e18 = 100%)
     function getLeverage() public view returns (uint256) {
         uint256 coll = totalCollateral();
