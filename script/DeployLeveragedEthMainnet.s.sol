@@ -20,6 +20,8 @@ import {scUSDC} from "../src/steth/scUSDC.sol";
 import {sc4626} from "../src/sc4626.sol";
 
 contract DeployScript is CREATE3Script {
+    bytes32 constant DEFAULT_ADMIN_ROLE = 0x00;
+
     WETH weth = WETH(payable(C.WETH));
     ERC20 usdc = ERC20(C.USDC);
     ISwapRouter uniswapRouter = ISwapRouter(C.UNISWAP_V3_SWAP_ROUTER);
@@ -34,7 +36,7 @@ contract DeployScript is CREATE3Script {
         vm.startBroadcast(deployerPrivateKey);
 
         scWETH.ConstructorParams memory scWethParams = scWETH.ConstructorParams({
-            admin: address(this),
+            admin: deployerAddress,
             keeper: keeper,
             targetLtv: 0.7e18,
             slippageTolerance: 0.99e18,
@@ -54,8 +56,12 @@ contract DeployScript is CREATE3Script {
         weth.deposit{ value: 0.01 ether }(); // wrap 0.01 ETH into WETH
         deposit(scWeth, weth, 0.01 ether); // 0.01 WETH
 
+        // transfer DEFAULT_ADMIN_ROLE to multisig
+        scWeth.grantRole(DEFAULT_ADMIN_ROLE, C.MULTISIG);
+        scWeth.revokeRole(DEFAULT_ADMIN_ROLE, deployerAddress);
+
         scUSDC.ConstructorParams memory scUsdcParams = scUSDC.ConstructorParams({
-            admin: address(this),
+            admin: deployerAddress,
             keeper: keeper,
             scWETH: scWeth,
             usdc: usdc,
@@ -73,6 +79,10 @@ contract DeployScript is CREATE3Script {
 
         swapETHForUSDC(0.01 ether);
         deposit(scUsdc, usdc, usdc.balanceOf(address(deployerAddress))); // 0.01 ether worth of USDC
+
+        // transfer DEFAULT_ADMIN_ROLE to multisig
+        scUsdc.grantRole(DEFAULT_ADMIN_ROLE, C.MULTISIG);
+        scUsdc.revokeRole(DEFAULT_ADMIN_ROLE, deployerAddress);
 
         vm.stopBroadcast();
     }

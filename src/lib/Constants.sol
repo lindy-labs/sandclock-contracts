@@ -51,4 +51,7 @@ library Constants {
 
     // address of the 0x swap router contract
     address public constant ZEROX_ROUTER = 0xDef1C0ded9bec7F1a1670819833240f027b25EfF;
+
+    // address of the multisig
+    address public constant MULTISIG = 0x035F210e5d14054E8AE5A6CFA76d643aA200D56E;
 }
