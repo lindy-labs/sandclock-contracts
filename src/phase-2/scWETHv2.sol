@@ -182,7 +182,9 @@ contract scWETHv2 is sc4626, LendingMarketManager, IFlashLoanRecipient {
         // needed otherwise counted as profit during harvest
         totalInvested += totalInvestAmount;
 
+        _initiateFlashLoan();
         balancerVault.flashLoan(address(this), tokens, amounts, abi.encode(params));
+        _finalizeFlashLoan();
     }
 
     /// @notice disinvest from lending markets in case of a loss
@@ -207,7 +209,9 @@ contract scWETHv2 is sc4626, LendingMarketManager, IFlashLoanRecipient {
         amounts[0] = totalFlashLoanAmount;
 
         // take flashloan
+        _initiateFlashLoan();
         balancerVault.flashLoan(address(this), tokens, amounts, abi.encode(params));
+        _finalizeFlashLoan();
     }
 
     /// @notice reallocate funds between protocols (without any slippage)
@@ -237,7 +241,9 @@ contract scWETHv2 is sc4626, LendingMarketManager, IFlashLoanRecipient {
         amounts[0] = totalFlashLoanAmount;
 
         // take flashloan
+        _initiateFlashLoan();
         balancerVault.flashLoan(address(this), tokens, amounts, abi.encode(params));
+        _finalizeFlashLoan();
     }
 
     //////////////////// VIEW METHODS //////////////////////////
@@ -346,6 +352,8 @@ contract scWETHv2 is sc4626, LendingMarketManager, IFlashLoanRecipient {
             revert InvalidFlashLoanCaller();
         }
 
+        _isFlashLoanInitiated();
+
         // the amount flashloaned
         uint256 flashLoanAmount = amounts[0];
 
@@ -442,7 +450,9 @@ contract scWETHv2 is sc4626, LendingMarketManager, IFlashLoanRecipient {
         RebalanceParams memory params = RebalanceParams(repayWithdrawParams, empty, type(uint256).max, 0);
 
         // take flashloan
+        _initiateFlashLoan();
         balancerVault.flashLoan(address(this), tokens, amounts, abi.encode(params));
+        _finalizeFlashLoan();
     }
 
     function _supplyBorrow(SupplyBorrowParam[] memory supplyBorrowParams) internal {
