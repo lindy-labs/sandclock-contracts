@@ -179,8 +179,8 @@ contract scUSDCv2Test is Test {
         assertApproxEqAbs(vault.totalCollateral(), initialBalance, 1, "total collateral");
         assertApproxEqAbs(vault.totalDebt(), initialDebt, 1, "total debt");
 
-        _assertLendingPosition(UsdcWethLendingManager.Protocol.AAVE_V3, 0, 0);
-        _assertLendingPosition(UsdcWethLendingManager.Protocol.EULER, initialBalance, initialDebt);
+        _assertCollateralAndDebt(UsdcWethLendingManager.Protocol.AAVE_V3, 0, 0);
+        _assertCollateralAndDebt(UsdcWethLendingManager.Protocol.EULER, initialBalance, initialDebt);
     }
 
     function test_rebalance_BorrowOnlyOnAaveV2() public {
@@ -196,9 +196,9 @@ contract scUSDCv2Test is Test {
         assertApproxEqAbs(vault.totalCollateral(), initialBalance, 1, "total collateral");
         assertApproxEqAbs(vault.totalDebt(), initialDebt, 1, "total debt");
 
-        _assertLendingPosition(UsdcWethLendingManager.Protocol.AAVE_V2, initialBalance, initialDebt);
-        _assertLendingPosition(UsdcWethLendingManager.Protocol.AAVE_V3, 0, 0);
-        _assertLendingPosition(UsdcWethLendingManager.Protocol.EULER, 0, 0);
+        _assertCollateralAndDebt(UsdcWethLendingManager.Protocol.AAVE_V2, initialBalance, initialDebt);
+        _assertCollateralAndDebt(UsdcWethLendingManager.Protocol.AAVE_V3, 0, 0);
+        _assertCollateralAndDebt(UsdcWethLendingManager.Protocol.EULER, 0, 0);
     }
 
     function test_rebalance_OneProtocolLeverageDown() public {
@@ -222,7 +222,7 @@ contract scUSDCv2Test is Test {
         assertApproxEqAbs(vault.totalCollateral(), initialBalance, 1, "total collateral");
         assertApproxEqAbs(vault.totalDebt(), initialDebt / 2, 1, "total debt");
 
-        _assertLendingPosition(UsdcWethLendingManager.Protocol.AAVE_V2, initialBalance, initialDebt / 2);
+        _assertCollateralAndDebt(UsdcWethLendingManager.Protocol.AAVE_V2, initialBalance, initialDebt / 2);
     }
 
     function test_rebalance_OneProtocolLeverageUp() public {
@@ -246,7 +246,7 @@ contract scUSDCv2Test is Test {
         assertApproxEqAbs(vault.totalCollateral(), initialBalance, 1, "total collateral");
         assertApproxEqAbs(vault.totalDebt(), initialDebt * 3 / 2, 1, "total debt");
 
-        _assertLendingPosition(UsdcWethLendingManager.Protocol.AAVE_V2, initialBalance, initialDebt * 3 / 2);
+        _assertCollateralAndDebt(UsdcWethLendingManager.Protocol.AAVE_V2, initialBalance, initialDebt * 3 / 2);
     }
 
     function test_rebalance_OneProtocolWithAdditionalDeposits() public {
@@ -291,8 +291,8 @@ contract scUSDCv2Test is Test {
         assertApproxEqAbs(vault.totalCollateral(), initialBalance, 1, "total collateral");
         assertApproxEqAbs(vault.totalDebt(), debtOnAaveV3 + debtOnEuler, 1, "total debt");
 
-        _assertLendingPosition(UsdcWethLendingManager.Protocol.AAVE_V3, initialBalance / 2, debtOnAaveV3);
-        _assertLendingPosition(UsdcWethLendingManager.Protocol.EULER, initialBalance / 2, debtOnEuler);
+        _assertCollateralAndDebt(UsdcWethLendingManager.Protocol.AAVE_V3, initialBalance / 2, debtOnAaveV3);
+        _assertCollateralAndDebt(UsdcWethLendingManager.Protocol.EULER, initialBalance / 2, debtOnEuler);
     }
 
     function test_rebalance_TwoProtocolsWithAdditionalDeposits() public {
@@ -340,12 +340,12 @@ contract scUSDCv2Test is Test {
             "total debt after"
         );
 
-        _assertLendingPosition(
+        _assertCollateralAndDebt(
             UsdcWethLendingManager.Protocol.AAVE_V3,
             initialBalance / 2 + additionalCollateralOnAaveV3,
             debtOnAaveV3 + additionalDebtOnAaveV3
         );
-        _assertLendingPosition(
+        _assertCollateralAndDebt(
             UsdcWethLendingManager.Protocol.EULER,
             initialBalance / 2 + additionalCollateralOnEuler,
             debtOnEuler + additionalDebtOnEuler
@@ -397,12 +397,12 @@ contract scUSDCv2Test is Test {
             "total debt after"
         );
 
-        _assertLendingPosition(
+        _assertCollateralAndDebt(
             UsdcWethLendingManager.Protocol.AAVE_V3,
             initialBalance / 2 + additionalCollateralOnAaveV3,
             debtOnAaveV3 + additionalDebtOnAaveV3
         );
-        _assertLendingPosition(
+        _assertCollateralAndDebt(
             UsdcWethLendingManager.Protocol.EULER,
             initialBalance / 2 + additionalCollateralOnEuler,
             debtOnEuler - debtReductionOnEuler
@@ -428,9 +428,9 @@ contract scUSDCv2Test is Test {
         assertApproxEqAbs(vault.totalCollateral(), initialBalance, 1, "total collateral");
         assertApproxEqAbs(vault.totalDebt(), debtOnAaveV3 + debtOnEuler + debtOnAaveV2, 1, "total debt");
 
-        _assertLendingPosition(UsdcWethLendingManager.Protocol.AAVE_V3, initialBalance / 3, debtOnAaveV3);
-        _assertLendingPosition(UsdcWethLendingManager.Protocol.AAVE_V2, initialBalance / 3, debtOnAaveV2);
-        _assertLendingPosition(UsdcWethLendingManager.Protocol.EULER, initialBalance / 3, debtOnEuler);
+        _assertCollateralAndDebt(UsdcWethLendingManager.Protocol.AAVE_V3, initialBalance / 3, debtOnAaveV3);
+        _assertCollateralAndDebt(UsdcWethLendingManager.Protocol.AAVE_V2, initialBalance / 3, debtOnAaveV2);
+        _assertCollateralAndDebt(UsdcWethLendingManager.Protocol.EULER, initialBalance / 3, debtOnEuler);
     }
 
     function test_rebalance_ThreeProtocolsLeveragingDown() public {
@@ -466,13 +466,13 @@ contract scUSDCv2Test is Test {
         assertApproxEqAbs(vault.totalCollateral(), initialBalance, 1, "total collateral");
         assertApproxEqAbs(vault.totalDebt(), totalDebt - totalDebtReduction, 1, "total debt");
 
-        _assertLendingPosition(
+        _assertCollateralAndDebt(
             UsdcWethLendingManager.Protocol.AAVE_V3, initialBalance / 3, debtOnAaveV3 - debtReductionOnAaveV3
         );
-        _assertLendingPosition(
+        _assertCollateralAndDebt(
             UsdcWethLendingManager.Protocol.AAVE_V2, initialBalance / 3, debtOnAaveV2 - debtReductionOnAaveV2
         );
-        _assertLendingPosition(
+        _assertCollateralAndDebt(
             UsdcWethLendingManager.Protocol.EULER, initialBalance / 3, debtOnEuler - debtReductionOnEuler
         );
     }
@@ -560,9 +560,9 @@ contract scUSDCv2Test is Test {
         assertApproxEqAbs(vault.totalCollateral(), totalCollateral, 1, "total collateral before");
         assertApproxEqAbs(vault.totalDebt(), totalDebt, 1, "total debt before");
 
-        _assertLendingPosition(UsdcWethLendingManager.Protocol.AAVE_V3, totalCollateral, totalDebt);
-        _assertLendingPosition(UsdcWethLendingManager.Protocol.AAVE_V2, 0, 0);
-        _assertLendingPosition(UsdcWethLendingManager.Protocol.EULER, 0, 0);
+        _assertCollateralAndDebt(UsdcWethLendingManager.Protocol.AAVE_V3, totalCollateral, totalDebt);
+        _assertCollateralAndDebt(UsdcWethLendingManager.Protocol.AAVE_V2, 0, 0);
+        _assertCollateralAndDebt(UsdcWethLendingManager.Protocol.EULER, 0, 0);
 
         // move everything from Aave to Euler
         uint256 collateralToMove = totalCollateral;
@@ -591,9 +591,9 @@ contract scUSDCv2Test is Test {
         assertApproxEqAbs(vault.totalCollateral(), totalCollateral, 1, "total collateral after");
         assertApproxEqAbs(vault.totalDebt(), totalDebt, 1, "total debt after");
 
-        _assertLendingPosition(UsdcWethLendingManager.Protocol.AAVE_V3, 0, 0);
-        _assertLendingPosition(UsdcWethLendingManager.Protocol.AAVE_V2, 0, 0);
-        _assertLendingPosition(UsdcWethLendingManager.Protocol.EULER, totalCollateral, totalDebt);
+        _assertCollateralAndDebt(UsdcWethLendingManager.Protocol.AAVE_V3, 0, 0);
+        _assertCollateralAndDebt(UsdcWethLendingManager.Protocol.AAVE_V2, 0, 0);
+        _assertCollateralAndDebt(UsdcWethLendingManager.Protocol.EULER, totalCollateral, totalDebt);
     }
 
     function test_reallocateCapital_FailsIfThereIsNoDownsizeOnAtLeastOnProtocol() public {
@@ -610,9 +610,9 @@ contract scUSDCv2Test is Test {
         assertApproxEqAbs(vault.totalCollateral(), totalCollateral, 1, "total collateral before");
         assertApproxEqAbs(vault.totalDebt(), totalDebt, 1, "total debt before");
 
-        _assertLendingPosition(UsdcWethLendingManager.Protocol.AAVE_V3, totalCollateral, totalDebt);
-        _assertLendingPosition(UsdcWethLendingManager.Protocol.AAVE_V2, 0, 0);
-        _assertLendingPosition(UsdcWethLendingManager.Protocol.EULER, 0, 0);
+        _assertCollateralAndDebt(UsdcWethLendingManager.Protocol.AAVE_V3, totalCollateral, totalDebt);
+        _assertCollateralAndDebt(UsdcWethLendingManager.Protocol.AAVE_V2, 0, 0);
+        _assertCollateralAndDebt(UsdcWethLendingManager.Protocol.EULER, 0, 0);
 
         // move everything from Aave to Euler
         uint256 collateralToMove = totalCollateral / 2;
@@ -646,9 +646,9 @@ contract scUSDCv2Test is Test {
         assertApproxEqAbs(vault.totalCollateral(), totalCollateral, 1, "total collateral before");
         assertApproxEqAbs(vault.totalDebt(), totalDebt, 1, "total debt before");
 
-        _assertLendingPosition(UsdcWethLendingManager.Protocol.AAVE_V3, totalCollateral / 2, totalDebt / 2);
-        _assertLendingPosition(UsdcWethLendingManager.Protocol.AAVE_V2, 0, 0);
-        _assertLendingPosition(UsdcWethLendingManager.Protocol.EULER, totalCollateral / 2, totalDebt / 2);
+        _assertCollateralAndDebt(UsdcWethLendingManager.Protocol.AAVE_V3, totalCollateral / 2, totalDebt / 2);
+        _assertCollateralAndDebt(UsdcWethLendingManager.Protocol.AAVE_V2, 0, 0);
+        _assertCollateralAndDebt(UsdcWethLendingManager.Protocol.EULER, totalCollateral / 2, totalDebt / 2);
 
         // move half of the position from Aave to Euler
         uint256 collateralToMove = totalCollateral / 4;
@@ -674,9 +674,9 @@ contract scUSDCv2Test is Test {
         assertApproxEqAbs(vault.totalCollateral(), totalCollateral, 1, "total collateral after");
         assertApproxEqAbs(vault.totalDebt(), totalDebt, 1, "total debt after");
 
-        _assertLendingPosition(UsdcWethLendingManager.Protocol.AAVE_V3, totalCollateral / 4, totalDebt / 4);
-        _assertLendingPosition(UsdcWethLendingManager.Protocol.AAVE_V2, 0, 0);
-        _assertLendingPosition(UsdcWethLendingManager.Protocol.EULER, totalCollateral * 3 / 4, totalDebt * 3 / 4);
+        _assertCollateralAndDebt(UsdcWethLendingManager.Protocol.AAVE_V3, totalCollateral / 4, totalDebt / 4);
+        _assertCollateralAndDebt(UsdcWethLendingManager.Protocol.AAVE_V2, 0, 0);
+        _assertCollateralAndDebt(UsdcWethLendingManager.Protocol.EULER, totalCollateral * 3 / 4, totalDebt * 3 / 4);
     }
 
     function test_reallocateCapital_EmitsEventForEveryAffectedProtocol() public {
@@ -772,8 +772,8 @@ contract scUSDCv2Test is Test {
         assertApproxEqAbs(vault.totalCollateral(), totalCollateral, 1, "total collateral");
         assertApproxEqAbs(vault.totalDebt(), totalDebt, 1, "total debt");
 
-        _assertLendingPosition(UsdcWethLendingManager.Protocol.AAVE_V3, totalCollateral, totalDebt);
-        _assertLendingPosition(UsdcWethLendingManager.Protocol.EULER, 0, 0);
+        _assertCollateralAndDebt(UsdcWethLendingManager.Protocol.AAVE_V3, totalCollateral, totalDebt);
+        _assertCollateralAndDebt(UsdcWethLendingManager.Protocol.EULER, 0, 0);
     }
 
     // #receiveFlashLoan ///
@@ -1373,7 +1373,7 @@ contract scUSDCv2Test is Test {
         });
     }
 
-    function _assertLendingPosition(
+    function _assertCollateralAndDebt(
         UsdcWethLendingManager.Protocol _protocolId,
         uint256 _expectedCollateral,
         uint256 _expectedDebt
@@ -1390,13 +1390,8 @@ contract scUSDCv2Test is Test {
         view
         returns (uint256 collateral, uint256 debt)
     {
-        UsdcWethLendingManager.Protocol[] memory protocols = new UsdcWethLendingManager.Protocol[](1);
-        protocols[0] = _protocolId;
-        UsdcWethLendingManager.LendingPositionInfo[] memory loanInfo =
-            lendingManager.getLendingPositionsInfo(protocols, address(vault));
-
-        collateral = loanInfo[0].collateral;
-        debt = loanInfo[0].debt;
+        collateral = lendingManager.getCollateral(_protocolId, address(vault));
+        debt = lendingManager.getDebt(_protocolId, address(vault));
     }
 
     function _protocolIdToString(UsdcWethLendingManager.Protocol _protocolId) public pure returns (string memory) {

@@ -40,15 +40,6 @@ contract UsdcWethLendingManager {
         EULER
     }
 
-    /**
-     * @notice Struct to store lending position related information
-     */
-    struct LendingPositionInfo {
-        Protocol protocolId; // ID of the protocol
-        uint256 collateral; // Amount of collateral
-        uint256 debt; // Amount of debt
-    }
-
     ERC20 public immutable usdc;
     WETH public immutable weth;
 
@@ -161,6 +152,11 @@ contract UsdcWethLendingManager {
         }
     }
 
+    function getTotalCollateral(address _account) public view returns (uint256) {
+        return getCollateral(Protocol.AAVE_V2, _account) + getCollateral(Protocol.AAVE_V3, _account)
+            + getCollateral(Protocol.EULER, _account);
+    }
+
     function getDebt(Protocol _protocolId, address _account) public view returns (uint256 debt) {
         if (_protocolId == Protocol.AAVE_V2) {
             debt = aaveV2VarDWeth.balanceOf(_account);
@@ -169,6 +165,11 @@ contract UsdcWethLendingManager {
         } else {
             debt = eulerDWeth.balanceOf(_account);
         }
+    }
+
+    function getTotalDebt(address _account) public view returns (uint256) {
+        return getDebt(Protocol.AAVE_V2, _account) + getDebt(Protocol.AAVE_V3, _account)
+            + getDebt(Protocol.EULER, _account);
     }
 
     function getMaxLtv(Protocol _protocolId) public view returns (uint256 maxLtv) {
@@ -194,30 +195,24 @@ contract UsdcWethLendingManager {
     }
 
     /**
-     * @notice Fetches position-related information for each protocol in the input list
-     * @param _protocolIds An array of protocol identifiers for which to fetch position info
-     * @return positionInfos An array of LendingPositionInfo structs containing the position info for each input protocol
-     *
-     * @dev Each LendingPositionInfo struct in the output array corresponds to the protocol with the same index in the input array.
-     * If the collateral for a position is 0, the LTV for that position is also 0.
+     * @notice Fetches collateral and debt amounts for each protocol in the input list
+     * @param _protocolIds An array of protocol identifiers for which to fetch the data
+     * @param _account The account for which to fetch the data
+     * @return collateralPositions An array of collateral positions for each protocol in the input list
+     * @return debtPositions An array of debt positions for each protocol in the input list
      */
 
-    function getLendingPositionsInfo(Protocol[] calldata _protocolIds, address _account)
+    function getCollateralAndDebtPositions(Protocol[] calldata _protocolIds, address _account)
         external
         view
-        returns (LendingPositionInfo[] memory positionInfos)
+        returns (uint256[] memory collateralPositions, uint256[] memory debtPositions)
     {
-        positionInfos = new LendingPositionInfo[](_protocolIds.length);
+        collateralPositions = new uint256[](_protocolIds.length);
+        debtPositions = new uint256[](_protocolIds.length);
 
         for (uint8 i = 0; i < _protocolIds.length; i++) {
-            Protocol protocolId = _protocolIds[i];
-
-            LendingPositionInfo memory positionInfo;
-            positionInfo.protocolId = protocolId;
-            positionInfo.collateral = getCollateral(protocolId, _account);
-            positionInfo.debt = getDebt(protocolId, _account);
-
-            positionInfos[i] = positionInfo;
+            collateralPositions[i] = getCollateral(_protocolIds[i], _account);
+            debtPositions[i] = getDebt(_protocolIds[i], _account);
         }
     }
 }

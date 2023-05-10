@@ -103,9 +103,9 @@ contract UsdcWethLendingManagerTest is Test {
         assertEq(maxLtv, 0.819e18, "max ltv");
     }
 
-    /// #getLendingPositionsInfo ///
+    /// #getCollateralAndDebtPositions ///
 
-    function test_getLendingPositionsInfo_ReturnsInfoOnOneProtocol() public {
+    function test_getCollateralAndDebtPositions_ReturnsInfoOnOneProtocol() public {
         uint256 initialBalance = 1_000_000e6;
         uint256 initialDebt = 100 ether;
         deal(address(usdc), address(lendingManager), initialBalance);
@@ -118,88 +118,85 @@ contract UsdcWethLendingManagerTest is Test {
         UsdcWethLendingManager.Protocol[] memory protocolIds = new UsdcWethLendingManager.Protocol[](1);
         protocolIds[0] = UsdcWethLendingManager.Protocol.AAVE_V3;
 
-        UsdcWethLendingManager.LendingPositionInfo[] memory positions =
-            lendingManager.getLendingPositionsInfo(protocolIds, address(lendingManager));
+        (uint256[] memory collateralPositions, uint256[] memory debtPositions) =
+            lendingManager.getCollateralAndDebtPositions(protocolIds, address(lendingManager));
 
-        assertEq(positions.length, 1, "positions info length");
-        assertEq(uint8(positions[0].protocolId), uint8(UsdcWethLendingManager.Protocol.AAVE_V3), "protocolId");
-        assertEq(positions[0].collateral, initialBalance, "supplyAmount");
-        assertEq(positions[0].debt, initialDebt, "borrowAmount");
+        assertEq(collateralPositions.length, 1, "collateral positions length");
+        assertEq(debtPositions.length, 1, "debt positions length");
+        assertEq(collateralPositions[0], initialBalance, "collateral");
+        assertEq(debtPositions[0], initialDebt, "debt");
     }
 
-    function test_getLendingPositionsInfo_ReturnsInfoOnMultipleProtocols() public {
-        uint256 initialBalancePerProtocol = 500_000e6;
-        uint256 initialDebtPerProtocol = 100 ether;
-        deal(address(usdc), address(lendingManager), initialBalancePerProtocol * 3);
+    function test_getCollateralAndDebtPositions_ReturnsInfoOnMultipleProtocols() public {
+        uint256 aaveV3Deposit = 500_000e6;
+        uint256 aaveV3Loan = 100 ether;
+        uint256 aaveV2Deposit = 400_000e6;
+        uint256 aaveV2Loan = 80 ether;
+        uint256 eulerDeposit = 300_000e6;
+        uint256 eulerLoan = 60 ether;
+        deal(address(usdc), address(lendingManager), aaveV3Deposit + aaveV2Deposit + eulerDeposit);
         vm.startPrank(address(lendingManager));
 
-        usdc.approve(address(lendingManager.aaveV3Pool()), initialBalancePerProtocol);
-        lendingManager.supply(UsdcWethLendingManager.Protocol.AAVE_V3, initialBalancePerProtocol);
-        lendingManager.borrow(UsdcWethLendingManager.Protocol.AAVE_V3, initialDebtPerProtocol);
+        usdc.approve(address(lendingManager.aaveV3Pool()), aaveV3Deposit);
+        lendingManager.supply(UsdcWethLendingManager.Protocol.AAVE_V3, aaveV3Deposit);
+        lendingManager.borrow(UsdcWethLendingManager.Protocol.AAVE_V3, aaveV3Loan);
 
-        usdc.approve(address(lendingManager.aaveV2Pool()), initialBalancePerProtocol);
-        lendingManager.supply(UsdcWethLendingManager.Protocol.AAVE_V2, initialBalancePerProtocol);
-        lendingManager.borrow(UsdcWethLendingManager.Protocol.AAVE_V2, initialDebtPerProtocol);
+        usdc.approve(address(lendingManager.aaveV2Pool()), aaveV2Deposit);
+        lendingManager.supply(UsdcWethLendingManager.Protocol.AAVE_V2, aaveV2Deposit);
+        lendingManager.borrow(UsdcWethLendingManager.Protocol.AAVE_V2, aaveV2Loan);
 
-        usdc.approve(address(lendingManager.eulerProtocol()), initialBalancePerProtocol);
+        usdc.approve(address(lendingManager.eulerProtocol()), eulerDeposit);
         lendingManager.eulerMarkets().enterMarket(0, address(usdc));
-        lendingManager.supply(UsdcWethLendingManager.Protocol.EULER, initialBalancePerProtocol);
-        lendingManager.borrow(UsdcWethLendingManager.Protocol.EULER, initialDebtPerProtocol);
+        lendingManager.supply(UsdcWethLendingManager.Protocol.EULER, eulerDeposit);
+        lendingManager.borrow(UsdcWethLendingManager.Protocol.EULER, eulerLoan);
 
         UsdcWethLendingManager.Protocol[] memory protocolIds = new UsdcWethLendingManager.Protocol[](3);
         protocolIds[0] = UsdcWethLendingManager.Protocol.AAVE_V3;
         protocolIds[1] = UsdcWethLendingManager.Protocol.EULER;
         protocolIds[2] = UsdcWethLendingManager.Protocol.AAVE_V2;
 
-        UsdcWethLendingManager.LendingPositionInfo[] memory positions =
-            lendingManager.getLendingPositionsInfo(protocolIds, address(lendingManager));
+        (uint256[] memory collateralPositions, uint256[] memory debtPositions) =
+            lendingManager.getCollateralAndDebtPositions(protocolIds, address(lendingManager));
 
-        assertEq(positions.length, 3, "positions info length");
-        assertEq(
-            uint8(positions[0].protocolId), uint8(UsdcWethLendingManager.Protocol.AAVE_V3), "protocolId not AAVE_V3"
-        );
-        assertApproxEqAbs(positions[0].collateral, initialBalancePerProtocol, 1, "aave v3 collateral");
-        assertApproxEqAbs(positions[0].debt, initialDebtPerProtocol, 1, "aave v3 debt");
+        assertEq(collateralPositions.length, 3, "collateral positions length");
+        assertEq(debtPositions.length, 3, "debt positions length");
 
-        assertEq(uint8(positions[1].protocolId), uint8(UsdcWethLendingManager.Protocol.EULER), "protocolId not EULER");
-        assertApproxEqAbs(positions[1].collateral, initialBalancePerProtocol, 1, "euler collateral");
-        assertApproxEqAbs(positions[1].debt, initialDebtPerProtocol, 1, "euler debt");
+        assertApproxEqAbs(collateralPositions[0], aaveV3Deposit, 1, "aave v3 collateral");
+        assertApproxEqAbs(debtPositions[0], aaveV3Loan, 1, "aave v3 debt");
 
-        assertEq(
-            uint8(positions[2].protocolId), uint8(UsdcWethLendingManager.Protocol.AAVE_V2), "protocolId not AAVE_V2"
-        );
-        assertApproxEqAbs(positions[2].collateral, initialBalancePerProtocol, 1, "aave v2 collateral");
-        assertApproxEqAbs(positions[2].debt, initialDebtPerProtocol, 1, "aave v2 debt");
+        assertApproxEqAbs(collateralPositions[1], eulerDeposit, 1, "euler collateral");
+        assertApproxEqAbs(debtPositions[1], eulerLoan, 1, "euler debt");
+
+        assertApproxEqAbs(collateralPositions[2], aaveV2Deposit, 1, "aave v2 collateral");
+        assertApproxEqAbs(debtPositions[2], aaveV2Loan, 1, "aave v2 debt");
     }
 
-    function test_getLendingPositionsInfo_WorksWhenProtocolRequestedIsNotUsed() public {
-        uint256 initialBalance = 1_000_000e6;
-        uint256 initialDebt = 100 ether;
-        deal(address(usdc), address(lendingManager), initialBalance);
+    function test_getCollateralAndDebtPositions_WorksWhenProtocolRequestedIsNotUsed() public {
+        uint256 eulerDeposit = 1_000_000e6;
+        uint256 eulerDebt = 100 ether;
+        deal(address(usdc), address(lendingManager), eulerDeposit);
         vm.startPrank(address(lendingManager));
 
-        usdc.approve(address(lendingManager.eulerProtocol()), initialBalance);
+        usdc.approve(address(lendingManager.eulerProtocol()), eulerDeposit);
         lendingManager.eulerMarkets().enterMarket(0, address(usdc));
-        lendingManager.supply(UsdcWethLendingManager.Protocol.EULER, initialBalance);
-        lendingManager.borrow(UsdcWethLendingManager.Protocol.EULER, initialDebt);
+        lendingManager.supply(UsdcWethLendingManager.Protocol.EULER, eulerDeposit);
+        lendingManager.borrow(UsdcWethLendingManager.Protocol.EULER, eulerDebt);
 
         // AAVE V3 is not used
         UsdcWethLendingManager.Protocol[] memory protocolIds = new UsdcWethLendingManager.Protocol[](2);
         protocolIds[0] = UsdcWethLendingManager.Protocol.AAVE_V3;
         protocolIds[1] = UsdcWethLendingManager.Protocol.EULER;
 
-        UsdcWethLendingManager.LendingPositionInfo[] memory positions =
-            lendingManager.getLendingPositionsInfo(protocolIds, address(lendingManager));
+        (uint256[] memory collateralPositions, uint256[] memory debtPositions) =
+            lendingManager.getCollateralAndDebtPositions(protocolIds, address(lendingManager));
 
-        assertEq(positions.length, 2, "positions info length");
-        assertEq(
-            uint8(positions[0].protocolId), uint8(UsdcWethLendingManager.Protocol.AAVE_V3), "protocolId not AAVE_V3"
-        );
-        assertEq(positions[0].collateral, 0, "aave v3 collateral not 0");
-        assertEq(positions[0].debt, 0, "aave v3 debt not 0");
+        assertEq(collateralPositions.length, 2, "positions info length");
+        assertEq(debtPositions.length, 2, "positions info length");
 
-        assertEq(uint8(positions[1].protocolId), uint8(UsdcWethLendingManager.Protocol.EULER), "protocolId not EULER");
-        assertApproxEqAbs(positions[1].collateral, initialBalance, 1, "euler collateral");
-        assertApproxEqAbs(positions[1].debt, initialDebt, 1, "euler debt");
+        assertEq(collateralPositions[0], 0, "aave v3 collateral not 0");
+        assertEq(debtPositions[0], 0, "aave v3 debt not 0");
+
+        assertApproxEqAbs(collateralPositions[1], eulerDeposit, 1, "euler collateral");
+        assertApproxEqAbs(debtPositions[1], eulerDebt, 1, "euler debt");
     }
 }

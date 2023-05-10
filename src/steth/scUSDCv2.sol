@@ -371,19 +371,15 @@ contract scUSDCv2 is sc4626, IFlashLoanRecipient {
     /**
      * @notice Returns the total USDC supplied as collateral in all money markets.
      */
-    function totalCollateral() public view returns (uint256 total) {
-        for (uint8 i = 0; i <= uint256(type(UsdcWethLendingManager.Protocol).max); i++) {
-            total += lendingManager.getCollateral(UsdcWethLendingManager.Protocol(i), address(this));
-        }
+    function totalCollateral() public view returns (uint256) {
+        return lendingManager.getTotalCollateral(address(this));
     }
 
     /**
      * @notice Returns the total WETH borrowed in all money markets.
      */
-    function totalDebt() public view returns (uint256 total) {
-        for (uint8 i = 0; i <= uint256(type(UsdcWethLendingManager.Protocol).max); i++) {
-            total += lendingManager.getDebt(UsdcWethLendingManager.Protocol(i), address(this));
-        }
+    function totalDebt() public view returns (uint256) {
+        return lendingManager.getTotalDebt(address(this));
     }
 
     /**
