@@ -1,12 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.13;
 
-import {
-    InvalidTargetLtv,
-    InvalidSlippageTolerance,
-    InvalidFlashLoanCaller,
-    VaultNotUnderwater
-} from "../errors/scErrors.sol";
+import {EulerSwapFailed, AmountReceivedBelowMin} from "../errors/scErrors.sol";
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {WETH} from "solmate/tokens/WETH.sol";
@@ -22,7 +17,7 @@ import {Constants as C} from "../lib/Constants.sol";
 import {ILendingPool} from "../interfaces/aave-v2/ILendingPool.sol";
 import {IProtocolDataProvider} from "../interfaces/aave-v2/IProtocolDataProvider.sol";
 
-// TODO: celan up imports
+// TODO: update documentation
 contract UsdcWethLendingManager {
     using SafeTransferLib for ERC20;
     using SafeTransferLib for WETH;
@@ -36,6 +31,8 @@ contract UsdcWethLendingManager {
 
     ERC20 public immutable usdc;
     WETH public immutable weth;
+
+    address public immutable zeroExRouter;
 
     ILendingPool public immutable aaveV2Pool;
     IProtocolDataProvider public immutable aaveV2ProtocolDataProvider;
@@ -75,9 +72,17 @@ contract UsdcWethLendingManager {
         ERC20 varDWeth;
     }
 
-    constructor(ERC20 _usdc, WETH _weth, AaveV3 memory _aaveV3, AaveV2 memory _aaveV2, Euler memory _euler) {
+    constructor(
+        ERC20 _usdc,
+        WETH _weth,
+        address _zeroExRouter,
+        AaveV3 memory _aaveV3,
+        AaveV2 memory _aaveV2,
+        Euler memory _euler
+    ) {
         usdc = _usdc;
         weth = _weth;
+        zeroExRouter = _zeroExRouter;
 
         aaveV3Pool = _aaveV3.pool;
         aaveV3PoolDataProvider = _aaveV3.poolDataProvider;
@@ -208,5 +213,30 @@ contract UsdcWethLendingManager {
             collateralPositions[i] = getCollateral(_protocolIds[i], _account);
             debtPositions[i] = getDebt(_protocolIds[i], _account);
         }
+    }
+
+    /**
+     * @notice Sell Euler token (EUL) for USDC.
+     * @param _swapData The swap data for 0xrouter.
+     * @param _usdcAmountOutMin The minimum amount of USDC to receive for the swap.
+     */
+    function sellEulerRewards(bytes calldata _swapData, uint256 _usdcAmountOutMin)
+        external
+        returns (uint256 eulerSold, uint256 usdcReceived)
+    {
+        uint256 eulerBalance = eulerRewardsToken.balanceOf(address(this));
+        uint256 initialUsdcBalance = usdc.balanceOf(address(this));
+
+        eulerRewardsToken.safeApprove(C.ZERO_EX_ROUTER, eulerBalance);
+
+        (bool success,) = C.ZERO_EX_ROUTER.call{value: 0}(_swapData);
+        if (!success) revert EulerSwapFailed();
+
+        usdcReceived = usdc.balanceOf(address(this)) - initialUsdcBalance;
+        eulerSold = eulerBalance - eulerRewardsToken.balanceOf(address(this));
+
+        if (usdcReceived < _usdcAmountOutMin) revert AmountReceivedBelowMin();
+
+        eulerRewardsToken.safeApprove(C.ZERO_EX_ROUTER, 0);
     }
 }

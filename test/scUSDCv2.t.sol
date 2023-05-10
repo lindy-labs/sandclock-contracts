@@ -1211,7 +1211,9 @@ contract scUSDCv2Test is Test {
         assertEq(vault.totalAssets(), initialUsdcBalance + EUL_SWAP_USDC_RECEIVED, "vault total assets");
         assertEq(vault.usdcBalance(), initialUsdcBalance + EUL_SWAP_USDC_RECEIVED, "vault usdc balance");
         assertEq(
-            lendingManager.eulerRewardsToken().allowance(address(vault), vault.zeroExRouter()), 0, "0x eul allowance"
+            lendingManager.eulerRewardsToken().allowance(address(vault), lendingManager.zeroExRouter()),
+            0,
+            "0x eul allowance"
         );
     }
 
@@ -1239,7 +1241,7 @@ contract scUSDCv2Test is Test {
 
         deal(address(lendingManager.eulerRewardsToken()), address(vault), EUL_AMOUNT);
 
-        vm.expectRevert(EndUsdcBalanceTooLow.selector);
+        vm.expectRevert(AmountReceivedBelowMin.selector);
         vault.sellEulerRewards(EUL_SWAP_DATA, EUL_SWAP_USDC_RECEIVED + 1);
     }
 
@@ -1311,7 +1313,7 @@ contract scUSDCv2Test is Test {
             varDWeth: ERC20(C.AAVE_V2_VAR_DEBT_WETH_TOKEN)
         });
 
-        lendingManager = new UsdcWethLendingManager(usdc, weth, aaveV3, aaveV2, euler);
+        lendingManager = new UsdcWethLendingManager(usdc, weth, C.ZERO_EX_ROUTER, aaveV3, aaveV2, euler);
     }
 
     function _deployScWeth() internal {
@@ -1342,7 +1344,6 @@ contract scUSDCv2Test is Test {
             lendingManager: lendingManager,
             usdc: ERC20(C.USDC),
             weth: WETH(payable(C.WETH)),
-            zeroExRouter: C.ZERO_EX_ROUTER,
             uniswapSwapRouter: ISwapRouter(C.UNISWAP_V3_SWAP_ROUTER),
             chainlinkUsdcToEthPriceFeed: AggregatorV3Interface(C.CHAINLINK_USDC_ETH_PRICE_FEED),
             balancerVault: IVault(C.BALANCER_VAULT)

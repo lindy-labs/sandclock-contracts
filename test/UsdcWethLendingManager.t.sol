@@ -70,7 +70,7 @@ contract UsdcWethLendingManagerTest is Test {
             varDWeth: ERC20(C.AAVE_V2_VAR_DEBT_WETH_TOKEN)
         });
 
-        lendingManager = new UsdcWethLendingManager(usdc, weth, aaveV3, aaveV2, euler);
+        lendingManager = new UsdcWethLendingManager(usdc, weth, C.ZERO_EX_ROUTER, aaveV3, aaveV2, euler);
     }
 
     /// #getMaxLtv ///

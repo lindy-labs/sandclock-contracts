@@ -17,3 +17,4 @@ error EndUsdcBalanceTooLow();
 error FlashLoanAmountZero();
 error PriceFeedZeroAddress();
 error EulerSwapFailed();
+error AmountReceivedBelowMin();

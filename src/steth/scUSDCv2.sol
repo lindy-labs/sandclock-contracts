@@ -10,8 +10,7 @@ import {
     NoProfitsToSell,
     FlashLoanAmountZero,
     PriceFeedZeroAddress,
-    EndUsdcBalanceTooLow,
-    EulerSwapFailed
+    EndUsdcBalanceTooLow
 } from "../errors/scErrors.sol";
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
@@ -28,8 +27,6 @@ import {IFlashLoanRecipient} from "../interfaces/balancer/IFlashLoanRecipient.so
 import {sc4626} from "../sc4626.sol";
 import {UsdcWethLendingManager} from "./UsdcWethLendingManager.sol";
 
-// TODO: update documentation on lending manager
-// TODO: remove structs for gas optimization and further contract size reduction
 /**
  * @title Sandclock USDC Vault version 2
  * @notice A vault that allows users to earn interest on their USDC deposits from leveraged WETH staking.
@@ -87,9 +84,6 @@ contract scUSDCv2 is sc4626, IFlashLoanRecipient {
     // Uniswap V3 router
     ISwapRouter public immutable swapRouter;
 
-    // Ox router address
-    address public immutable zeroExRouter;
-
     // Chainlink pricefeed (USDC -> WETH)
     AggregatorV3Interface public usdcToEthPriceFeed;
 
@@ -112,7 +106,6 @@ contract scUSDCv2 is sc4626, IFlashLoanRecipient {
         ERC20 usdc;
         WETH weth;
         UsdcWethLendingManager lendingManager;
-        address zeroExRouter;
         ISwapRouter uniswapSwapRouter;
         AggregatorV3Interface chainlinkUsdcToEthPriceFeed;
         IVault balancerVault;
@@ -124,7 +117,6 @@ contract scUSDCv2 is sc4626, IFlashLoanRecipient {
         scWETH = _params.scWETH;
         weth = _params.weth;
         lendingManager = _params.lendingManager;
-        zeroExRouter = _params.zeroExRouter;
         swapRouter = _params.uniswapSwapRouter;
         usdcToEthPriceFeed = _params.chainlinkUsdcToEthPriceFeed;
         balancerVault = _params.balancerVault;
@@ -284,23 +276,23 @@ contract scUSDCv2 is sc4626, IFlashLoanRecipient {
      * @dev Called by Balancer's vault in 2 situations:
      * 1. When the vault is underwater and the vault needs to exit all positions.
      * 2. When the vault needs to reallocate capital between lending markets.
-     * @param amounts single elment array containing the amount of WETH being flashloaned.
-     * @param userData The encoded data that was passed to the flashloan.
+     * @param _amounts single elment array containing the amount of WETH being flashloaned.
+     * @param _data The encoded data that was passed to the flashloan.
      */
-    function receiveFlashLoan(address[] memory, uint256[] memory amounts, uint256[] memory, bytes memory userData)
+    function receiveFlashLoan(address[] memory, uint256[] memory _amounts, uint256[] memory, bytes memory _data)
         external
     {
         _isFlashLoanInitiated();
 
         if (msg.sender != address(balancerVault)) revert InvalidFlashLoanCaller();
 
-        uint256 flashLoanAmount = amounts[0];
-        FlashLoanType flashLoanType = abi.decode(userData, (FlashLoanType));
+        uint256 flashLoanAmount = _amounts[0];
+        FlashLoanType flashLoanType = abi.decode(_data, (FlashLoanType));
 
         if (flashLoanType == FlashLoanType.ExitAllPositions) {
             _exitAllPositionsFlash(flashLoanAmount);
         } else {
-            (, ReallocationParams[] memory params) = abi.decode(userData, (FlashLoanType, ReallocationParams[]));
+            (, ReallocationParams[] memory params) = abi.decode(_data, (FlashLoanType, ReallocationParams[]));
             _reallocateCapitalFlash(params);
         }
 
@@ -314,20 +306,13 @@ contract scUSDCv2 is sc4626, IFlashLoanRecipient {
      * @param _usdcAmountOutMin The minimum amount of USDC to receive for the swap.
      */
     function sellEulerRewards(bytes calldata _swapData, uint256 _usdcAmountOutMin) external onlyKeeper {
-        uint256 eulerBalance = lendingManager.eulerRewardsToken().balanceOf(address(this));
+        (bool success, bytes memory result) = address(lendingManager).delegatecall(
+            abi.encodeWithSelector(UsdcWethLendingManager.sellEulerRewards.selector, _swapData, _usdcAmountOutMin)
+        );
+        if (!success) revert(string(result));
+        (uint256 eulerSold, uint256 usdcReceived) = abi.decode(result, (uint256, uint256));
 
-        lendingManager.eulerRewardsToken().safeApprove(zeroExRouter, eulerBalance);
-        uint256 initialBalance = usdcBalance();
-
-        (bool success,) = zeroExRouter.call{value: 0}(_swapData);
-        if (!success) revert EulerSwapFailed();
-
-        uint256 usdcReceived = usdcBalance() - initialBalance;
-        if (usdcReceived < _usdcAmountOutMin) revert EndUsdcBalanceTooLow();
-
-        lendingManager.eulerRewardsToken().safeApprove(zeroExRouter, 0);
-
-        emit EulerRewardsSold(eulerBalance - lendingManager.eulerRewardsToken().balanceOf(address(this)), usdcReceived);
+        emit EulerRewardsSold(eulerSold, usdcReceived);
     }
 
     /**
@@ -538,10 +523,10 @@ contract scUSDCv2 is sc4626, IFlashLoanRecipient {
         return _invested > _debt ? _invested - _debt : 0;
     }
 
-    function _disinvest(uint256 _wethAmount) internal returns (uint256 amountWithdrawn) {
+    function _disinvest(uint256 _wethAmount) internal returns (uint256) {
         uint256 shares = scWETH.convertToShares(_wethAmount);
 
-        amountWithdrawn = scWETH.redeem(shares, address(this), address(this));
+        return scWETH.redeem(shares, address(this), address(this));
     }
 
     function _swapWethForUsdc(uint256 _wethAmount, uint256 _usdcAmountOutMin) internal returns (uint256) {
