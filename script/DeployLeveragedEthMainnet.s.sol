@@ -53,7 +53,7 @@ contract DeployScript is CREATE3Script {
 
         scWeth = new scWETH(scWethParams);
 
-        weth.deposit{ value: 0.01 ether }(); // wrap 0.01 ETH into WETH
+        weth.deposit{value: 0.01 ether}(); // wrap 0.01 ETH into WETH
         deposit(scWeth, weth, 0.01 ether); // 0.01 WETH
 
         // transfer DEFAULT_ADMIN_ROLE to multisig
