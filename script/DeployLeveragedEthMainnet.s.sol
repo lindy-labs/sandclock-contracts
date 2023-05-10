@@ -73,7 +73,7 @@ contract DeployScript is CREATE3Script {
         scUsdc = new scUSDC(scUsdcParams);
 
         swapETHForUSDC(0.01 ether);
-        deposit(scUsdc, usdc, usdc.balanceOf(msg.sender)); // 0.01 ether worth of USDC
+        deposit(scUsdc, usdc, usdc.balanceOf(address(this))); // 0.01 ether worth of USDC
 
         vm.stopBroadcast();
     }
