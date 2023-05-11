@@ -97,22 +97,14 @@ contract DeployScript is CREATE3Script {
 
         weth.approve(address(uniswapRouter), amount);
 
-        address[] memory tokenPath = new address[](2);
-        tokenPath[0] = address(weth);
-        tokenPath[1] = address(usdc);
-
-        uint256[] memory amountsMin = new uint256[](2);
-        amountsMin[0] = amount;
-        amountsMin[1] = 0;
-
         ISwapRouter.ExactInputSingleParams memory params = ISwapRouter.ExactInputSingleParams({
-            tokenIn: tokenPath[0],
-            tokenOut: tokenPath[1],
+            tokenIn: address(weth),
+            tokenOut: address(usdc),
             fee: 500, // 0.05%
             recipient: deployerAddress,
             deadline: block.timestamp + 1000,
             amountIn: amount,
-            amountOutMinimum: amountsMin[1],
+            amountOutMinimum: 0,
             sqrtPriceLimitX96: 0
         });
 
