@@ -89,7 +89,7 @@ contract DeployScript is CREATE3Script {
 
     function deposit(sc4626 vault, ERC20 underlying, uint256 amount) internal {
         underlying.approve(address(vault), amount);
-        vault.deposit(amount, msg.sender);
+        vault.deposit(amount, deployerAddress);
     }
 
     function swapETHForUSDC(uint256 amount) internal {
