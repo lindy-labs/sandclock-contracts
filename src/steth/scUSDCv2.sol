@@ -204,12 +204,12 @@ contract scUSDCv2 is sc4626, IFlashLoanRecipient {
     }
 
     /**
-     * @notice Reallocate capital between lending markets, ie moves debt and collateral positions from one protocol (money market) to another.
+     * @notice Reallocate collateral & debt between lending markets, ie move debt and collateral positions from one protocol (money market) to another.
      * @dev To move the funds between lending markets, the vault uses flashloans to repay debt and release collateral in one money market enabling it to be moved to anoter mm.
      * @param _params The reallocation parameters. Markets where positions are downsized must be listed first because collateral has to be relased before it is reallocated.
      * @param _flashLoanAmount The amount of WETH to flashloan from Balancer. Has to be at least equal to amount of WETH debt moved between lending markets.
      */
-    function reallocateCapital(ReallocationParams[] calldata _params, uint256 _flashLoanAmount) external onlyKeeper {
+    function reallocate(ReallocationParams[] calldata _params, uint256 _flashLoanAmount) external onlyKeeper {
         if (_flashLoanAmount == 0) revert FlashLoanAmountZero();
 
         address[] memory tokens = new address[](1);
@@ -292,7 +292,7 @@ contract scUSDCv2 is sc4626, IFlashLoanRecipient {
             _exitAllPositionsFlash(flashLoanAmount);
         } else {
             (, ReallocationParams[] memory params) = abi.decode(_data, (FlashLoanType, ReallocationParams[]));
-            _reallocateCapitalFlash(params);
+            _reallocateFlash(params);
         }
 
         weth.safeTransfer(address(balancerVault), flashLoanAmount);
@@ -405,7 +405,7 @@ contract scUSDCv2 is sc4626, IFlashLoanRecipient {
         if (!success) revert(string(result));
     }
 
-    function _reallocateCapitalFlash(ReallocationParams[] memory _params) internal {
+    function _reallocateFlash(ReallocationParams[] memory _params) internal {
         for (uint8 i = 0; i < _params.length; i++) {
             if (_params[i].isDownsize) {
                 _repay(uint8(_params[i].protocolId), _params[i].debtAmount);
