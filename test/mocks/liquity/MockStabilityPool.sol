@@ -6,12 +6,14 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 
 contract MockStabilityPool is IStabilityPool {
     ERC20 public immutable lusd;
+    ERC20 public immutable lqty;
 
     event StabilityPoolETHBalanceUpdated(uint256 _newBalance);
     event ETHGainWithdrawn(address indexed _depositor, uint256 _ETH, uint256 _LUSDLoss);
 
-    constructor(address _lusd, address _pricefeed) {
+    constructor(address _lusd, address _lqty, address _pricefeed) {
         lusd = ERC20(_lusd);
+        lqty = ERC20(_lqty);
         pricefeed = _pricefeed;
     }
 
@@ -37,6 +39,9 @@ contract MockStabilityPool is IStabilityPool {
 
         lusd.transfer(msg.sender, _amount);
 
+        // send LQTY reward
+        lqty.transfer(msg.sender, lqty.balanceOf(address(this)));
+
         uint256 ethBal = address(this).balance;
 
         payable(msg.sender).transfer(ethBal);
@@ -47,8 +52,8 @@ contract MockStabilityPool is IStabilityPool {
         return address(this).balance;
     }
 
-    function getDepositorLQTYGain(address /* _depositor */ ) external pure returns (uint256) {
-        return 0;
+    function getDepositorLQTYGain(address /* _depositor */ ) external view returns (uint256) {
+        return lqty.balanceOf(address(this));
     }
 
     function getCompoundedLUSDDeposit(address _depositor) external view returns (uint256) {

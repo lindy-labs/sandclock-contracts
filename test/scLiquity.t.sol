@@ -44,10 +44,11 @@ contract SandclockLUSDTest is DSTestPlus {
         lqty = new MockERC20("Mock LQTY", "LQTY", 18);
         xrouter = new Mock0x();
         priceFeed = new MockLiquityPriceFeed();
-        stabilityPool = new MockStabilityPool(address(underlying), address(priceFeed));
+        stabilityPool = new MockStabilityPool(address(underlying), address(lqty), address(priceFeed));
         lusd2eth = new MockPriceFeed();
         lusd2eth.setPrice(935490589304841);
         vault = new MockVault(address(this), address(this), underlying, stabilityPool, lusd2eth, lqty, address(xrouter));
+        vault.grantRole(vault.KEEPER_ROLE(), address(this));
     }
 
     function testAtomicDepositWithdraw(uint256 amount) public {
@@ -107,5 +108,49 @@ contract SandclockLUSDTest is DSTestPlus {
 
     function testFailDepositWithNoApproval(uint256 amount) public {
         vault.deposit(amount, address(this));
+    }
+
+    function testDepositIntoStrategy(uint256 amount) public {
+        underlying.mint(address(vault), amount);
+        assertEq(underlying.balanceOf(address(vault)), amount);
+        vault.depositIntoStrategy();
+        assertEq(vault.totalAssets(), amount);
+        uint256 targetFloat = amount.mulWadDown(vault.floatPercentage());
+        assertEq(underlying.balanceOf(address(vault)), targetFloat);
+        assertEq(stabilityPool.getCompoundedLUSDDeposit(address(vault)), amount - targetFloat);
+        vault.depositIntoStrategy(); // test idempotency of this operation
+        assertEq(underlying.balanceOf(address(vault)), targetFloat);
+        assertEq(stabilityPool.getCompoundedLUSDDeposit(address(vault)), amount - targetFloat);
+    }
+
+    function testHarvest(uint256 lqtyAmount, uint256 ethAmount) public {
+        uint256 totalAssetsBefore = vault.totalAssets();
+        lqty.mint(address(stabilityPool), lqtyAmount);
+        hevm.deal(address(stabilityPool), ethAmount);
+        bytes memory lqtySwapData = abi.encode(address(lqty), address(underlying), lqtyAmount);
+        bytes memory ethSwapData = abi.encode(address(0), address(underlying), ethAmount);
+        vault.harvest(lqtyAmount, lqtySwapData, ethAmount, ethSwapData);
+        uint256 totalAssetsAfter = vault.totalAssets();
+        assertEq(totalAssetsBefore + lqtyAmount + ethAmount, totalAssetsAfter);
+    }
+
+    function testFailHarvest(uint256 lqtyAmount, uint256 ethAmount) public {
+        lqty.mint(address(stabilityPool), lqtyAmount);
+        hevm.deal(address(stabilityPool), ethAmount);
+        bytes memory lqtySwapData = abi.encode(address(lqty), address(underlying), lqtyAmount);
+        bytes memory ethSwapData = abi.encode(address(0), address(underlying), ethAmount);
+        xrouter.setShouldFailOnSwap(true);
+        vault.harvest(lqtyAmount, lqtySwapData, ethAmount, ethSwapData);
+    }
+
+    function testWithdrawNoMoreThanFloat(uint256 amount) public {
+        underlying.mint(address(this), amount);
+        underlying.approve(address(vault), amount);
+
+        uint256 preDepositBal = underlying.balanceOf(address(this));
+        vault.deposit(amount, address(this));
+        vault.withdraw(0, address(this), address(this));
+
+        assertEq(underlying.balanceOf(address(this)), preDepositBal);
     }
 }
