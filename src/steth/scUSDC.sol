@@ -128,7 +128,8 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
      * @notice Set the slippage tolerance for swapping WETH to USDC on Uniswap.
      * @param _newSlippageTolerance The new slippage tolerance value.
      */
-    function setSlippageTolerance(uint256 _newSlippageTolerance) external onlyAdmin {
+    function setSlippageTolerance(uint256 _newSlippageTolerance) external {
+        onlyAdmin();
         if (_newSlippageTolerance > C.ONE) revert InvalidSlippageTolerance();
 
         slippageTolerance = _newSlippageTolerance;
@@ -140,7 +141,8 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
      * @notice Apply a new target LTV and trigger a rebalance.
      * @param _newTargetLtv The new target LTV value.
      */
-    function applyNewTargetLtv(uint256 _newTargetLtv) external onlyKeeper {
+    function applyNewTargetLtv(uint256 _newTargetLtv) external {
+        onlyKeeper();
         if (_newTargetLtv > getMaxLtv()) revert InvalidTargetLtv();
 
         targetLtv = _newTargetLtv;
@@ -154,7 +156,9 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
      * @notice Rebalance the vault's positions.
      * @dev Called to increase or decrease the WETH debt to match the target LTV.
      */
-    function rebalance() public onlyKeeper {
+    function rebalance() public {
+        onlyKeeper();
+
         uint256 initialBalance = getUsdcBalance();
         uint256 currentBalance = initialBalance;
         uint256 collateral = getCollateral();
@@ -194,7 +198,9 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
      * @notice Sells WETH profits to USDC.
      * @param _usdcAmountOutMin The minimum amount of USDC to receive.
      */
-    function sellProfit(uint256 _usdcAmountOutMin) external onlyKeeper {
+    function sellProfit(uint256 _usdcAmountOutMin) external {
+        onlyKeeper();
+
         uint256 profits = _calculateWethProfit(getInvested(), getDebt());
 
         if (profits == 0) revert NoProfitsToSell();
@@ -209,7 +215,8 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
      * @notice Emergency exit to release collateral if the vault is underwater.
      * @param _endUsdcBalanceMin The minimum USDC balance to end with after all positions are closed.
      */
-    function exitAllPositions(uint256 _endUsdcBalanceMin) external onlyAdmin {
+    function exitAllPositions(uint256 _endUsdcBalanceMin) external {
+        onlyAdmin();
         uint256 debt = getDebt();
 
         if (getInvested() >= debt) {
