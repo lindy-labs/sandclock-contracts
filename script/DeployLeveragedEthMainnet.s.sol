@@ -54,7 +54,7 @@ contract DeployScript is CREATE3Script {
         scWeth = new scWETH(scWethParams);
 
         weth.deposit{value: 0.01 ether}(); // wrap 0.01 ETH into WETH
-        deposit(scWeth, weth, 0.01 ether); // 0.01 WETH
+        deposit(scWeth, 0.01 ether); // 0.01 WETH
 
         // transfer DEFAULT_ADMIN_ROLE to multisig
         scWeth.grantRole(DEFAULT_ADMIN_ROLE, C.MULTISIG);
@@ -78,7 +78,7 @@ contract DeployScript is CREATE3Script {
         scUsdc = new scUSDC(scUsdcParams);
 
         swapETHForUSDC(0.01 ether);
-        deposit(scUsdc, usdc, usdc.balanceOf(address(deployerAddress))); // 0.01 ether worth of USDC
+        deposit(scUsdc, usdc.balanceOf(address(deployerAddress))); // 0.01 ether worth of USDC
 
         // transfer DEFAULT_ADMIN_ROLE to multisig
         scUsdc.grantRole(DEFAULT_ADMIN_ROLE, C.MULTISIG);
@@ -87,8 +87,8 @@ contract DeployScript is CREATE3Script {
         vm.stopBroadcast();
     }
 
-    function deposit(sc4626 vault, ERC20 underlying, uint256 amount) internal {
-        underlying.approve(address(vault), amount);
+    function deposit(sc4626 vault, uint256 amount) internal {
+        vault.asset().approve(address(vault), amount);
         vault.deposit(amount, deployerAddress);
     }
 

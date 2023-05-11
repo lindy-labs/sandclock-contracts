@@ -2,6 +2,9 @@
 pragma solidity ^0.8.13;
 
 library Constants {
+    // address of the multisig. meant to have default admin role
+    address public constant MULTISIG = 0x035F210e5d14054E8AE5A6CFA76d643aA200D56E;
+
     uint256 public constant ONE = 1e18;
     // decimals difference between WETH and USDC (18 - 6)
     uint256 public constant WETH_USDC_DECIMALS_DIFF = 1e12;
@@ -51,7 +54,4 @@ library Constants {
 
     // address of the 0x swap router contract
     address public constant ZEROX_ROUTER = 0xDef1C0ded9bec7F1a1670819833240f027b25EfF;
-
-    // address of the multisig
-    address public constant MULTISIG = 0x035F210e5d14054E8AE5A6CFA76d643aA200D56E;
 }
