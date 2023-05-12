@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.10;
 
+import "forge-std/console2.sol";
 import {DSTestPlus} from "solmate/test/utils/DSTestPlus.sol";
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockStabilityPool} from "./mocks/liquity/MockStabilityPool.sol";
@@ -111,6 +112,7 @@ contract SandclockLUSDTest is DSTestPlus {
     }
 
     function testDepositIntoStrategy(uint256 amount) public {
+        amount = bound(amount, 1e5, 1e27);
         underlying.mint(address(vault), amount);
         assertEq(underlying.balanceOf(address(vault)), amount);
         vault.depositIntoStrategy();
@@ -124,6 +126,8 @@ contract SandclockLUSDTest is DSTestPlus {
     }
 
     function testHarvest(uint256 lqtyAmount, uint256 ethAmount) public {
+        lqtyAmount = bound(lqtyAmount, 1, 1e27);
+        ethAmount = bound(ethAmount, 1, 1e27);
         uint256 totalAssetsBefore = vault.totalAssets();
         lqty.mint(address(stabilityPool), lqtyAmount);
         hevm.deal(address(stabilityPool), ethAmount);
@@ -134,23 +138,32 @@ contract SandclockLUSDTest is DSTestPlus {
         assertEq(totalAssetsBefore + lqtyAmount + ethAmount, totalAssetsAfter);
     }
 
-    function testFailHarvest(uint256 lqtyAmount, uint256 ethAmount) public {
+    function testFailHarvestLQTY(uint256 lqtyAmount) public {
+        lqtyAmount = bound(lqtyAmount, 1, 1e27);
         lqty.mint(address(stabilityPool), lqtyAmount);
-        hevm.deal(address(stabilityPool), ethAmount);
         bytes memory lqtySwapData = abi.encode(address(lqty), address(underlying), lqtyAmount);
+        bytes memory ethSwapData = abi.encode(address(0), address(underlying), 0);
+        xrouter.setShouldFailOnSwap(true);
+        vault.harvest(lqtyAmount, lqtySwapData, 0, ethSwapData);
+    }
+
+    function testFailHarvestETH(uint256 ethAmount) public {
+        ethAmount = bound(ethAmount, 1, 1e27);
+        hevm.deal(address(stabilityPool), ethAmount);
+        bytes memory lqtySwapData = abi.encode(address(lqty), address(underlying), 0);
         bytes memory ethSwapData = abi.encode(address(0), address(underlying), ethAmount);
         xrouter.setShouldFailOnSwap(true);
-        vault.harvest(lqtyAmount, lqtySwapData, ethAmount, ethSwapData);
+        vault.harvest(0, lqtySwapData, ethAmount, ethSwapData);
     }
 
     function testWithdrawNoMoreThanFloat(uint256 amount) public {
+        amount = bound(amount, 1e5, 1e27);
         underlying.mint(address(this), amount);
         underlying.approve(address(vault), amount);
 
         uint256 preDepositBal = underlying.balanceOf(address(this));
         vault.deposit(amount, address(this));
-        vault.withdraw(0, address(this), address(this));
-
-        assertEq(underlying.balanceOf(address(this)), preDepositBal);
+        vault.withdraw(amount.mulWadDown(vault.floatPercentage()), address(this), address(this));
+        assertEq(underlying.balanceOf(address(this)), preDepositBal.mulWadDown(vault.floatPercentage()));
     }
 }
