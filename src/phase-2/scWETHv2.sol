@@ -10,7 +10,8 @@ import {
     PleaseUseRedeemMethod,
     InvalidFlashLoanCaller,
     InvalidAllocationPercents,
-    InsufficientDepositBalance
+    InsufficientDepositBalance,
+    FloatBalanceTooSmall
 } from "../errors/scErrors.sol";
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
@@ -33,8 +34,6 @@ import {LendingMarketManager} from "./LendingMarketManager.sol";
 contract scWETHv2 is sc4626, IFlashLoanRecipient {
     using SafeTransferLib for ERC20;
     using FixedPointMathLib for uint256;
-
-    error FloatBalanceTooSmall(uint256 actual, uint256 required);
 
     event SlippageToleranceUpdated(address indexed admin, uint256 newSlippageTolerance);
     event ExchangeProxyAddressUpdated(address indexed user, address newAddress);
@@ -567,7 +566,6 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
 }
 
 // todo:
-// refactoring LendingMarketManager
 // add full test coverage
 // euler rewards & 0x swapping
 // gas optimizations

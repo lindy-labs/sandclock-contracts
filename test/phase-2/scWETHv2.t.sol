@@ -91,6 +91,44 @@ contract scWETHv2Test is Test {
         assertEq(vault.slippageTolerance(), slippageTolerance);
     }
 
+    function test_setSlippageTolerance() public {
+        vault.setSlippageTolerance(0.5e18);
+        assertEq(vault.slippageTolerance(), 0.5e18, "slippageTolerance not set");
+
+        // revert if called by another user
+        vm.expectRevert(CallerNotAdmin.selector);
+        vm.prank(alice);
+        vault.setSlippageTolerance(0.5e18);
+
+        vm.expectRevert(InvalidSlippageTolerance.selector);
+        vault.setSlippageTolerance(1.1e18);
+    }
+
+    function test_setStEThToEthPriceFeed() public {
+        address newStEthPriceFeed = alice;
+        vault.setStEThToEthPriceFeed(newStEthPriceFeed);
+        assertEq(address(vault.stEThToEthPriceFeed()), newStEthPriceFeed);
+
+        // revert if called by another user
+        vm.expectRevert(CallerNotAdmin.selector);
+        vm.prank(alice);
+        vault.setStEThToEthPriceFeed(newStEthPriceFeed);
+
+        vm.expectRevert(ZeroAddress.selector);
+        vault.setStEThToEthPriceFeed(address(0x00));
+    }
+
+    function test_setMinimumFloatAmount() public {
+        uint256 newMinimumFloatAmount = 69e18;
+        vault.setMinimumFloatAmount(newMinimumFloatAmount);
+        assertEq(vault.minimumFloatAmount(), newMinimumFloatAmount);
+
+        // revert if called by another user
+        vm.expectRevert(CallerNotAdmin.selector);
+        vm.prank(alice);
+        vault.setMinimumFloatAmount(newMinimumFloatAmount);
+    }
+
     function test_receiveFlashLoan_InvalidFlashLoanCaller() public {
         address[] memory empty;
         uint256[] memory amounts = new uint[](1);
@@ -109,6 +147,50 @@ contract scWETHv2Test is Test {
 
         vm.expectRevert(InvalidFlashLoanCaller.selector);
         balancer.flashLoan(address(vault), tokens, amounts, abi.encode(0, 0));
+    }
+
+    function test_withdraw_revert() public {
+        vm.expectRevert(PleaseUseRedeemMethod.selector);
+        vault.withdraw(1e18, address(this), address(this));
+    }
+
+    function test_invest_FloatBalanceTooSmall(uint256 amount) public {
+        amount = bound(amount, boundMinimum, 15000 ether);
+        _depositToVault(address(this), amount);
+
+        uint256 investAmount = amount - minimumFloatAmount + 1;
+
+        (scWETHv2.SupplyBorrowParam[] memory supplyBorrowParams,,) =
+            _getInvestParams(investAmount, aaveV3AllocationPercent, eulerAllocationPercent, compoundAllocationPercent);
+
+        // deposit into strategy
+        vm.startPrank(keeper);
+        vm.expectRevert(
+            abi.encodeWithSelector(FloatBalanceTooSmall.selector, minimumFloatAmount - 1, minimumFloatAmount)
+        );
+        vault.investAndHarvest(investAmount, supplyBorrowParams);
+    }
+
+    function test_deposit_eth(uint256 amount) public {
+        amount = bound(amount, boundMinimum, 1e21);
+        vm.deal(address(this), amount);
+
+        assertEq(weth.balanceOf(address(this)), 0);
+        assertEq(address(this).balance, amount);
+
+        vault.deposit{value: amount}(address(this));
+
+        assertEq(address(this).balance, 0, "eth not transferred from user");
+        assertEq(vault.balanceOf(address(this)), amount, "shares not minted");
+        assertEq(weth.balanceOf(address(vault)), amount, "weth not transferred to vault");
+    }
+
+    function test_maxLtv() public {
+        assertEq(lendingManager.getMaxLtv(LendingMarketManager.Protocol.AAVE_V3), 0.9e18, "aaveV3 Max Ltv Error");
+        assertEq(lendingManager.getMaxLtv(LendingMarketManager.Protocol.EULER), 0.7735e18, "euler Max Ltv Error");
+        assertEq(
+            lendingManager.getMaxLtv(LendingMarketManager.Protocol.COMPOUND_V3), 0.9e18, "compoundV3 Max Ltv Error"
+        );
     }
 
     function test_deposit_redeem(uint256 amount) public {
