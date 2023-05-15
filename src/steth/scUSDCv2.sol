@@ -98,6 +98,9 @@ contract scUSDCv2 is sc4626, IFlashLoanRecipient {
     // lending manager contract used to interact with different money markets
     UsdcWethLendingManager public immutable lendingManager;
 
+    // whether to use Euler Protocol
+    bool public useEuler = false;
+
     struct ConstructorParams {
         address admin;
         address keeper;
@@ -128,15 +131,21 @@ contract scUSDCv2 is sc4626, IFlashLoanRecipient {
 
         asset.safeApprove(address(lendingManager.aaveV3Pool()), type(uint256).max);
         weth.safeApprove(address(lendingManager.aaveV3Pool()), type(uint256).max);
-
-        asset.safeApprove(lendingManager.eulerProtocol(), type(uint256).max);
-        weth.safeApprove(lendingManager.eulerProtocol(), type(uint256).max);
-        lendingManager.eulerMarkets().enterMarket(0, address(asset));
     }
 
     /*//////////////////////////////////////////////////////////////
                             PUBLIC API
     //////////////////////////////////////////////////////////////*/
+
+    /**
+     * @notice Enable use of the Euler Protocol. Disabled by default.
+     */
+    function enableEuler() external onlyAdmin {
+        asset.safeApprove(lendingManager.eulerProtocol(), type(uint256).max);
+        weth.safeApprove(lendingManager.eulerProtocol(), type(uint256).max);
+        lendingManager.eulerMarkets().enterMarket(0, address(asset));
+        useEuler = true;
+    }
 
     /**
      * @notice Set the slippage tolerance for swapping WETH to USDC on Uniswap.
@@ -351,15 +360,23 @@ contract scUSDCv2 is sc4626, IFlashLoanRecipient {
     /**
      * @notice Returns the total USDC supplied as collateral in all money markets.
      */
-    function totalCollateral() public view returns (uint256) {
-        return lendingManager.getTotalCollateral(address(this));
+    function totalCollateral() public view returns (uint256 total) {
+        for (uint8 i = 0; i <= uint8(type(UsdcWethLendingManager.Protocol).max); i++) {
+            if (UsdcWethLendingManager.Protocol(i) == UsdcWethLendingManager.Protocol.EULER && !useEuler) continue;
+
+            total += lendingManager.getCollateral(UsdcWethLendingManager.Protocol(i), address(this));
+        }
     }
 
     /**
      * @notice Returns the total WETH borrowed in all money markets.
      */
-    function totalDebt() public view returns (uint256) {
-        return lendingManager.getTotalDebt(address(this));
+    function totalDebt() public view returns (uint256 total) {
+        for (uint8 i = 0; i <= uint8(type(UsdcWethLendingManager.Protocol).max); i++) {
+            if (UsdcWethLendingManager.Protocol(i) == UsdcWethLendingManager.Protocol.EULER && !useEuler) continue;
+
+            total += lendingManager.getDebt(UsdcWethLendingManager.Protocol(i), address(this));
+        }
     }
 
     /**
@@ -423,6 +440,8 @@ contract scUSDCv2 is sc4626, IFlashLoanRecipient {
 
     function _exitAllPositionsFlash(uint256 _flashLoanAmount) internal {
         for (uint8 i = 0; i <= uint256(type(UsdcWethLendingManager.Protocol).max); i++) {
+            if (UsdcWethLendingManager.Protocol(i) == UsdcWethLendingManager.Protocol.EULER && !useEuler) continue;
+
             uint256 debt = lendingManager.getDebt(UsdcWethLendingManager.Protocol(i), address(this));
             uint256 collateral = lendingManager.getCollateral(UsdcWethLendingManager.Protocol(i), address(this));
 
@@ -489,7 +508,9 @@ contract scUSDCv2 is sc4626, IFlashLoanRecipient {
         uint256 withdrawn = _disinvest(wethNeeded);
 
         // repay debt and withdraw collateral from each protocol in proportion to their collateral allocation
-        for (uint8 i = 0; i <= uint256(type(UsdcWethLendingManager.Protocol).max); i++) {
+        for (uint8 i = 0; i <= uint8(type(UsdcWethLendingManager.Protocol).max); i++) {
+            if (UsdcWethLendingManager.Protocol(i) == UsdcWethLendingManager.Protocol.EULER && !useEuler) continue;
+
             uint256 collateral = lendingManager.getCollateral(UsdcWethLendingManager.Protocol(i), address(this));
 
             if (collateral == 0) continue;

@@ -286,9 +286,9 @@ contract UsdcWethLendingManager {
         uint256 eulerBalance = eulerRewardsToken.balanceOf(address(this));
         uint256 usdcBalance = usdc.balanceOf(address(this));
 
-        eulerRewardsToken.safeApprove(C.ZERO_EX_ROUTER, eulerBalance);
+        eulerRewardsToken.safeApprove(zeroExRouter, eulerBalance);
 
-        (bool success,) = C.ZERO_EX_ROUTER.call{value: 0}(_swapData);
+        (bool success,) = zeroExRouter.call{value: 0}(_swapData);
         if (!success) revert EulerSwapFailed();
 
         usdcReceived = usdc.balanceOf(address(this)) - usdcBalance;
@@ -296,6 +296,6 @@ contract UsdcWethLendingManager {
 
         if (usdcReceived < _usdcAmountOutMin) revert AmountReceivedBelowMin();
 
-        eulerRewardsToken.safeApprove(C.ZERO_EX_ROUTER, 0);
+        eulerRewardsToken.safeApprove(zeroExRouter, 0);
     }
 }
