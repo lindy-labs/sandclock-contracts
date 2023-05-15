@@ -4,6 +4,7 @@ pragma solidity ^0.8.13;
 import {
     InvalidTargetLtv,
     InvalidSlippageTolerance,
+    InvalidFloatPercentage,
     InvalidFlashLoanCaller,
     VaultNotUnderwater,
     NoProfitsToSell,
@@ -36,6 +37,7 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
     using SafeTransferLib for WETH;
     using FixedPointMathLib for uint256;
 
+    event FloatPercentageUpdated(address indexed user, uint256 newFloatPercentage);
     event NewTargetLtvApplied(address indexed admin, uint256 newTargetLtv);
     event SlippageToleranceUpdated(address indexed admin, uint256 newSlippageTolerance);
     event EmergencyExitExecuted(
@@ -81,6 +83,9 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
     // max slippage for swapping WETH -> USDC
     uint256 public slippageTolerance = 0.99e18; // 1% default
     uint256 public constant rebalanceMinimum = 10e6; // 10 USDC
+
+    // percentage of the total assets to be kept in the vault as a withdrawal buffer
+    uint256 public floatPercentage = 0.01e18;
 
     // leveraged (w)eth vault
     ERC4626 public immutable scWETH;
@@ -136,6 +141,19 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
         slippageTolerance = _newSlippageTolerance;
 
         emit SlippageToleranceUpdated(msg.sender, _newSlippageTolerance);
+    }
+
+    /**
+     * @notice Set the percentage of the total assets to be kept in the vault as a withdrawal buffer.
+     * @param _newFloatPercentage The new float percentage value.
+     */
+    function setFloatPercentage(uint256 _newFloatPercentage) external {
+        _onlyAdmin();
+
+        if (_newFloatPercentage > C.ONE) revert InvalidFloatPercentage();
+
+        floatPercentage = _newFloatPercentage;
+        emit FloatPercentageUpdated(msg.sender, _newFloatPercentage);
     }
 
     /**

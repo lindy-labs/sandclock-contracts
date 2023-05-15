@@ -4,6 +4,8 @@ pragma solidity ^0.8.13;
 import {
     InvalidTargetLtv,
     ZeroAddress,
+    FeesTooHigh,
+    TreasuryCannotBeZero,
     InvalidSlippageTolerance,
     PleaseUseRedeemMethod,
     InvalidFlashLoanCaller
@@ -30,6 +32,8 @@ contract scWETH is sc4626, IFlashLoanRecipient {
     using SafeTransferLib for ERC20;
     using FixedPointMathLib for uint256;
 
+    event PerformanceFeeUpdated(address indexed user, uint256 newPerformanceFee);
+    event TreasuryUpdated(address indexed user, address newTreasury);
     event SlippageToleranceUpdated(address indexed admin, uint256 newSlippageTolerance);
     event ExchangeProxyAddressUpdated(address indexed user, address newAddress);
     event NewTargetLtvApplied(address indexed admin, uint256 newTargetLtv);
@@ -67,6 +71,12 @@ contract scWETH is sc4626, IFlashLoanRecipient {
     // slippage for curve swaps
     uint256 public slippageTolerance;
 
+    // performance fee percentage
+    uint256 public performanceFee = 0.1e18; // 10%
+
+    // address of the treasury to send performance fees to
+    address public treasury;
+
     struct ConstructorParams {
         address admin;
         address keeper;
@@ -97,6 +107,7 @@ contract scWETH is sc4626, IFlashLoanRecipient {
         weth = _params.weth;
         stEThToEthPriceFeed = _params.stEthToEthPriceFeed;
         balancerVault = _params.balancerVault;
+        treasury = _params.admin;
 
         ERC20(address(stEth)).safeApprove(address(wstETH), type(uint256).max);
         ERC20(address(stEth)).safeApprove(address(curvePool), type(uint256).max);
@@ -121,6 +132,27 @@ contract scWETH is sc4626, IFlashLoanRecipient {
         if (newSlippageTolerance > C.ONE) revert InvalidSlippageTolerance();
         slippageTolerance = newSlippageTolerance;
         emit SlippageToleranceUpdated(msg.sender, newSlippageTolerance);
+    }
+
+    /// @notice set the performance fee percentage
+    /// @param _newPerformanceFee the new performance fee percentage
+    /// @dev performance fee is a number between 0 and 1e18
+    function setPerformanceFee(uint256 _newPerformanceFee) external {
+        _onlyAdmin();
+
+        if (_newPerformanceFee > 1e18) revert FeesTooHigh();
+        performanceFee = _newPerformanceFee;
+        emit PerformanceFeeUpdated(msg.sender, _newPerformanceFee);
+    }
+
+    /// @notice set the treasury address
+    /// @param _newTreasury the new treasury address
+    function setTreasury(address _newTreasury) external {
+        _onlyAdmin();
+
+        if (_newTreasury == address(0)) revert TreasuryCannotBeZero();
+        treasury = _newTreasury;
+        emit TreasuryUpdated(msg.sender, _newTreasury);
     }
 
     /// @notice set stEThToEthPriceFeed address

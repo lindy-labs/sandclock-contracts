@@ -5,6 +5,7 @@ error InvalidTargetLtv();
 error InvalidMaxLtv();
 error InvalidFlashLoanCaller();
 error InvalidSlippageTolerance();
+error InvalidFloatPercentage();
 error ZeroAddress();
 error PleaseUseRedeemMethod();
 error FeesTooHigh();

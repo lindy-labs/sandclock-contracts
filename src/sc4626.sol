@@ -4,14 +4,7 @@ pragma solidity ^0.8.10;
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {ERC4626} from "solmate/mixins/ERC4626.sol";
 import {AccessControl} from "openzeppelin-contracts/access/AccessControl.sol";
-import {
-    TreasuryCannotBeZero,
-    FeesTooHigh,
-    CallerNotAdmin,
-    CallerNotKeeper,
-    ZeroAddress,
-    InvalidFlashLoanCaller
-} from "./errors/scErrors.sol";
+import {CallerNotAdmin, CallerNotKeeper, ZeroAddress, InvalidFlashLoanCaller} from "./errors/scErrors.sol";
 
 abstract contract sc4626 is ERC4626, AccessControl {
     constructor(address _admin, address _keeper, ERC20 _asset, string memory _name, string memory _symbol)
@@ -22,21 +15,12 @@ abstract contract sc4626 is ERC4626, AccessControl {
 
         _grantRole(DEFAULT_ADMIN_ROLE, _admin);
         _grantRole(KEEPER_ROLE, _keeper);
-
-        treasury = _admin;
     }
-
-    bool public flashLoanInitiated;
-    uint256 public performanceFee = 0.1e18;
-    uint256 public floatPercentage = 0.01e18;
-    address public treasury;
 
     /// Role allowed to harvest/reinvest
     bytes32 public constant KEEPER_ROLE = keccak256("KEEPER_ROLE");
 
-    event PerformanceFeeUpdated(address indexed user, uint256 newPerformanceFee);
-    event FloatPercentageUpdated(address indexed user, uint256 newFloatPercentage);
-    event TreasuryUpdated(address indexed user, address newTreasury);
+    bool public flashLoanInitiated;
 
     function _onlyAdmin() internal view {
         if (!hasRole(DEFAULT_ADMIN_ROLE, msg.sender)) revert CallerNotAdmin();
@@ -44,30 +28,6 @@ abstract contract sc4626 is ERC4626, AccessControl {
 
     function _onlyKeeper() internal view {
         if (!hasRole(KEEPER_ROLE, msg.sender)) revert CallerNotKeeper();
-    }
-
-    function setPerformanceFee(uint256 newPerformanceFee) external {
-        _onlyAdmin();
-
-        if (newPerformanceFee > 1e18) revert FeesTooHigh();
-        performanceFee = newPerformanceFee;
-        emit PerformanceFeeUpdated(msg.sender, newPerformanceFee);
-    }
-
-    function setFloatPercentage(uint256 newFloatPercentage) external {
-        _onlyAdmin();
-
-        require(newFloatPercentage <= 1e18, "float percentage too high");
-        floatPercentage = newFloatPercentage;
-        emit FloatPercentageUpdated(msg.sender, newFloatPercentage);
-    }
-
-    function setTreasury(address newTreasury) external {
-        _onlyAdmin();
-
-        if (newTreasury == address(0)) revert TreasuryCannotBeZero();
-        treasury = newTreasury;
-        emit TreasuryUpdated(msg.sender, newTreasury);
     }
 
     function _initiateFlashLoan() internal {

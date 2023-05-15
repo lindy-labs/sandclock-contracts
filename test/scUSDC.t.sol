@@ -27,6 +27,7 @@ import "../src/errors/scErrors.sol";
 contract scUSDCTest is Test {
     using FixedPointMathLib for uint256;
 
+    event FloatPercentageUpdated(address indexed user, uint256 newFloatPercentage);
     event NewTargetLtvApplied(address indexed admin, uint256 newTargetLtv);
     event SlippageToleranceUpdated(address indexed admin, uint256 newSlippageTolerance);
     event EmergencyExitExecuted(
@@ -940,6 +941,33 @@ contract scUSDCTest is Test {
         vault.setSlippageTolerance(newTolerance);
 
         assertEq(vault.slippageTolerance(), newTolerance, "slippage tolerance");
+    }
+
+    /// #setFloatPercentage ///
+    function test_setFloatPercentage_FailsIfCallerIsNotAdmin() public {
+        uint256 percentage = 0.01e18;
+
+        vm.startPrank(alice);
+        vm.expectRevert(CallerNotAdmin.selector);
+        vault.setFloatPercentage(percentage);
+    }
+
+    function test_setFloatPercentage_UpdatesFloatPercentage() public {
+        uint256 newPercentage = 0.01e18;
+
+        vm.expectEmit(true, true, true, true);
+        emit FloatPercentageUpdated(address(this), newPercentage);
+
+        vault.setFloatPercentage(newPercentage);
+
+        assertEq(vault.floatPercentage(), newPercentage, "float percentage");
+    }
+
+    function test_setFloatPercentage_FailsIfNewPercentageIsGreaterThan100Percent() public {
+        uint256 newPercentage = 1.01e18;
+
+        vm.expectRevert(InvalidFloatPercentage.selector);
+        vault.setFloatPercentage(newPercentage);
     }
 
     /// #exitAllPositions ///
