@@ -140,7 +140,9 @@ contract scUSDCv2 is sc4626, IFlashLoanRecipient {
     /**
      * @notice Enable use of the Euler Protocol. Disabled by default.
      */
-    function enableEuler() external onlyAdmin {
+    function enableEuler() external {
+        _onlyAdmin();
+
         asset.safeApprove(lendingManager.eulerProtocol(), type(uint256).max);
         weth.safeApprove(lendingManager.eulerProtocol(), type(uint256).max);
         lendingManager.eulerMarkets().enterMarket(0, address(asset));
@@ -151,7 +153,9 @@ contract scUSDCv2 is sc4626, IFlashLoanRecipient {
      * @notice Set the slippage tolerance for swapping WETH to USDC on Uniswap.
      * @param _newSlippageTolerance The new slippage tolerance value.
      */
-    function setSlippageTolerance(uint256 _newSlippageTolerance) external onlyAdmin {
+    function setSlippageTolerance(uint256 _newSlippageTolerance) external {
+        _onlyAdmin();
+
         if (_newSlippageTolerance > C.ONE) revert InvalidSlippageTolerance();
 
         slippageTolerance = _newSlippageTolerance;
@@ -163,7 +167,9 @@ contract scUSDCv2 is sc4626, IFlashLoanRecipient {
      * @notice Set the chainlink price feed for USDC -> WETH.
      * @param _newPriceFeed The new price feed.
      */
-    function setUsdcToEthPriceFeed(AggregatorV3Interface _newPriceFeed) external onlyAdmin {
+    function setUsdcToEthPriceFeed(AggregatorV3Interface _newPriceFeed) external {
+        _onlyAdmin();
+
         if (address(_newPriceFeed) == address(0)) revert PriceFeedZeroAddress();
 
         usdcToEthPriceFeed = _newPriceFeed;
@@ -173,7 +179,9 @@ contract scUSDCv2 is sc4626, IFlashLoanRecipient {
      * @notice Rebalance the vault's positions/loans in multiple money markets.
      * @dev Called to increase or decrease the WETH debt to maintain the LTV (loan to value) and avoid liquidation.
      */
-    function rebalance(RebalanceParams[] calldata _params) external onlyKeeper {
+    function rebalance(RebalanceParams[] calldata _params) external {
+        _onlyKeeper();
+
         for (uint8 i = 0; i < _params.length; i++) {
             // respect new deposits
             if (_params[i].supplyAmount != 0) {
@@ -218,7 +226,9 @@ contract scUSDCv2 is sc4626, IFlashLoanRecipient {
      * @param _params The reallocation parameters. Markets where positions are downsized must be listed first because collateral has to be relased before it is reallocated.
      * @param _flashLoanAmount The amount of WETH to flashloan from Balancer. Has to be at least equal to amount of WETH debt moved between lending markets.
      */
-    function reallocate(ReallocationParams[] calldata _params, uint256 _flashLoanAmount) external onlyKeeper {
+    function reallocate(ReallocationParams[] calldata _params, uint256 _flashLoanAmount) external {
+        _onlyKeeper();
+
         if (_flashLoanAmount == 0) revert FlashLoanAmountZero();
 
         address[] memory tokens = new address[](1);
@@ -237,7 +247,9 @@ contract scUSDCv2 is sc4626, IFlashLoanRecipient {
      * @dev As the vault generates yield by staking WETH, the profits are in WETH.
      * @param _usdcAmountOutMin The minimum amount of USDC to receive.
      */
-    function sellProfit(uint256 _usdcAmountOutMin) external onlyKeeper {
+    function sellProfit(uint256 _usdcAmountOutMin) external {
+        _onlyKeeper();
+
         uint256 profit = _calculateWethProfit(wethInvested(), totalDebt());
 
         if (profit == 0) revert NoProfitsToSell();
@@ -254,7 +266,9 @@ contract scUSDCv2 is sc4626, IFlashLoanRecipient {
      *  which can lead to withdrawals being blocked. To handle this situation, the vault can close all positions in all money markets and release all of the assets (realize all losses).
      * @param _endUsdcBalanceMin The minimum USDC balance to end with after all positions are closed.
      */
-    function exitAllPositions(uint256 _endUsdcBalanceMin) external onlyAdmin {
+    function exitAllPositions(uint256 _endUsdcBalanceMin) external {
+        _onlyAdmin();
+
         uint256 debt = totalDebt();
 
         if (wethInvested() >= debt) {
@@ -313,7 +327,9 @@ contract scUSDCv2 is sc4626, IFlashLoanRecipient {
      * @param _swapData The swap data for 0xrouter.
      * @param _usdcAmountOutMin The minimum amount of USDC to receive for the swap.
      */
-    function sellEulerRewards(bytes calldata _swapData, uint256 _usdcAmountOutMin) external onlyKeeper {
+    function sellEulerRewards(bytes calldata _swapData, uint256 _usdcAmountOutMin) external {
+        _onlyKeeper();
+
         (bool success, bytes memory result) = address(lendingManager).delegatecall(
             abi.encodeWithSelector(UsdcWethLendingManager.sellEulerRewards.selector, _swapData, _usdcAmountOutMin)
         );

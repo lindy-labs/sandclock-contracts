@@ -38,29 +38,33 @@ abstract contract sc4626 is ERC4626, AccessControl {
     event FloatPercentageUpdated(address indexed user, uint256 newFloatPercentage);
     event TreasuryUpdated(address indexed user, address newTreasury);
 
-    modifier onlyAdmin() {
+    function _onlyAdmin() internal view {
         if (!hasRole(DEFAULT_ADMIN_ROLE, msg.sender)) revert CallerNotAdmin();
-        _;
     }
 
-    modifier onlyKeeper() {
+    function _onlyKeeper() internal view {
         if (!hasRole(KEEPER_ROLE, msg.sender)) revert CallerNotKeeper();
-        _;
     }
 
-    function setPerformanceFee(uint256 newPerformanceFee) external onlyAdmin {
+    function setPerformanceFee(uint256 newPerformanceFee) external {
+        _onlyAdmin();
+
         if (newPerformanceFee > 1e18) revert FeesTooHigh();
         performanceFee = newPerformanceFee;
         emit PerformanceFeeUpdated(msg.sender, newPerformanceFee);
     }
 
-    function setFloatPercentage(uint256 newFloatPercentage) external onlyAdmin {
+    function setFloatPercentage(uint256 newFloatPercentage) external {
+        _onlyAdmin();
+
         require(newFloatPercentage <= 1e18, "float percentage too high");
         floatPercentage = newFloatPercentage;
         emit FloatPercentageUpdated(msg.sender, newFloatPercentage);
     }
 
-    function setTreasury(address newTreasury) external onlyAdmin {
+    function setTreasury(address newTreasury) external {
+        _onlyAdmin();
+
         if (newTreasury == address(0)) revert TreasuryCannotBeZero();
         treasury = newTreasury;
         emit TreasuryUpdated(msg.sender, newTreasury);
