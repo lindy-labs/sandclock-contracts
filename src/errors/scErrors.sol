@@ -17,3 +17,5 @@ error EndUsdcBalanceTooLow();
 error InvalidAllocationPercents();
 error InsufficientDepositBalance();
 error FloatBalanceTooSmall(uint256 actual, uint256 required);
+error TokenSwapFailed();
+error AmountReceivedBelowMin();

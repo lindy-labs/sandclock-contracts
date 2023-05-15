@@ -42,6 +42,7 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
     event Invested(uint256 amount, SupplyBorrowParam[] supplyBorrowParams);
     event DisInvested(RepayWithdrawParam[] repayWithdrawParams);
     event Reallocated(RepayWithdrawParam[] from, SupplyBorrowParam[] to);
+    event TokensSwapped(address inToken, address outToken, uint256 amountIn, uint256 amountOutMin);
 
     struct RebalanceParams {
         RepayWithdrawParam[] repayWithdrawParams;
@@ -149,6 +150,28 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
 
     /////////////////// ADMIN/KEEPER METHODS //////////////////////////////////
 
+    /// @dev to be used to ideally swap euler rewards to weth
+    /// @dev can also be used to swap between other tokens
+    function swapTokens(
+        bytes calldata swapData,
+        address inToken,
+        address outToken,
+        uint256 amountIn,
+        uint256 amountOutMin
+    ) external {
+        onlyKeeper();
+        (bool success, bytes memory result) = address(lendingManager).delegatecall(
+            abi.encodeWithSelector(
+                LendingMarketManager.swapTokens.selector, swapData, inToken, outToken, amountIn, amountOutMin
+            )
+        );
+        if (!success) revert(string(result));
+
+        (amountIn, amountOutMin) = abi.decode(result, (uint256, uint256));
+
+        emit TokensSwapped(inToken, outToken, amountIn, amountOutMin);
+    }
+
     /// @notice invest funds into the strategy and harvest profits if any
     /// @dev for the first deposit, deposits everything into the strategy.
     /// @dev also mints performance fee tokens to the treasury
@@ -159,8 +182,6 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
         // store the old total
         uint256 oldTotalInvested = totalInvested;
         uint256 assets = totalCollateral() - totalDebt();
-
-        // todo: harvest euler rewards
 
         if (assets > oldTotalInvested) {
             totalInvested = assets;
@@ -566,7 +587,6 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
 }
 
 // todo:
-// add full test coverage
 // euler rewards & 0x swapping
 // gas optimizations
 // call with nenad to make contract function signatures similar

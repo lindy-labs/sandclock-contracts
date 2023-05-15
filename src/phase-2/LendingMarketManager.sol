@@ -11,6 +11,7 @@ import {IPool} from "aave-v3/interfaces/IPool.sol";
 import {IAToken} from "aave-v3/interfaces/IAToken.sol";
 import {IVariableDebtToken} from "aave-v3/interfaces/IVariableDebtToken.sol";
 import {IEulerDToken, IEulerEToken, IEulerMarkets} from "lib/euler-interfaces/contracts/IEuler.sol";
+import {TokenSwapFailed, AmountReceivedBelowMin} from "../errors/scErrors.sol";
 
 import {Constants as C} from "../lib/Constants.sol";
 import {sc4626} from "../sc4626.sol";
@@ -180,5 +181,26 @@ contract LendingMarketManager {
     function getTotalDebt(address account) external view returns (uint256) {
         return getDebt(Protocol.AAVE_V3, account) + getDebt(Protocol.COMPOUND_V3, account)
             + getDebt(Protocol.EULER, account);
+    }
+
+    function swapTokens(
+        bytes calldata swapData,
+        address inToken,
+        address outToken,
+        uint256 amountIn,
+        uint256 amountOutMin
+    ) external returns (uint256 inTokenAmount, uint256 outTokenAmount) {
+        uint256 inBalance = ERC20(inToken).balanceOf(address(this));
+        uint256 outBalance = ERC20(outToken).balanceOf(address(this));
+
+        ERC20(inToken).safeApprove(C.ZEROX_ROUTER, amountIn);
+
+        (bool success,) = C.ZEROX_ROUTER.call{value: outToken == address(0) ? amountIn : 0}(swapData);
+        if (!success) revert TokenSwapFailed();
+
+        inTokenAmount = inBalance - ERC20(inToken).balanceOf(address(this));
+        outTokenAmount = ERC20(outToken).balanceOf(address(this)) - outBalance;
+
+        if (ERC20(outToken).balanceOf(address(this)) - outTokenAmount < amountOutMin) revert AmountReceivedBelowMin();
     }
 }
