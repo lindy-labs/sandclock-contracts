@@ -99,9 +99,6 @@ contract scUSDCv2 is sc4626, IFlashLoanRecipient {
     // lending manager contract used to interact with different money markets
     UsdcWethLendingManager public immutable lendingManager;
 
-    // whether to use Euler Protocol
-    bool public useEuler = false;
-
     // percentage of the total assets to be kept in the vault as a withdrawal buffer
     uint256 public floatPercentage = 0.01e18;
 
@@ -150,7 +147,6 @@ contract scUSDCv2 is sc4626, IFlashLoanRecipient {
         asset.safeApprove(lendingManager.eulerProtocol(), type(uint256).max);
         weth.safeApprove(lendingManager.eulerProtocol(), type(uint256).max);
         lendingManager.eulerMarkets().enterMarket(0, address(asset));
-        useEuler = true;
     }
 
     /**
@@ -395,7 +391,7 @@ contract scUSDCv2 is sc4626, IFlashLoanRecipient {
      */
     function totalCollateral() public view returns (uint256 total) {
         for (uint8 i = 0; i <= uint8(type(UsdcWethLendingManager.Protocol).max); i++) {
-            if (UsdcWethLendingManager.Protocol(i) == UsdcWethLendingManager.Protocol.EULER && !useEuler) continue;
+            if (_isEulerAndDisabled(UsdcWethLendingManager.Protocol(i))) continue;
 
             total += lendingManager.getCollateral(UsdcWethLendingManager.Protocol(i), address(this));
         }
@@ -406,7 +402,7 @@ contract scUSDCv2 is sc4626, IFlashLoanRecipient {
      */
     function totalDebt() public view returns (uint256 total) {
         for (uint8 i = 0; i <= uint8(type(UsdcWethLendingManager.Protocol).max); i++) {
-            if (UsdcWethLendingManager.Protocol(i) == UsdcWethLendingManager.Protocol.EULER && !useEuler) continue;
+            if (_isEulerAndDisabled(UsdcWethLendingManager.Protocol(i))) continue;
 
             total += lendingManager.getDebt(UsdcWethLendingManager.Protocol(i), address(this));
         }
@@ -473,7 +469,7 @@ contract scUSDCv2 is sc4626, IFlashLoanRecipient {
 
     function _exitAllPositionsFlash(uint256 _flashLoanAmount) internal {
         for (uint8 i = 0; i <= uint256(type(UsdcWethLendingManager.Protocol).max); i++) {
-            if (UsdcWethLendingManager.Protocol(i) == UsdcWethLendingManager.Protocol.EULER && !useEuler) continue;
+            if (_isEulerAndDisabled(UsdcWethLendingManager.Protocol(i))) continue;
 
             uint256 debt = lendingManager.getDebt(UsdcWethLendingManager.Protocol(i), address(this));
             uint256 collateral = lendingManager.getCollateral(UsdcWethLendingManager.Protocol(i), address(this));
@@ -542,7 +538,7 @@ contract scUSDCv2 is sc4626, IFlashLoanRecipient {
 
         // repay debt and withdraw collateral from each protocol in proportion to their collateral allocation
         for (uint8 i = 0; i <= uint8(type(UsdcWethLendingManager.Protocol).max); i++) {
-            if (UsdcWethLendingManager.Protocol(i) == UsdcWethLendingManager.Protocol.EULER && !useEuler) continue;
+            if (_isEulerAndDisabled(UsdcWethLendingManager.Protocol(i))) continue;
 
             uint256 collateral = lendingManager.getCollateral(UsdcWethLendingManager.Protocol(i), address(this));
 
@@ -580,6 +576,11 @@ contract scUSDCv2 is sc4626, IFlashLoanRecipient {
         uint256 shares = scWETH.convertToShares(_wethAmount);
 
         return scWETH.redeem(shares, address(this), address(this));
+    }
+
+    function _isEulerAndDisabled(UsdcWethLendingManager.Protocol _protocolId) internal view returns (bool) {
+        return _protocolId == UsdcWethLendingManager.Protocol.EULER
+            && asset.allowance(address(this), address(lendingManager.eulerProtocol())) == 0;
     }
 
     function _swapWethForUsdc(uint256 _wethAmount, uint256 _usdcAmountOutMin) internal returns (uint256) {
