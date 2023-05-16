@@ -18,6 +18,7 @@ import {WETH} from "solmate/tokens/WETH.sol";
 import {ERC4626} from "solmate/mixins/ERC4626.sol";
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
+import {Address} from "openzeppelin-contracts/utils/Address.sol";
 
 import {Constants as C} from "../lib/Constants.sol";
 import {IVault} from "../interfaces/balancer/IVault.sol";
@@ -37,6 +38,7 @@ contract scUSDCv2 is scUSDCBase {
     using SafeTransferLib for ERC20;
     using SafeTransferLib for WETH;
     using FixedPointMathLib for uint256;
+    using Address for address;
 
     /**
      * @notice Enum indicating the purpose of a flashloan.
@@ -300,10 +302,9 @@ contract scUSDCv2 is scUSDCBase {
     function sellEulerRewards(bytes calldata _swapData, uint256 _usdcAmountOutMin) external {
         _onlyKeeper();
 
-        (bool success, bytes memory result) = address(lendingManager).delegatecall(
+        bytes memory result = address(lendingManager).functionDelegateCall(
             abi.encodeWithSelector(UsdcWethLendingManager.sellEulerRewards.selector, _swapData, _usdcAmountOutMin)
         );
-        if (!success) revert(string(result));
         (uint256 eulerSold, uint256 usdcReceived) = abi.decode(result, (uint256, uint256));
 
         emit EulerRewardsSold(eulerSold, usdcReceived);
@@ -385,27 +386,27 @@ contract scUSDCv2 is scUSDCBase {
     //////////////////////////////////////////////////////////////*/
 
     function _supply(uint8 _protocolId, uint256 _amount) internal {
-        _lendingManagerDelegateCall(UsdcWethLendingManager.supply.selector, _protocolId, _amount);
+        address(lendingManager).functionDelegateCall(
+            abi.encodeWithSelector(UsdcWethLendingManager.supply.selector, _protocolId, _amount)
+        );
     }
 
     function _borrow(uint8 _protocolId, uint256 _amount) internal {
-        _lendingManagerDelegateCall(UsdcWethLendingManager.borrow.selector, _protocolId, _amount);
+        address(lendingManager).functionDelegateCall(
+            abi.encodeWithSelector(UsdcWethLendingManager.borrow.selector, _protocolId, _amount)
+        );
     }
 
     function _repay(uint8 _protocolId, uint256 _amount) internal {
-        _lendingManagerDelegateCall(UsdcWethLendingManager.repay.selector, _protocolId, _amount);
+        address(lendingManager).functionDelegateCall(
+            abi.encodeWithSelector(UsdcWethLendingManager.repay.selector, _protocolId, _amount)
+        );
     }
 
     function _withdraw(uint8 _protocolId, uint256 _amount) internal {
-        _lendingManagerDelegateCall(UsdcWethLendingManager.withdraw.selector, _protocolId, _amount);
-    }
-
-    /// @dev Need to use "delegatecall" to interact with lending protocols through the lending manager contract.
-    function _lendingManagerDelegateCall(bytes4 _selector, uint8 _protocolId, uint256 _amount) internal {
-        (bool success, bytes memory result) =
-            address(lendingManager).delegatecall(abi.encodeWithSelector(_selector, _protocolId, _amount));
-
-        if (!success) revert(string(result));
+        address(lendingManager).functionDelegateCall(
+            abi.encodeWithSelector(UsdcWethLendingManager.withdraw.selector, _protocolId, _amount)
+        );
     }
 
     function _reallocateFlash(ReallocationParams[] memory _params) internal {
