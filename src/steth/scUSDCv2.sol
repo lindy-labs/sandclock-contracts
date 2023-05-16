@@ -24,7 +24,7 @@ import {IVault} from "../interfaces/balancer/IVault.sol";
 import {ISwapRouter} from "../interfaces/uniswap/ISwapRouter.sol";
 import {AggregatorV3Interface} from "../interfaces/chainlink/AggregatorV3Interface.sol";
 import {IFlashLoanRecipient} from "../interfaces/balancer/IFlashLoanRecipient.sol";
-import {sc4626} from "../sc4626.sol";
+import {scUSDCBase} from "./scUSDCBase.sol";
 import {UsdcWethLendingManager} from "./UsdcWethLendingManager.sol";
 
 /**
@@ -33,7 +33,7 @@ import {UsdcWethLendingManager} from "./UsdcWethLendingManager.sol";
  * @notice The v2 vault uses multiple money markets to earn yield on USDC deposits and borrow WETH to stake.
  * @dev This vault uses Sandclock's leveraged WETH staking vault - scWETH.
  */
-contract scUSDCv2 is sc4626, IFlashLoanRecipient {
+contract scUSDCv2 is scUSDCBase {
     using SafeTransferLib for ERC20;
     using SafeTransferLib for WETH;
     using FixedPointMathLib for uint256;
@@ -69,8 +69,6 @@ contract scUSDCv2 is sc4626, IFlashLoanRecipient {
     error LtvAboveMaxAllowed(UsdcWethLendingManager.Protocol protocolId);
     error FloatBalanceTooSmall(uint256 actual, uint256 required);
 
-    event FloatPercentageUpdated(address indexed user, uint256 newFloatPercentage);
-    event SlippageToleranceUpdated(address indexed admin, uint256 newSlippageTolerance);
     event EmergencyExitExecuted(
         address indexed admin, uint256 wethWithdrawn, uint256 debtRepaid, uint256 collateralReleased
     );
@@ -78,8 +76,6 @@ contract scUSDCv2 is sc4626, IFlashLoanRecipient {
     event Rebalanced(UsdcWethLendingManager.Protocol protocolId, uint256 supplied, bool leverageUp, uint256 debt);
     event ProfitSold(uint256 wethSold, uint256 usdcReceived);
     event EulerRewardsSold(uint256 eulerSold, uint256 usdcReceived);
-
-    WETH public immutable weth;
 
     // Uniswap V3 router
     ISwapRouter public immutable swapRouter;
@@ -90,17 +86,8 @@ contract scUSDCv2 is sc4626, IFlashLoanRecipient {
     // Balancer vault for flashloans
     IVault public immutable balancerVault;
 
-    // max slippage for swapping WETH -> USDC
-    uint256 public slippageTolerance = 0.99e18; // 1% default
-
-    // leveraged (w)eth vault
-    ERC4626 public immutable scWETH;
-
     // lending manager contract used to interact with different money markets
     UsdcWethLendingManager public immutable lendingManager;
-
-    // percentage of the total assets to be kept in the vault as a withdrawal buffer
-    uint256 public floatPercentage = 0.01e18;
 
     struct ConstructorParams {
         address admin;
@@ -115,10 +102,16 @@ contract scUSDCv2 is sc4626, IFlashLoanRecipient {
     }
 
     constructor(ConstructorParams memory _params)
-        sc4626(_params.admin, _params.keeper, _params.usdc, "Sandclock USDC Vault v2", "scUSDCv2")
+        scUSDCBase(
+            _params.admin,
+            _params.keeper,
+            _params.usdc,
+            _params.weth,
+            _params.scWETH,
+            "Sandclock USDC Vault v2",
+            "scUSDCv2"
+        )
     {
-        scWETH = _params.scWETH;
-        weth = _params.weth;
         lendingManager = _params.lendingManager;
         swapRouter = _params.uniswapSwapRouter;
         usdcToEthPriceFeed = _params.chainlinkUsdcToEthPriceFeed;
@@ -147,33 +140,6 @@ contract scUSDCv2 is sc4626, IFlashLoanRecipient {
         asset.safeApprove(lendingManager.eulerProtocol(), type(uint256).max);
         weth.safeApprove(lendingManager.eulerProtocol(), type(uint256).max);
         lendingManager.eulerMarkets().enterMarket(0, address(asset));
-    }
-
-    /**
-     * @notice Set the slippage tolerance for swapping WETH to USDC on Uniswap.
-     * @param _newSlippageTolerance The new slippage tolerance value.
-     */
-    function setSlippageTolerance(uint256 _newSlippageTolerance) external {
-        _onlyAdmin();
-
-        if (_newSlippageTolerance > C.ONE) revert InvalidSlippageTolerance();
-
-        slippageTolerance = _newSlippageTolerance;
-
-        emit SlippageToleranceUpdated(msg.sender, _newSlippageTolerance);
-    }
-
-    /**
-     * @notice Set the percentage of the total assets to be kept in the vault as a withdrawal buffer.
-     * @param _newFloatPercentage The new float percentage value.
-     */
-    function setFloatPercentage(uint256 _newFloatPercentage) external {
-        _onlyAdmin();
-
-        if (_newFloatPercentage > C.ONE) revert InvalidFloatPercentage();
-
-        floatPercentage = _newFloatPercentage;
-        emit FloatPercentageUpdated(msg.sender, _newFloatPercentage);
     }
 
     /**
