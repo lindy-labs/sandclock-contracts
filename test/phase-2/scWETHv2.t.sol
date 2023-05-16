@@ -154,10 +154,10 @@ contract scWETHv2Test is Test {
         balancer.flashLoan(address(vault), tokens, amounts, abi.encode(0, 0));
     }
 
-    // function test_withdraw_revert() public {
-    //     vm.expectRevert(PleaseUseRedeemMethod.selector);
-    //     vault.withdraw(1e18, address(this), address(this));
-    // }
+    function test_withdraw_revert() public {
+        vm.expectRevert(PleaseUseRedeemMethod.selector);
+        vault.withdraw(1e18, address(this), address(this));
+    }
 
     function test_invest_FloatBalanceTooSmall(uint256 amount) public {
         amount = bound(amount, boundMinimum, 15000 ether);

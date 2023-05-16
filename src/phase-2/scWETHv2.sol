@@ -23,7 +23,6 @@ import {IEulerMarkets} from "lib/euler-interfaces/contracts/IEuler.sol";
 import {IPool} from "aave-v3/interfaces/IPool.sol";
 
 import {Constants as C} from "../lib/Constants.sol";
-import {sc4626v2} from "./sc4626v2.sol";
 import {sc4626} from "../sc4626.sol";
 import {ICurvePool} from "../interfaces/curve/ICurvePool.sol";
 import {ILido} from "../interfaces/lido/ILido.sol";
@@ -33,7 +32,7 @@ import {IFlashLoanRecipient} from "../interfaces/balancer/IFlashLoanRecipient.so
 import {LendingMarketManager} from "./LendingMarketManager.sol";
 import {OracleLib} from "./OracleLib.sol";
 
-contract scWETHv2 is sc4626v2, IFlashLoanRecipient {
+contract scWETHv2 is sc4626, IFlashLoanRecipient {
     using SafeTransferLib for ERC20;
     using FixedPointMathLib for uint256;
 
@@ -103,7 +102,7 @@ contract scWETHv2 is sc4626v2, IFlashLoanRecipient {
     OracleLib immutable oracleLib;
 
     constructor(ConstructorParams memory params)
-        sc4626v2(params.admin, params.keeper, ERC20(params.weth), "Sandclock WETH Vault v2", "scWETHv2")
+        sc4626(params.admin, params.keeper, ERC20(params.weth), "Sandclock WETH Vault v2", "scWETHv2")
     {
         if (params.slippageTolerance > C.ONE) revert InvalidSlippageTolerance();
         slippageTolerance = params.slippageTolerance;
@@ -353,7 +352,11 @@ contract scWETHv2 is sc4626v2, IFlashLoanRecipient {
         afterDeposit(assets, shares);
     }
 
-    function redeem(uint256 shares, address receiver, address owner) public returns (uint256 assets) {
+    function withdraw(uint256, address, address) public virtual override returns (uint256) {
+        revert PleaseUseRedeemMethod();
+    }
+
+    function redeem(uint256 shares, address receiver, address owner) public override returns (uint256 assets) {
         if (msg.sender != owner) {
             uint256 allowed = allowance[owner][msg.sender]; // Saves gas for limited approvals.
 
