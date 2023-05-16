@@ -203,15 +203,6 @@ contract scUSDCv2 is sc4626, IFlashLoanRecipient {
 
             // borrow and invest or disinvest and repay
             if (_params[i].leverageUp) {
-                uint256 maxLtv = lendingManager.getMaxLtv(_params[i].protocolId);
-                uint256 collateral = lendingManager.getCollateral(_params[i].protocolId, address(this));
-                uint256 debt = lendingManager.getDebt(_params[i].protocolId, address(this));
-                uint256 expectedLtv = getUsdcFromWeth(debt + _params[i].wethAmount).divWadUp(collateral);
-
-                if (expectedLtv >= maxLtv) {
-                    revert LtvAboveMaxAllowed(UsdcWethLendingManager.Protocol(_params[i].protocolId));
-                }
-
                 _borrow(uint8(_params[i].protocolId), _params[i].wethAmount);
                 scWETH.deposit(_params[i].wethAmount, address(this));
             } else {

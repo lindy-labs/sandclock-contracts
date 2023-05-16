@@ -556,25 +556,6 @@ contract scUSDCv2Test is Test {
         vault.rebalance(params);
     }
 
-    function test_rebalance_FailsWhenBorrowingOverMaxLtv() public {
-        _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
-
-        uint256 initialBalance = 1_000_000e6;
-        deal(address(usdc), address(vault), initialBalance);
-        uint256 maxLtv = lendingManager.getMaxLtv(UsdcWethLendingManager.Protocol.AAVE_V2);
-        uint256 tooLargeBorrowAmount = vault.getWethFromUsdc(initialBalance).mulWadUp(maxLtv + 0.01e18);
-
-        scUSDCv2.RebalanceParams[] memory params = new scUSDCv2.RebalanceParams[](1);
-        params[0] = _createRebalanceParams(
-            UsdcWethLendingManager.Protocol.AAVE_V2, initialBalance / 2, true, tooLargeBorrowAmount
-        );
-
-        vm.expectRevert(
-            abi.encodeWithSelector(scUSDCv2.LtvAboveMaxAllowed.selector, UsdcWethLendingManager.Protocol.AAVE_V2)
-        );
-        vault.rebalance(params);
-    }
-
     function test_rebalance_EnforcesFloatAmountToRemainInVault() public {
         _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
         uint256 initialBalance = 1_000_000e6;
