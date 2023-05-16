@@ -22,6 +22,7 @@ import {AggregatorV3Interface} from "../interfaces/chainlink/AggregatorV3Interfa
 import {IVault} from "../interfaces/balancer/IVault.sol";
 import {IFlashLoanRecipient} from "../interfaces/balancer/IFlashLoanRecipient.sol";
 import {IComet} from "../interfaces/compound-v3/IComet.sol";
+import {scWETHv2} from "./scWETHv2.sol";
 
 contract LendingMarketManager {
     using SafeTransferLib for ERC20;
@@ -90,8 +91,30 @@ contract LendingMarketManager {
         compoundV3Comet = IComet(compound.comet);
     }
 
+    function setApprovals() external {
+        address aaveV3Pool = address(aaveV3pool);
+        address compoundComet = address(compoundV3Comet);
+
+        ERC20(address(stEth)).safeApprove(address(wstETH), type(uint256).max);
+        ERC20(address(wstETH)).safeApprove(aaveV3Pool, type(uint256).max);
+        ERC20(address(weth)).safeApprove(aaveV3Pool, type(uint256).max);
+        ERC20(address(wstETH)).safeApprove(compoundComet, type(uint256).max);
+        ERC20(address(weth)).safeApprove(compoundComet, type(uint256).max);
+
+        // set e-mode on aave-v3 for increased borrowing capacity to 90% of collateral
+        IPool(aaveV3Pool).setUserEMode(C.AAVE_EMODE_ID);
+    }
+
+    function approveEuler() external {
+        ERC20(address(wstETH)).safeApprove(address(eulerProtocol), type(uint256).max);
+        ERC20(weth).safeApprove(address(eulerProtocol), type(uint256).max);
+
+        // Enter the euler collateral market (collateral's address, *not* the eToken address) ,
+        IEulerMarkets(address(eulerMarkets)).enterMarket(0, address(wstETH));
+    }
+
     // supply wstEth to the respective protocol
-    function supply(Protocol protocolId, uint256 amount) external {
+    function supply(Protocol protocolId, uint256 amount) internal {
         if (protocolId == Protocol.AAVE_V3) {
             aaveV3pool.supply(address(wstETH), amount, address(this), 0);
         } else if (protocolId == Protocol.COMPOUND_V3) {
@@ -101,7 +124,7 @@ contract LendingMarketManager {
         }
     }
 
-    function borrow(Protocol protocolId, uint256 amount) external {
+    function borrow(Protocol protocolId, uint256 amount) internal {
         if (protocolId == Protocol.AAVE_V3) {
             aaveV3pool.borrow(address(weth), amount, C.AAVE_VAR_INTEREST_RATE_MODE, 0, address(this));
         } else if (protocolId == Protocol.COMPOUND_V3) {
@@ -111,7 +134,7 @@ contract LendingMarketManager {
         }
     }
 
-    function repay(Protocol protocolId, uint256 amount) external {
+    function repay(Protocol protocolId, uint256 amount) internal {
         if (protocolId == Protocol.AAVE_V3) {
             aaveV3pool.repay(address(weth), amount, C.AAVE_VAR_INTEREST_RATE_MODE, address(this));
         } else if (protocolId == Protocol.COMPOUND_V3) {
@@ -121,13 +144,38 @@ contract LendingMarketManager {
         }
     }
 
-    function withdraw(Protocol protocolId, uint256 amount) external {
+    function withdraw(Protocol protocolId, uint256 amount) internal {
         if (protocolId == Protocol.AAVE_V3) {
             aaveV3pool.withdraw(address(wstETH), amount, address(this));
         } else if (protocolId == Protocol.COMPOUND_V3) {
             compoundV3Comet.withdraw(address(wstETH), amount);
         } else if (protocolId == Protocol.EULER) {
             eulerEWstEth.withdraw(0, amount);
+        }
+    }
+
+    function supplyBorrow(scWETHv2.SupplyBorrowParam[] memory params) external {
+        uint256 n = params.length;
+        if (n != 0) {
+            for (uint256 i; i < n; i++) {
+                supply(params[i].protocol, params[i].supplyAmount); // supplyAmount must be in wstEth
+                borrow(params[i].protocol, params[i].borrowAmount); // borrowAmount must be in weth
+            }
+        }
+    }
+
+    function repayWithdraw(scWETHv2.RepayWithdrawParam[] memory params) external {
+        uint256 n = params.length;
+        if (n != 0) {
+            for (uint256 i; i < n; i++) {
+                if (params[i].repayAmount > getDebt(params[i].protocol, address(this))) {
+                    repay(params[i].protocol, type(uint256).max);
+                    withdraw(params[i].protocol, type(uint256).max);
+                } else {
+                    repay(params[i].protocol, params[i].repayAmount); // repayAmount must be in weth
+                    withdraw(params[i].protocol, params[i].withdrawAmount); // withdrawAmount must be in wstEth
+                }
+            }
         }
     }
 
@@ -196,7 +244,7 @@ contract LendingMarketManager {
         ERC20(inToken).safeApprove(C.ZEROX_ROUTER, amountIn);
 
         (bool success,) = C.ZEROX_ROUTER.call{value: outToken == address(0) ? amountIn : 0}(swapData);
-        if (!success) revert TokenSwapFailed();
+        if (!success) revert TokenSwapFailed(inToken, outToken);
 
         inTokenAmount = inBalance - ERC20(inToken).balanceOf(address(this));
         outTokenAmount = ERC20(outToken).balanceOf(address(this)) - outBalance;

@@ -11,7 +11,8 @@ import {
     InvalidFlashLoanCaller,
     InvalidAllocationPercents,
     InsufficientDepositBalance,
-    FloatBalanceTooSmall
+    FloatBalanceTooSmall,
+    TokenSwapFailed
 } from "../errors/scErrors.sol";
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
@@ -22,16 +23,17 @@ import {IEulerMarkets} from "lib/euler-interfaces/contracts/IEuler.sol";
 import {IPool} from "aave-v3/interfaces/IPool.sol";
 
 import {Constants as C} from "../lib/Constants.sol";
+import {sc4626v2} from "./sc4626v2.sol";
 import {sc4626} from "../sc4626.sol";
 import {ICurvePool} from "../interfaces/curve/ICurvePool.sol";
 import {ILido} from "../interfaces/lido/ILido.sol";
 import {IwstETH} from "../interfaces/lido/IwstETH.sol";
-import {AggregatorV3Interface} from "../interfaces/chainlink/AggregatorV3Interface.sol";
 import {IVault} from "../interfaces/balancer/IVault.sol";
 import {IFlashLoanRecipient} from "../interfaces/balancer/IFlashLoanRecipient.sol";
 import {LendingMarketManager} from "./LendingMarketManager.sol";
+import {OracleLib} from "./OracleLib.sol";
 
-contract scWETHv2 is sc4626, IFlashLoanRecipient {
+contract scWETHv2 is sc4626v2, IFlashLoanRecipient {
     using SafeTransferLib for ERC20;
     using FixedPointMathLib for uint256;
 
@@ -47,6 +49,8 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
     struct RebalanceParams {
         RepayWithdrawParam[] repayWithdrawParams;
         SupplyBorrowParam[] supplyBorrowParams;
+        bytes wstEthToWethSwapData;
+        bytes wethToWstEthSwapData;
         uint256 wstEthSwapAmount; // amount of wstEth to swap to weth (0 = not required, type(uint).max = all wstEth Balance)
         uint256 wethSwapAmount; //  amount of weth to swap to wstEth (0 = not required)
     }
@@ -72,8 +76,8 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
         address wstEth;
         ICurvePool curvePool;
         IVault balancerVault;
-        AggregatorV3Interface stEthToEthPriceFeed;
         LendingMarketManager lendingManager;
+        OracleLib oracleLib;
     }
 
     ILido public immutable stEth;
@@ -88,46 +92,37 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
 
     // slippage for curve swaps
     uint256 public slippageTolerance;
-    LendingMarketManager public immutable lendingManager;
 
     // Curve pool for ETH-stETH
     ICurvePool public immutable curvePool;
     // Balancer vault for flashloans
     IVault public immutable balancerVault;
-    // Chainlink pricefeed (stETH -> ETH)
-    AggregatorV3Interface public stEThToEthPriceFeed;
+
+    // external contracts
+    LendingMarketManager public immutable lendingManager;
+    OracleLib immutable oracleLib;
 
     constructor(ConstructorParams memory params)
-        sc4626(params.admin, params.keeper, ERC20(params.weth), "Sandclock WETH Vault v2", "scWETHv2")
+        sc4626v2(params.admin, params.keeper, ERC20(params.weth), "Sandclock WETH Vault v2", "scWETHv2")
     {
         if (params.slippageTolerance > C.ONE) revert InvalidSlippageTolerance();
         slippageTolerance = params.slippageTolerance;
         curvePool = params.curvePool;
         balancerVault = params.balancerVault;
-        stEThToEthPriceFeed = params.stEthToEthPriceFeed;
         stEth = ILido(params.stEth);
         wstETH = IwstETH(params.wstEth);
         weth = WETH(payable(params.weth));
+        oracleLib = params.oracleLib;
 
         lendingManager = params.lendingManager;
 
-        address aaveV3Pool = address(lendingManager.aaveV3pool());
-        address eulerProtocol = lendingManager.eulerProtocol();
-        address compoundComet = address(lendingManager.compoundV3Comet());
-
-        ERC20(params.stEth).safeApprove(params.wstEth, type(uint256).max);
         ERC20(params.stEth).safeApprove(address(curvePool), type(uint256).max);
-        ERC20(params.wstEth).safeApprove(aaveV3Pool, type(uint256).max);
-        ERC20(params.weth).safeApprove(aaveV3Pool, type(uint256).max);
-        ERC20(params.wstEth).safeApprove(eulerProtocol, type(uint256).max);
-        ERC20(params.weth).safeApprove(eulerProtocol, type(uint256).max);
-        ERC20(params.wstEth).safeApprove(compoundComet, type(uint256).max);
-        ERC20(params.weth).safeApprove(compoundComet, type(uint256).max);
+        _lendingManagerDelegateCall(abi.encodeWithSelector(LendingMarketManager.setApprovals.selector));
+    }
 
-        // Enter the euler collateral market (collateral's address, *not* the eToken address) ,
-        IEulerMarkets(address(lendingManager.eulerMarkets())).enterMarket(0, params.wstEth);
-        // set e-mode on aave-v3 for increased borrowing capacity to 90% of collateral
-        IPool(aaveV3Pool).setUserEMode(C.AAVE_EMODE_ID);
+    function approveEuler() external {
+        onlyKeeper();
+        _lendingManagerDelegateCall(abi.encodeWithSelector(LendingMarketManager.approveEuler.selector));
     }
 
     /// @notice set the slippage tolerance for curve swaps
@@ -138,14 +133,6 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
         if (newSlippageTolerance > C.ONE) revert InvalidSlippageTolerance();
         slippageTolerance = newSlippageTolerance;
         emit SlippageToleranceUpdated(msg.sender, newSlippageTolerance);
-    }
-
-    /// @notice set stEThToEthPriceFeed address
-    /// @param newAddress the new address of the stEThToEthPriceFeed
-    function setStEThToEthPriceFeed(address newAddress) external {
-        onlyAdmin();
-        if (newAddress == address(0)) revert ZeroAddress();
-        stEThToEthPriceFeed = AggregatorV3Interface(newAddress);
     }
 
     /////////////////// ADMIN/KEEPER METHODS //////////////////////////////////
@@ -175,9 +162,13 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
     /// @notice invest funds into the strategy and harvest profits if any
     /// @dev for the first deposit, deposits everything into the strategy.
     /// @dev also mints performance fee tokens to the treasury
-    function investAndHarvest(uint256 totalInvestAmount, SupplyBorrowParam[] calldata supplyBorrowParams) external {
+    function investAndHarvest(
+        uint256 totalInvestAmount,
+        SupplyBorrowParam[] calldata supplyBorrowParams,
+        bytes calldata wethToWstEthSwapData
+    ) external {
         onlyKeeper();
-        invest(totalInvestAmount, supplyBorrowParams);
+        invest(totalInvestAmount, supplyBorrowParams, wethToWstEthSwapData);
 
         // store the old total
         uint256 oldTotalInvested = totalInvested;
@@ -209,7 +200,11 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
     /// @notice invest funds into the strategy (or reinvesting profits)
     /// @param totalInvestAmount : amount of weth to invest into the strategy
     /// @param supplyBorrowParams : protocols to invest into and their respective amounts
-    function invest(uint256 totalInvestAmount, SupplyBorrowParam[] calldata supplyBorrowParams) internal {
+    function invest(
+        uint256 totalInvestAmount,
+        SupplyBorrowParam[] calldata supplyBorrowParams,
+        bytes calldata wethToWstEthSwapData
+    ) internal {
         if (totalInvestAmount > asset.balanceOf(address(this))) revert InsufficientDepositBalance();
 
         uint256 totalFlashLoanAmount;
@@ -217,9 +212,11 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
             totalFlashLoanAmount += supplyBorrowParams[i].borrowAmount;
         }
 
-        RebalanceParams memory params = RebalanceParams({
-            repayWithdrawParams: new RepayWithdrawParam[](0),
+        scWETHv2.RebalanceParams memory params = scWETHv2.RebalanceParams({
+            repayWithdrawParams: new scWETHv2.RepayWithdrawParam[](0),
             supplyBorrowParams: supplyBorrowParams,
+            wstEthToWethSwapData: "",
+            wethToWstEthSwapData: wethToWstEthSwapData,
             wstEthSwapAmount: 0,
             wethSwapAmount: totalInvestAmount + totalFlashLoanAmount
         });
@@ -242,7 +239,9 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
 
     /// @notice disinvest from lending markets in case of a loss
     /// @param repayWithdrawParams : protocols to disinvest from and their respective amounts
-    function disinvest(RepayWithdrawParam[] calldata repayWithdrawParams) external {
+    function disinvest(RepayWithdrawParam[] calldata repayWithdrawParams, bytes calldata wstEthToWethSwapData)
+        external
+    {
         onlyKeeper();
         uint256 totalFlashLoanAmount;
         for (uint256 i; i < repayWithdrawParams.length; i++) {
@@ -252,6 +251,8 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
         RebalanceParams memory params = RebalanceParams({
             repayWithdrawParams: repayWithdrawParams,
             supplyBorrowParams: new SupplyBorrowParam[](0),
+            wstEthToWethSwapData: wstEthToWethSwapData,
+            wethToWstEthSwapData: "",
             wstEthSwapAmount: type(uint256).max,
             wethSwapAmount: 0
         });
@@ -275,6 +276,8 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
     function reallocate(
         RepayWithdrawParam[] calldata from,
         SupplyBorrowParam[] calldata to,
+        bytes calldata wstEthToWethSwapData,
+        bytes calldata wethToWstEthSwapData,
         uint256 wstEthSwapAmount,
         uint256 wethSwapAmount
     ) external {
@@ -287,6 +290,8 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
         RebalanceParams memory params = RebalanceParams({
             repayWithdrawParams: from,
             supplyBorrowParams: to,
+            wstEthToWethSwapData: wstEthToWethSwapData,
+            wethToWstEthSwapData: wethToWstEthSwapData,
             wstEthSwapAmount: wstEthSwapAmount,
             wethSwapAmount: wethSwapAmount
         });
@@ -321,7 +326,7 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
 
     /// @notice returns the total assets supplied as collateral (in WETH terms)
     function totalCollateral() public view returns (uint256) {
-        return wstEthToEth(lendingManager.getTotalCollateral(address(this)));
+        return oracleLib.wstEthToEth(lendingManager.getTotalCollateral(address(this)));
     }
 
     /// @notice returns the total ETH borrowed
@@ -348,7 +353,7 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
         afterDeposit(assets, shares);
     }
 
-    function redeem(uint256 shares, address receiver, address owner) public override returns (uint256 assets) {
+    function redeem(uint256 shares, address receiver, address owner) public returns (uint256 assets) {
         if (msg.sender != owner) {
             uint256 allowed = allowance[owner][msg.sender]; // Saves gas for limited approvals.
 
@@ -373,10 +378,6 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
         asset.safeTransfer(receiver, assets);
     }
 
-    function withdraw(uint256, address, address) public virtual override returns (uint256) {
-        revert PleaseUseRedeemMethod();
-    }
-
     /// @dev called after the flashLoan on rebalance
     function receiveFlashLoan(address[] memory, uint256[] memory amounts, uint256[] memory, bytes memory userData)
         external
@@ -394,60 +395,62 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
         (RebalanceParams memory rebalanceParams) = abi.decode(userData, (RebalanceParams));
 
         // repay and withdraw first
-        _repayWithdraw(rebalanceParams.repayWithdrawParams);
+        _lendingManagerDelegateCall(
+            abi.encodeWithSelector(LendingMarketManager.repayWithdraw.selector, rebalanceParams.repayWithdrawParams)
+        );
 
         if (rebalanceParams.wstEthSwapAmount != 0) {
-            // unwrap wstETH
-            uint256 stEthAmount = wstETH.unwrap(
-                rebalanceParams.wstEthSwapAmount == type(uint256).max
-                    ? wstETH.balanceOf(address(this))
-                    : rebalanceParams.wstEthSwapAmount
-            );
-            // stETH to eth
-            curvePool.exchange(1, 0, stEthAmount, _stEthToEth(stEthAmount).mulWadDown(slippageTolerance));
-            // wrap eth
-            weth.deposit{value: address(this).balance}();
+            // wstEth to weth
+            if (rebalanceParams.wstEthToWethSwapData.length != 0) {
+                // use 0x for swapping
+                _swap_0x(rebalanceParams.wstEthToWethSwapData, address(wstETH), address(weth));
+            } else {
+                // use curve for swapping
+                //  wstETH to stEth
+                uint256 stEthAmount = wstETH.unwrap(
+                    rebalanceParams.wstEthSwapAmount == type(uint256).max
+                        ? wstETH.balanceOf(address(this))
+                        : rebalanceParams.wstEthSwapAmount
+                );
+                // stETH to eth
+                curvePool.exchange(1, 0, stEthAmount, oracleLib.stEthToEth(stEthAmount).mulWadDown(slippageTolerance));
+                // eth to weth
+                weth.deposit{value: address(this).balance}();
+            }
         }
 
         if (rebalanceParams.wethSwapAmount != 0) {
-            // unwrap eth
-            weth.withdraw(rebalanceParams.wethSwapAmount);
-            // stake to lido / eth => stETH
-            // todo: since we are directly depositing to lido for stEth
-            // we are getting a slightly lower rate than the rate calculated from the
-            // chainlink oracle on _ethToWstEth method.
-            stEth.submit{value: rebalanceParams.wethSwapAmount}(address(0x00));
-
-            // wrap stETH
-            wstETH.wrap(stEth.balanceOf(address(this)));
+            // weth to wstEth
+            if (rebalanceParams.wethToWstEthSwapData.length != 0) {
+                _swap_0x(rebalanceParams.wethToWstEthSwapData, address(weth), address(wstETH));
+            } else {
+                // unwrap eth
+                weth.withdraw(rebalanceParams.wethSwapAmount);
+                // stake to lido / eth => stETH
+                stEth.submit{value: rebalanceParams.wethSwapAmount}(address(0x00));
+                // wrap stETH
+                wstETH.wrap(stEth.balanceOf(address(this)));
+            }
         }
 
-        _supplyBorrow(rebalanceParams.supplyBorrowParams);
-
+        _lendingManagerDelegateCall(
+            abi.encodeWithSelector(LendingMarketManager.supplyBorrow.selector, rebalanceParams.supplyBorrowParams)
+        );
         // payback flashloan
         asset.safeTransfer(address(balancerVault), flashLoanAmount);
 
         _enforceFloat();
     }
 
+    function _swap_0x(bytes memory swapData, address from, address to) internal {
+        (bool success,) = C.ZEROX_ROUTER.call{value: 0}(swapData);
+        if (!success) revert TokenSwapFailed(from, to);
+    }
+
     // need to be able to receive eth
     receive() external payable {}
 
     //////////////////// INTERNAL METHODS //////////////////////////
-
-    function _calcFlashLoanAmountWithdrawing(
-        LendingMarketManager.Protocol protocol,
-        uint256 totalAmount,
-        uint256 totalInvested_
-    ) internal view returns (uint256 flashLoanAmount, uint256 amount) {
-        uint256 debt = lendingManager.getDebt(protocol, address(this));
-        uint256 assets = wstEthToEth(lendingManager.getCollateral(protocol, address(this))) - debt;
-        // withdraw from each protocol based on the allocation percent
-        amount = totalAmount.mulDivDown(assets, totalInvested_);
-
-        // calculate the flashloan amount needed
-        flashLoanAmount = amount.mulDivDown(debt, assets);
-    }
 
     function _withdrawToVault(uint256 amount) internal {
         uint256 n = lendingManager.totalMarkets();
@@ -461,10 +464,12 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
             uint256 amount_;
             for (uint256 i; i < n; i++) {
                 (flashLoanAmount_, amount_) =
-                    _calcFlashLoanAmountWithdrawing(LendingMarketManager.Protocol(i), amount, totalInvested_);
+                    oracleLib.calcFlashLoanAmountWithdrawing(LendingMarketManager.Protocol(i), amount, totalInvested_);
 
                 repayWithdrawParams[i] = RepayWithdrawParam(
-                    LendingMarketManager.Protocol(i), flashLoanAmount_, _ethToWstEth(flashLoanAmount_ + amount_)
+                    LendingMarketManager.Protocol(i),
+                    flashLoanAmount_,
+                    oracleLib.ethToWstEth(flashLoanAmount_ + amount_)
                 );
                 flashLoanAmount += flashLoanAmount_;
             }
@@ -480,7 +485,14 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
         totalInvested -= amount;
 
         SupplyBorrowParam[] memory empty;
-        RebalanceParams memory params = RebalanceParams(repayWithdrawParams, empty, type(uint256).max, 0);
+        RebalanceParams memory params = RebalanceParams({
+            repayWithdrawParams: repayWithdrawParams,
+            supplyBorrowParams: empty,
+            wstEthToWethSwapData: "",
+            wethToWstEthSwapData: "",
+            wstEthSwapAmount: type(uint256).max,
+            wethSwapAmount: 0
+        });
 
         // take flashloan
         _initiateFlashLoan();
@@ -488,50 +500,9 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
         _finalizeFlashLoan();
     }
 
-    function _supplyBorrow(SupplyBorrowParam[] memory params) internal {
-        uint256 n = params.length;
-        if (n != 0) {
-            for (uint256 i; i < n; i++) {
-                _lendingManagerDelegateCall(
-                    LendingMarketManager.supply.selector, params[i].protocol, params[i].supplyAmount
-                ); // supplyAmount must be in wstEth
-                _lendingManagerDelegateCall(
-                    LendingMarketManager.borrow.selector, params[i].protocol, params[i].borrowAmount
-                ); // borrowAmount must be in weth
-            }
-        }
-    }
-
-    function _repayWithdraw(RepayWithdrawParam[] memory params) internal {
-        uint256 n = params.length;
-        if (n != 0) {
-            for (uint256 i; i < n; i++) {
-                if (params[i].repayAmount > lendingManager.getDebt(params[i].protocol, address(this))) {
-                    _lendingManagerDelegateCall(
-                        LendingMarketManager.repay.selector, params[i].protocol, type(uint256).max
-                    );
-                    _lendingManagerDelegateCall(
-                        LendingMarketManager.withdraw.selector, params[i].protocol, type(uint256).max
-                    );
-                } else {
-                    _lendingManagerDelegateCall(
-                        LendingMarketManager.repay.selector, params[i].protocol, params[i].repayAmount
-                    ); // repayAmount must be in weth
-                    _lendingManagerDelegateCall(
-                        LendingMarketManager.withdraw.selector, params[i].protocol, params[i].withdrawAmount
-                    ); // withdrawAmount must be in wstEth
-                }
-            }
-        }
-    }
-
     /// @dev Need to use "delegatecall" to interact with lending protocols through the lending manager contract.
-    function _lendingManagerDelegateCall(bytes4 _selector, LendingMarketManager.Protocol _protocolId, uint256 _amount)
-        internal
-    {
-        (bool success, bytes memory result) =
-            address(lendingManager).delegatecall(abi.encodeWithSelector(_selector, _protocolId, _amount));
-
+    function _lendingManagerDelegateCall(bytes memory data) internal {
+        (bool success, bytes memory result) = address(lendingManager).delegatecall(data);
         if (!success) revert(string(result));
     }
 
@@ -555,34 +526,6 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
         uint256 missing = assets + floatRequired - float;
 
         _withdrawToVault(missing);
-    }
-
-    //////////////////////// ORACLE METHODS ///////////////////////////////
-
-    function _ethToWstEth(uint256 ethAmount) internal view returns (uint256 wstEthAmount) {
-        if (ethAmount > 0) {
-            (, int256 price,,,) = stEThToEthPriceFeed.latestRoundData();
-
-            // eth to stEth
-            uint256 stEthAmount = ethAmount.divWadDown(uint256(price));
-
-            // stEth to wstEth
-            wstEthAmount = wstETH.getWstETHByStETH(stEthAmount);
-        }
-    }
-
-    function _stEthToEth(uint256 stEthAmount) internal view returns (uint256 ethAmount) {
-        if (stEthAmount > 0) {
-            // stEth to eth
-            (, int256 price,,,) = stEThToEthPriceFeed.latestRoundData();
-            ethAmount = stEthAmount.mulWadDown(uint256(price));
-        }
-    }
-
-    function wstEthToEth(uint256 wstEthAmount) public view returns (uint256 ethAmount) {
-        // wstETh to stEth using exchangeRate
-        uint256 stEthAmount = wstETH.getStETHByWstETH(wstEthAmount);
-        ethAmount = _stEthToEth(stEthAmount);
     }
 }
 

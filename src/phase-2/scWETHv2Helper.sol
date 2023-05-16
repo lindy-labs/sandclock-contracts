@@ -5,6 +5,7 @@ import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 
 import {scWETHv2} from "./scWETHv2.sol";
 import {LendingMarketManager} from "./LendingMarketManager.sol";
+import {OracleLib} from "./OracleLib.sol";
 
 // @title helper contract for just the external view methods to be used by the backend
 contract scWETHv2Helper {
@@ -12,10 +13,12 @@ contract scWETHv2Helper {
 
     scWETHv2 vault;
     LendingMarketManager lendingManager;
+    OracleLib oracleLib;
 
-    constructor(scWETHv2 _vault, LendingMarketManager _lendingManager) {
+    constructor(scWETHv2 _vault, LendingMarketManager _lendingManager, OracleLib _oracleLib) {
         vault = _vault;
         lendingManager = _lendingManager;
+        oracleLib = _oracleLib;
     }
 
     function getDebt(LendingMarketManager.Protocol protocol) public view returns (uint256) {
@@ -23,7 +26,7 @@ contract scWETHv2Helper {
     }
 
     function getCollateral(LendingMarketManager.Protocol protocol) public view returns (uint256) {
-        return vault.wstEthToEth(lendingManager.getCollateral(protocol, address(vault)));
+        return oracleLib.wstEthToEth(lendingManager.getCollateral(protocol, address(vault)));
     }
 
     /// @notice returns the net leverage that the strategy is using right now (1e18 = 100%)
@@ -34,13 +37,13 @@ contract scWETHv2Helper {
 
     function getLtv(LendingMarketManager.Protocol protocol) public view returns (uint256) {
         return lendingManager.getDebt(protocol, address(vault)).divWadDown(
-            vault.wstEthToEth(lendingManager.getCollateral(protocol, address(vault)))
+            oracleLib.wstEthToEth(lendingManager.getCollateral(protocol, address(vault)))
         );
     }
 
     /// @notice method to get the assets deposited in a particular lending market (in terms of weth)
     function getAssets(LendingMarketManager.Protocol protocol) external view returns (uint256) {
-        return vault.wstEthToEth(lendingManager.getCollateral(protocol, address(vault)))
+        return oracleLib.wstEthToEth(lendingManager.getCollateral(protocol, address(vault)))
             - lendingManager.getDebt(protocol, address(vault));
     }
 
@@ -55,7 +58,7 @@ contract scWETHv2Helper {
 
     function allocationPercent(LendingMarketManager.Protocol protocol) external view returns (uint256) {
         return (
-            vault.wstEthToEth(lendingManager.getCollateral(protocol, address(vault)))
+            oracleLib.wstEthToEth(lendingManager.getCollateral(protocol, address(vault)))
                 - lendingManager.getDebt(protocol, address(vault))
         ).divWadDown(vault.totalCollateral() - vault.totalDebt());
     }
