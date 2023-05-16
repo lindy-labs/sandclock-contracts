@@ -378,13 +378,13 @@ contract scUSDCv2Test is Test {
         vault.rebalance(params);
 
         assertApproxEqAbs(
-            vault.totalCollateral(),
+            lendingManager.getTotalCollateral(address(vault)),
             initialBalance + additionalCollateralOnAaveV3 + additionalCollateralOnEuler,
             2,
             "total collateral after"
         );
         assertApproxEqAbs(
-            vault.totalDebt(),
+            lendingManager.getTotalDebt(address(vault)),
             debtOnAaveV3 + debtOnEuler + additionalDebtOnAaveV3 + additionalDebtOnEuler,
             2,
             "total debt after"
