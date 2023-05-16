@@ -328,16 +328,6 @@ contract scUSDCv2 is scUSDCBase {
     }
 
     /**
-     * @notice Returns the WETH fair value of the USDC amount.
-     * @param _usdcAmount The amount of USDC.
-     */
-    function getWethFromUsdc(uint256 _usdcAmount) public view returns (uint256) {
-        (, int256 usdcPriceInWeth,,,) = usdcToEthPriceFeed.latestRoundData();
-
-        return (_usdcAmount * C.WETH_USDC_DECIMALS_DIFF).mulWadDown(uint256(usdcPriceInWeth));
-    }
-
-    /**
      * @notice Returns the USDC balance of the vault.
      */
     function usdcBalance() public view returns (uint256) {
