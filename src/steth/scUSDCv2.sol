@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.13;
 
+import "forge-std/console2.sol";
 import {
     InvalidTargetLtv,
     InvalidSlippageTolerance,
@@ -27,6 +28,11 @@ import {AggregatorV3Interface} from "../interfaces/chainlink/AggregatorV3Interfa
 import {IFlashLoanRecipient} from "../interfaces/balancer/IFlashLoanRecipient.sol";
 import {scUSDCBase} from "./scUSDCBase.sol";
 import {UsdcWethLendingManager} from "./UsdcWethLendingManager.sol";
+
+import {IPool} from "aave-v3/interfaces/IPool.sol";
+import {ILendingPool} from "../interfaces/aave-v2/ILendingPool.sol";
+
+import {IEulerMarkets, IEulerEToken, IEulerDToken} from "lib/euler-interfaces/contracts/IEuler.sol";
 
 /**
  * @title Sandclock USDC Vault version 2
@@ -119,14 +125,16 @@ contract scUSDCv2 is scUSDCBase {
         usdcToEthPriceFeed = _params.chainlinkUsdcToEthPriceFeed;
         balancerVault = _params.balancerVault;
 
+        _initAdaptors();
+
         weth.safeApprove(address(swapRouter), type(uint256).max);
         weth.safeApprove(address(scWETH), type(uint256).max);
 
-        asset.safeApprove(address(lendingManager.aaveV2Pool()), type(uint256).max);
-        weth.safeApprove(address(lendingManager.aaveV2Pool()), type(uint256).max);
+        // asset.safeApprove(address(lendingManager.aaveV2Pool()), type(uint256).max);
+        // weth.safeApprove(address(lendingManager.aaveV2Pool()), type(uint256).max);
 
-        asset.safeApprove(address(lendingManager.aaveV3Pool()), type(uint256).max);
-        weth.safeApprove(address(lendingManager.aaveV3Pool()), type(uint256).max);
+        // asset.safeApprove(address(lendingManager.aaveV3Pool()), type(uint256).max);
+        // weth.safeApprove(address(lendingManager.aaveV3Pool()), type(uint256).max);
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -154,6 +162,120 @@ contract scUSDCv2 is scUSDCBase {
         if (address(_newPriceFeed) == address(0)) revert PriceFeedZeroAddress();
 
         usdcToEthPriceFeed = _newPriceFeed;
+    }
+
+    function rebalance2(bytes[] memory callData) external {
+        _onlyKeeper();
+
+        for (uint8 i = 0; i < callData.length; i++) {
+            address(this).functionDelegateCall(callData[i]);
+        }
+
+        // invest any weth remaining after rebalancing
+        invest();
+
+        // enforce float to be above the minimum required
+        uint256 float = usdcBalance();
+        uint256 floatRequired = totalAssets().mulWadDown(floatPercentage);
+
+        if (float < floatRequired) {
+            revert FloatBalanceTooSmall(float, floatRequired);
+        }
+    }
+
+    mapping(uint8 => IAdapter) protocolAdapters;
+
+    // function supportedProtocols() public view returns (ProtocolId[] memory) {
+    //     ProtocolId[] memory supported = new ProtocolId[](2);
+    //     uint256 index = 0;
+    //     for (uint8 i = 0; i < uint8(type(ProtocolId).max); i++) {
+    //         if (address(protocolAdapters[ProtocolId(i)]) != address(0)) {
+    //             supported[index] = ProtocolId(i);
+    //         }
+    //     }
+
+    //     return supported;
+    // }
+
+    uint8[] supportedProtocols;
+
+    function _isSupported(uint8 _protocolId) internal view returns (bool) {
+        return address(protocolAdapters[_protocolId]) != address(0);
+    }
+
+    function addAdapter(IAdapter _adapter) public {
+        _onlyAdmin();
+
+        uint8 id = _adapter.id();
+        protocolAdapters[id] = _adapter;
+        supportedProtocols.push(id);
+
+        address(_adapter).functionDelegateCall(abi.encodeWithSelector(IAdapter.setApprovals.selector));
+    }
+
+    function _initAdaptors() internal {
+        addAdapter(new AaveV3Adapter());
+        addAdapter(new AaveV2Adapter());
+    }
+
+    function supply(uint8 _protocolId, uint256 _amount) external {
+        _onlyKeeper();
+        console2.log("inside scusdc supply");
+        console2.log("address(this)", address(this));
+        console2.log("protocolId", uint8(_protocolId));
+        console2.log("_amount", _amount);
+
+        address(protocolAdapters[_protocolId]).functionDelegateCall(
+            abi.encodeWithSelector(IAdapter.supply.selector, _amount)
+        );
+    }
+
+    function borrow(uint8 _protocolId, uint256 _amount) external {
+        _onlyKeeper();
+        console2.log("inside scusdc borrow");
+        console2.log("address(this)", address(this));
+        console2.log("protocolId", uint8(_protocolId));
+
+        address(protocolAdapters[_protocolId]).functionDelegateCall(
+            abi.encodeWithSelector(IAdapter.borrow.selector, _amount)
+        );
+    }
+
+    function repay(uint8 _protocolId, uint256 _amount) external {
+        _onlyKeeper();
+
+        uint256 wethBalance = weth.balanceOf(address(this));
+
+        _amount = _amount > wethBalance ? wethBalance : _amount;
+
+        address(protocolAdapters[_protocolId]).functionDelegateCall(
+            abi.encodeWithSelector(IAdapter.repay.selector, _amount)
+        );
+    }
+
+    function withdraw(uint8 _protocolId, uint256 _amount) external {
+        _onlyKeeper();
+
+        address(protocolAdapters[_protocolId]).functionDelegateCall(
+            abi.encodeWithSelector(IAdapter.withdraw.selector, _amount)
+        );
+    }
+
+    function invest() public {
+        _onlyKeeper();
+
+        _invest();
+    }
+
+    function _invest() internal {
+        uint256 wethBalance = weth.balanceOf(address(this));
+        if (wethBalance > 0) scWETH.deposit(wethBalance, address(this));
+    }
+
+    function disinvest(uint256 _amount) external returns (uint256) {
+        _onlyKeeper();
+
+        return _disinvest(_amount);
     }
 
     /**
@@ -338,10 +460,13 @@ contract scUSDCv2 is scUSDCBase {
      * @notice Returns the total USDC supplied as collateral in all money markets.
      */
     function totalCollateral() public view returns (uint256 total) {
-        for (uint8 i = 0; i <= uint8(type(UsdcWethLendingManager.Protocol).max); i++) {
-            if (_isEulerAndDisabled(UsdcWethLendingManager.Protocol(i))) continue;
+        // for (uint8 i = 0; i <= uint8(type(UsdcWethLendingManager.Protocol).max); i++) {
+        //     if (_isEulerAndDisabled(UsdcWethLendingManager.Protocol(i))) continue;
 
-            total += lendingManager.getCollateral(UsdcWethLendingManager.Protocol(i), address(this));
+        //     total += lendingManager.getCollateral(UsdcWethLendingManager.Protocol(i), address(this));
+        // }
+        for (uint8 i = 0; i < supportedProtocols.length; i++) {
+            total += protocolAdapters[supportedProtocols[i]].getCollateral(address(this));
         }
     }
 
@@ -349,10 +474,13 @@ contract scUSDCv2 is scUSDCBase {
      * @notice Returns the total WETH borrowed in all money markets.
      */
     function totalDebt() public view returns (uint256 total) {
-        for (uint8 i = 0; i <= uint8(type(UsdcWethLendingManager.Protocol).max); i++) {
-            if (_isEulerAndDisabled(UsdcWethLendingManager.Protocol(i))) continue;
+        // for (uint8 i = 0; i <= uint8(type(UsdcWethLendingManager.Protocol).max); i++) {
+        //     if (_isEulerAndDisabled(UsdcWethLendingManager.Protocol(i))) continue;
 
-            total += lendingManager.getDebt(UsdcWethLendingManager.Protocol(i), address(this));
+        //     total += lendingManager.getDebt(UsdcWethLendingManager.Protocol(i), address(this));
+        // }
+        for (uint8 i = 0; i < supportedProtocols.length; i++) {
+            total += protocolAdapters[supportedProtocols[i]].getDebt(address(this));
         }
     }
 
@@ -544,5 +672,143 @@ contract scUSDCv2 is scUSDCBase {
         });
 
         return swapRouter.exactInputSingle(params);
+    }
+}
+
+interface IAdapter {
+    function id() external returns (uint8);
+    function setApprovals() external;
+    function supply(uint256 amount) external;
+    function borrow(uint256 amount) external;
+    function repay(uint256 amount) external;
+    function withdraw(uint256 amount) external;
+    function getCollateral(address account) external view returns (uint256);
+    function getDebt(address account) external view returns (uint256);
+}
+
+contract AaveV3Adapter is IAdapter {
+    using SafeTransferLib for ERC20;
+    using SafeTransferLib for WETH;
+
+    IPool public constant pool = IPool(C.AAVE_POOL);
+    ERC20 public constant aUsdc = ERC20(C.AAVE_AUSDC_TOKEN);
+    ERC20 public constant dWeth = ERC20(C.AAVAAVE_VAR_DEBT_WETH_TOKEN);
+
+    uint8 public constant id = 1;
+
+    function setApprovals() external override {
+        ERC20(C.USDC).safeApprove(address(pool), type(uint256).max);
+        WETH(payable(C.WETH)).safeApprove(address(pool), type(uint256).max);
+    }
+
+    function supply(uint256 _amount) external override {
+        console2.log("inside adaptor supply");
+        console2.log("_amount", _amount);
+        console2.log("address(this)", address(this));
+        pool.supply(address(C.USDC), _amount, address(this), 0);
+    }
+
+    function borrow(uint256 _amount) external override {
+        console2.log("inside adaptor borrow");
+        pool.borrow(address(C.WETH), _amount, C.AAVE_VAR_INTEREST_RATE_MODE, 0, address(this));
+    }
+
+    function repay(uint256 _amount) external override {
+        pool.repay(address(C.WETH), _amount, C.AAVE_VAR_INTEREST_RATE_MODE, address(this));
+    }
+
+    function withdraw(uint256 _amount) external override {
+        pool.withdraw(address(C.USDC), _amount, address(this));
+    }
+
+    function getCollateral(address _account) external view override returns (uint256) {
+        return aUsdc.balanceOf(_account);
+    }
+
+    function getDebt(address _account) external view override returns (uint256) {
+        return dWeth.balanceOf(_account);
+    }
+}
+
+contract AaveV2Adapter is IAdapter {
+    using SafeTransferLib for ERC20;
+    using SafeTransferLib for WETH;
+
+    ILendingPool public constant pool = ILendingPool(C.AAVE_V2_LENDING_POOL);
+    ERC20 public constant aUsdc = ERC20(C.AAVE_V2_AUSDC_TOKEN);
+    ERC20 public constant dWeth = ERC20(C.AAVE_V2_VAR_DEBT_WETH_TOKEN);
+
+    uint8 public constant id = 2;
+
+    function setApprovals() external override {
+        ERC20(C.USDC).safeApprove(address(pool), type(uint256).max);
+        WETH(payable(C.WETH)).safeApprove(address(pool), type(uint256).max);
+    }
+
+    function supply(uint256 _amount) external override {
+        pool.deposit(address(C.USDC), _amount, address(this), 0);
+    }
+
+    function borrow(uint256 _amount) external override {
+        pool.borrow(address(C.WETH), _amount, C.AAVE_VAR_INTEREST_RATE_MODE, 0, address(this));
+    }
+
+    function repay(uint256 _amount) external override {
+        pool.repay(address(C.WETH), _amount, C.AAVE_VAR_INTEREST_RATE_MODE, address(this));
+    }
+
+    function withdraw(uint256 _amount) external override {
+        pool.withdraw(address(C.USDC), _amount, address(this));
+    }
+
+    function getCollateral(address _account) external view override returns (uint256) {
+        return aUsdc.balanceOf(_account);
+    }
+
+    function getDebt(address _account) external view override returns (uint256) {
+        return dWeth.balanceOf(_account);
+    }
+}
+
+contract EulerAdapter is IAdapter {
+    using SafeTransferLib for ERC20;
+    using SafeTransferLib for WETH;
+
+    address constant protocol = C.EULER_PROTOCOL;
+    IEulerMarkets constant markets = IEulerMarkets(C.EULER_MARKETS);
+    IEulerEToken constant eUsdc = IEulerEToken(C.EULER_EUSDC_TOKEN);
+    IEulerDToken constant dWeth = IEulerDToken(C.EULER_DWETH_TOKEN);
+    // rewardsToken: ERC20(C.EULER_REWARDS_TOKEN)
+
+    uint8 public constant id = 3;
+
+    function setApprovals() external override {
+        ERC20(C.USDC).safeApprove(protocol, type(uint256).max);
+        WETH(payable(C.WETH)).safeApprove(protocol, type(uint256).max);
+        markets.enterMarket(0, address(C.USDC));
+    }
+
+    function supply(uint256 _amount) external override {
+        eUsdc.deposit(0, _amount);
+    }
+
+    function borrow(uint256 _amount) external override {
+        dWeth.borrow(0, _amount);
+    }
+
+    function repay(uint256 _amount) external override {
+        dWeth.repay(0, _amount);
+    }
+
+    function withdraw(uint256 _amount) external override {
+        eUsdc.withdraw(0, _amount);
+    }
+
+    function getCollateral(address _account) external view override returns (uint256) {
+        return eUsdc.balanceOfUnderlying(_account);
+    }
+
+    function getDebt(address _account) external view override returns (uint256) {
+        return dWeth.balanceOf(_account);
     }
 }

@@ -15,7 +15,7 @@ import {IEulerMarkets, IEulerEToken, IEulerDToken} from "lib/euler-interfaces/co
 import {Constants as C} from "../src/lib/Constants.sol";
 import {ILendingPool} from "../src/interfaces/aave-v2/ILendingPool.sol";
 import {IProtocolDataProvider} from "../src/interfaces/aave-v2/IProtocolDataProvider.sol";
-import {scUSDCv2} from "../src/steth/scUSDCv2.sol";
+import {scUSDCv2, AaveV2Adapter, AaveV3Adapter, EulerAdapter} from "../src/steth/scUSDCv2.sol";
 import {UsdcWethLendingManager} from "../src/steth/UsdcWethLendingManager.sol";
 import {scWETH} from "../src/steth/scWETH.sol";
 import {ISwapRouter} from "../src/interfaces/uniswap/ISwapRouter.sol";
@@ -241,6 +241,64 @@ contract scUSDCv2Test is Test {
 
         _assertCollateralAndDebt(UsdcWethLendingManager.Protocol.AAVE_V2, initialBalance, initialDebt);
         _assertCollateralAndDebt(UsdcWethLendingManager.Protocol.AAVE_V3, 0, 0);
+    }
+
+    function test_rebalance2_BorrowOnlyOnAaveV2() public {
+        _setUpForkAtBlock(BLOCK_BEFORE_EULER_EXPLOIT);
+        uint256 initialBalance = 1_000_000e6;
+        uint256 initialDebt = 250 ether;
+        deal(address(usdc), address(vault), initialBalance * 2);
+
+        bytes[] memory callData = new bytes[](4);
+        callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, 1, initialBalance);
+        callData[1] = abi.encodeWithSelector(scUSDCv2.borrow.selector, 1, initialDebt);
+        callData[2] = abi.encodeWithSelector(scUSDCv2.supply.selector, 2, initialBalance);
+        callData[3] = abi.encodeWithSelector(scUSDCv2.borrow.selector, 2, initialDebt);
+
+        vault.rebalance2(callData);
+
+        assertApproxEqAbs(vault.totalCollateral(), initialBalance * 2, 1, "total collateral");
+        assertApproxEqAbs(vault.totalDebt(), initialDebt * 2, 1, "total debt");
+
+        uint256 collateral = lendingManager.getCollateral(UsdcWethLendingManager.Protocol.AAVE_V3, address(vault));
+        console2.log("collateral test", collateral);
+
+        _assertCollateralAndDebt(UsdcWethLendingManager.Protocol.AAVE_V3, initialBalance, initialDebt);
+        _assertCollateralAndDebt(UsdcWethLendingManager.Protocol.AAVE_V2, initialBalance, initialDebt);
+
+        // disinvest
+        // uint256 invested = vault.wethInvested();
+        // console2.log("invested", invested);
+        // vault.disinvest(invested);
+        // uint256 wethBalance = weth.balanceOf(address(vault));
+        // console2.log("wethBalance", wethBalance);
+
+        callData = new bytes[](3);
+        callData[0] = abi.encodeWithSelector(scUSDCv2.disinvest.selector, initialDebt);
+        callData[1] = abi.encodeWithSelector(scUSDCv2.repay.selector, 1, initialDebt);
+        callData[2] = abi.encodeWithSelector(scUSDCv2.withdraw.selector, 1, initialBalance);
+        vault.rebalance2(callData);
+
+        _assertCollateralAndDebt(UsdcWethLendingManager.Protocol.AAVE_V3, 0, 0);
+        _assertCollateralAndDebt(UsdcWethLendingManager.Protocol.AAVE_V2, initialBalance, initialDebt);
+
+        assertEq(usdc.balanceOf(address(vault)), initialBalance, "balance");
+
+        // add euler
+        EulerAdapter eulerAdapter = new EulerAdapter();
+        vault.addAdapter(eulerAdapter);
+        callData = new bytes[](2);
+        callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, 3, initialBalance);
+        callData[1] = abi.encodeWithSelector(scUSDCv2.borrow.selector, 3, initialDebt);
+
+        vault.rebalance2(callData);
+
+        _assertCollateralAndDebt(UsdcWethLendingManager.Protocol.AAVE_V3, 0, 0);
+        _assertCollateralAndDebt(UsdcWethLendingManager.Protocol.AAVE_V2, initialBalance, initialDebt);
+        _assertCollateralAndDebt(UsdcWethLendingManager.Protocol.EULER, initialBalance, initialDebt);
+
+        assertApproxEqAbs(vault.totalCollateral(), initialBalance * 2, 1, "total collateral");
+        assertApproxEqAbs(vault.totalDebt(), initialDebt * 2, 1, "total debt");
     }
 
     function test_rebalance_OneProtocolLeverageDown() public {
