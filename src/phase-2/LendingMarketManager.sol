@@ -154,30 +154,30 @@ contract LendingMarketManager {
         }
     }
 
-    function supplyBorrow(scWETHv2.SupplyBorrowParam[] memory params) external {
-        uint256 n = params.length;
-        if (n != 0) {
-            for (uint256 i; i < n; i++) {
-                supply(params[i].protocol, params[i].supplyAmount); // supplyAmount must be in wstEth
-                borrow(params[i].protocol, params[i].borrowAmount); // borrowAmount must be in weth
-            }
-        }
-    }
+    // function supplyBorrow(scWETHv2.SupplyBorrowParam[] memory params) external {
+    //     uint256 n = params.length;
+    //     if (n != 0) {
+    //         for (uint256 i; i < n; i++) {
+    //             supply(params[i].protocol, params[i].supplyAmount); // supplyAmount must be in wstEth
+    //             borrow(params[i].protocol, params[i].borrowAmount); // borrowAmount must be in weth
+    //         }
+    //     }
+    // }
 
-    function repayWithdraw(scWETHv2.RepayWithdrawParam[] memory params) external {
-        uint256 n = params.length;
-        if (n != 0) {
-            for (uint256 i; i < n; i++) {
-                if (params[i].repayAmount > getDebt(params[i].protocol, address(this))) {
-                    repay(params[i].protocol, type(uint256).max);
-                    withdraw(params[i].protocol, type(uint256).max);
-                } else {
-                    repay(params[i].protocol, params[i].repayAmount); // repayAmount must be in weth
-                    withdraw(params[i].protocol, params[i].withdrawAmount); // withdrawAmount must be in wstEth
-                }
-            }
-        }
-    }
+    // function repayWithdraw(scWETHv2.RepayWithdrawParam[] memory params) external {
+    //     uint256 n = params.length;
+    //     if (n != 0) {
+    //         for (uint256 i; i < n; i++) {
+    //             if (params[i].repayAmount > getDebt(params[i].protocol, address(this))) {
+    //                 repay(params[i].protocol, type(uint256).max);
+    //                 withdraw(params[i].protocol, type(uint256).max);
+    //             } else {
+    //                 repay(params[i].protocol, params[i].repayAmount); // repayAmount must be in weth
+    //                 withdraw(params[i].protocol, params[i].withdrawAmount); // withdrawAmount must be in wstEth
+    //             }
+    //         }
+    //     }
+    // }
 
     // number of lending markets we are currently using
     function totalMarkets() external pure returns (uint256) {

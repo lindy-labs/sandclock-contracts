@@ -21,6 +21,7 @@ import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 import {WETH} from "solmate/tokens/WETH.sol";
 import {IEulerMarkets} from "lib/euler-interfaces/contracts/IEuler.sol";
 import {IPool} from "aave-v3/interfaces/IPool.sol";
+import {Address} from "openzeppelin-contracts/utils/Address.sol";
 
 import {Constants as C} from "../lib/Constants.sol";
 import {sc4626} from "../sc4626.sol";
@@ -31,40 +32,53 @@ import {IVault} from "../interfaces/balancer/IVault.sol";
 import {IFlashLoanRecipient} from "../interfaces/balancer/IFlashLoanRecipient.sol";
 import {LendingMarketManager} from "./LendingMarketManager.sol";
 import {OracleLib} from "./OracleLib.sol";
+import {IAdapter} from "../scWeth-adapters/IAdapter.sol";
 
 contract scWETHv2 is sc4626, IFlashLoanRecipient {
     using SafeTransferLib for ERC20;
     using FixedPointMathLib for uint256;
+    using Address for address;
+
+    error ProtocolAlreadyAdded();
 
     event SlippageToleranceUpdated(address indexed admin, uint256 newSlippageTolerance);
     event ExchangeProxyAddressUpdated(address indexed user, address newAddress);
     event NewTargetLtvApplied(address indexed admin, uint256 newTargetLtv);
     event Harvest(uint256 profitSinceLastHarvest, uint256 performanceFee);
-    event Invested(uint256 amount, SupplyBorrowParam[] supplyBorrowParams);
-    event DisInvested(RepayWithdrawParam[] repayWithdrawParams);
-    event Reallocated(RepayWithdrawParam[] from, SupplyBorrowParam[] to);
+    // event Invested(uint256 amount, SupplyBorrowParam[] supplyBorrowParams);
+    // event DisInvested(RepayWithdrawParam[] repayWithdrawParams);
+    // event Reallocated(RepayWithdrawParam[] from, SupplyBorrowParam[] to);
     event TokensSwapped(address inToken, address outToken, uint256 amountIn, uint256 amountOutMin);
 
+    // struct RebalanceParams {
+    //     RepayWithdrawParam[] repayWithdrawParams;
+    //     SupplyBorrowParam[] supplyBorrowParams;
+    //     bytes wstEthToWethSwapData;
+    //     bytes wethToWstEthSwapData;
+    //     uint256 wstEthSwapAmount; // amount of wstEth to swap to weth (0 = not required, type(uint).max = all wstEth Balance)
+    //     uint256 wethSwapAmount; //  amount of weth to swap to wstEth (0 = not required)
+    // }
+
     struct RebalanceParams {
-        RepayWithdrawParam[] repayWithdrawParams;
-        SupplyBorrowParam[] supplyBorrowParams;
+        bytes[] repayWithdrawParams;
+        bytes[] supplyBorrowParams;
         bytes wstEthToWethSwapData;
         bytes wethToWstEthSwapData;
         uint256 wstEthSwapAmount; // amount of wstEth to swap to weth (0 = not required, type(uint).max = all wstEth Balance)
         uint256 wethSwapAmount; //  amount of weth to swap to wstEth (0 = not required)
     }
 
-    struct RepayWithdrawParam {
-        LendingMarketManager.Protocol protocol;
-        uint256 repayAmount; // flashLoanAmount (in WETH)
-        uint256 withdrawAmount; // amount of wstEth to withdraw from the market (amount + flashLoanAmount) (in wstEth)
-    }
+    // struct RepayWithdrawParam {
+    //     LendingMarketManager.Protocol protocol;
+    //     uint256 repayAmount; // flashLoanAmount (in WETH)
+    //     uint256 withdrawAmount; // amount of wstEth to withdraw from the market (amount + flashLoanAmount) (in wstEth)
+    // }
 
-    struct SupplyBorrowParam {
-        LendingMarketManager.Protocol protocol;
-        uint256 supplyAmount; // amount of wstEth to supply to the market (in wstEth)
-        uint256 borrowAmount; // flashLoanAmount (in WETH)
-    }
+    // struct SupplyBorrowParam {
+    //     LendingMarketManager.Protocol protocol;
+    //     uint256 supplyAmount; // amount of wstEth to supply to the market (in wstEth)
+    //     uint256 borrowAmount; // flashLoanAmount (in WETH)
+    // }
 
     struct ConstructorParams {
         address admin;
@@ -75,7 +89,7 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
         address wstEth;
         ICurvePool curvePool;
         IVault balancerVault;
-        LendingMarketManager lendingManager;
+        // LendingMarketManager lendingManager;
         OracleLib oracleLib;
     }
 
@@ -98,8 +112,11 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
     IVault public immutable balancerVault;
 
     // external contracts
-    LendingMarketManager public immutable lendingManager;
+    // LendingMarketManager public immutable lendingManager;
     OracleLib immutable oracleLib;
+
+    mapping(uint8 => address) protocolAdapters;
+    uint8[] supportedProtocols;
 
     constructor(ConstructorParams memory params)
         sc4626(params.admin, params.keeper, ERC20(params.weth), "Sandclock WETH Vault v2", "scWETHv2")
@@ -113,16 +130,17 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
         weth = WETH(payable(params.weth));
         oracleLib = params.oracleLib;
 
-        lendingManager = params.lendingManager;
+        // lendingManager = params.lendingManager;
 
         ERC20(params.stEth).safeApprove(address(curvePool), type(uint256).max);
-        _lendingManagerDelegateCall(abi.encodeWithSelector(LendingMarketManager.setApprovals.selector));
+        ERC20(address(stEth)).safeApprove(address(wstETH), type(uint256).max);
+        // _lendingManagerDelegateCall(abi.encodeWithSelector(LendingMarketManager.setApprovals.selector));
     }
 
-    function approveEuler() external {
-        onlyKeeper();
-        _lendingManagerDelegateCall(abi.encodeWithSelector(LendingMarketManager.approveEuler.selector));
-    }
+    // function approveEuler() external {
+    //     onlyKeeper();
+    //     _lendingManagerDelegateCall(abi.encodeWithSelector(LendingMarketManager.approveEuler.selector));
+    // }
 
     /// @notice set the slippage tolerance for curve swaps
     /// @param newSlippageTolerance the new slippage tolerance
@@ -136,38 +154,39 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
 
     /////////////////// ADMIN/KEEPER METHODS //////////////////////////////////
 
-    /// @dev to be used to ideally swap euler rewards to weth
-    /// @dev can also be used to swap between other tokens
-    function swapTokens(
-        bytes calldata swapData,
-        address inToken,
-        address outToken,
-        uint256 amountIn,
-        uint256 amountOutMin
-    ) external {
-        onlyKeeper();
-        (bool success, bytes memory result) = address(lendingManager).delegatecall(
-            abi.encodeWithSelector(
-                LendingMarketManager.swapTokens.selector, swapData, inToken, outToken, amountIn, amountOutMin
-            )
-        );
-        if (!success) revert(string(result));
+    // /// @dev to be used to ideally swap euler rewards to weth
+    // /// @dev can also be used to swap between other tokens
+    // function swapTokens(
+    //     bytes calldata swapData,
+    //     address inToken,
+    //     address outToken,
+    //     uint256 amountIn,
+    //     uint256 amountOutMin
+    // ) external {
+    //     onlyKeeper();
+    //     (bool success, bytes memory result) = address(lendingManager).delegatecall(
+    //         abi.encodeWithSelector(
+    //             LendingMarketManager.swapTokens.selector, swapData, inToken, outToken, amountIn, amountOutMin
+    //         )
+    //     );
+    //     if (!success) revert(string(result));
 
-        (amountIn, amountOutMin) = abi.decode(result, (uint256, uint256));
+    //     (amountIn, amountOutMin) = abi.decode(result, (uint256, uint256));
 
-        emit TokensSwapped(inToken, outToken, amountIn, amountOutMin);
-    }
+    //     emit TokensSwapped(inToken, outToken, amountIn, amountOutMin);
+    // }
 
     /// @notice invest funds into the strategy and harvest profits if any
     /// @dev for the first deposit, deposits everything into the strategy.
     /// @dev also mints performance fee tokens to the treasury
     function investAndHarvest(
         uint256 totalInvestAmount,
-        SupplyBorrowParam[] calldata supplyBorrowParams,
+        uint256 totalFlashLoanAmount,
+        bytes[] calldata supplyBorrowParams,
         bytes calldata wethToWstEthSwapData
     ) external {
         onlyKeeper();
-        invest(totalInvestAmount, supplyBorrowParams, wethToWstEthSwapData);
+        invest(totalInvestAmount, totalFlashLoanAmount, supplyBorrowParams, wethToWstEthSwapData);
 
         // store the old total
         uint256 oldTotalInvested = totalInvested;
@@ -201,18 +220,19 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
     /// @param supplyBorrowParams : protocols to invest into and their respective amounts
     function invest(
         uint256 totalInvestAmount,
-        SupplyBorrowParam[] calldata supplyBorrowParams,
+        uint256 totalFlashLoanAmount,
+        bytes[] calldata supplyBorrowParams,
         bytes calldata wethToWstEthSwapData
     ) internal {
         if (totalInvestAmount > asset.balanceOf(address(this))) revert InsufficientDepositBalance();
 
-        uint256 totalFlashLoanAmount;
-        for (uint256 i; i < supplyBorrowParams.length; i++) {
-            totalFlashLoanAmount += supplyBorrowParams[i].borrowAmount;
-        }
+        // uint256 totalFlashLoanAmount;
+        // for (uint256 i; i < supplyBorrowParams.length; i++) {
+        //     totalFlashLoanAmount += supplyBorrowParams[i].borrowAmount;
+        // }
 
         scWETHv2.RebalanceParams memory params = scWETHv2.RebalanceParams({
-            repayWithdrawParams: new scWETHv2.RepayWithdrawParam[](0),
+            repayWithdrawParams: new bytes[](0),
             supplyBorrowParams: supplyBorrowParams,
             wstEthToWethSwapData: "",
             wethToWstEthSwapData: wethToWstEthSwapData,
@@ -233,23 +253,25 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
         balancerVault.flashLoan(address(this), tokens, amounts, abi.encode(params));
         _finalizeFlashLoan();
 
-        emit Invested(totalInvestAmount, supplyBorrowParams);
+        // emit Invested(totalInvestAmount, supplyBorrowParams);
     }
 
     /// @notice disinvest from lending markets in case of a loss
     /// @param repayWithdrawParams : protocols to disinvest from and their respective amounts
-    function disinvest(RepayWithdrawParam[] calldata repayWithdrawParams, bytes calldata wstEthToWethSwapData)
-        external
-    {
+    function disinvest(
+        uint256 totalFlashLoanAmount,
+        bytes[] calldata repayWithdrawParams,
+        bytes calldata wstEthToWethSwapData
+    ) external {
         onlyKeeper();
-        uint256 totalFlashLoanAmount;
-        for (uint256 i; i < repayWithdrawParams.length; i++) {
-            totalFlashLoanAmount += repayWithdrawParams[i].repayAmount;
-        }
+        // uint256 totalFlashLoanAmount;
+        // for (uint256 i; i < repayWithdrawParams.length; i++) {
+        //     totalFlashLoanAmount += repayWithdrawParams[i].repayAmount;
+        // }
 
         RebalanceParams memory params = RebalanceParams({
             repayWithdrawParams: repayWithdrawParams,
-            supplyBorrowParams: new SupplyBorrowParam[](0),
+            supplyBorrowParams: new bytes[](0),
             wstEthToWethSwapData: wstEthToWethSwapData,
             wethToWstEthSwapData: "",
             wstEthSwapAmount: type(uint256).max,
@@ -267,24 +289,25 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
         balancerVault.flashLoan(address(this), tokens, amounts, abi.encode(params));
         _finalizeFlashLoan();
 
-        emit DisInvested(repayWithdrawParams);
+        // emit DisInvested(repayWithdrawParams);
     }
 
     /// @notice reallocate funds between protocols (without any slippage)
     // @param wstEthSwapAmount: amount of wstEth to swap to weth
     function reallocate(
-        RepayWithdrawParam[] calldata from,
-        SupplyBorrowParam[] calldata to,
+        uint256 totalFlashLoanAmount,
+        bytes[] calldata from,
+        bytes[] calldata to,
         bytes calldata wstEthToWethSwapData,
         bytes calldata wethToWstEthSwapData,
         uint256 wstEthSwapAmount,
         uint256 wethSwapAmount
     ) external {
         onlyKeeper();
-        uint256 totalFlashLoanAmount;
-        for (uint256 i; i < from.length; i++) {
-            totalFlashLoanAmount += from[i].repayAmount;
-        }
+        // uint256 totalFlashLoanAmount;
+        // for (uint256 i; i < from.length; i++) {
+        //     totalFlashLoanAmount += from[i].repayAmount;
+        // }
 
         RebalanceParams memory params = RebalanceParams({
             repayWithdrawParams: from,
@@ -306,7 +329,7 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
         balancerVault.flashLoan(address(this), tokens, amounts, abi.encode(params));
         _finalizeFlashLoan();
 
-        emit Reallocated(from, to);
+        // emit Reallocated(from, to);
     }
 
     //////////////////// VIEW METHODS //////////////////////////
@@ -324,13 +347,21 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
     }
 
     /// @notice returns the total assets supplied as collateral (in WETH terms)
-    function totalCollateral() public view returns (uint256) {
-        return oracleLib.wstEthToEth(lendingManager.getTotalCollateral(address(this)));
+    function totalCollateral() public view returns (uint256 collateral) {
+        // return oracleLib.wstEthToEth(lendingManager.getTotalCollateral(address(this)));
+        for (uint8 i; i < supportedProtocols.length; i++) {
+            collateral += IAdapter(protocolAdapters[supportedProtocols[i]]).getCollateral(address(this));
+        }
+
+        collateral = oracleLib.wstEthToEth(collateral);
     }
 
     /// @notice returns the total ETH borrowed
-    function totalDebt() public view returns (uint256) {
-        return lendingManager.getTotalDebt(address(this));
+    function totalDebt() public view returns (uint256 debt) {
+        // return lendingManager.getTotalDebt(address(this));
+        for (uint8 i; i < supportedProtocols.length; i++) {
+            debt += IAdapter(protocolAdapters[supportedProtocols[i]]).getDebt(address(this));
+        }
     }
 
     //////////////////// EXTERNAL METHODS //////////////////////////
@@ -398,9 +429,9 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
         (RebalanceParams memory rebalanceParams) = abi.decode(userData, (RebalanceParams));
 
         // repay and withdraw first
-        _lendingManagerDelegateCall(
-            abi.encodeWithSelector(LendingMarketManager.repayWithdraw.selector, rebalanceParams.repayWithdrawParams)
-        );
+        for (uint8 i; i < rebalanceParams.repayWithdrawParams.length; i++) {
+            address(this).functionDelegateCall(rebalanceParams.repayWithdrawParams[i]);
+        }
 
         if (rebalanceParams.wstEthSwapAmount != 0) {
             // wstEth to weth
@@ -436,9 +467,9 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
             }
         }
 
-        _lendingManagerDelegateCall(
-            abi.encodeWithSelector(LendingMarketManager.supplyBorrow.selector, rebalanceParams.supplyBorrowParams)
-        );
+        for (uint8 i; i < rebalanceParams.supplyBorrowParams.length; i++) {
+            address(this).functionDelegateCall(rebalanceParams.supplyBorrowParams[i]);
+        }
         // payback flashloan
         asset.safeTransfer(address(balancerVault), flashLoanAmount);
 
@@ -456,24 +487,29 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
     //////////////////// INTERNAL METHODS //////////////////////////
 
     function _withdrawToVault(uint256 amount) internal {
-        uint256 n = lendingManager.totalMarkets();
+        uint256 n = supportedProtocols.length;
         uint256 flashLoanAmount;
-        RepayWithdrawParam[] memory repayWithdrawParams = new RepayWithdrawParam[](n);
+        bytes[] memory repayWithdrawParams = new bytes[](n);
 
         uint256 totalInvested_ = totalCollateral() - totalDebt();
 
         {
             uint256 flashLoanAmount_;
             uint256 amount_;
+            uint8 protocolId;
+            address adapter;
             for (uint256 i; i < n; i++) {
-                (flashLoanAmount_, amount_) =
-                    oracleLib.calcFlashLoanAmountWithdrawing(LendingMarketManager.Protocol(i), amount, totalInvested_);
+                protocolId = supportedProtocols[i];
+                adapter = protocolAdapters[protocolId];
+                (flashLoanAmount_, amount_) = oracleLib.calcFlashLoanAmountWithdrawing(adapter, amount, totalInvested_);
 
-                repayWithdrawParams[i] = RepayWithdrawParam(
-                    LendingMarketManager.Protocol(i),
+                repayWithdrawParams[i] = abi.encodeWithSelector(
+                    this.repayWithdraw.selector,
+                    protocolId,
                     flashLoanAmount_,
                     oracleLib.ethToWstEth(flashLoanAmount_ + amount_)
                 );
+
                 flashLoanAmount += flashLoanAmount_;
             }
         }
@@ -487,7 +523,7 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
         // needed otherwise counted as loss during harvest
         totalInvested -= amount;
 
-        SupplyBorrowParam[] memory empty;
+        bytes[] memory empty;
         RebalanceParams memory params = RebalanceParams({
             repayWithdrawParams: repayWithdrawParams,
             supplyBorrowParams: empty,
@@ -503,11 +539,11 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
         _finalizeFlashLoan();
     }
 
-    /// @dev Need to use "delegatecall" to interact with lending protocols through the lending manager contract.
-    function _lendingManagerDelegateCall(bytes memory data) internal {
-        (bool success, bytes memory result) = address(lendingManager).delegatecall(data);
-        if (!success) revert(string(result));
-    }
+    // /// @dev Need to use "delegatecall" to interact with lending protocols through the lending manager contract.
+    // function _lendingManagerDelegateCall(bytes memory data) internal {
+    //     (bool success, bytes memory result) = address(lendingManager).delegatecall(data);
+    //     if (!success) revert(string(result));
+    // }
 
     /// @notice enforce float to be above the minimum required
     function _enforceFloat() internal view {
@@ -530,9 +566,39 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
 
         _withdrawToVault(missing);
     }
+
+    function _isSupported(uint8 _protocolId) internal view returns (bool) {
+        return protocolAdapters[_protocolId] != address(0);
+    }
+
+    function addAdapter(address _adapter) public {
+        onlyAdmin();
+
+        uint8 id = IAdapter(_adapter).id();
+
+        if (_isSupported(id)) revert ProtocolAlreadyAdded();
+
+        protocolAdapters[id] = _adapter;
+        supportedProtocols.push(id);
+
+        _adapter.functionDelegateCall(abi.encodeWithSelector(IAdapter.setApprovals.selector));
+    }
+
+    function supplyBorrow(uint8 _protocolId, uint256 _supplyAmount, uint256 _borrowAmount) public {
+        onlyKeeper();
+        address adapter = protocolAdapters[_protocolId];
+        adapter.functionDelegateCall(abi.encodeWithSelector(IAdapter.supply.selector, _supplyAmount));
+        adapter.functionDelegateCall(abi.encodeWithSelector(IAdapter.borrow.selector, _borrowAmount));
+    }
+
+    function repayWithdraw(uint8 _protocolId, uint256 _repayAmount, uint256 _withdrawAmount) public {
+        onlyKeeper();
+        address adapter = protocolAdapters[_protocolId];
+        adapter.functionDelegateCall(abi.encodeWithSelector(IAdapter.repay.selector, _repayAmount));
+        adapter.functionDelegateCall(abi.encodeWithSelector(IAdapter.withdraw.selector, _withdrawAmount));
+    }
 }
 
 // todo:
-// euler rewards & 0x swapping
 // gas optimizations
 // call with nenad to make contract function signatures similar

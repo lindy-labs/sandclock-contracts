@@ -9,6 +9,7 @@ import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 import {AccessControl} from "openzeppelin-contracts/access/AccessControl.sol";
 import {LendingMarketManager} from "./LendingMarketManager.sol";
 import {scWETHv2} from "./scWETHv2.sol";
+import {IAdapter} from "../scWEth-adapters/IAdapter.sol";
 
 import {CallerNotAdmin, ZeroAddress} from "../errors/scErrors.sol";
 
@@ -19,19 +20,11 @@ contract OracleLib is AccessControl {
     AggregatorV3Interface public stEThToEthPriceFeed;
     IwstETH immutable wstETH;
     address immutable weth;
-    LendingMarketManager lendingManager;
 
-    constructor(
-        AggregatorV3Interface _stEThToEthPriceFeed,
-        LendingMarketManager _lendingManager,
-        address _wstETH,
-        address _weth,
-        address _admin
-    ) {
+    constructor(AggregatorV3Interface _stEThToEthPriceFeed, address _wstETH, address _weth, address _admin) {
         stEThToEthPriceFeed = _stEThToEthPriceFeed;
         wstETH = IwstETH(_wstETH);
         weth = _weth;
-        lendingManager = _lendingManager;
 
         _grantRole(DEFAULT_ADMIN_ROLE, _admin);
     }
@@ -67,13 +60,13 @@ contract OracleLib is AccessControl {
         ethAmount = stEthToEth(stEthAmount);
     }
 
-    function calcFlashLoanAmountWithdrawing(
-        LendingMarketManager.Protocol protocol,
-        uint256 totalAmount,
-        uint256 totalInvested_
-    ) public view returns (uint256 flashLoanAmount, uint256 amount) {
-        uint256 debt = lendingManager.getDebt(protocol, msg.sender);
-        uint256 assets = wstEthToEth(lendingManager.getCollateral(protocol, msg.sender)) - debt;
+    function calcFlashLoanAmountWithdrawing(address adapter, uint256 totalAmount, uint256 totalInvested_)
+        public
+        view
+        returns (uint256 flashLoanAmount, uint256 amount)
+    {
+        uint256 debt = IAdapter(adapter).getDebt(msg.sender);
+        uint256 assets = wstEthToEth(IAdapter(adapter).getCollateral(msg.sender)) - debt;
 
         // withdraw from each protocol based on the allocation percent
         amount = totalAmount.mulDivDown(assets, totalInvested_);
