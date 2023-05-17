@@ -10,4 +10,5 @@ interface IAdapter {
     function withdraw(uint256 amount) external;
     function getCollateral(address account) external view returns (uint256);
     function getDebt(address account) external view returns (uint256);
+    function getMaxLtv() external view returns (uint256);
 }

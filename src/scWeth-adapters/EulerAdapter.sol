@@ -12,6 +12,7 @@ import {IEulerDToken, IEulerEToken, IEulerMarkets} from "lib/euler-interfaces/co
 contract EulerAdapter is IAdapter {
     using SafeTransferLib for ERC20;
     using SafeTransferLib for WETH;
+    using FixedPointMathLib for uint256;
 
     address constant protocol = C.EULER;
     IEulerMarkets constant markets = IEulerMarkets(C.EULER_MARKETS);
@@ -49,5 +50,15 @@ contract EulerAdapter is IAdapter {
 
     function getDebt(address _account) external view override returns (uint256) {
         return dWeth.balanceOf(_account);
+    }
+
+    function getMaxLtv() external view override returns (uint256) {
+        uint256 collateralFactor = markets.underlyingToAssetConfig(C.WSTETH).collateralFactor;
+        uint256 borrowFactor = markets.underlyingToAssetConfig(C.WSTETH).borrowFactor;
+
+        uint256 scaledCollateralFactor = collateralFactor.divWadDown(C.EULER_CONFIG_FACTOR_SCALE);
+        uint256 scaledBorrowFactor = borrowFactor.divWadDown(C.EULER_CONFIG_FACTOR_SCALE);
+
+        return scaledCollateralFactor.mulWadDown(scaledBorrowFactor);
     }
 }

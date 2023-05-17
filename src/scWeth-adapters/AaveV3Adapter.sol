@@ -49,4 +49,8 @@ contract AaveV3Adapter is IAdapter {
     function getDebt(address _account) external view override returns (uint256) {
         return dWeth.balanceOf(_account);
     }
+
+    function getMaxLtv() external view override returns (uint256) {
+        return uint256(pool.getEModeCategoryData(C.AAVE_EMODE_ID).ltv) * 1e14;
+    }
 }

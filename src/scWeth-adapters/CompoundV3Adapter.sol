@@ -44,4 +44,8 @@ contract CompoundV3Adapter is IAdapter {
     function getDebt(address _account) external view override returns (uint256) {
         return compoundV3Comet.borrowBalanceOf(_account);
     }
+
+    function getMaxLtv() external view override returns (uint256) {
+        return compoundV3Comet.getAssetInfoByAddress(C.WSTETH).borrowCollateralFactor;
+    }
 }
