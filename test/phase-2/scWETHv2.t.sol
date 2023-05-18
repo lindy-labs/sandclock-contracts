@@ -644,7 +644,7 @@ contract scWETHv2Test is Test {
         assertApproxEqRel(balance, profit.mulWadDown(vault.performanceFee()), 0.015e18);
     }
 
-    // //////////////////////////// INTERNAL METHODS ////////////////////////////////////////
+    //////////////////////////// INTERNAL METHODS ////////////////////////////////////////
 
     function _calcSupplyBorrowFlashLoanAmount(IAdapter adapter, uint256 amount)
         internal
