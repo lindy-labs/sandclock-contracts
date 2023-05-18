@@ -127,6 +127,17 @@ contract scUSDCv2 is scUSDCBase {
         usdcToEthPriceFeed = _newPriceFeed;
     }
 
+    // TODO: test this
+    function addAdapter(IAdapter _adapter) external {
+        _onlyAdmin();
+
+        uint8 id = _adapter.id();
+        protocolAdapters[id] = _adapter;
+        supportedProtocols.push(id);
+
+        address(_adapter).functionDelegateCall(abi.encodeWithSelector(IAdapter.setApprovals.selector));
+    }
+
     /**
      * @notice Rebalance the vault's positions/loans in multiple money markets.
      * @dev Called to increase or decrease the WETH debt to maintain the LTV (loan to value) and avoid liquidation.
@@ -146,71 +157,6 @@ contract scUSDCv2 is scUSDCBase {
         if (float < floatRequired) {
             revert FloatBalanceTooSmall(float, floatRequired);
         }
-    }
-
-    function _multiCall(bytes[] memory _callData) internal {
-        for (uint8 i = 0; i < _callData.length; i++) {
-            address(this).functionDelegateCall(_callData[i]);
-        }
-    }
-
-    function _isSupported(uint8 _protocolId) internal view returns (bool) {
-        return address(protocolAdapters[_protocolId]) != address(0);
-    }
-
-    function addAdapter(IAdapter _adapter) public {
-        _onlyAdmin();
-
-        uint8 id = _adapter.id();
-        protocolAdapters[id] = _adapter;
-        supportedProtocols.push(id);
-
-        address(_adapter).functionDelegateCall(abi.encodeWithSelector(IAdapter.setApprovals.selector));
-    }
-
-    function _onlyKeeperOrFlashLoan() internal view {
-        if (!flashLoanInitiated) _onlyKeeper();
-    }
-
-    function supply(uint8 _protocolId, uint256 _amount) external {
-        _onlyKeeperOrFlashLoan();
-
-        _supply(_protocolId, _amount);
-    }
-
-    function borrow(uint8 _protocolId, uint256 _amount) external {
-        _onlyKeeperOrFlashLoan();
-
-        _borrow(_protocolId, _amount);
-    }
-
-    function repay(uint8 _protocolId, uint256 _amount) external {
-        _onlyKeeperOrFlashLoan();
-
-        _repay(_protocolId, _amount);
-    }
-
-    function withdraw(uint8 _protocolId, uint256 _amount) external {
-        _onlyKeeperOrFlashLoan();
-
-        _withdraw(_protocolId, _amount);
-    }
-
-    function invest() public {
-        _onlyKeeper();
-
-        _invest();
-    }
-
-    function _invest() internal {
-        uint256 wethBalance = weth.balanceOf(address(this));
-        if (wethBalance > 0) scWETH.deposit(wethBalance, address(this));
-    }
-
-    function disinvest(uint256 _amount) external returns (uint256) {
-        _onlyKeeper();
-
-        return _disinvest(_amount);
     }
 
     /**
@@ -340,6 +286,47 @@ contract scUSDCv2 is scUSDCBase {
         emit EulerRewardsSold(eulerSold, usdcReceived);
     }
 
+    // TODO: test all of these
+    function supply(uint8 _protocolId, uint256 _amount) external {
+        _onlyKeeperOrFlashLoan();
+
+        _supply(_protocolId, _amount);
+    }
+
+    function borrow(uint8 _protocolId, uint256 _amount) external {
+        _onlyKeeperOrFlashLoan();
+
+        _borrow(_protocolId, _amount);
+    }
+
+    function repay(uint8 _protocolId, uint256 _amount) external {
+        _onlyKeeperOrFlashLoan();
+
+        _repay(_protocolId, _amount);
+    }
+
+    function withdraw(uint8 _protocolId, uint256 _amount) external {
+        _onlyKeeperOrFlashLoan();
+
+        _withdraw(_protocolId, _amount);
+    }
+
+    function invest() public {
+        _onlyKeeper();
+
+        _invest();
+    }
+
+    function disinvest(uint256 _amount) external returns (uint256) {
+        _onlyKeeper();
+
+        return _disinvest(_amount);
+    }
+
+    function isSupported(uint8 _protocolId) public view returns (bool) {
+        return address(protocolAdapters[_protocolId]) != address(0);
+    }
+
     /**
      * @notice total claimable assets of the vault in USDC.
      */
@@ -365,7 +352,7 @@ contract scUSDCv2 is scUSDCBase {
     }
 
     function getCollateral(uint8 _protocolId) external view returns (uint256) {
-        if (!_isSupported(_protocolId)) return 0;
+        if (!isSupported(_protocolId)) return 0;
 
         return protocolAdapters[_protocolId].getCollateral(address(this));
     }
@@ -380,7 +367,7 @@ contract scUSDCv2 is scUSDCBase {
     }
 
     function getDebt(uint8 _protocolId) external view returns (uint256) {
-        if (!_isSupported(_protocolId)) return 0;
+        if (!isSupported(_protocolId)) return 0;
 
         return protocolAdapters[_protocolId].getDebt(address(this));
     }
@@ -413,6 +400,12 @@ contract scUSDCv2 is scUSDCBase {
                             INTERNAL API
     //////////////////////////////////////////////////////////////*/
 
+    function _multiCall(bytes[] memory _callData) internal {
+        for (uint8 i = 0; i < _callData.length; i++) {
+            address(this).functionDelegateCall(_callData[i]);
+        }
+    }
+
     function _supply(uint8 _protocolId, uint256 _amount) internal {
         address(protocolAdapters[_protocolId]).functionDelegateCall(
             abi.encodeWithSelector(IAdapter.supply.selector, _amount)
@@ -439,6 +432,17 @@ contract scUSDCv2 is scUSDCBase {
         address(protocolAdapters[_protocolId]).functionDelegateCall(
             abi.encodeWithSelector(IAdapter.withdraw.selector, _amount)
         );
+    }
+
+    function _invest() internal {
+        uint256 wethBalance = weth.balanceOf(address(this));
+        if (wethBalance > 0) scWETH.deposit(wethBalance, address(this));
+    }
+
+    function _disinvest(uint256 _wethAmount) internal returns (uint256) {
+        uint256 shares = scWETH.convertToShares(_wethAmount);
+
+        return scWETH.redeem(shares, address(this), address(this));
     }
 
     function _exitAllPositionsFlash(uint256 _flashLoanAmount) internal {
@@ -543,12 +547,6 @@ contract scUSDCv2 is scUSDCBase {
 
     function _calculateWethProfit(uint256 _invested, uint256 _debt) internal pure returns (uint256) {
         return _invested > _debt ? _invested - _debt : 0;
-    }
-
-    function _disinvest(uint256 _wethAmount) internal returns (uint256) {
-        uint256 shares = scWETH.convertToShares(_wethAmount);
-
-        return scWETH.redeem(shares, address(this), address(this));
     }
 
     function _swapWethForUsdc(uint256 _wethAmount, uint256 _usdcAmountOutMin) internal returns (uint256) {

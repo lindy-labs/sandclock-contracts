@@ -30,6 +30,10 @@ abstract contract sc4626 is ERC4626, AccessControl {
         if (!hasRole(KEEPER_ROLE, msg.sender)) revert CallerNotKeeper();
     }
 
+    function _onlyKeeperOrFlashLoan() internal view {
+        if (!flashLoanInitiated) _onlyKeeper();
+    }
+
     function _initiateFlashLoan() internal {
         flashLoanInitiated = true;
     }
