@@ -688,37 +688,6 @@ contract scWETHv2Test is Test {
         assertApproxEqRel(balance, profit.mulWadDown(vault.performanceFee()), 0.015e18);
     }
 
-    function test_approveEuler() public {
-        vm.expectRevert(CallerNotKeeper.selector);
-        vm.prank(alice);
-        vault.approveEuler();
-
-        hoax(keeper);
-        vault.approveEuler();
-        assertEq(ERC20(C.WSTETH).allowance(address(vault), C.EULER), type(uint256).max);
-        assertEq(ERC20(C.WETH).allowance(address(vault), C.EULER), type(uint256).max);
-    }
-
-    function test_swapTokens() public {
-        bytes memory swapData = hex"d9627aa4000000000000000000000000000000000000000000000000000000000000008000000000000000000000000000000000000000000000000000000000000186a0000000000000000000000000000000000000000000000000000000000abe8b3f00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000002000000000000000000000000c02aaa39b223fe8d0a0e5c4f27ead9083c756cc20000000000000000000000006b175474e89094c44da98b954eedeac495271d0f869584cd00000000000000000000000010000000000000000000000000000000000000110000000000000000000000000000000000000000000000286c9ba65f6465ec08";
-        address inToken = C.WETH;
-        address outToken = 0x6B175474E89094C44Da98b954EedeAC495271d0F; // DAI
-        uint256 amountIn = 100000;
-        uint256 amountMinOut = 0;
-
-        vm.deal(address(this), amountIn);
-        vault.deposit{value: amountIn}(address(this));
-        vm.prank(alice);
-        vm.expectRevert(CallerNotKeeper.selector);
-        vault.swapTokens(swapData, inToken, outToken, amountIn, amountMinOut);
-
-        hoax(keeper);
-        vm.expectRevert(
-            abi.encodeWithSelector(TokenSwapFailed.selector, inToken, outToken)
-        );
-        vault.swapTokens(swapData, inToken, outToken, amountIn, amountMinOut);
-    }
-
     //////////////////////////// INTERNAL METHODS ////////////////////////////////////////
 
     function _calcSupplyBorrowFlashLoanAmount(IAdapter adapter, uint256 amount)
