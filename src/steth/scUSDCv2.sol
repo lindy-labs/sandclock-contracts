@@ -364,6 +364,12 @@ contract scUSDCv2 is scUSDCBase {
         return asset.balanceOf(address(this));
     }
 
+    function getCollateral(uint8 _protocolId) external view returns (uint256) {
+        if (!_isSupported(_protocolId)) return 0;
+
+        return protocolAdapters[_protocolId].getCollateral(address(this));
+    }
+
     /**
      * @notice Returns the total USDC supplied as collateral in all money markets.
      */
@@ -371,6 +377,12 @@ contract scUSDCv2 is scUSDCBase {
         for (uint8 i = 0; i < supportedProtocols.length; i++) {
             total += protocolAdapters[supportedProtocols[i]].getCollateral(address(this));
         }
+    }
+
+    function getDebt(uint8 _protocolId) external view returns (uint256) {
+        if (!_isSupported(_protocolId)) return 0;
+
+        return protocolAdapters[_protocolId].getDebt(address(this));
     }
 
     /**
