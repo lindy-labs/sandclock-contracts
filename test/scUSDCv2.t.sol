@@ -159,7 +159,7 @@ contract scUSDCv2Test is Test {
 
         vm.prank(alice);
         vm.expectRevert(CallerNotKeeper.selector);
-        vault.rebalance2(callData);
+        vault.rebalance(callData);
     }
 
     function test_rebalance_BorrowOnlyOnAaveV3() public {
@@ -172,7 +172,7 @@ contract scUSDCv2Test is Test {
         callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV3.id(), initialBalance);
         callData[1] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV3.id(), initialDebt);
 
-        vault.rebalance2(callData);
+        vault.rebalance(callData);
 
         assertEq(vault.totalDebt(), initialDebt, "total debt");
         assertEq(vault.totalCollateral(), initialBalance, "total collateral");
@@ -190,7 +190,7 @@ contract scUSDCv2Test is Test {
         callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, euler.id(), initialBalance);
         callData[1] = abi.encodeWithSelector(scUSDCv2.borrow.selector, euler.id(), initialDebt);
 
-        vault.rebalance2(callData);
+        vault.rebalance(callData);
 
         assertApproxEqAbs(vault.totalCollateral(), initialBalance, 1, "total collateral");
         assertApproxEqAbs(vault.totalDebt(), initialDebt, 1, "total debt");
@@ -210,7 +210,7 @@ contract scUSDCv2Test is Test {
         callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV2.id(), initialBalance);
         callData[1] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV2.id(), initialDebt);
 
-        vault.rebalance2(callData);
+        vault.rebalance(callData);
 
         assertApproxEqAbs(vault.totalCollateral(), initialBalance, 1, "total collateral");
         assertApproxEqAbs(vault.totalDebt(), initialDebt, 1, "total debt");
@@ -231,7 +231,7 @@ contract scUSDCv2Test is Test {
         callData[2] = abi.encodeWithSelector(scUSDCv2.supply.selector, 2, initialBalance);
         callData[3] = abi.encodeWithSelector(scUSDCv2.borrow.selector, 2, initialDebt);
 
-        vault.rebalance2(callData);
+        vault.rebalance(callData);
 
         assertApproxEqAbs(vault.totalCollateral(), initialBalance * 2, 1, "total collateral");
         assertApproxEqAbs(vault.totalDebt(), initialDebt * 2, 1, "total debt");
@@ -253,7 +253,7 @@ contract scUSDCv2Test is Test {
         callData[0] = abi.encodeWithSelector(scUSDCv2.disinvest.selector, initialDebt);
         callData[1] = abi.encodeWithSelector(scUSDCv2.repay.selector, 1, initialDebt);
         callData[2] = abi.encodeWithSelector(scUSDCv2.withdraw.selector, 1, initialBalance);
-        vault.rebalance2(callData);
+        vault.rebalance(callData);
 
         _assertCollateralAndDebt(UsdcWethLendingManager.Protocol.AAVE_V3, 0, 0);
         _assertCollateralAndDebt(UsdcWethLendingManager.Protocol.AAVE_V2, initialBalance, initialDebt);
@@ -267,7 +267,7 @@ contract scUSDCv2Test is Test {
         callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, 3, initialBalance);
         callData[1] = abi.encodeWithSelector(scUSDCv2.borrow.selector, 3, initialDebt);
 
-        vault.rebalance2(callData);
+        vault.rebalance(callData);
 
         _assertCollateralAndDebt(UsdcWethLendingManager.Protocol.AAVE_V3, 0, 0);
         _assertCollateralAndDebt(UsdcWethLendingManager.Protocol.AAVE_V2, initialBalance, initialDebt);
@@ -287,7 +287,7 @@ contract scUSDCv2Test is Test {
         callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV2.id(), initialBalance);
         callData[1] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV2.id(), initialDebt);
 
-        vault.rebalance2(callData);
+        vault.rebalance(callData);
 
         assertApproxEqAbs(vault.totalCollateral(), initialBalance, 1, "total collateral");
         assertApproxEqAbs(vault.totalDebt(), initialDebt, 1, "total debt");
@@ -297,7 +297,7 @@ contract scUSDCv2Test is Test {
         callData[0] = abi.encodeWithSelector(scUSDCv2.disinvest.selector, initialDebt / 2);
         callData[1] = abi.encodeWithSelector(scUSDCv2.repay.selector, aaveV2.id(), initialDebt / 2);
 
-        vault.rebalance2(callData);
+        vault.rebalance(callData);
 
         assertApproxEqAbs(vault.totalCollateral(), initialBalance, 1, "total collateral");
         assertApproxEqAbs(vault.totalDebt(), initialDebt / 2, 1, "total debt");
@@ -315,7 +315,7 @@ contract scUSDCv2Test is Test {
         callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV2.id(), initialBalance);
         callData[1] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV2.id(), initialDebt);
 
-        vault.rebalance2(callData);
+        vault.rebalance(callData);
 
         assertApproxEqAbs(vault.totalCollateral(), initialBalance, 1, "total collateral");
         assertApproxEqAbs(vault.totalDebt(), initialDebt, 1, "total debt");
@@ -324,7 +324,7 @@ contract scUSDCv2Test is Test {
         callData = new bytes[](1);
         callData[0] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV2.id(), initialDebt);
 
-        vault.rebalance2(callData);
+        vault.rebalance(callData);
 
         assertApproxEqAbs(vault.totalCollateral(), initialBalance, 1, "total collateral");
         assertApproxEqAbs(vault.totalDebt(), initialDebt * 2, 1, "total debt");
@@ -342,7 +342,7 @@ contract scUSDCv2Test is Test {
         callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV3.id(), initialBalance);
         callData[1] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV3.id(), initialDebt);
 
-        vault.rebalance2(callData);
+        vault.rebalance(callData);
 
         assertEq(vault.totalDebt(), initialDebt, "total debt before");
         assertEq(vault.totalCollateral(), initialBalance, "total collateral before");
@@ -354,7 +354,7 @@ contract scUSDCv2Test is Test {
         callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV3.id(), additionalBalance);
         callData[1] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV3.id(), additionalDebt);
 
-        vault.rebalance2(callData);
+        vault.rebalance(callData);
 
         assertEq(vault.totalCollateral(), initialBalance + additionalBalance, "total collateral after");
         assertEq(vault.totalDebt(), initialDebt + additionalDebt, "total debt after");
@@ -373,7 +373,7 @@ contract scUSDCv2Test is Test {
         callData[2] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV2.id(), initialBalance / 2);
         callData[3] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV2.id(), debtOnAaveV2);
 
-        vault.rebalance2(callData);
+        vault.rebalance(callData);
 
         assertApproxEqAbs(vault.totalCollateral(), initialBalance, 1, "total collateral");
         assertApproxEqAbs(vault.totalDebt(), debtOnAaveV3 + debtOnAaveV2, 1, "total debt");
@@ -397,7 +397,7 @@ contract scUSDCv2Test is Test {
         callData[2] = abi.encodeWithSelector(scUSDCv2.supply.selector, euler.id(), initialBalance / 2);
         callData[3] = abi.encodeWithSelector(scUSDCv2.borrow.selector, euler.id(), debtOnEuler);
 
-        vault.rebalance2(callData);
+        vault.rebalance(callData);
 
         assertApproxEqAbs(vault.totalCollateral(), initialBalance, 1, "total collateral before");
         assertApproxEqAbs(vault.totalDebt(), debtOnAaveV3 + debtOnEuler, 1, "total debt before");
@@ -414,7 +414,7 @@ contract scUSDCv2Test is Test {
         callData[2] = abi.encodeWithSelector(scUSDCv2.supply.selector, euler.id(), additionalCollateralOnEuler);
         callData[3] = abi.encodeWithSelector(scUSDCv2.borrow.selector, euler.id(), additionalDebtOnEuler);
 
-        vault.rebalance2(callData);
+        vault.rebalance(callData);
 
         assertApproxEqAbs(
             lendingManager.getTotalCollateral(address(vault)),
@@ -456,7 +456,7 @@ contract scUSDCv2Test is Test {
         callData[2] = abi.encodeWithSelector(scUSDCv2.supply.selector, euler.id(), initialBalance / 2);
         callData[3] = abi.encodeWithSelector(scUSDCv2.borrow.selector, euler.id(), debtOnEuler);
 
-        vault.rebalance2(callData);
+        vault.rebalance(callData);
 
         assertApproxEqAbs(vault.totalCollateral(), initialBalance, 1, "total collateral before");
         assertApproxEqAbs(vault.totalDebt(), debtOnAaveV3 + debtOnEuler, 1, "total debt before");
@@ -472,7 +472,7 @@ contract scUSDCv2Test is Test {
         callData[2] = abi.encodeWithSelector(scUSDCv2.disinvest.selector, debtReductionOnEuler - additionalDebtOnAaveV3);
         callData[3] = abi.encodeWithSelector(scUSDCv2.repay.selector, euler.id(), debtReductionOnEuler);
 
-        vault.rebalance2(callData);
+        vault.rebalance(callData);
 
         assertApproxEqAbs(
             vault.totalCollateral(), initialBalance + additionalCollateralOnAaveV3, 2, "total collateral after"
@@ -512,7 +512,7 @@ contract scUSDCv2Test is Test {
         callData[4] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV2.id(), initialBalance / 3);
         callData[5] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV2.id(), debtOnAaveV2);
 
-        vault.rebalance2(callData);
+        vault.rebalance(callData);
 
         assertApproxEqAbs(vault.totalCollateral(), initialBalance, 1, "total collateral");
         assertApproxEqAbs(vault.totalDebt(), debtOnAaveV3 + debtOnEuler + debtOnAaveV2, 1, "total debt");
@@ -541,7 +541,7 @@ contract scUSDCv2Test is Test {
         callData[4] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV2.id(), initialBalance / 3);
         callData[5] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV2.id(), debtOnAaveV2);
 
-        vault.rebalance2(callData);
+        vault.rebalance(callData);
 
         assertApproxEqAbs(vault.totalCollateral(), initialBalance, 1, "total collateral");
         assertApproxEqAbs(vault.totalDebt(), totalDebt, 1, "total debt");
@@ -557,7 +557,7 @@ contract scUSDCv2Test is Test {
         callData[2] = abi.encodeWithSelector(scUSDCv2.repay.selector, euler.id(), debtReductionOnEuler);
         callData[3] = abi.encodeWithSelector(scUSDCv2.repay.selector, aaveV2.id(), debtReductionOnAaveV2);
 
-        vault.rebalance2(callData);
+        vault.rebalance(callData);
 
         assertApproxEqAbs(vault.totalCollateral(), initialBalance, 1, "total collateral");
         assertApproxEqAbs(vault.totalDebt(), totalDebt - totalDebtReduction, 1, "total debt");
@@ -610,7 +610,7 @@ contract scUSDCv2Test is Test {
         callData[1] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV3.id(), 50 ether);
 
         vm.expectRevert(abi.encodeWithSelector(scUSDCv2.FloatBalanceTooSmall.selector, actualFloat, expectedFloat));
-        vault.rebalance2(callData);
+        vault.rebalance(callData);
     }
 
     /// #reallocate ///
@@ -644,7 +644,7 @@ contract scUSDCv2Test is Test {
         callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV3.id(), totalCollateral);
         callData[1] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV3.id(), totalDebt);
 
-        vault.rebalance2(callData);
+        vault.rebalance(callData);
 
         _assertCollateralAndDebt(UsdcWethLendingManager.Protocol.AAVE_V3, totalCollateral, totalDebt);
         _assertCollateralAndDebt(UsdcWethLendingManager.Protocol.AAVE_V2, 0, 0);
@@ -694,7 +694,7 @@ contract scUSDCv2Test is Test {
         callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV3.id(), totalCollateral);
         callData[1] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV3.id(), totalDebt);
 
-        vault.rebalance2(callData);
+        vault.rebalance(callData);
 
         _assertCollateralAndDebt(UsdcWethLendingManager.Protocol.AAVE_V3, totalCollateral, totalDebt);
         _assertCollateralAndDebt(UsdcWethLendingManager.Protocol.AAVE_V2, 0, 0);
@@ -730,7 +730,7 @@ contract scUSDCv2Test is Test {
         callData[2] = abi.encodeWithSelector(scUSDCv2.supply.selector, euler.id(), totalCollateral / 2);
         callData[3] = abi.encodeWithSelector(scUSDCv2.borrow.selector, euler.id(), totalDebt / 2);
 
-        vault.rebalance2(callData);
+        vault.rebalance(callData);
 
         _assertCollateralAndDebt(UsdcWethLendingManager.Protocol.AAVE_V3, totalCollateral / 2, totalDebt / 2);
         _assertCollateralAndDebt(UsdcWethLendingManager.Protocol.AAVE_V2, 0, 0);
@@ -777,7 +777,7 @@ contract scUSDCv2Test is Test {
         callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV3.id(), totalCollateral);
         callData[1] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV3.id(), totalDebt);
 
-        vault.rebalance2(callData);
+        vault.rebalance(callData);
 
         // move half from Aave v3 to Euler and Aave v2 equally
         uint256 collateralToMoveFromAaveV3 = totalCollateral / 2;
@@ -832,7 +832,7 @@ contract scUSDCv2Test is Test {
         callData[2] = abi.encodeWithSelector(scUSDCv2.supply.selector, euler.id(), totalCollateral / 2);
         callData[3] = abi.encodeWithSelector(scUSDCv2.borrow.selector, euler.id(), totalDebt / 2);
 
-        vault.rebalance2(callData);
+        vault.rebalance(callData);
 
         // 1. move half of the position from Aave to Euler
         uint256 collateralToMove = totalCollateral / 2;
@@ -936,7 +936,7 @@ contract scUSDCv2Test is Test {
         callData[2] = abi.encodeWithSelector(scUSDCv2.supply.selector, euler.id(), initialBalance / 2);
         callData[3] = abi.encodeWithSelector(scUSDCv2.borrow.selector, euler.id(), 50 ether);
 
-        vault.rebalance2(callData);
+        vault.rebalance(callData);
 
         // add 100% profit to the weth vault
         uint256 initialWethInvested = vault.wethInvested();
@@ -969,7 +969,7 @@ contract scUSDCv2Test is Test {
         callData[2] = abi.encodeWithSelector(scUSDCv2.supply.selector, euler.id(), initialBalance / 2);
         callData[3] = abi.encodeWithSelector(scUSDCv2.borrow.selector, euler.id(), initialDebt / 2);
 
-        vault.rebalance2(callData);
+        vault.rebalance(callData);
 
         // add 100% profit to the weth vault
         uint256 wethInvested = weth.balanceOf(address(wethVault));
@@ -996,7 +996,7 @@ contract scUSDCv2Test is Test {
         callData[2] = abi.encodeWithSelector(scUSDCv2.supply.selector, euler.id(), initialBalance / 2);
         callData[3] = abi.encodeWithSelector(scUSDCv2.borrow.selector, euler.id(), initialDebt / 2);
 
-        vault.rebalance2(callData);
+        vault.rebalance(callData);
 
         // add 100% profit to the weth vault
         uint256 wethInvested = weth.balanceOf(address(wethVault));
@@ -1025,7 +1025,7 @@ contract scUSDCv2Test is Test {
         callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV3.id(), initialBalance);
         callData[1] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV3.id(), 200 ether);
 
-        vault.rebalance2(callData);
+        vault.rebalance(callData);
 
         uint256 withdrawAmount = vault.convertToAssets(vault.balanceOf(alice));
         vm.prank(alice);
@@ -1052,7 +1052,7 @@ contract scUSDCv2Test is Test {
         );
         callData[1] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV3.id(), 200 ether);
 
-        vault.rebalance2(callData);
+        vault.rebalance(callData);
 
         uint256 collateralBefore = lendingManager.getCollateral(UsdcWethLendingManager.Protocol.AAVE_V3, address(vault));
         uint256 debtBefore = lendingManager.getDebt(UsdcWethLendingManager.Protocol.AAVE_V3, address(vault));
@@ -1084,7 +1084,7 @@ contract scUSDCv2Test is Test {
         );
         callData[1] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV3.id(), 200 ether);
 
-        vault.rebalance2(callData);
+        vault.rebalance(callData);
 
         // add 100% profit to the weth vault
         uint256 initialWethInvested = vault.wethInvested();
@@ -1126,7 +1126,7 @@ contract scUSDCv2Test is Test {
         );
         callData[1] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV3.id(), 200 ether);
 
-        vault.rebalance2(callData);
+        vault.rebalance(callData);
 
         // add 50% profit to the weth vault
         uint256 initialWethInvested = vault.wethInvested();
@@ -1161,7 +1161,7 @@ contract scUSDCv2Test is Test {
         callData[2] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV2.id(), initialBalance / 2);
         callData[3] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV2.id(), initialDebt / 2);
 
-        vault.rebalance2(callData);
+        vault.rebalance(callData);
 
         uint256 withdrawAmount = initialBalance / 2;
         uint256 endCollateral = initialBalance / 2;
@@ -1203,7 +1203,7 @@ contract scUSDCv2Test is Test {
         callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV2.id(), initialBalance);
         callData[1] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV2.id(), 200 ether);
 
-        vault.rebalance2(callData);
+        vault.rebalance(callData);
 
         vm.expectRevert(VaultNotUnderwater.selector);
         vault.exitAllPositions(0);
@@ -1218,7 +1218,7 @@ contract scUSDCv2Test is Test {
         callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV2.id(), initialBalance);
         callData[1] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV2.id(), 200 ether);
 
-        vault.rebalance2(callData);
+        vault.rebalance(callData);
 
         // simulate 50% loss
         uint256 wethInvested = weth.balanceOf(address(wethVault));
@@ -1253,7 +1253,7 @@ contract scUSDCv2Test is Test {
         callData[4] = abi.encodeWithSelector(scUSDCv2.supply.selector, euler.id(), initialCollateralPerProtocol);
         callData[5] = abi.encodeWithSelector(scUSDCv2.borrow.selector, euler.id(), initialDebtPerProtocol);
 
-        vault.rebalance2(callData);
+        vault.rebalance(callData);
 
         // simulate 50% loss
         uint256 wethInvested = weth.balanceOf(address(wethVault));
@@ -1284,7 +1284,7 @@ contract scUSDCv2Test is Test {
         callData[4] = abi.encodeWithSelector(scUSDCv2.supply.selector, euler.id(), initialCollateralPerProtocol);
         callData[5] = abi.encodeWithSelector(scUSDCv2.borrow.selector, euler.id(), initialDebtPerProtocol);
 
-        vault.rebalance2(callData);
+        vault.rebalance(callData);
 
         // simulate 50% loss
         uint256 wethInvested = weth.balanceOf(address(wethVault));
@@ -1308,7 +1308,7 @@ contract scUSDCv2Test is Test {
         callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV2.id(), initialBalance);
         callData[1] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV2.id(), 200 ether);
 
-        vault.rebalance2(callData);
+        vault.rebalance(callData);
 
         // simulate 50% loss
         uint256 wethInvested = weth.balanceOf(address(wethVault));

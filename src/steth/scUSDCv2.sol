@@ -66,7 +66,7 @@ contract scUSDCv2 is scUSDCBase {
         address indexed admin, uint256 wethWithdrawn, uint256 debtRepaid, uint256 collateralReleased
     );
     event Reallocated(UsdcWethLendingManager.Protocol protocolId, bool isDownsize, uint256 collateral, uint256 debt);
-    event Rebalanced(UsdcWethLendingManager.Protocol protocolId, uint256 supplied, bool leverageUp, uint256 debt);
+    event Rebalanced(uint8 protocolId, uint256 supplied, bool leverageUp, uint256 debt);
     event ProfitSold(uint256 wethSold, uint256 usdcReceived);
     event EulerRewardsSold(uint256 eulerSold, uint256 usdcReceived);
 
@@ -140,7 +140,7 @@ contract scUSDCv2 is scUSDCBase {
      * @notice Rebalance the vault's positions/loans in multiple money markets.
      * @dev Called to increase or decrease the WETH debt to maintain the LTV (loan to value) and avoid liquidation.
      */
-    function rebalance2(bytes[] memory callData) external {
+    function rebalance(bytes[] memory callData) external {
         _onlyKeeper();
 
         for (uint8 i = 0; i < callData.length; i++) {
@@ -158,18 +158,6 @@ contract scUSDCv2 is scUSDCBase {
             revert FloatBalanceTooSmall(float, floatRequired);
         }
     }
-
-    // function supportedProtocols() public view returns (ProtocolId[] memory) {
-    //     ProtocolId[] memory supported = new ProtocolId[](2);
-    //     uint256 index = 0;
-    //     for (uint8 i = 0; i < uint8(type(ProtocolId).max); i++) {
-    //         if (address(protocolAdapters[ProtocolId(i)]) != address(0)) {
-    //             supported[index] = ProtocolId(i);
-    //         }
-    //     }
-
-    //     return supported;
-    // }
 
     // TODO: fix ordering of functions
     function _isSupported(uint8 _protocolId) internal view returns (bool) {
