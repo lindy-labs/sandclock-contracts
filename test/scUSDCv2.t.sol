@@ -125,43 +125,6 @@ contract scUSDCv2Test is Test {
         assertEq(weth.allowance(address(vault), address(vault.scWETH())), type(uint256).max, "weth->scWETH allowance");
     }
 
-    /// #enableEuler ///
-    function test_enableEuler_FailsIfCallerIsNotAdmin() public {
-        _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
-        vm.prank(alice);
-        vm.expectRevert(CallerNotAdmin.selector);
-        vault.enableEuler();
-    }
-
-    function test_enableEuler_SetsApprovalsAndEntersMarket() public {
-        _setUpForkAtBlock(BLOCK_BEFORE_EULER_EXPLOIT);
-
-        vault.enableEuler();
-
-        assertEq(
-            usdc.allowance(address(vault), address(lendingManager.eulerProtocol())),
-            type(uint256).max,
-            "usdc->euler allowance"
-        );
-        assertEq(
-            weth.allowance(address(vault), address(lendingManager.eulerProtocol())),
-            type(uint256).max,
-            "weth->euler allowance"
-        );
-
-        address[] memory markets = IEulerMarkets(lendingManager.eulerMarkets()).getEnteredMarkets(address(vault));
-        assertEq(markets.length, 1, "markets length");
-        assertEq(markets[0], address(vault.asset()), "market asset");
-    }
-
-    function test_enableEuler_FailsIfCannotEnterEulerMarkets() public {
-        // after the exploit "enterMarkets" function reverts since the protocol is down
-        _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
-
-        vm.expectRevert();
-        vault.enableEuler();
-    }
-
     /// #setUsdcToEthPriceFeed
 
     function test_setUsdcToEthPriceFeed_FailsIfCallerIsNotAdmin() public {
@@ -1181,8 +1144,7 @@ contract scUSDCv2Test is Test {
     }
 
     function test_withdraw_PullsFundsFromAllProtocolsInEqualWeight() public {
-        _setUpForkAtBlock(BLOCK_BEFORE_EULER_EXPLOIT);
-        vault.enableEuler();
+        _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
 
         uint256 initialBalance = 1_000_000e6;
         uint256 initialDebt = 100 ether;
@@ -1206,7 +1168,6 @@ contract scUSDCv2Test is Test {
         uint256 endDebt = initialDebt / 2;
         vm.prank(alice);
         vault.withdraw(withdrawAmount, alice, alice);
-        console2.log("withdraw complete");
 
         assertApproxEqRel(usdc.balanceOf(alice), withdrawAmount, 0.01e18, "alice usdc balance");
 

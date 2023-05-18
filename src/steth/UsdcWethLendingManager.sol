@@ -31,8 +31,9 @@ contract UsdcWethLendingManager {
      * @notice Enum representing the supported lending protocols.
      */
     enum Protocol {
-        AAVE_V2,
+        None,
         AAVE_V3,
+        AAVE_V2,
         EULER
     }
 

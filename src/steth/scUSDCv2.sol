@@ -125,17 +125,6 @@ contract scUSDCv2 is scUSDCBase {
     //////////////////////////////////////////////////////////////*/
 
     /**
-     * @notice Enable use of the Euler Protocol. Disabled by default.
-     */
-    function enableEuler() external {
-        _onlyAdmin();
-
-        asset.safeApprove(lendingManager.eulerProtocol(), type(uint256).max);
-        weth.safeApprove(lendingManager.eulerProtocol(), type(uint256).max);
-        lendingManager.eulerMarkets().enterMarket(0, address(asset));
-    }
-
-    /**
      * @notice Set the chainlink price feed for USDC -> WETH.
      * @param _newPriceFeed The new price feed.
      */
@@ -200,37 +189,25 @@ contract scUSDCv2 is scUSDCBase {
     function supply(uint8 _protocolId, uint256 _amount) external {
         _onlyKeeper();
 
-        address(protocolAdapters[_protocolId]).functionDelegateCall(
-            abi.encodeWithSelector(IAdapter.supply.selector, _amount)
-        );
+        _supply(_protocolId, _amount);
     }
 
     function borrow(uint8 _protocolId, uint256 _amount) external {
         _onlyKeeper();
 
-        address(protocolAdapters[_protocolId]).functionDelegateCall(
-            abi.encodeWithSelector(IAdapter.borrow.selector, _amount)
-        );
+        _borrow(_protocolId, _amount);
     }
 
     function repay(uint8 _protocolId, uint256 _amount) external {
         _onlyKeeper();
 
-        uint256 wethBalance = weth.balanceOf(address(this));
-
-        _amount = _amount > wethBalance ? wethBalance : _amount;
-
-        address(protocolAdapters[_protocolId]).functionDelegateCall(
-            abi.encodeWithSelector(IAdapter.repay.selector, _amount)
-        );
+        _repay(_protocolId, _amount);
     }
 
     function withdraw(uint8 _protocolId, uint256 _amount) external {
         _onlyKeeper();
 
-        address(protocolAdapters[_protocolId]).functionDelegateCall(
-            abi.encodeWithSelector(IAdapter.withdraw.selector, _amount)
-        );
+        _withdraw(_protocolId, _amount);
     }
 
     function invest() public {
@@ -430,26 +407,30 @@ contract scUSDCv2 is scUSDCBase {
     //////////////////////////////////////////////////////////////*/
 
     function _supply(uint8 _protocolId, uint256 _amount) internal {
-        address(lendingManager).functionDelegateCall(
-            abi.encodeWithSelector(UsdcWethLendingManager.supply.selector, _protocolId, _amount)
+        address(protocolAdapters[_protocolId]).functionDelegateCall(
+            abi.encodeWithSelector(IAdapter.supply.selector, _amount)
         );
     }
 
     function _borrow(uint8 _protocolId, uint256 _amount) internal {
-        address(lendingManager).functionDelegateCall(
-            abi.encodeWithSelector(UsdcWethLendingManager.borrow.selector, _protocolId, _amount)
+        address(protocolAdapters[_protocolId]).functionDelegateCall(
+            abi.encodeWithSelector(IAdapter.borrow.selector, _amount)
         );
     }
 
     function _repay(uint8 _protocolId, uint256 _amount) internal {
-        address(lendingManager).functionDelegateCall(
-            abi.encodeWithSelector(UsdcWethLendingManager.repay.selector, _protocolId, _amount)
+        uint256 wethBalance = weth.balanceOf(address(this));
+
+        _amount = _amount > wethBalance ? wethBalance : _amount;
+
+        address(protocolAdapters[_protocolId]).functionDelegateCall(
+            abi.encodeWithSelector(IAdapter.repay.selector, _amount)
         );
     }
 
     function _withdraw(uint8 _protocolId, uint256 _amount) internal {
-        address(lendingManager).functionDelegateCall(
-            abi.encodeWithSelector(UsdcWethLendingManager.withdraw.selector, _protocolId, _amount)
+        address(protocolAdapters[_protocolId]).functionDelegateCall(
+            abi.encodeWithSelector(IAdapter.withdraw.selector, _amount)
         );
     }
 
@@ -470,15 +451,15 @@ contract scUSDCv2 is scUSDCBase {
     }
 
     function _exitAllPositionsFlash(uint256 _flashLoanAmount) internal {
-        for (uint8 i = 0; i <= uint256(type(UsdcWethLendingManager.Protocol).max); i++) {
-            if (_isEulerAndDisabled(UsdcWethLendingManager.Protocol(i))) continue;
+        for (uint8 i = 0; i < supportedProtocols.length; i++) {
+            uint8 protocolId = supportedProtocols[i];
+            uint256 debt = protocolAdapters[protocolId].getDebt(address(this));
+            uint256 collateral = protocolAdapters[protocolId].getCollateral(address(this));
 
-            uint256 debt = lendingManager.getDebt(UsdcWethLendingManager.Protocol(i), address(this));
-            uint256 collateral = lendingManager.getCollateral(UsdcWethLendingManager.Protocol(i), address(this));
-
+            // TODO: separate debt and collateral conditions
             if (debt > 0) {
-                _repay(i, debt);
-                _withdraw(i, collateral);
+                _repay(protocolId, debt);
+                _withdraw(protocolId, collateral);
             }
         }
 
@@ -539,17 +520,16 @@ contract scUSDCv2 is scUSDCBase {
         uint256 withdrawn = _disinvest(wethNeeded);
 
         // repay debt and withdraw collateral from each protocol in proportion to their collateral allocation
-        for (uint8 i = 0; i <= uint8(type(UsdcWethLendingManager.Protocol).max); i++) {
-            if (_isEulerAndDisabled(UsdcWethLendingManager.Protocol(i))) continue;
-
-            uint256 collateral = lendingManager.getCollateral(UsdcWethLendingManager.Protocol(i), address(this));
+        for (uint8 i = 0; i < supportedProtocols.length; i++) {
+            uint8 protocolId = supportedProtocols[i];
+            uint256 collateral = protocolAdapters[protocolId].getCollateral(address(this));
 
             if (collateral == 0) continue;
 
             uint256 allocationPct = collateral.divWadDown(_collateral);
 
-            _repay(i, withdrawn.mulWadUp(allocationPct));
-            _withdraw(i, _usdcNeeded.mulWadUp(allocationPct));
+            _repay(protocolId, withdrawn.mulWadDown(allocationPct));
+            _withdraw(protocolId, _usdcNeeded.mulWadDown(allocationPct));
         }
     }
 
@@ -578,11 +558,6 @@ contract scUSDCv2 is scUSDCBase {
         uint256 shares = scWETH.convertToShares(_wethAmount);
 
         return scWETH.redeem(shares, address(this), address(this));
-    }
-
-    function _isEulerAndDisabled(UsdcWethLendingManager.Protocol _protocolId) internal view returns (bool) {
-        return _protocolId == UsdcWethLendingManager.Protocol.EULER
-            && asset.allowance(address(this), address(lendingManager.eulerProtocol())) == 0;
     }
 
     function _swapWethForUsdc(uint256 _wethAmount, uint256 _usdcAmountOutMin) internal returns (uint256) {
