@@ -33,6 +33,7 @@ import {IFlashLoanRecipient} from "../interfaces/balancer/IFlashLoanRecipient.so
 import {LendingMarketManager} from "./LendingMarketManager.sol";
 import {OracleLib} from "./OracleLib.sol";
 import {IAdapter} from "../scWeth-adapters/IAdapter.sol";
+import {ISwapRouter} from "../swap-routers/ISwapRouter.sol";
 
 contract scWETHv2 is sc4626, IFlashLoanRecipient {
     using SafeTransferLib for ERC20;
@@ -55,8 +56,6 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
         SupplyBorrowParam[] supplyBorrowParams;
         bytes wstEthToWethSwapData;
         bytes wethToWstEthSwapData;
-        uint256 wstEthSwapAmount; // amount of wstEth to swap to weth (0 = not required, type(uint).max = all wstEth Balance)
-        uint256 wethSwapAmount; //  amount of weth to swap to wstEth (0 = not required)
     }
 
     struct RepayWithdrawParam {
@@ -78,9 +77,10 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
         address weth;
         address stEth;
         address wstEth;
-        ICurvePool curvePool;
         IVault balancerVault;
         OracleLib oracleLib;
+        address wstEthToWethSwapRouter;
+        address wethToWstEthSwapRouter;
     }
 
     ILido public immutable stEth;
@@ -96,8 +96,6 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
     // slippage for curve swaps
     uint256 public slippageTolerance;
 
-    // Curve pool for ETH-stETH
-    ICurvePool public immutable curvePool;
     // Balancer vault for flashloans
     IVault public immutable balancerVault;
 
@@ -107,20 +105,27 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
     mapping(uint8 => address) protocolAdapters;
     uint8[] supportedProtocols;
 
+    address wstEthToWethSwapRouter;
+    address wethToWstEthSwapRouter;
+
     constructor(ConstructorParams memory params)
         sc4626(params.admin, params.keeper, ERC20(params.weth), "Sandclock WETH Vault v2", "scWETHv2")
     {
         if (params.slippageTolerance > C.ONE) revert InvalidSlippageTolerance();
         slippageTolerance = params.slippageTolerance;
-        curvePool = params.curvePool;
         balancerVault = params.balancerVault;
         stEth = ILido(params.stEth);
         wstETH = IwstETH(params.wstEth);
         weth = WETH(payable(params.weth));
         oracleLib = params.oracleLib;
+        wstEthToWethSwapRouter = params.wstEthToWethSwapRouter;
+        wethToWstEthSwapRouter = params.wethToWstEthSwapRouter;
+    }
 
-        ERC20(params.stEth).safeApprove(address(curvePool), type(uint256).max);
-        ERC20(address(stEth)).safeApprove(address(wstETH), type(uint256).max);
+    function setSwapRouter(address _wstEthToWethSwapRouter, address _wethToWstEthSwapRouter) external {
+        onlyAdmin();
+        if (_wstEthToWethSwapRouter != address(0x0)) wstEthToWethSwapRouter = _wstEthToWethSwapRouter;
+        if (_wethToWstEthSwapRouter != address(0x0)) wethToWstEthSwapRouter = _wethToWstEthSwapRouter;
     }
 
     /// @notice set the slippage tolerance for curve swaps
@@ -214,9 +219,7 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
             repayWithdrawParams: new scWETHv2.RepayWithdrawParam[](0),
             supplyBorrowParams: supplyBorrowParams,
             wstEthToWethSwapData: "",
-            wethToWstEthSwapData: wethToWstEthSwapData,
-            wstEthSwapAmount: 0,
-            wethSwapAmount: totalInvestAmount + totalFlashLoanAmount
+            wethToWstEthSwapData: wethToWstEthSwapData
         });
 
         address[] memory tokens = new address[](1);
@@ -250,9 +253,7 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
             repayWithdrawParams: repayWithdrawParams,
             supplyBorrowParams: new SupplyBorrowParam[](0),
             wstEthToWethSwapData: wstEthToWethSwapData,
-            wethToWstEthSwapData: "",
-            wstEthSwapAmount: type(uint256).max,
-            wethSwapAmount: 0
+            wethToWstEthSwapData: ""
         });
 
         address[] memory tokens = new address[](1);
@@ -275,9 +276,7 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
         RepayWithdrawParam[] calldata from,
         SupplyBorrowParam[] calldata to,
         bytes calldata wstEthToWethSwapData,
-        bytes calldata wethToWstEthSwapData,
-        uint256 wstEthSwapAmount,
-        uint256 wethSwapAmount
+        bytes calldata wethToWstEthSwapData
     ) external {
         onlyKeeper();
         uint256 totalFlashLoanAmount;
@@ -289,9 +288,7 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
             repayWithdrawParams: from,
             supplyBorrowParams: to,
             wstEthToWethSwapData: wstEthToWethSwapData,
-            wethToWstEthSwapData: wethToWstEthSwapData,
-            wstEthSwapAmount: wstEthSwapAmount,
-            wethSwapAmount: wethSwapAmount
+            wethToWstEthSwapData: wethToWstEthSwapData
         });
 
         address[] memory tokens = new address[](1);
@@ -407,38 +404,14 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
             _repayWithdraw(rebalanceParams.repayWithdrawParams[i]);
         }
 
-        if (rebalanceParams.wstEthSwapAmount != 0) {
+        if (rebalanceParams.wstEthToWethSwapData.length != 0) {
             // wstEth to weth
-            if (rebalanceParams.wstEthToWethSwapData.length != 0) {
-                // use 0x for swapping
-                _swap_0x(rebalanceParams.wstEthToWethSwapData, address(wstETH), address(weth));
-            } else {
-                // use curve for swapping
-                //  wstETH to stEth
-                uint256 stEthAmount = wstETH.unwrap(
-                    rebalanceParams.wstEthSwapAmount == type(uint256).max
-                        ? wstETH.balanceOf(address(this))
-                        : rebalanceParams.wstEthSwapAmount
-                );
-                // stETH to eth
-                curvePool.exchange(1, 0, stEthAmount, oracleLib.stEthToEth(stEthAmount).mulWadDown(slippageTolerance));
-                // eth to weth
-                weth.deposit{value: address(this).balance}();
-            }
+            wstEthToWethSwapRouter.functionDelegateCall(rebalanceParams.wstEthToWethSwapData);
         }
 
-        if (rebalanceParams.wethSwapAmount != 0) {
+        if (rebalanceParams.wethToWstEthSwapData.length != 0) {
             // weth to wstEth
-            if (rebalanceParams.wethToWstEthSwapData.length != 0) {
-                _swap_0x(rebalanceParams.wethToWstEthSwapData, address(weth), address(wstETH));
-            } else {
-                // unwrap eth
-                weth.withdraw(rebalanceParams.wethSwapAmount);
-                // stake to lido / eth => stETH
-                stEth.submit{value: rebalanceParams.wethSwapAmount}(address(0x00));
-                // wrap stETH
-                wstETH.wrap(stEth.balanceOf(address(this)));
-            }
+            wethToWstEthSwapRouter.functionDelegateCall(rebalanceParams.wethToWstEthSwapData);
         }
 
         for (uint8 i; i < rebalanceParams.supplyBorrowParams.length; i++) {
@@ -497,10 +470,10 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
         RebalanceParams memory params = RebalanceParams({
             repayWithdrawParams: repayWithdrawParams,
             supplyBorrowParams: empty,
-            wstEthToWethSwapData: "",
-            wethToWstEthSwapData: "",
-            wstEthSwapAmount: type(uint256).max,
-            wethSwapAmount: 0
+            wstEthToWethSwapData: abi.encodeWithSelector(
+                ISwapRouter.swapDefault.selector, type(uint256).max, slippageTolerance
+                ),
+            wethToWstEthSwapData: ""
         });
 
         // take flashloan
