@@ -29,6 +29,10 @@ import {scUSDCBase} from "./scUSDCBase.sol";
 import {UsdcWethLendingManager} from "./UsdcWethLendingManager.sol";
 import {IAdapter} from "./usdc-adapters/IAdapter.sol";
 
+// TODO: fix ordering of functions
+// TODO: add check for is protocol supported
+// TODO: add & fix documenation
+// TODO: rebalance and reallocation events
 /**
  * @title Sandclock USDC Vault version 2
  * @notice A vault that allows users to earn interest on their USDC deposits from leveraged WETH staking.
@@ -49,23 +53,12 @@ contract scUSDCv2 is scUSDCBase {
         ExitAllPositions
     }
 
-    /**
-     * @notice Struct containing parameters for moving funds between money markets.
-     */
-    struct ReallocationParams {
-        UsdcWethLendingManager.Protocol protocolId;
-        bool isDownsize;
-        uint256 collateralAmount;
-        uint256 debtAmount;
-    }
-
-    error LtvAboveMaxAllowed(UsdcWethLendingManager.Protocol protocolId);
     error FloatBalanceTooSmall(uint256 actual, uint256 required);
 
     event EmergencyExitExecuted(
         address indexed admin, uint256 wethWithdrawn, uint256 debtRepaid, uint256 collateralReleased
     );
-    event Reallocated(UsdcWethLendingManager.Protocol protocolId, bool isDownsize, uint256 collateral, uint256 debt);
+    event Reallocated(uint8 protocolId, bool isDownsize, uint256 collateral, uint256 debt);
     event Rebalanced(uint8 protocolId, uint256 supplied, bool leverageUp, uint256 debt);
     event ProfitSold(uint256 wethSold, uint256 usdcReceived);
     event EulerRewardsSold(uint256 eulerSold, uint256 usdcReceived);
@@ -140,15 +133,13 @@ contract scUSDCv2 is scUSDCBase {
      * @notice Rebalance the vault's positions/loans in multiple money markets.
      * @dev Called to increase or decrease the WETH debt to maintain the LTV (loan to value) and avoid liquidation.
      */
-    function rebalance(bytes[] memory callData) external {
+    function rebalance(bytes[] memory _callData) external {
         _onlyKeeper();
 
-        for (uint8 i = 0; i < callData.length; i++) {
-            address(this).functionDelegateCall(callData[i]);
-        }
+        _multiCall(_callData);
 
         // invest any weth remaining after rebalancing
-        invest();
+        _invest();
 
         // enforce float to be above the minimum required
         uint256 float = usdcBalance();
@@ -159,7 +150,12 @@ contract scUSDCv2 is scUSDCBase {
         }
     }
 
-    // TODO: fix ordering of functions
+    function _multiCall(bytes[] memory _callData) internal {
+        for (uint8 i = 0; i < _callData.length; i++) {
+            address(this).functionDelegateCall(_callData[i]);
+        }
+    }
+
     function _isSupported(uint8 _protocolId) internal view returns (bool) {
         return address(protocolAdapters[_protocolId]) != address(0);
     }
@@ -174,26 +170,30 @@ contract scUSDCv2 is scUSDCBase {
         address(_adapter).functionDelegateCall(abi.encodeWithSelector(IAdapter.setApprovals.selector));
     }
 
+    function _onlyKeeperOrFlashLoan() internal view {
+        if (!flashLoanInitiated) _onlyKeeper();
+    }
+
     function supply(uint8 _protocolId, uint256 _amount) external {
-        _onlyKeeper();
+        _onlyKeeperOrFlashLoan();
 
         _supply(_protocolId, _amount);
     }
 
     function borrow(uint8 _protocolId, uint256 _amount) external {
-        _onlyKeeper();
+        _onlyKeeperOrFlashLoan();
 
         _borrow(_protocolId, _amount);
     }
 
     function repay(uint8 _protocolId, uint256 _amount) external {
-        _onlyKeeper();
+        _onlyKeeperOrFlashLoan();
 
         _repay(_protocolId, _amount);
     }
 
     function withdraw(uint8 _protocolId, uint256 _amount) external {
-        _onlyKeeper();
+        _onlyKeeperOrFlashLoan();
 
         _withdraw(_protocolId, _amount);
     }
@@ -218,10 +218,10 @@ contract scUSDCv2 is scUSDCBase {
     /**
      * @notice Reallocate collateral & debt between lending markets, ie move debt and collateral positions from one protocol (money market) to another.
      * @dev To move the funds between lending markets, the vault uses flashloans to repay debt and release collateral in one money market enabling it to be moved to anoter mm.
-     * @param _params The reallocation parameters. Markets where positions are downsized must be listed first because collateral has to be relased before it is reallocated.
      * @param _flashLoanAmount The amount of WETH to flashloan from Balancer. Has to be at least equal to amount of WETH debt moved between lending markets.
+     * @param _callData The data for the flashloan callback.
      */
-    function reallocate(ReallocationParams[] calldata _params, uint256 _flashLoanAmount) external {
+    function reallocate(uint256 _flashLoanAmount, bytes[] memory _callData) external {
         _onlyKeeper();
 
         if (_flashLoanAmount == 0) revert FlashLoanAmountZero();
@@ -233,7 +233,7 @@ contract scUSDCv2 is scUSDCBase {
         amounts[0] = _flashLoanAmount;
 
         _initiateFlashLoan();
-        balancerVault.flashLoan(address(this), tokens, amounts, abi.encode(FlashLoanType.Reallocate, _params));
+        balancerVault.flashLoan(address(this), tokens, amounts, abi.encode(FlashLoanType.Reallocate, _callData));
         _finalizeFlashLoan();
     }
 
@@ -309,8 +309,8 @@ contract scUSDCv2 is scUSDCBase {
         if (flashLoanType == FlashLoanType.ExitAllPositions) {
             _exitAllPositionsFlash(flashLoanAmount);
         } else {
-            (, ReallocationParams[] memory params) = abi.decode(_data, (FlashLoanType, ReallocationParams[]));
-            _reallocateFlash(params);
+            (, bytes[] memory callData) = abi.decode(_data, (FlashLoanType, bytes[]));
+            _multiCall(callData);
         }
 
         weth.safeTransfer(address(balancerVault), flashLoanAmount);
@@ -420,22 +420,6 @@ contract scUSDCv2 is scUSDCBase {
         address(protocolAdapters[_protocolId]).functionDelegateCall(
             abi.encodeWithSelector(IAdapter.withdraw.selector, _amount)
         );
-    }
-
-    function _reallocateFlash(ReallocationParams[] memory _params) internal {
-        for (uint8 i = 0; i < _params.length; i++) {
-            if (_params[i].isDownsize) {
-                _repay(uint8(_params[i].protocolId), _params[i].debtAmount);
-                _withdraw(uint8(_params[i].protocolId), _params[i].collateralAmount);
-            } else {
-                _supply(uint8(_params[i].protocolId), _params[i].collateralAmount);
-                _borrow(uint8(_params[i].protocolId), _params[i].debtAmount);
-            }
-
-            emit Reallocated(
-                _params[i].protocolId, _params[i].isDownsize, _params[i].collateralAmount, _params[i].debtAmount
-            );
-        }
     }
 
     function _exitAllPositionsFlash(uint256 _flashLoanAmount) internal {

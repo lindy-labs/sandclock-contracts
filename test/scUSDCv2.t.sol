@@ -617,19 +617,17 @@ contract scUSDCv2Test is Test {
 
     function test_reallocate_FailsIfCallerIsNotKeeper() public {
         _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
-        scUSDCv2.ReallocationParams[] memory reallocateParams = new scUSDCv2.ReallocationParams[](1);
 
         vm.prank(alice);
         vm.expectRevert(CallerNotKeeper.selector);
-        vault.reallocate(reallocateParams, 0);
+        vault.reallocate(0, new bytes[](0));
     }
 
     function test_reallocate_FailsIfFlashLoanParameterIsZero() public {
         _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
-        scUSDCv2.ReallocationParams[] memory reallocateParams = new scUSDCv2.ReallocationParams[](1);
 
         vm.expectRevert(FlashLoanAmountZero.selector);
-        vault.reallocate(reallocateParams, 0);
+        vault.reallocate(0, new bytes[](0));
     }
 
     function test_reallocate_MoveEverythingFromOneProtocolToAnother() public {
@@ -653,24 +651,17 @@ contract scUSDCv2Test is Test {
         // move everything from Aave to Euler
         uint256 collateralToMove = totalCollateral;
         uint256 debtToMove = totalDebt;
-        scUSDCv2.ReallocationParams[] memory reallocateParams = new scUSDCv2.ReallocationParams[](2);
-        reallocateParams[0] = scUSDCv2.ReallocationParams({
-            protocolId: UsdcWethLendingManager.Protocol.AAVE_V3,
-            isDownsize: true,
-            collateralAmount: collateralToMove,
-            debtAmount: debtToMove
-        });
-        reallocateParams[1] = scUSDCv2.ReallocationParams({
-            protocolId: UsdcWethLendingManager.Protocol.EULER,
-            isDownsize: false,
-            collateralAmount: collateralToMove,
-            debtAmount: debtToMove
-        });
+        uint256 flashLoanAmount = debtToMove;
+
+        callData = new bytes[](4);
+        callData[0] = abi.encodeWithSelector(scUSDCv2.repay.selector, aaveV3.id(), debtToMove);
+        callData[1] = abi.encodeWithSelector(scUSDCv2.withdraw.selector, aaveV3.id(), collateralToMove);
+        callData[2] = abi.encodeWithSelector(scUSDCv2.supply.selector, euler.id(), collateralToMove);
+        callData[3] = abi.encodeWithSelector(scUSDCv2.borrow.selector, euler.id(), debtToMove);
 
         assertFalse(vault.flashLoanInitiated(), "flash loan initiated");
 
-        uint256 flashLoanAmount = debtToMove;
-        vault.reallocate(reallocateParams, flashLoanAmount);
+        vault.reallocate(flashLoanAmount, callData);
 
         assertFalse(vault.flashLoanInitiated(), "flash loan initiated");
 
@@ -703,17 +694,14 @@ contract scUSDCv2Test is Test {
         // move everything from Aave to Euler
         uint256 collateralToMove = totalCollateral / 2;
         uint256 debtToMove = totalDebt / 2;
-        scUSDCv2.ReallocationParams[] memory reallocateParams = new scUSDCv2.ReallocationParams[](1);
-        reallocateParams[0] = scUSDCv2.ReallocationParams({
-            protocolId: UsdcWethLendingManager.Protocol.EULER,
-            isDownsize: false,
-            collateralAmount: collateralToMove,
-            debtAmount: debtToMove
-        });
-
         uint256 flashLoanAmount = debtToMove;
+
+        callData = new bytes[](2);
+        callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, euler.id(), collateralToMove);
+        callData[1] = abi.encodeWithSelector(scUSDCv2.borrow.selector, euler.id(), debtToMove);
+
         vm.expectRevert();
-        vault.reallocate(reallocateParams, flashLoanAmount);
+        vault.reallocate(flashLoanAmount, callData);
     }
 
     function test_reallocate_MoveHalfFromOneProtocolToAnother() public {
@@ -739,23 +727,15 @@ contract scUSDCv2Test is Test {
         // move half of the position from Aave to Euler
         uint256 collateralToMove = totalCollateral / 4;
         uint256 debtToMove = totalDebt / 4;
-
-        scUSDCv2.ReallocationParams[] memory reallocateParams = new scUSDCv2.ReallocationParams[](2);
-        reallocateParams[0] = scUSDCv2.ReallocationParams({
-            protocolId: UsdcWethLendingManager.Protocol.AAVE_V3,
-            isDownsize: true,
-            collateralAmount: collateralToMove,
-            debtAmount: debtToMove
-        });
-        reallocateParams[1] = scUSDCv2.ReallocationParams({
-            protocolId: UsdcWethLendingManager.Protocol.EULER,
-            isDownsize: false,
-            collateralAmount: collateralToMove,
-            debtAmount: debtToMove
-        });
-
         uint256 flashLoanAmount = 100 ether;
-        vault.reallocate(reallocateParams, flashLoanAmount);
+
+        callData = new bytes[](4);
+        callData[0] = abi.encodeWithSelector(scUSDCv2.repay.selector, aaveV3.id(), debtToMove);
+        callData[1] = abi.encodeWithSelector(scUSDCv2.withdraw.selector, aaveV3.id(), collateralToMove);
+        callData[2] = abi.encodeWithSelector(scUSDCv2.supply.selector, euler.id(), collateralToMove);
+        callData[3] = abi.encodeWithSelector(scUSDCv2.borrow.selector, euler.id(), debtToMove);
+
+        vault.reallocate(flashLoanAmount, callData);
 
         assertApproxEqAbs(vault.totalCollateral(), totalCollateral, 1, "total collateral after");
         assertApproxEqAbs(vault.totalDebt(), totalDebt, 1, "total debt after");
@@ -765,7 +745,7 @@ contract scUSDCv2Test is Test {
         _assertCollateralAndDebt(UsdcWethLendingManager.Protocol.EULER, totalCollateral * 3 / 4, totalDebt * 3 / 4);
     }
 
-    function test_reallocate_EmitsEventForEveryAffectedProtocol() public {
+    function test_reallocate_MovesDebtFromOneToMultipleOtherProtocols() public {
         _setUpForkAtBlock(BLOCK_BEFORE_EULER_EXPLOIT);
         vault.addAdapter(euler);
 
@@ -786,36 +766,25 @@ contract scUSDCv2Test is Test {
         uint256 debtToMoveFromAaveV3 = totalDebt / 2;
         uint256 debtToMoveToAaveV2 = debtToMoveFromAaveV3 / 2;
         uint256 debtToMoveToEuler = debtToMoveFromAaveV3 / 2;
-
-        scUSDCv2.ReallocationParams[] memory reallocateParams = new scUSDCv2.ReallocationParams[](3);
-        reallocateParams[0] = scUSDCv2.ReallocationParams({
-            protocolId: UsdcWethLendingManager.Protocol.AAVE_V3,
-            isDownsize: true,
-            collateralAmount: collateralToMoveFromAaveV3,
-            debtAmount: debtToMoveFromAaveV3
-        });
-        reallocateParams[1] = scUSDCv2.ReallocationParams({
-            protocolId: UsdcWethLendingManager.Protocol.EULER,
-            isDownsize: false,
-            collateralAmount: collateralToMoveToEuler,
-            debtAmount: debtToMoveToEuler
-        });
-        reallocateParams[2] = scUSDCv2.ReallocationParams({
-            protocolId: UsdcWethLendingManager.Protocol.AAVE_V2,
-            isDownsize: false,
-            collateralAmount: collateralToMoveToAaveV2,
-            debtAmount: debtToMoveToAaveV2
-        });
-
         uint256 flashLoanAmount = debtToMoveFromAaveV3;
-        vm.expectEmit(true, true, true, true);
-        emit Reallocated(
-            UsdcWethLendingManager.Protocol.AAVE_V3, true, collateralToMoveFromAaveV3, debtToMoveFromAaveV3
-        );
-        emit Reallocated(UsdcWethLendingManager.Protocol.AAVE_V2, false, collateralToMoveToAaveV2, debtToMoveToAaveV2);
-        emit Reallocated(UsdcWethLendingManager.Protocol.EULER, false, collateralToMoveToEuler, debtToMoveToEuler);
 
-        vault.reallocate(reallocateParams, flashLoanAmount);
+        callData = new bytes[](6);
+        callData[0] = abi.encodeWithSelector(scUSDCv2.repay.selector, aaveV3.id(), debtToMoveFromAaveV3);
+        callData[1] = abi.encodeWithSelector(scUSDCv2.withdraw.selector, aaveV3.id(), collateralToMoveFromAaveV3);
+        callData[2] = abi.encodeWithSelector(scUSDCv2.supply.selector, euler.id(), collateralToMoveToEuler);
+        callData[3] = abi.encodeWithSelector(scUSDCv2.borrow.selector, euler.id(), debtToMoveToEuler);
+        callData[4] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV2.id(), collateralToMoveToAaveV2);
+        callData[5] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV2.id(), debtToMoveToAaveV2);
+
+        vault.reallocate(flashLoanAmount, callData);
+
+        _assertCollateralAndDebt(
+            UsdcWethLendingManager.Protocol.AAVE_V3,
+            totalCollateral - collateralToMoveFromAaveV3,
+            totalDebt - debtToMoveFromAaveV3
+        );
+        _assertCollateralAndDebt(UsdcWethLendingManager.Protocol.AAVE_V2, collateralToMoveToAaveV2, debtToMoveToAaveV2);
+        _assertCollateralAndDebt(UsdcWethLendingManager.Protocol.EULER, collateralToMoveToEuler, debtToMoveToEuler);
     }
 
     function test_reallocate_WorksWhenCalledMultipleTimes() public {
@@ -837,43 +806,27 @@ contract scUSDCv2Test is Test {
         // 1. move half of the position from Aave to Euler
         uint256 collateralToMove = totalCollateral / 2;
         uint256 debtToMove = totalDebt / 2;
-
-        scUSDCv2.ReallocationParams[] memory reallocateParams = new scUSDCv2.ReallocationParams[](2);
-        reallocateParams[0] = scUSDCv2.ReallocationParams({
-            protocolId: UsdcWethLendingManager.Protocol.AAVE_V3,
-            isDownsize: true,
-            collateralAmount: collateralToMove,
-            debtAmount: debtToMove
-        });
-        reallocateParams[1] = scUSDCv2.ReallocationParams({
-            protocolId: UsdcWethLendingManager.Protocol.EULER,
-            isDownsize: false,
-            collateralAmount: collateralToMove,
-            debtAmount: debtToMove
-        });
-
         uint256 flashLoanAmount = debtToMove;
-        vault.reallocate(reallocateParams, flashLoanAmount);
+
+        callData = new bytes[](4);
+        callData[0] = abi.encodeWithSelector(scUSDCv2.repay.selector, aaveV3.id(), debtToMove);
+        callData[1] = abi.encodeWithSelector(scUSDCv2.withdraw.selector, aaveV3.id(), collateralToMove);
+        callData[2] = abi.encodeWithSelector(scUSDCv2.supply.selector, euler.id(), collateralToMove);
+        callData[3] = abi.encodeWithSelector(scUSDCv2.borrow.selector, euler.id(), debtToMove);
+
+        vault.reallocate(flashLoanAmount, callData);
 
         // 2. move everyting to Aave
         (collateralToMove, debtToMove) = _getCollateralAndDebt(UsdcWethLendingManager.Protocol.EULER);
 
-        reallocateParams = new scUSDCv2.ReallocationParams[](2);
-        reallocateParams[0] = scUSDCv2.ReallocationParams({
-            protocolId: UsdcWethLendingManager.Protocol.EULER,
-            isDownsize: true,
-            collateralAmount: collateralToMove,
-            debtAmount: debtToMove
-        });
-        reallocateParams[1] = scUSDCv2.ReallocationParams({
-            protocolId: UsdcWethLendingManager.Protocol.AAVE_V3,
-            isDownsize: false,
-            collateralAmount: collateralToMove,
-            debtAmount: debtToMove
-        });
+        callData = new bytes[](4);
+        callData[0] = abi.encodeWithSelector(scUSDCv2.repay.selector, euler.id(), debtToMove);
+        callData[1] = abi.encodeWithSelector(scUSDCv2.withdraw.selector, euler.id(), collateralToMove);
+        callData[2] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV3.id(), collateralToMove);
+        callData[3] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV3.id(), debtToMove);
 
         flashLoanAmount = debtToMove;
-        vault.reallocate(reallocateParams, flashLoanAmount);
+        vault.reallocate(flashLoanAmount, callData);
 
         assertApproxEqAbs(vault.totalCollateral(), totalCollateral, 1, "total collateral");
         assertApproxEqAbs(vault.totalDebt(), totalDebt, 1, "total debt");
