@@ -1332,7 +1332,7 @@ contract scUSDCv2Test is Test {
 
         bytes memory invalidSwapData = hex"6af479b20000";
 
-        vm.expectRevert(EulerSwapFailed.selector);
+        vm.expectRevert("Address: low-level call failed");
         vault.sellEulerRewards(invalidSwapData, 0);
     }
 
@@ -1420,7 +1420,6 @@ contract scUSDCv2Test is Test {
             admin: address(this),
             keeper: keeper,
             scWETH: wethVault,
-            lendingManager: lendingManager,
             usdc: ERC20(C.USDC),
             weth: WETH(payable(C.WETH)),
             uniswapSwapRouter: ISwapRouter(C.UNISWAP_V3_SWAP_ROUTER),

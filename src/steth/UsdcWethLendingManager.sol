@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.13;
 
-import {EulerSwapFailed, AmountReceivedBelowMin} from "../errors/scErrors.sol";
+import {AmountReceivedBelowMin} from "../errors/scErrors.sol";
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {WETH} from "solmate/tokens/WETH.sol";
@@ -290,7 +290,7 @@ contract UsdcWethLendingManager {
         eulerRewardsToken.safeApprove(zeroExRouter, eulerBalance);
 
         (bool success,) = zeroExRouter.call{value: 0}(_swapData);
-        if (!success) revert EulerSwapFailed();
+        if (!success) revert("failed");
 
         usdcReceived = usdc.balanceOf(address(this)) - usdcBalance;
         eulerSold = eulerBalance - eulerRewardsToken.balanceOf(address(this));

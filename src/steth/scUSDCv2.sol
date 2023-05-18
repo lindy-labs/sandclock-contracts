@@ -10,7 +10,8 @@ import {
     NoProfitsToSell,
     FlashLoanAmountZero,
     PriceFeedZeroAddress,
-    EndUsdcBalanceTooLow
+    EndUsdcBalanceTooLow,
+    AmountReceivedBelowMin
 } from "../errors/scErrors.sol";
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
@@ -26,7 +27,6 @@ import {ISwapRouter} from "../interfaces/uniswap/ISwapRouter.sol";
 import {AggregatorV3Interface} from "../interfaces/chainlink/AggregatorV3Interface.sol";
 import {IFlashLoanRecipient} from "../interfaces/balancer/IFlashLoanRecipient.sol";
 import {scUSDCBase} from "./scUSDCBase.sol";
-import {UsdcWethLendingManager} from "./UsdcWethLendingManager.sol";
 import {IAdapter} from "./usdc-adapters/IAdapter.sol";
 
 // TODO: fix ordering of functions
@@ -63,6 +63,9 @@ contract scUSDCv2 is scUSDCBase {
     event ProfitSold(uint256 wethSold, uint256 usdcReceived);
     event EulerRewardsSold(uint256 eulerSold, uint256 usdcReceived);
 
+    // token representing the rewards from the euler protocol
+    ERC20 public constant eulerRewardsToken = ERC20(C.EULER_REWARDS_TOKEN);
+
     // Uniswap V3 router
     ISwapRouter public immutable swapRouter;
 
@@ -71,9 +74,6 @@ contract scUSDCv2 is scUSDCBase {
 
     // Balancer vault for flashloans
     IVault public immutable balancerVault;
-
-    // lending manager contract used to interact with different money markets
-    UsdcWethLendingManager public immutable lendingManager;
 
     // mapping of protocol IDs to adapters
     mapping(uint8 => IAdapter) protocolAdapters;
@@ -87,7 +87,6 @@ contract scUSDCv2 is scUSDCBase {
         ERC4626 scWETH;
         ERC20 usdc;
         WETH weth;
-        UsdcWethLendingManager lendingManager;
         ISwapRouter uniswapSwapRouter;
         AggregatorV3Interface chainlinkUsdcToEthPriceFeed;
         IVault balancerVault;
@@ -104,7 +103,6 @@ contract scUSDCv2 is scUSDCBase {
             "scUSDCv2"
         )
     {
-        lendingManager = _params.lendingManager;
         swapRouter = _params.uniswapSwapRouter;
         usdcToEthPriceFeed = _params.chainlinkUsdcToEthPriceFeed;
         balancerVault = _params.balancerVault;
@@ -325,10 +323,19 @@ contract scUSDCv2 is scUSDCBase {
     function sellEulerRewards(bytes calldata _swapData, uint256 _usdcAmountOutMin) external {
         _onlyKeeper();
 
-        bytes memory result = address(lendingManager).functionDelegateCall(
-            abi.encodeWithSelector(UsdcWethLendingManager.sellEulerRewards.selector, _swapData, _usdcAmountOutMin)
-        );
-        (uint256 eulerSold, uint256 usdcReceived) = abi.decode(result, (uint256, uint256));
+        uint256 eulerBalance = eulerRewardsToken.balanceOf(address(this));
+        uint256 initialUsdcBalance = usdcBalance();
+
+        eulerRewardsToken.safeApprove(C.ZERO_EX_ROUTER, eulerBalance);
+
+        C.ZERO_EX_ROUTER.functionCall(_swapData);
+
+        uint256 usdcReceived = usdcBalance() - initialUsdcBalance;
+        uint256 eulerSold = eulerBalance - eulerRewardsToken.balanceOf(address(this));
+
+        if (usdcReceived < _usdcAmountOutMin) revert AmountReceivedBelowMin();
+
+        eulerRewardsToken.safeApprove(C.ZERO_EX_ROUTER, 0);
 
         emit EulerRewardsSold(eulerSold, usdcReceived);
     }
