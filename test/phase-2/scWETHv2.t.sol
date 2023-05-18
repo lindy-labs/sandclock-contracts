@@ -201,6 +201,21 @@ contract scWETHv2Test is Test {
         vault.investAndHarvest(investAmount, supplyBorrowParams, "");
     }
 
+    function test_invest_TooMuch(uint256 amount) public {
+        amount = bound(amount, boundMinimum, 15000 ether);
+        _depositToVault(address(this), amount);
+
+        uint256 investAmount = amount + 1;
+
+        (scWETHv2.SupplyBorrowParam[] memory supplyBorrowParams,,) =
+            _getInvestParams(investAmount, aaveV3AllocationPercent, eulerAllocationPercent, compoundAllocationPercent);
+
+        // deposit into strategy
+        vm.startPrank(keeper);
+        vm.expectRevert(InsufficientDepositBalance.selector);
+        vault.investAndHarvest(investAmount, supplyBorrowParams, "");
+    }
+
     function test_deposit_eth(uint256 amount) public {
         amount = bound(amount, boundMinimum, 1e21);
         vm.deal(address(this), amount);
@@ -213,6 +228,9 @@ contract scWETHv2Test is Test {
         assertEq(address(this).balance, 0, "eth not transferred from user");
         assertEq(vault.balanceOf(address(this)), amount, "shares not minted");
         assertEq(weth.balanceOf(address(vault)), amount, "weth not transferred to vault");
+
+        vm.expectRevert("ZERO_SHARES");
+        vault.deposit{value: 0}(address(this));
     }
 
     // function test_maxLtv() public {
@@ -239,6 +257,32 @@ contract scWETHv2Test is Test {
         vault.redeem(vault.balanceOf(address(this)), address(this), address(this));
 
         _redeemChecks(preDepositBal);
+    }
+
+    function test_redeem_by_others(uint256 amount) public {
+        amount = bound(amount, boundMinimum, 1e27);
+        vm.deal(address(this), amount);
+        weth.deposit{value: amount}();
+        weth.approve(address(vault), amount);
+        vault.deposit(amount, address(this));
+
+        uint256 giftAmount;
+        giftAmount = bound(giftAmount, 1, amount - 1);
+        vault.approve(alice, giftAmount);
+
+        vm.startPrank(alice);
+        vault.redeem(giftAmount, alice, address(this));
+        assertEq(vault.totalAssets(), amount - giftAmount);
+        assertEq(vault.balanceOf(alice), 0);
+        assertEq(weth.balanceOf(address(alice)), giftAmount);
+
+        vm.expectRevert();
+        vault.redeem(giftAmount, alice, address(this)); // no shares anymore
+    }
+
+    function test_redeem_zero() public {
+        vm.expectRevert("ZERO_ASSETS");
+        vault.redeem(0, address(this), address(this));
     }
 
     function test_invest_basic(uint256 amount) public {
@@ -642,6 +686,37 @@ contract scWETHv2Test is Test {
         uint256 balance = vault.convertToAssets(vault.balanceOf(treasury));
         uint256 profit = vault.totalProfit();
         assertApproxEqRel(balance, profit.mulWadDown(vault.performanceFee()), 0.015e18);
+    }
+
+    function test_approveEuler() public {
+        vm.expectRevert(CallerNotKeeper.selector);
+        vm.prank(alice);
+        vault.approveEuler();
+
+        hoax(keeper);
+        vault.approveEuler();
+        assertEq(ERC20(C.WSTETH).allowance(address(vault), C.EULER), type(uint256).max);
+        assertEq(ERC20(C.WETH).allowance(address(vault), C.EULER), type(uint256).max);
+    }
+
+    function test_swapTokens() public {
+        bytes memory swapData = hex"d9627aa4000000000000000000000000000000000000000000000000000000000000008000000000000000000000000000000000000000000000000000000000000186a0000000000000000000000000000000000000000000000000000000000abe8b3f00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000002000000000000000000000000c02aaa39b223fe8d0a0e5c4f27ead9083c756cc20000000000000000000000006b175474e89094c44da98b954eedeac495271d0f869584cd00000000000000000000000010000000000000000000000000000000000000110000000000000000000000000000000000000000000000286c9ba65f6465ec08";
+        address inToken = C.WETH;
+        address outToken = 0x6B175474E89094C44Da98b954EedeAC495271d0F; // DAI
+        uint256 amountIn = 100000;
+        uint256 amountMinOut = 0;
+
+        vm.deal(address(this), amountIn);
+        vault.deposit{value: amountIn}(address(this));
+        vm.prank(alice);
+        vm.expectRevert(CallerNotKeeper.selector);
+        vault.swapTokens(swapData, inToken, outToken, amountIn, amountMinOut);
+
+        hoax(keeper);
+        vm.expectRevert(
+            abi.encodeWithSelector(TokenSwapFailed.selector, inToken, outToken)
+        );
+        vault.swapTokens(swapData, inToken, outToken, amountIn, amountMinOut);
     }
 
     //////////////////////////// INTERNAL METHODS ////////////////////////////////////////
