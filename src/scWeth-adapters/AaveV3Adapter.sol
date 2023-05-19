@@ -26,6 +26,11 @@ contract AaveV3Adapter is IAdapter {
         pool.setUserEMode(C.AAVE_EMODE_ID);
     }
 
+    function revokeApprovals() external override {
+        ERC20(C.WSTETH).safeApprove(address(pool), 0);
+        WETH(payable(C.WETH)).safeApprove(address(pool), 0);
+    }
+
     function supply(uint256 _amount) external override {
         pool.supply(address(C.WSTETH), _amount, address(this), 0);
     }

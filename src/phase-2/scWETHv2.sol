@@ -12,7 +12,8 @@ import {
     InvalidAllocationPercents,
     InsufficientDepositBalance,
     FloatBalanceTooSmall,
-    TokenSwapFailed
+    TokenSwapFailed,
+    AmountReceivedBelowMin
 } from "../errors/scErrors.sol";
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
@@ -22,6 +23,7 @@ import {WETH} from "solmate/tokens/WETH.sol";
 import {IEulerMarkets} from "lib/euler-interfaces/contracts/IEuler.sol";
 import {IPool} from "aave-v3/interfaces/IPool.sol";
 import {Address} from "openzeppelin-contracts/utils/Address.sol";
+import {EnumerableSet} from "openzeppelin-contracts/utils/structs/EnumerableSet.sol";
 
 import {Constants as C} from "../lib/Constants.sol";
 import {sc4626} from "../sc4626.sol";
@@ -39,17 +41,18 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
     using SafeTransferLib for ERC20;
     using FixedPointMathLib for uint256;
     using Address for address;
+    using EnumerableSet for EnumerableSet.UintSet;
 
-    error ProtocolAlreadyAdded();
+    error ProtocolAlreadySupported();
+    error ProtocolNotSupported();
+    error ProtocolContainsFunds();
 
     event SlippageToleranceUpdated(address indexed admin, uint256 newSlippageTolerance);
-    event ExchangeProxyAddressUpdated(address indexed user, address newAddress);
-    event NewTargetLtvApplied(address indexed admin, uint256 newTargetLtv);
     event Harvest(uint256 profitSinceLastHarvest, uint256 performanceFee);
     event Invested(uint256 amount, SupplyBorrowParam[] supplyBorrowParams);
     event DisInvested(RepayWithdrawParam[] repayWithdrawParams);
     event Reallocated(RepayWithdrawParam[] from, SupplyBorrowParam[] to);
-    event TokensSwapped(address inToken, address outToken, uint256 amountIn, uint256 amountOutMin);
+    event TokensSwapped(address inToken, address outToken);
 
     struct RebalanceParams {
         RepayWithdrawParam[] repayWithdrawParams;
@@ -59,13 +62,13 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
     }
 
     struct RepayWithdrawParam {
-        uint8 protocolId;
+        uint256 protocolId;
         uint256 repayAmount; // flashLoanAmount (in WETH)
         uint256 withdrawAmount; // amount of wstEth to withdraw from the market (amount + flashLoanAmount) (in wstEth)
     }
 
     struct SupplyBorrowParam {
-        uint8 protocolId;
+        uint256 protocolId;
         uint256 supplyAmount; // amount of wstEth to supply to the market (in wstEth)
         uint256 borrowAmount; // flashLoanAmount (in WETH)
     }
@@ -102,8 +105,8 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
     // external contracts
     OracleLib immutable oracleLib;
 
-    mapping(uint8 => address) protocolAdapters;
-    uint8[] supportedProtocols;
+    mapping(uint256 => address) protocolAdapters;
+    EnumerableSet.UintSet private supportedProtocols;
 
     address wstEthToWethSwapRouter;
     address wethToWstEthSwapRouter;
@@ -140,27 +143,15 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
 
     /////////////////// ADMIN/KEEPER METHODS //////////////////////////////////
 
-    // /// @dev to be used to ideally swap euler rewards to weth
-    // /// @dev can also be used to swap between other tokens
-    // function swapTokens(
-    //     bytes calldata swapData,
-    //     address inToken,
-    //     address outToken,
-    //     uint256 amountIn,
-    //     uint256 amountOutMin
-    // ) external {
-    //     onlyKeeper();
-    //     (bool success, bytes memory result) = address(lendingManager).delegatecall(
-    //         abi.encodeWithSelector(
-    //             LendingMarketManager.swapTokens.selector, swapData, inToken, outToken, amountIn, amountOutMin
-    //         )
-    //     );
-    //     if (!success) revert(string(result));
+    /// @dev to be used to ideally swap euler rewards to weth using 0x api
+    /// @dev can also be used to swap between other tokens
+    function swapTokensWith0x(bytes calldata swapData, address inToken, address outToken, uint256 amountIn) external {
+        onlyKeeper();
+        ERC20(inToken).safeApprove(C.ZEROX_ROUTER, amountIn);
+        C.ZEROX_ROUTER.functionCall(swapData);
 
-    //     (amountIn, amountOutMin) = abi.decode(result, (uint256, uint256));
-
-    //     emit TokensSwapped(inToken, outToken, amountIn, amountOutMin);
-    // }
+        emit TokensSwapped(inToken, outToken);
+    }
 
     /// @notice invest funds into the strategy and harvest profits if any
     /// @dev for the first deposit, deposits everything into the strategy.
@@ -321,8 +312,8 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
 
     /// @notice returns the total assets supplied as collateral (in WETH terms)
     function totalCollateral() public view returns (uint256 collateral) {
-        for (uint8 i; i < supportedProtocols.length; i++) {
-            collateral += IAdapter(protocolAdapters[supportedProtocols[i]]).getCollateral(address(this));
+        for (uint8 i; i < supportedProtocols.length(); i++) {
+            collateral += IAdapter(protocolAdapters[supportedProtocols.at(i)]).getCollateral(address(this));
         }
 
         collateral = oracleLib.wstEthToEth(collateral);
@@ -330,8 +321,8 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
 
     /// @notice returns the total ETH borrowed
     function totalDebt() public view returns (uint256 debt) {
-        for (uint8 i; i < supportedProtocols.length; i++) {
-            debt += IAdapter(protocolAdapters[supportedProtocols[i]]).getDebt(address(this));
+        for (uint8 i; i < supportedProtocols.length(); i++) {
+            debt += IAdapter(protocolAdapters[supportedProtocols.at(i)]).getDebt(address(this));
         }
     }
 
@@ -424,18 +415,13 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
         _enforceFloat();
     }
 
-    function _swap_0x(bytes memory swapData, address from, address to) internal {
-        (bool success,) = C.ZEROX_ROUTER.call{value: 0}(swapData);
-        if (!success) revert TokenSwapFailed(from, to);
-    }
-
     // need to be able to receive eth
     receive() external payable {}
 
     //////////////////// INTERNAL METHODS //////////////////////////
 
     function _withdrawToVault(uint256 amount) internal {
-        uint256 n = supportedProtocols.length;
+        uint256 n = supportedProtocols.length();
         uint256 flashLoanAmount;
         RepayWithdrawParam[] memory repayWithdrawParams = new RepayWithdrawParam[](n);
 
@@ -444,10 +430,10 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
         {
             uint256 flashLoanAmount_;
             uint256 amount_;
-            uint8 protocolId;
+            uint256 protocolId;
             address adapter;
             for (uint256 i; i < n; i++) {
-                protocolId = supportedProtocols[i];
+                protocolId = supportedProtocols.at(i);
                 adapter = protocolAdapters[protocolId];
                 (flashLoanAmount_, amount_) = oracleLib.calcFlashLoanAmountWithdrawing(adapter, amount, totalInvested_);
 
@@ -504,21 +490,30 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
         _withdrawToVault(missing);
     }
 
-    function _isSupported(uint8 _protocolId) internal view returns (bool) {
+    function _isSupported(uint256 _protocolId) internal view returns (bool) {
         return protocolAdapters[_protocolId] != address(0);
     }
 
-    function addAdapter(address _adapter) public {
+    function addAdapter(address _adapter) external {
         onlyAdmin();
 
         uint8 id = IAdapter(_adapter).id();
 
-        if (_isSupported(id)) revert ProtocolAlreadyAdded();
+        if (_isSupported(id)) revert ProtocolAlreadySupported();
 
         protocolAdapters[id] = _adapter;
-        supportedProtocols.push(id);
+        supportedProtocols.add(id);
 
         _adapter.functionDelegateCall(abi.encodeWithSelector(IAdapter.setApprovals.selector));
+    }
+
+    function removeAdapter(uint256 _adapterId) external {
+        onlyAdmin();
+        if (!_isSupported(_adapterId)) revert ProtocolNotSupported();
+        if (IAdapter(protocolAdapters[_adapterId]).getCollateral(address(this)) != 0) revert ProtocolContainsFunds();
+
+        delete protocolAdapters[_adapterId];
+        supportedProtocols.remove(_adapterId);
     }
 
     function _supplyBorrow(SupplyBorrowParam memory params) internal {

@@ -4,6 +4,7 @@ pragma solidity ^0.8.13;
 interface IAdapter {
     function id() external returns (uint8);
     function setApprovals() external;
+    function revokeApprovals() external;
     function supply(uint256 amount) external;
     function borrow(uint256 amount) external;
     function repay(uint256 amount) external;

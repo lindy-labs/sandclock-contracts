@@ -18,7 +18,6 @@ contract EulerAdapter is IAdapter {
     IEulerMarkets constant markets = IEulerMarkets(C.EULER_MARKETS);
     IEulerEToken constant eWstEth = IEulerEToken(C.EULER_ETOKEN_WSTETH);
     IEulerDToken constant dWeth = IEulerDToken(C.EULER_DTOKEN_WETH);
-    // rewardsToken: ERC20(C.EULER_REWARDS_TOKEN)
 
     uint8 public constant id = 3;
 
@@ -26,6 +25,11 @@ contract EulerAdapter is IAdapter {
         ERC20(C.WSTETH).safeApprove(protocol, type(uint256).max);
         WETH(payable(C.WETH)).safeApprove(protocol, type(uint256).max);
         markets.enterMarket(0, address(C.WSTETH));
+    }
+
+    function revokeApprovals() external override {
+        ERC20(C.WSTETH).safeApprove(protocol, 0);
+        WETH(payable(C.WETH)).safeApprove(protocol, 0);
     }
 
     function supply(uint256 _amount) external override {

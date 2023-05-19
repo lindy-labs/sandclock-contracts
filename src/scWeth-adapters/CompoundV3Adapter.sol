@@ -21,6 +21,11 @@ contract CompoundV3Adapter is IAdapter {
         ERC20(C.WETH).safeApprove(address(compoundV3Comet), type(uint256).max);
     }
 
+    function revokeApprovals() external override {
+        ERC20(C.WSTETH).safeApprove(address(compoundV3Comet), 0);
+        ERC20(C.WETH).safeApprove(address(compoundV3Comet), 0);
+    }
+
     function supply(uint256 _amount) external override {
         compoundV3Comet.supply(C.WSTETH, _amount);
     }
