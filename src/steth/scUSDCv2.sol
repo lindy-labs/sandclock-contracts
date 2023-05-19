@@ -58,8 +58,8 @@ contract scUSDCv2 is scUSDCBase {
     event EmergencyExitExecuted(
         address indexed admin, uint256 wethWithdrawn, uint256 debtRepaid, uint256 collateralReleased
     );
-    event Reallocated(uint8 protocolId, bool isDownsize, uint256 collateral, uint256 debt);
-    event Rebalanced(uint8 protocolId, uint256 supplied, bool leverageUp, uint256 debt);
+    event Reallocated();
+    event Rebalanced(uint256 totalCollateral, uint256 totalDebt, uint256 floatBalance);
     event ProfitSold(uint256 wethSold, uint256 usdcReceived);
     event EulerRewardsSold(uint256 eulerSold, uint256 usdcReceived);
 
@@ -159,6 +159,7 @@ contract scUSDCv2 is scUSDCBase {
     /**
      * @notice Rebalance the vault's positions/loans in multiple money markets.
      * @dev Called to increase or decrease the WETH debt to maintain the LTV (loan to value) and avoid liquidation.
+     * @param _callData The encoded data for the calls to be made to the money markets.
      */
     function rebalance(bytes[] memory _callData) external {
         _onlyKeeper();
@@ -175,13 +176,15 @@ contract scUSDCv2 is scUSDCBase {
         if (float < floatRequired) {
             revert FloatBalanceTooSmall(float, floatRequired);
         }
+
+        emit Rebalanced(totalCollateral(), totalDebt(), float);
     }
 
     /**
      * @notice Reallocate collateral & debt between lending markets, ie move debt and collateral positions from one protocol (money market) to another.
      * @dev To move the funds between lending markets, the vault uses flashloans to repay debt and release collateral in one money market enabling it to be moved to anoter mm.
      * @param _flashLoanAmount The amount of WETH to flashloan from Balancer. Has to be at least equal to amount of WETH debt moved between lending markets.
-     * @param _callData The data for the flashloan callback.
+     * @param _callData The encoded data for the calls to be made to the money markets.
      */
     function reallocate(uint256 _flashLoanAmount, bytes[] memory _callData) external {
         _onlyKeeper();
@@ -197,6 +200,8 @@ contract scUSDCv2 is scUSDCBase {
         _initiateFlashLoan();
         balancerVault.flashLoan(address(this), tokens, amounts, abi.encode(FlashLoanType.Reallocate, _callData));
         _finalizeFlashLoan();
+
+        emit Reallocated();
     }
 
     /**

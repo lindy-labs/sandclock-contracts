@@ -38,8 +38,8 @@ contract scUSDCv2Test is Test {
     event EmergencyExitExecuted(
         address indexed admin, uint256 wethWithdrawn, uint256 debtRepaid, uint256 collateralReleased
     );
-    event Reallocated(uint8 protocolId, bool isDownsize, uint256 collateral, uint256 debt);
-    event Rebalanced(uint8 protocolId, uint256 supplied, bool leverageUp, uint256 debt);
+    event Reallocated();
+    event Rebalanced(uint256 totalCollateral, uint256 totalDebt, uint256 floatBalance);
     event ProfitSold(uint256 wethSold, uint256 usdcReceived);
     event EulerRewardsSold(uint256 eulerSold, uint256 usdcReceived);
 
@@ -762,25 +762,29 @@ contract scUSDCv2Test is Test {
         _assertCollateralAndDebt2(euler.id(), initialBalance / 3, debtOnEuler - debtReductionOnEuler);
     }
 
-    function test_rebalance_EmitsEventForEachProtocol() public {
-        // TODO: change event emission
-        // _setUpForkAtBlock(BLOCK_BEFORE_EULER_EXPLOIT);
-        // vault.enableEuler();
+    function test_rebalance_EmitsRebalancedEvent() public {
+        _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
+        uint256 initialBalance = 1_000_000e6;
+        uint256 floatPercentage = 0.01e18;
+        vault.setFloatPercentage(floatPercentage);
+        uint256 float = initialBalance.mulWadDown(floatPercentage);
+        uint256 supplyOnAaveV3 = (initialBalance - float) / 2;
+        uint256 supplyOnAaveV2 = (initialBalance - float) / 2;
+        uint256 debtOnAaveV3 = 200 ether;
+        uint256 debtOnAaveV2 = 200 ether;
 
-        // uint256 initialBalance = 1_500_000e6;
-        // deal(address(usdc), address(vault), initialBalance);
+        deal(address(usdc), address(vault), initialBalance);
 
-        // scUSDCv2.RebalanceParams[] memory params = new scUSDCv2.RebalanceParams[](3);
-        // params[0] = _createRebalanceParams(UsdcWethLendingManager.Protocol.AAVE_V3, initialBalance / 3, true, 150 ether);
-        // params[1] = _createRebalanceParams(UsdcWethLendingManager.Protocol.EULER, initialBalance / 6, true, 50 ether);
-        // params[2] = _createRebalanceParams(aaveV2.id(), initialBalance / 2, true, 250 ether);
+        bytes[] memory callData = new bytes[](4);
+        callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV3.id(), supplyOnAaveV3);
+        callData[1] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV3.id(), debtOnAaveV3);
+        callData[2] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV2.id(), supplyOnAaveV2);
+        callData[3] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV2.id(), debtOnAaveV2);
 
-        // vm.expectEmit(true, true, true, true);
-        // emit Rebalanced(params[0].protocolId, params[0].supplyAmount, params[0].leverageUp, params[0].wethAmount);
-        // emit Rebalanced(params[1].protocolId, params[1].supplyAmount, params[1].leverageUp, params[1].wethAmount);
-        // emit Rebalanced(params[2].protocolId, params[2].supplyAmount, params[2].leverageUp, params[2].wethAmount);
+        vm.expectEmit(true, true, true, true);
+        emit Rebalanced(supplyOnAaveV3 + supplyOnAaveV2, debtOnAaveV3 + debtOnAaveV2, float);
 
-        // vault.rebalance(params);
+        vault.rebalance(callData);
     }
 
     function test_rebalance_EnforcesFloatAmountToRemainInVault() public {
@@ -1021,6 +1025,32 @@ contract scUSDCv2Test is Test {
 
         _assertCollateralAndDebt2(aaveV3.id(), totalCollateral, totalDebt);
         _assertCollateralAndDebt2(euler.id(), 0, 0);
+    }
+
+    function test_reallocate_EmitsReallocatedEvent() public {
+        _setUpForkAtBlock(BLOCK_BEFORE_EULER_EXPLOIT);
+        vault.addAdapter(euler);
+
+        uint256 totalCollateral = 1_000_000e6;
+        deal(address(usdc), address(vault), totalCollateral);
+
+        bytes[] memory callData = new bytes[](2);
+        callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV3.id(), totalCollateral / 2);
+        callData[1] = abi.encodeWithSelector(scUSDCv2.supply.selector, euler.id(), totalCollateral / 2);
+
+        vault.rebalance(callData);
+
+        // 1. move half of the position from Aave to Euler
+        uint256 collateralToMove = totalCollateral / 4;
+
+        callData = new bytes[](2);
+        callData[0] = abi.encodeWithSelector(scUSDCv2.withdraw.selector, aaveV3.id(), collateralToMove);
+        callData[1] = abi.encodeWithSelector(scUSDCv2.supply.selector, euler.id(), collateralToMove);
+
+        vm.expectEmit(true, true, true, true);
+        emit Reallocated();
+
+        vault.reallocate(1, callData);
     }
 
     // #receiveFlashLoan ///
