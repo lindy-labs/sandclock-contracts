@@ -12,7 +12,8 @@ import {
     PriceFeedZeroAddress,
     EndUsdcBalanceTooLow,
     AmountReceivedBelowMin,
-    ProtocolNotSupported
+    ProtocolNotSupported,
+    ProtocolInUse
 } from "../errors/scErrors.sol";
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
@@ -78,7 +79,7 @@ contract scUSDCv2 is scUSDCBase {
     mapping(uint8 => IAdapter) protocolAdapters;
 
     // list of supported protocols IDs
-    uint8[] supportedProtocols;
+    uint8[] public supportedProtocolIds;
 
     struct ConstructorParams {
         address admin;
@@ -131,9 +132,28 @@ contract scUSDCv2 is scUSDCBase {
 
         uint8 id = _adapter.id();
         protocolAdapters[id] = _adapter;
-        supportedProtocols.push(id);
+        supportedProtocolIds.push(id);
 
         address(_adapter).functionDelegateCall(abi.encodeWithSelector(IAdapter.setApprovals.selector));
+    }
+
+    function removeAdapter(uint8 _protocolId) external {
+        _onlyAdmin();
+        _isSupportedCheck(_protocolId);
+
+        // check if protocol is being used
+        if (protocolAdapters[_protocolId].getCollateral(address(this)) > 0) revert ProtocolInUse(_protocolId);
+
+        delete protocolAdapters[_protocolId];
+
+        // remove from supportedProtocolIds array
+        for (uint256 i = 0; i < supportedProtocolIds.length; i++) {
+            if (supportedProtocolIds[i] == _protocolId) {
+                supportedProtocolIds[i] = supportedProtocolIds[supportedProtocolIds.length - 1];
+                supportedProtocolIds.pop();
+                break;
+            }
+        }
     }
 
     /**
@@ -362,8 +382,8 @@ contract scUSDCv2 is scUSDCBase {
      * @notice Returns the total USDC supplied as collateral in all money markets.
      */
     function totalCollateral() public view returns (uint256 total) {
-        for (uint8 i = 0; i < supportedProtocols.length; i++) {
-            total += protocolAdapters[supportedProtocols[i]].getCollateral(address(this));
+        for (uint8 i = 0; i < supportedProtocolIds.length; i++) {
+            total += protocolAdapters[supportedProtocolIds[i]].getCollateral(address(this));
         }
     }
 
@@ -377,8 +397,8 @@ contract scUSDCv2 is scUSDCBase {
      * @notice Returns the total WETH borrowed in all money markets.
      */
     function totalDebt() public view returns (uint256 total) {
-        for (uint8 i = 0; i < supportedProtocols.length; i++) {
-            total += protocolAdapters[supportedProtocols[i]].getDebt(address(this));
+        for (uint8 i = 0; i < supportedProtocolIds.length; i++) {
+            total += protocolAdapters[supportedProtocolIds[i]].getDebt(address(this));
         }
     }
 
@@ -451,8 +471,8 @@ contract scUSDCv2 is scUSDCBase {
     }
 
     function _exitAllPositionsFlash(uint256 _flashLoanAmount) internal {
-        for (uint8 i = 0; i < supportedProtocols.length; i++) {
-            uint8 protocolId = supportedProtocols[i];
+        for (uint8 i = 0; i < supportedProtocolIds.length; i++) {
+            uint8 protocolId = supportedProtocolIds[i];
             uint256 debt = protocolAdapters[protocolId].getDebt(address(this));
             uint256 collateral = protocolAdapters[protocolId].getCollateral(address(this));
 
@@ -517,8 +537,8 @@ contract scUSDCv2 is scUSDCBase {
         uint256 withdrawn = _disinvest(wethNeeded);
 
         // repay debt and withdraw collateral from each protocol in proportion to their collateral allocation
-        for (uint8 i = 0; i < supportedProtocols.length; i++) {
-            uint8 protocolId = supportedProtocols[i];
+        for (uint8 i = 0; i < supportedProtocolIds.length; i++) {
+            uint8 protocolId = supportedProtocolIds[i];
             uint256 collateral = protocolAdapters[protocolId].getCollateral(address(this));
 
             if (collateral == 0) continue;

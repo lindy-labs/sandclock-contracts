@@ -19,3 +19,4 @@ error FlashLoanAmountZero();
 error PriceFeedZeroAddress();
 error AmountReceivedBelowMin();
 error ProtocolNotSupported(uint8 protocolId);
+error ProtocolInUse(uint8 protocolId);

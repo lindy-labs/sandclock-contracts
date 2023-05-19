@@ -156,11 +156,72 @@ contract scUSDCv2Test is Test {
 
     function test_addAdapter_SetsApprovalsAndEnablesInteractionWithNewProtocol() public {
         _setUpForkAtBlock(BLOCK_BEFORE_EULER_EXPLOIT);
+        uint256 initialBalance = 1000e6;
+        deal(address(usdc), address(vault), initialBalance);
 
         vault.addAdapter(euler);
 
         assertEq(usdc.allowance(address(vault), euler.protocol()), type(uint256).max, "usdc allowance");
         assertEq(weth.allowance(address(vault), euler.protocol()), type(uint256).max, "weth allowance");
+
+        vault.supply(euler.id(), initialBalance);
+        assertEq(vault.usdcBalance(), 0, "usdc balance");
+        assertApproxEqAbs(euler.getCollateral(address(vault)), initialBalance, 1, "collateral");
+    }
+
+    /// #removeAdapter ///
+
+    function test_removeAdapter_FailsIfCallerIsNotAdmin() public {
+        _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
+
+        vm.prank(keeper);
+        vm.expectRevert(CallerNotAdmin.selector);
+        vault.removeAdapter(1);
+    }
+
+    function test_removeAdapter_FailsIfProtocolIsNotSupported() public {
+        _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
+
+        uint8 eulerId = euler.id();
+
+        vm.expectRevert(abi.encodeWithSelector(ProtocolNotSupported.selector, eulerId));
+        vault.removeAdapter(eulerId);
+    }
+
+    function test_removeAdapter_FailsIfProtocolIsBeingUsed() public {
+        _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
+        deal(address(usdc), address(vault), 1_000e6);
+
+        uint8 aaveV3Id = aaveV3.id();
+
+        vault.supply(aaveV3Id, vault.usdcBalance());
+
+        vm.expectRevert(abi.encodeWithSelector(ProtocolInUse.selector, aaveV3Id));
+        vault.removeAdapter(aaveV3Id);
+    }
+
+    function test_removeAdapter_RemovesSupportForProvidedProtocolId() public {
+        _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
+        // going to remove aave v3
+        uint8 aaveV3Id = aaveV3.id();
+
+        // the vault was set up to support aave v3 & aave v2
+        assertTrue(vault.isSupported(aaveV3Id), "aave v3 should be supported");
+        assertEq(vault.supportedProtocolIds(0), aaveV3Id);
+        assertEq(vault.supportedProtocolIds(1), aaveV2.id());
+
+        vault.removeAdapter(aaveV3Id);
+
+        assertTrue(!vault.isSupported(aaveV3Id), "aave v3 should not be supported anymore");
+        assertEq(vault.supportedProtocolIds(0), aaveV2.id());
+
+        vm.expectRevert();
+        vault.supportedProtocolIds(1);
+
+        uint256 usdcBalance = 1_000e6;
+        deal(address(usdc), address(vault), usdcBalance);
+        vm.expectRevert(abi.encodeWithSelector(ProtocolNotSupported.selector, aaveV3Id));
+        vault.supply(aaveV3Id, usdcBalance);
     }
 
     /// #supply ///
