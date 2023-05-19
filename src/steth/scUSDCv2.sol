@@ -11,7 +11,8 @@ import {
     FlashLoanAmountZero,
     PriceFeedZeroAddress,
     EndUsdcBalanceTooLow,
-    AmountReceivedBelowMin
+    AmountReceivedBelowMin,
+    ProtocolNotSupported
 } from "../errors/scErrors.sol";
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
@@ -29,8 +30,6 @@ import {IFlashLoanRecipient} from "../interfaces/balancer/IFlashLoanRecipient.so
 import {scUSDCBase} from "./scUSDCBase.sol";
 import {IAdapter} from "./usdc-adapters/IAdapter.sol";
 
-// TODO: fix ordering of functions
-// TODO: add check for is protocol supported
 // TODO: add & fix documenation
 // TODO: rebalance and reallocation events
 /**
@@ -286,27 +285,30 @@ contract scUSDCv2 is scUSDCBase {
         emit EulerRewardsSold(eulerSold, usdcReceived);
     }
 
-    // TODO: test all of these
     function supply(uint8 _protocolId, uint256 _amount) external {
         _onlyKeeperOrFlashLoan();
+        _isSupportedCheck(_protocolId);
 
         _supply(_protocolId, _amount);
     }
 
     function borrow(uint8 _protocolId, uint256 _amount) external {
         _onlyKeeperOrFlashLoan();
+        _isSupportedCheck(_protocolId);
 
         _borrow(_protocolId, _amount);
     }
 
     function repay(uint8 _protocolId, uint256 _amount) external {
         _onlyKeeperOrFlashLoan();
+        _isSupportedCheck(_protocolId);
 
         _repay(_protocolId, _amount);
     }
 
     function withdraw(uint8 _protocolId, uint256 _amount) external {
         _onlyKeeperOrFlashLoan();
+        _isSupportedCheck(_protocolId);
 
         _withdraw(_protocolId, _amount);
     }
@@ -404,6 +406,10 @@ contract scUSDCv2 is scUSDCBase {
         for (uint8 i = 0; i < _callData.length; i++) {
             address(this).functionDelegateCall(_callData[i]);
         }
+    }
+
+    function _isSupportedCheck(uint8 _protocolId) internal view {
+        if (!isSupported(_protocolId)) revert ProtocolNotSupported(_protocolId);
     }
 
     function _supply(uint8 _protocolId, uint256 _amount) internal {

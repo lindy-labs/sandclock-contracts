@@ -129,6 +129,185 @@ contract scUSDCv2Test is Test {
         assertEq(address(vault.usdcToEthPriceFeed()), address(_newPriceFeed), "price feed has not changed");
     }
 
+    /// #supply ///
+
+    function test_supply_FailsIfCallerIsNotKeeper() public {
+        _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
+
+        vm.prank(alice);
+        vm.expectRevert(CallerNotKeeper.selector);
+        vault.supply(1, 0);
+    }
+
+    function test_supply_FailsIfProtocolIsNotSupported() public {
+        _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
+
+        //  euler is not supported by default
+        uint8 protocolId = euler.id();
+
+        vm.expectRevert(abi.encodeWithSelector(ProtocolNotSupported.selector, protocolId));
+        vault.supply(protocolId, 1);
+    }
+
+    function test_supply_MovesAssetsToLendingProtocol() public {
+        _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
+        uint256 initialBalance = 1_000e6;
+        deal(address(usdc), address(vault), initialBalance);
+
+        vault.supply(aaveV2.id(), initialBalance);
+
+        assertEq(aaveV2.getCollateral(address(vault)), initialBalance);
+    }
+
+    /// #borrow ///
+
+    function test_borrow_FailsIfCallerIsNotKeeper() public {
+        _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
+
+        vm.prank(alice);
+        vm.expectRevert(CallerNotKeeper.selector);
+        vault.borrow(1, 0);
+    }
+
+    function test_borrow_FailsIfProtocolIsNotSupported() public {
+        _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
+
+        //  euler is not supported by default
+        uint8 protocolId = euler.id();
+
+        vm.expectRevert(abi.encodeWithSelector(ProtocolNotSupported.selector, protocolId));
+        vault.borrow(protocolId, 1);
+    }
+
+    function test_borrow_CreatesLoanOnLendingProtocol() public {
+        _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
+        uint256 initialBalance = 10_000e6;
+        deal(address(usdc), address(vault), initialBalance);
+        vault.supply(aaveV2.id(), initialBalance);
+
+        uint256 borrowAmount = 2 ether;
+        vault.borrow(aaveV2.id(), borrowAmount);
+
+        assertEq(aaveV2.getDebt(address(vault)), borrowAmount);
+    }
+
+    // #repay ///
+
+    function test_repay_FailsIfCallerIsNotKeeper() public {
+        _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
+
+        vm.prank(alice);
+        vm.expectRevert(CallerNotKeeper.selector);
+        vault.repay(1, 0);
+    }
+
+    function test_repay_FailsIfProtocolIsNotSupported() public {
+        _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
+
+        //  euler is not supported by default
+        uint8 protocolId = euler.id();
+
+        vm.expectRevert(abi.encodeWithSelector(ProtocolNotSupported.selector, protocolId));
+        vault.repay(protocolId, 1);
+    }
+
+    function test_repay_RepaysLoanOnLendingProtocol() public {
+        _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
+        uint256 initialBalance = 10_000e6;
+        uint256 borrowAmount = 2 ether;
+        deal(address(usdc), address(vault), initialBalance);
+        vault.supply(aaveV2.id(), initialBalance);
+        vault.borrow(aaveV2.id(), 2 ether);
+
+        uint256 repayAmount = 1 ether;
+        vault.repay(aaveV2.id(), repayAmount);
+
+        assertEq(aaveV2.getDebt(address(vault)), borrowAmount - repayAmount);
+    }
+
+    /// #withdraw ///
+
+    function test_withdraw_FailsIfCallerIsNotKeeper() public {
+        _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
+
+        vm.prank(alice);
+        vm.expectRevert(CallerNotKeeper.selector);
+        vault.withdraw(1, 0);
+    }
+
+    function test_withdraw_FailsIfProtocolIsNotSupported() public {
+        _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
+
+        //  euler is not supported by default
+        uint8 protocolId = euler.id();
+
+        vm.expectRevert(abi.encodeWithSelector(ProtocolNotSupported.selector, protocolId));
+        vault.withdraw(protocolId, 1);
+    }
+
+    function test_withdraw_WithdrawsAssetsFromLendingProtocol() public {
+        _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
+        uint256 initialBalance = 10_000e6;
+        deal(address(usdc), address(vault), initialBalance);
+        vault.supply(aaveV2.id(), initialBalance);
+        vault.borrow(aaveV2.id(), 1 ether);
+
+        uint256 withdrawAmount = 5_000e6;
+        vault.withdraw(aaveV2.id(), withdrawAmount);
+
+        assertEq(vault.usdcBalance(), withdrawAmount, "usdc balance");
+        assertApproxEqAbs(aaveV2.getCollateral(address(vault)), initialBalance - withdrawAmount, 1, "collateral");
+    }
+
+    /// #invest ///
+
+    function test_invest_FailsIfCallerIsNotKeeper() public {
+        _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
+        deal(address(weth), address(vault), 1 ether);
+
+        vm.prank(alice);
+        vm.expectRevert(CallerNotKeeper.selector);
+        vault.invest();
+    }
+
+    function test_invest_DepositsWethBalanceToScWETH() public {
+        _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
+        uint256 wethBalance = 1 ether;
+        deal(address(weth), address(vault), wethBalance);
+
+        vault.invest();
+
+        assertEq(weth.balanceOf(address(vault)), 0, "weth balance not 0");
+        uint256 shares = wethVault.balanceOf(address(vault));
+        assertTrue(shares > 0, "scWETH shares 0");
+        assertApproxEqAbs(vault.wethInvested(), wethBalance, 1, "weth invested");
+        assertApproxEqAbs(wethVault.convertToAssets(shares), wethBalance, 1, "scWETH assets");
+    }
+
+    /// #disinvest ///
+
+    function test_disinvest_FailsIfCallerIsNotKeeper() public {
+        _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
+        deal(address(weth), address(vault), 1 ether);
+
+        vm.prank(alice);
+        vm.expectRevert(CallerNotKeeper.selector);
+        vault.disinvest(1);
+    }
+
+    function test_disinvest_WithdrawsWethInvestedFromScWETH() public {
+        _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
+        uint256 initialBalance = 10 ether;
+        deal(address(weth), address(vault), initialBalance);
+        vault.invest();
+
+        uint256 disinvestAmount = vault.wethInvested() / 2;
+        vault.disinvest(disinvestAmount);
+
+        assertEq(weth.balanceOf(address(vault)), disinvestAmount, "weth balance");
+        assertEq(vault.wethInvested(), initialBalance - disinvestAmount, "weth invested");
+    }
+
     /// #rebalance ///
 
     function test_rebalance_FailsIfCallerIsNotKeeper() public {

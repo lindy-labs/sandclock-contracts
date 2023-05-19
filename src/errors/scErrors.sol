@@ -18,3 +18,4 @@ error EndUsdcBalanceTooLow();
 error FlashLoanAmountZero();
 error PriceFeedZeroAddress();
 error AmountReceivedBelowMin();
+error ProtocolNotSupported(uint8 protocolId);
