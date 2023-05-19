@@ -126,7 +126,6 @@ contract scUSDCv2 is scUSDCBase {
         usdcToEthPriceFeed = _newPriceFeed;
     }
 
-    // TODO: test this
     function addAdapter(IAdapter _adapter) external {
         _onlyAdmin();
 
@@ -457,11 +456,8 @@ contract scUSDCv2 is scUSDCBase {
             uint256 debt = protocolAdapters[protocolId].getDebt(address(this));
             uint256 collateral = protocolAdapters[protocolId].getCollateral(address(this));
 
-            // TODO: separate debt and collateral conditions
-            if (debt > 0) {
-                _repay(protocolId, debt);
-                _withdraw(protocolId, collateral);
-            }
+            if (debt > 0) _repay(protocolId, debt);
+            if (collateral > 0) _withdraw(protocolId, collateral);
         }
 
         asset.approve(address(swapRouter), type(uint256).max);

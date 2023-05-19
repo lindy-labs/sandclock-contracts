@@ -15,6 +15,7 @@ import {IEulerMarkets, IEulerEToken, IEulerDToken} from "lib/euler-interfaces/co
 import {Constants as C} from "../src/lib/Constants.sol";
 import {ILendingPool} from "../src/interfaces/aave-v2/ILendingPool.sol";
 import {IProtocolDataProvider} from "../src/interfaces/aave-v2/IProtocolDataProvider.sol";
+import {IAdapter} from "../src/steth/usdc-adapters/IAdapter.sol";
 import {scUSDCv2} from "../src/steth/scUSDCv2.sol";
 import {AaveV2Adapter} from "../src/steth/usdc-adapters/AaveV2Adapter.sol";
 import {AaveV3Adapter} from "../src/steth/usdc-adapters/AaveV3Adapter.sol";
@@ -127,6 +128,39 @@ contract scUSDCv2Test is Test {
         vault.setUsdcToEthPriceFeed(_newPriceFeed);
 
         assertEq(address(vault.usdcToEthPriceFeed()), address(_newPriceFeed), "price feed has not changed");
+    }
+
+    /// #addAdapter ///
+
+    function test_addAdapter_FailsIfCallerIsNotAdmin() public {
+        _setUpForkAtBlock(BLOCK_BEFORE_EULER_EXPLOIT);
+        IAdapter newAdapter = euler;
+
+        assertTrue(!vault.isSupported(newAdapter.id()), "euler should not be supported");
+
+        vm.prank(keeper);
+        vm.expectRevert(CallerNotAdmin.selector);
+        vault.addAdapter(newAdapter);
+    }
+
+    function test_addAdapter_NewProtocolBecomesSupported() public {
+        _setUpForkAtBlock(BLOCK_BEFORE_EULER_EXPLOIT);
+        IAdapter newAdapter = euler;
+
+        assertTrue(!vault.isSupported(newAdapter.id()), "euler should not be supported");
+
+        vault.addAdapter(newAdapter);
+
+        assertTrue(vault.isSupported(newAdapter.id()), "euler should be supported");
+    }
+
+    function test_addAdapter_SetsApprovalsAndEnablesInteractionWithNewProtocol() public {
+        _setUpForkAtBlock(BLOCK_BEFORE_EULER_EXPLOIT);
+
+        vault.addAdapter(euler);
+
+        assertEq(usdc.allowance(address(vault), euler.protocol()), type(uint256).max, "usdc allowance");
+        assertEq(weth.allowance(address(vault), euler.protocol()), type(uint256).max, "weth allowance");
     }
 
     /// #supply ///
