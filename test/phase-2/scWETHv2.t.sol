@@ -316,13 +316,11 @@ contract scWETHv2Test is Test {
         vault.deposit{value: 0}(address(this));
     }
 
-    // function test_maxLtv() public {
-    //     assertEq(lendingManager.getMaxLtv(aaveV3Adapter), 0.9e18, "aaveV3 Max Ltv Error");
-    //     assertEq(lendingManager.getMaxLtv(eulerAdapter), 0.7735e18, "euler Max Ltv Error");
-    //     assertEq(
-    //         lendingManager.getMaxLtv(compoundV3Adapter), 0.9e18, "compoundV3 Max Ltv Error"
-    //     );
-    // }
+    function test_maxLtv() public {
+        assertEq(aaveV3Adapter.getMaxLtv(), 0.9e18, "aaveV3 Max Ltv Error");
+        assertEq(eulerAdapter.getMaxLtv(), 0.7565e18, "euler Max Ltv Error");
+        assertEq(compoundV3Adapter.getMaxLtv(), 0.9e18, "compoundV3 Max Ltv Error");
+    }
 
     function test_deposit_redeem(uint256 amount) public {
         amount = bound(amount, boundMinimum, 1e27);
