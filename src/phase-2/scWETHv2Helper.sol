@@ -4,7 +4,6 @@ pragma solidity ^0.8.13;
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 
 import {scWETHv2} from "./scWETHv2.sol";
-import {LendingMarketManager} from "./LendingMarketManager.sol";
 import {OracleLib} from "./OracleLib.sol";
 import {IAdapter} from "../scWeth-adapters/IAdapter.sol";
 

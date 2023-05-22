@@ -7,7 +7,6 @@ import {AggregatorV3Interface} from "../interfaces/chainlink/AggregatorV3Interfa
 import {IwstETH} from "../interfaces/lido/IwstETH.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 import {AccessControl} from "openzeppelin-contracts/access/AccessControl.sol";
-import {LendingMarketManager} from "./LendingMarketManager.sol";
 import {scWETHv2} from "./scWETHv2.sol";
 import {IAdapter} from "../scWeth-adapters/IAdapter.sol";
 
