@@ -24,14 +24,14 @@ import {IVault} from "../interfaces/balancer/IVault.sol";
 import {ISwapRouter} from "../interfaces/uniswap/ISwapRouter.sol";
 import {AggregatorV3Interface} from "../interfaces/chainlink/AggregatorV3Interface.sol";
 import {IFlashLoanRecipient} from "../interfaces/balancer/IFlashLoanRecipient.sol";
-import {sc4626} from "../sc4626.sol";
+import {scUSDCBase} from "./scUSDCBase.sol";
 
 /**
  * @title Sandclock USDC Vault
  * @notice A vault that allows users to earn interest on their USDC deposits from leveraged WETH staking.
  * @dev This vault uses Sandclock's leveraged WETH staking vault - scWETH.
  */
-contract scUSDC is sc4626, IFlashLoanRecipient {
+contract scUSDC is scUSDCBase, IFlashLoanRecipient {
     using SafeTransferLib for ERC20;
     using SafeTransferLib for WETH;
     using FixedPointMathLib for uint256;
@@ -101,7 +101,7 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
     }
 
     constructor(ConstructorParams memory _params)
-        sc4626(_params.admin, _params.keeper, _params.usdc, "Sandclock USDC Vault", "scUSDC")
+        scUSDCBase(_params.admin, _params.keeper, _params.usdc, "Sandclock USDC Vault", "scUSDC")
     {
         scWETH = _params.scWETH;
         weth = _params.weth;
