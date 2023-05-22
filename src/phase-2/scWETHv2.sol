@@ -13,7 +13,10 @@ import {
     InsufficientDepositBalance,
     FloatBalanceTooSmall,
     TokenSwapFailed,
-    AmountReceivedBelowMin
+    AmountReceivedBelowMin,
+    ProtocolAlreadySupported,
+    ProtocolNotSupported,
+    ProtocolContainsFunds
 } from "../errors/scErrors.sol";
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
@@ -42,10 +45,6 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
     using FixedPointMathLib for uint256;
     using Address for address;
     using EnumerableSet for EnumerableSet.UintSet;
-
-    error ProtocolAlreadySupported();
-    error ProtocolNotSupported();
-    error ProtocolContainsFunds();
 
     event SlippageToleranceUpdated(address indexed admin, uint256 newSlippageTolerance);
     event Harvest(uint256 profitSinceLastHarvest, uint256 performanceFee);
@@ -105,11 +104,11 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
     // external contracts
     OracleLib immutable oracleLib;
 
-    mapping(uint256 => address) protocolAdapters;
+    mapping(uint256 => address) public protocolAdapters;
     EnumerableSet.UintSet private supportedProtocols;
 
-    address wstEthToWethSwapRouter;
-    address wethToWstEthSwapRouter;
+    address public wstEthToWethSwapRouter;
+    address public wethToWstEthSwapRouter;
 
     constructor(ConstructorParams memory params)
         sc4626(params.admin, params.keeper, ERC20(params.weth), "Sandclock WETH Vault v2", "scWETHv2")
@@ -124,6 +123,8 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
         wstEthToWethSwapRouter = params.wstEthToWethSwapRouter;
         wethToWstEthSwapRouter = params.wethToWstEthSwapRouter;
     }
+
+    /////////////////// ADMIN/KEEPER METHODS //////////////////////////////////
 
     function setSwapRouter(address _wstEthToWethSwapRouter, address _wethToWstEthSwapRouter) external {
         onlyAdmin();
@@ -141,7 +142,29 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
         emit SlippageToleranceUpdated(msg.sender, newSlippageTolerance);
     }
 
-    /////////////////// ADMIN/KEEPER METHODS //////////////////////////////////
+    function addAdapter(address _adapter) external {
+        onlyAdmin();
+
+        uint8 id = IAdapter(_adapter).id();
+        if (!supportedProtocols.add(id)) revert ProtocolAlreadySupported();
+        protocolAdapters[id] = _adapter;
+
+        _adapter.functionDelegateCall(abi.encodeWithSelector(IAdapter.setApprovals.selector));
+    }
+
+    /// @notice removes an adapter from the supported adapters
+    /// @param _adapterId the id of the adapter to remove
+    /// @param _checkForFunds if true, will revert if the vault still has funds deposited in the adapter
+    function removeAdapter(uint256 _adapterId, bool _checkForFunds) external {
+        onlyAdmin();
+        if (!supportedProtocols.remove(_adapterId)) revert ProtocolNotSupported();
+        if (_checkForFunds) {
+            if (IAdapter(protocolAdapters[_adapterId]).getCollateral(address(this)) != 0) {
+                revert ProtocolContainsFunds();
+            }
+        }
+        delete protocolAdapters[_adapterId];
+    }
 
     /// @dev to be used to ideally swap euler rewards to weth using 0x api
     /// @dev can also be used to swap between other tokens
@@ -298,6 +321,10 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
 
     //////////////////// VIEW METHODS //////////////////////////
 
+    function isSupported(uint256 id) external view returns (bool) {
+        return supportedProtocols.contains(id);
+    }
+
     /// @notice returns the total assets (WETH) held by the strategy
     function totalAssets() public view override returns (uint256 assets) {
         // value of the supplied collateral in eth terms using chainlink oracle
@@ -312,7 +339,8 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
 
     /// @notice returns the total assets supplied as collateral (in WETH terms)
     function totalCollateral() public view returns (uint256 collateral) {
-        for (uint8 i; i < supportedProtocols.length(); i++) {
+        uint256 n = supportedProtocols.length();
+        for (uint256 i; i < n; i++) {
             collateral += IAdapter(protocolAdapters[supportedProtocols.at(i)]).getCollateral(address(this));
         }
 
@@ -321,7 +349,8 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
 
     /// @notice returns the total ETH borrowed
     function totalDebt() public view returns (uint256 debt) {
-        for (uint8 i; i < supportedProtocols.length(); i++) {
+        uint256 n = supportedProtocols.length();
+        for (uint256 i; i < n; i++) {
             debt += IAdapter(protocolAdapters[supportedProtocols.at(i)]).getDebt(address(this));
         }
     }
@@ -488,32 +517,6 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
         uint256 missing = assets + floatRequired - float;
 
         _withdrawToVault(missing);
-    }
-
-    function _isSupported(uint256 _protocolId) internal view returns (bool) {
-        return protocolAdapters[_protocolId] != address(0);
-    }
-
-    function addAdapter(address _adapter) external {
-        onlyAdmin();
-
-        uint8 id = IAdapter(_adapter).id();
-
-        if (_isSupported(id)) revert ProtocolAlreadySupported();
-
-        protocolAdapters[id] = _adapter;
-        supportedProtocols.add(id);
-
-        _adapter.functionDelegateCall(abi.encodeWithSelector(IAdapter.setApprovals.selector));
-    }
-
-    function removeAdapter(uint256 _adapterId) external {
-        onlyAdmin();
-        if (!_isSupported(_adapterId)) revert ProtocolNotSupported();
-        if (IAdapter(protocolAdapters[_adapterId]).getCollateral(address(this)) != 0) revert ProtocolContainsFunds();
-
-        delete protocolAdapters[_adapterId];
-        supportedProtocols.remove(_adapterId);
     }
 
     function _supplyBorrow(SupplyBorrowParam memory params) internal {

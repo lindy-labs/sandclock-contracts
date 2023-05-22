@@ -119,9 +119,86 @@ contract scWETHv2Test is Test {
         assertEq(address(vault.weth()), C.WETH);
         assertEq(address(vault.stEth()), C.STETH);
         assertEq(address(vault.wstETH()), C.WSTETH);
-        // assertEq(address(vault.curvePool()), C.CURVE_ETH_STETH_POOL);
         assertEq(address(vault.balancerVault()), C.BALANCER_VAULT);
         assertEq(vault.slippageTolerance(), slippageTolerance);
+    }
+
+    function test_addAdapter() public {
+        address dummyAdapter = address(new AaveV3Adapter());
+        // must fail if not called by admin
+        vm.expectRevert(CallerNotAdmin.selector);
+        vm.prank(alice);
+        vault.addAdapter(dummyAdapter);
+
+        // must fail if same adapter is added again (if adapter id is not unique)
+        vm.expectRevert(ProtocolAlreadySupported.selector);
+        vault.addAdapter(dummyAdapter);
+
+        uint256 id = IAdapter(dummyAdapter).id();
+        vault.removeAdapter(id, true);
+        vault.addAdapter(dummyAdapter);
+        assertEq(
+            vault.protocolAdapters(IAdapter(dummyAdapter).id()), dummyAdapter, "adapter not added to protocolAdapters"
+        );
+        assertEq(vault.isSupported(id), true, "adapter not added to supportedProtocols");
+    }
+
+    function test_removeAdapter_Reverts() public {
+        uint256 id = aaveV3Adapter.id();
+        // must revert if not called by admin
+        vm.expectRevert(CallerNotAdmin.selector);
+        vm.prank(alice);
+        vault.removeAdapter(id, true);
+
+        // must revert if protocol not supported
+        vm.expectRevert(ProtocolNotSupported.selector);
+        vault.removeAdapter(69, true);
+
+        // must revert if protocol has funds deposited in it
+        _depositToVault(address(this), 10e18);
+        uint256 investAmount = 10e18 - minimumFloatAmount;
+        (scWETHv2.SupplyBorrowParam[] memory supplyBorrowParams,, uint256 totalFlashLoanAmount) =
+            _getInvestParams(investAmount, aaveV3AllocationPercent, eulerAllocationPercent, compoundAllocationPercent);
+        vm.startPrank(keeper);
+        vault.investAndHarvest(
+            investAmount, supplyBorrowParams, _getSwapDefaultData(investAmount + totalFlashLoanAmount, 0)
+        );
+        vm.stopPrank();
+
+        vm.expectRevert(ProtocolContainsFunds.selector);
+        vault.removeAdapter(id, true);
+
+        // must not revert if checkForFunds is false
+        vault.removeAdapter(id, false);
+        assertEq(vault.protocolAdapters(id), address(0x00), "adapter not removed from protocolAdapters");
+        assertEq(vault.isSupported(id), false, "adapter not removed from supportedProtocols");
+    }
+
+    function test_removeAdapter() public {
+        uint256 id = aaveV3Adapter.id();
+        vault.removeAdapter(id, true);
+        assertEq(vault.protocolAdapters(id), address(0x00), "adapter not removed from protocolAdapters");
+        assertEq(vault.isSupported(id), false, "adapter not removed from supportedProtocols");
+    }
+
+    function test_setSwapRouter() public {
+        address oldWethToWstEthSwapRouter = vault.wethToWstEthSwapRouter();
+        // revert if not called by admin
+        vm.expectRevert(CallerNotAdmin.selector);
+        vm.prank(alice);
+        vault.setSwapRouter(address(0x00), address(0x00));
+
+        // set wstEthToWethSwapRouter
+        address wstEthToWethSwapRouter = address(new WstEthToWethSwapRouter(oracleLib));
+        vault.setSwapRouter(wstEthToWethSwapRouter, address(0x00));
+        assertEq(vault.wstEthToWethSwapRouter(), wstEthToWethSwapRouter);
+        assertEq(vault.wethToWstEthSwapRouter(), oldWethToWstEthSwapRouter);
+
+        // set wethToWstEthSwapRouter
+        address wethToWstEthSwapRouter = address(new WethToWstEthSwapRouter());
+        vault.setSwapRouter(address(0x00), wethToWstEthSwapRouter);
+        assertEq(vault.wethToWstEthSwapRouter(), wethToWstEthSwapRouter);
+        assertEq(vault.wstEthToWethSwapRouter(), wstEthToWethSwapRouter);
     }
 
     function test_setSlippageTolerance() public {
