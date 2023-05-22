@@ -9,7 +9,7 @@ import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 import {AccessControl} from "openzeppelin-contracts/access/AccessControl.sol";
 import {LendingMarketManager} from "./LendingMarketManager.sol";
 import {scWETHv2} from "./scWETHv2.sol";
-import {IAdapter} from "../scWEth-adapters/IAdapter.sol";
+import {IAdapter} from "../scWeth-adapters/IAdapter.sol";
 
 import {CallerNotAdmin, ZeroAddress} from "../errors/scErrors.sol";
 
