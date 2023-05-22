@@ -176,6 +176,11 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
         emit TokensSwapped(inToken, outToken);
     }
 
+    function claimRewards(uint256 _adapterId, bytes calldata _data) external {
+        onlyKeeper();
+        IAdapter(protocolAdapters[_adapterId]).claimRewards(_data);
+    }
+
     /// @notice invest funds into the strategy and harvest profits if any
     /// @dev for the first deposit, deposits everything into the strategy.
     /// @dev also mints performance fee tokens to the treasury

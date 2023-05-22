@@ -48,6 +48,8 @@ contract EulerAdapter is IAdapter {
         eWstEth.withdraw(0, _amount);
     }
 
+    function claimRewards(bytes calldata data) external override {}
+
     function getCollateral(address _account) external view override returns (uint256) {
         return eWstEth.balanceOfUnderlying(_account);
     }

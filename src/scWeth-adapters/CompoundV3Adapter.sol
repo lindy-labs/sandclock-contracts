@@ -42,6 +42,8 @@ contract CompoundV3Adapter is IAdapter {
         compoundV3Comet.withdraw(C.WSTETH, _amount);
     }
 
+    function claimRewards(bytes calldata data) external override {}
+
     function getCollateral(address _account) external view override returns (uint256) {
         return compoundV3Comet.userCollateral(_account, C.WSTETH).balance;
     }

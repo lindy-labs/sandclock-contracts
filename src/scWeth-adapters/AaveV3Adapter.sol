@@ -47,6 +47,8 @@ contract AaveV3Adapter is IAdapter {
         pool.withdraw(address(C.WSTETH), _amount, address(this));
     }
 
+    function claimRewards(bytes calldata data) external override {}
+
     function getCollateral(address _account) external view override returns (uint256) {
         return aWstEth.balanceOf(_account);
     }
