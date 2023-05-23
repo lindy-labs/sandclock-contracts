@@ -31,8 +31,6 @@ import {IFlashLoanRecipient} from "../interfaces/balancer/IFlashLoanRecipient.so
 import {scUSDCBase} from "./scUSDCBase.sol";
 import {IAdapter} from "./usdc-adapters/IAdapter.sol";
 
-// TODO: add & fix documenation
-// TODO: rebalance and reallocation events
 /**
  * @title Sandclock USDC Vault version 2
  * @notice A vault that allows users to earn interest on their USDC deposits from leveraged WETH staking.
