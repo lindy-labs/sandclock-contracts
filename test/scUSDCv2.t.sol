@@ -154,6 +154,16 @@ contract scUSDCv2Test is Test {
         assertTrue(vault.isSupported(newAdapter.id()), "euler should be supported");
     }
 
+    function test_addAdapter_FailsIfAlreadySupported() public {
+        _setUpForkAtBlock(BLOCK_BEFORE_EULER_EXPLOIT);
+        IAdapter newAdapter = aaveV3;
+
+        assertTrue(vault.isSupported(newAdapter.id()), "euler should be supported initially");
+
+        vm.expectRevert(abi.encodeWithSelector(ProtocolInUse.selector, newAdapter.id()));
+        vault.addAdapter(newAdapter);
+    }
+
     function test_addAdapter_SetsApprovalsAndEnablesInteractionWithNewProtocol() public {
         _setUpForkAtBlock(BLOCK_BEFORE_EULER_EXPLOIT);
         uint256 initialBalance = 1000e6;

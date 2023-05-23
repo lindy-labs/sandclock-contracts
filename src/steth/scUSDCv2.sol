@@ -129,6 +129,9 @@ contract scUSDCv2 is scUSDCBase {
         _onlyAdmin();
 
         uint8 id = _adapter.id();
+
+        if (isSupported(id)) revert ProtocolInUse(id);
+
         protocolAdapters[id] = _adapter;
         supportedProtocolIds.push(id);
 
