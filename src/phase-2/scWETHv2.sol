@@ -295,7 +295,7 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
 
     //////////////////// VIEW METHODS //////////////////////////
 
-    function isSupported(uint256 id) external view returns (bool) {
+    function isSupported(uint256 id) public view returns (bool) {
         return supportedProtocols.contains(id);
     }
 
@@ -486,12 +486,14 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
     }
 
     function _supplyBorrow(SupplyBorrowParam memory params) internal {
+        if (!isSupported(params.protocolId)) revert ProtocolNotSupported();
         address adapter = protocolAdapters[params.protocolId];
         adapter.functionDelegateCall(abi.encodeWithSelector(IAdapter.supply.selector, params.supplyAmount));
         adapter.functionDelegateCall(abi.encodeWithSelector(IAdapter.borrow.selector, params.borrowAmount));
     }
 
     function _repayWithdraw(RepayWithdrawParam memory params) internal {
+        if (!isSupported(params.protocolId)) revert ProtocolNotSupported();
         address adapter = protocolAdapters[params.protocolId];
         adapter.functionDelegateCall(abi.encodeWithSelector(IAdapter.repay.selector, params.repayAmount));
         adapter.functionDelegateCall(abi.encodeWithSelector(IAdapter.withdraw.selector, params.withdrawAmount));
