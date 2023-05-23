@@ -36,6 +36,9 @@ import {WstEthToWethSwapRouter} from "../../src/swap-routers/WstEthToWethSwapRou
 contract scWETHv2Test is Test {
     using FixedPointMathLib for uint256;
 
+    uint256 constant BLOCK_BEFORE_EULER_EXPLOIT = 16784444;
+    uint256 constant BLOCK_AFTER_EULER_EXPLOIT = 17243956;
+
     uint256 mainnetFork;
 
     address constant keeper = address(0x05);
@@ -71,10 +74,10 @@ contract scWETHv2Test is Test {
     IAdapter eulerAdapter;
     IAdapter compoundV3Adapter;
 
-    function setUp() public {
+    function _setUp(uint256 _blockNumber) internal {
         vm.createFork(vm.envString("RPC_URL_MAINNET"));
         vm.selectFork(mainnetFork);
-        vm.rollFork(16784444);
+        vm.rollFork(_blockNumber);
 
         oracleLib = _deployOracleLib();
         scWETHv2.ConstructorParams memory params = _createDefaultWethv2VaultConstructorParams(oracleLib);
@@ -90,29 +93,36 @@ contract scWETHv2Test is Test {
         // set vault eth balance to zero
         vm.deal(address(vault), 0);
 
-        _setupAdapters();
+        _setupAdapters(_blockNumber);
 
         targetLtv[aaveV3Adapter] = 0.7e18;
-        targetLtv[eulerAdapter] = 0.5e18;
         targetLtv[compoundV3Adapter] = 0.7e18;
+
+        if (_blockNumber == BLOCK_BEFORE_EULER_EXPLOIT) {
+            targetLtv[eulerAdapter] = 0.5e18;
+        }
     }
 
-    function _setupAdapters() internal {
+    function _setupAdapters(uint256 _blockNumber) internal {
         // add adaptors
         aaveV3Adapter = new AaveV3Adapter();
-        eulerAdapter = new EulerAdapter();
         compoundV3Adapter = new CompoundV3Adapter();
 
         vault.addAdapter(address(aaveV3Adapter));
-        vault.addAdapter(address(eulerAdapter));
         vault.addAdapter(address(compoundV3Adapter));
 
         aaveV3AdapterId = aaveV3Adapter.id();
-        eulerAdapterId = eulerAdapter.id();
         compoundV3AdapterId = compoundV3Adapter.id();
+
+        if (_blockNumber == BLOCK_BEFORE_EULER_EXPLOIT) {
+            eulerAdapter = new EulerAdapter();
+            vault.addAdapter(address(eulerAdapter));
+            eulerAdapterId = eulerAdapter.id();
+        }
     }
 
     function test_constructor() public {
+        _setUp(BLOCK_AFTER_EULER_EXPLOIT);
         assertEq(vault.hasRole(vault.DEFAULT_ADMIN_ROLE(), admin), true, "admin role not set");
         assertEq(vault.hasRole(vault.KEEPER_ROLE(), keeper), true, "keeper role not set");
         assertEq(address(vault.weth()), C.WETH);
@@ -123,6 +133,8 @@ contract scWETHv2Test is Test {
     }
 
     function test_addAdapter() public {
+        _setUp(BLOCK_AFTER_EULER_EXPLOIT);
+
         address dummyAdapter = address(new AaveV3Adapter());
         // must fail if not called by admin
         vm.expectRevert(CallerNotAdmin.selector);
@@ -143,6 +155,8 @@ contract scWETHv2Test is Test {
     }
 
     function test_removeAdapter_Reverts() public {
+        _setUp(BLOCK_BEFORE_EULER_EXPLOIT);
+
         uint256 id = aaveV3Adapter.id();
         // must revert if not called by admin
         vm.expectRevert(CallerNotAdmin.selector);
@@ -174,6 +188,8 @@ contract scWETHv2Test is Test {
     }
 
     function test_removeAdapter() public {
+        _setUp(BLOCK_AFTER_EULER_EXPLOIT);
+
         uint256 id = aaveV3Adapter.id();
         vault.removeAdapter(id, true);
         assertEq(vault.protocolAdapters(id), address(0x00), "adapter not removed from protocolAdapters");
@@ -181,6 +197,8 @@ contract scWETHv2Test is Test {
     }
 
     function test_setSwapRouter() public {
+        _setUp(BLOCK_AFTER_EULER_EXPLOIT);
+
         address oldWethToWstEthSwapRouter = vault.wethToWstEthSwapRouter();
         // revert if not called by admin
         vm.expectRevert(CallerNotAdmin.selector);
@@ -201,6 +219,8 @@ contract scWETHv2Test is Test {
     }
 
     function test_setSlippageTolerance() public {
+        _setUp(BLOCK_AFTER_EULER_EXPLOIT);
+
         vault.setSlippageTolerance(0.5e18);
         assertEq(vault.slippageTolerance(), 0.5e18, "slippageTolerance not set");
 
@@ -214,6 +234,8 @@ contract scWETHv2Test is Test {
     }
 
     function test_setStEThToEthPriceFeed() public {
+        _setUp(BLOCK_AFTER_EULER_EXPLOIT);
+
         address newStEthPriceFeed = alice;
         oracleLib.setStEThToEthPriceFeed(newStEthPriceFeed);
         assertEq(address(oracleLib.stEThToEthPriceFeed()), newStEthPriceFeed);
@@ -228,6 +250,8 @@ contract scWETHv2Test is Test {
     }
 
     function test_setMinimumFloatAmount() public {
+        _setUp(BLOCK_AFTER_EULER_EXPLOIT);
+
         uint256 newMinimumFloatAmount = 69e18;
         vault.setMinimumFloatAmount(newMinimumFloatAmount);
         assertEq(vault.minimumFloatAmount(), newMinimumFloatAmount);
@@ -239,6 +263,8 @@ contract scWETHv2Test is Test {
     }
 
     function test_receiveFlashLoan_InvalidFlashLoanCaller() public {
+        _setUp(BLOCK_AFTER_EULER_EXPLOIT);
+
         address[] memory empty;
         uint256[] memory amounts = new uint[](1);
         amounts[0] = 1;
@@ -247,6 +273,8 @@ contract scWETHv2Test is Test {
     }
 
     function test_receiveFlashLoan_FailsIfInitiatorIsNotVault() public {
+        _setUp(BLOCK_AFTER_EULER_EXPLOIT);
+
         IVault balancer = IVault(C.BALANCER_VAULT);
         address[] memory tokens = new address[](1);
         uint256[] memory amounts = new uint256[](1);
@@ -259,11 +287,37 @@ contract scWETHv2Test is Test {
     }
 
     function test_withdraw_revert() public {
+        _setUp(BLOCK_AFTER_EULER_EXPLOIT);
+
         vm.expectRevert(PleaseUseRedeemMethod.selector);
         vault.withdraw(1e18, address(this), address(this));
     }
 
+    function test_swapWith0x_EulerToWeth() public {
+        _setUp(17322802);
+
+        address eulerToken = 0xd9Fcd98c322942075A5C3860693e9f4f03AAE07b;
+        uint256 expectedWethAmount = 988320853404199400;
+
+        bytes memory swapData =
+            hex"6af479b2000000000000000000000000000000000000000000000000000000000000008000000000000000000000000000000000000000000000003635c9adc5dea000000000000000000000000000000000000000000000000000000d941bdaa15b045e0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002bd9fcd98c322942075a5c3860693e9f4f03aae07b002710c02aaa39b223fe8d0a0e5c4f27ead9083c756cc2000000000000000000000000000000000000000000869584cd000000000000000000000000100000000000000000000000000000000000001100000000000000000000000000000000000000000000007992ffbce5646cdd8a";
+
+        uint256 eulerAmount = 1000e18;
+        deal(eulerToken, address(vault), eulerAmount);
+
+        vm.expectRevert(CallerNotKeeper.selector);
+        vault.swapTokensWith0x(swapData, eulerToken, C.WETH, eulerAmount);
+
+        hoax(keeper);
+        vault.swapTokensWith0x(swapData, eulerToken, C.WETH, eulerAmount);
+
+        assertGe(weth.balanceOf(address(vault)), expectedWethAmount, "weth not received");
+        assertEq(ERC20(eulerToken).balanceOf(address(vault)), 0, "euler token not transferred out");
+    }
+
     function test_invest_FloatBalanceTooSmall(uint256 amount) public {
+        _setUp(BLOCK_BEFORE_EULER_EXPLOIT);
+
         amount = bound(amount, boundMinimum, 15000 ether);
         _depositToVault(address(this), amount);
 
@@ -283,6 +337,8 @@ contract scWETHv2Test is Test {
     }
 
     function test_invest_TooMuch(uint256 amount) public {
+        _setUp(BLOCK_BEFORE_EULER_EXPLOIT);
+
         amount = bound(amount, boundMinimum, 15000 ether);
         _depositToVault(address(this), amount);
 
@@ -300,6 +356,8 @@ contract scWETHv2Test is Test {
     }
 
     function test_deposit_eth(uint256 amount) public {
+        _setUp(BLOCK_AFTER_EULER_EXPLOIT);
+
         amount = bound(amount, boundMinimum, 1e21);
         vm.deal(address(this), amount);
 
@@ -317,12 +375,16 @@ contract scWETHv2Test is Test {
     }
 
     function test_maxLtv() public {
+        _setUp(BLOCK_BEFORE_EULER_EXPLOIT);
+
         assertEq(aaveV3Adapter.getMaxLtv(), 0.9e18, "aaveV3 Max Ltv Error");
         assertEq(eulerAdapter.getMaxLtv(), 0.7565e18, "euler Max Ltv Error");
         assertEq(compoundV3Adapter.getMaxLtv(), 0.9e18, "compoundV3 Max Ltv Error");
     }
 
     function test_deposit_redeem(uint256 amount) public {
+        _setUp(BLOCK_AFTER_EULER_EXPLOIT);
+
         amount = bound(amount, boundMinimum, 1e27);
         vm.deal(address(this), amount);
         weth.deposit{value: amount}();
@@ -341,6 +403,8 @@ contract scWETHv2Test is Test {
     }
 
     function test_redeem_by_others(uint256 amount) public {
+        _setUp(BLOCK_AFTER_EULER_EXPLOIT);
+
         amount = bound(amount, boundMinimum, 1e27);
         vm.deal(address(this), amount);
         weth.deposit{value: amount}();
@@ -362,11 +426,15 @@ contract scWETHv2Test is Test {
     }
 
     function test_redeem_zero() public {
+        _setUp(BLOCK_AFTER_EULER_EXPLOIT);
+
         vm.expectRevert("ZERO_ASSETS");
         vault.redeem(0, address(this), address(this));
     }
 
     function test_invest_basic(uint256 amount) public {
+        _setUp(BLOCK_BEFORE_EULER_EXPLOIT);
+
         amount = bound(amount, boundMinimum, 15000 ether);
         _depositToVault(address(this), amount);
         _depositChecks(amount, amount);
@@ -385,6 +453,8 @@ contract scWETHv2Test is Test {
     }
 
     function test_deposit_invest_redeem(uint256 amount) public {
+        _setUp(BLOCK_BEFORE_EULER_EXPLOIT);
+
         amount = bound(amount, boundMinimum, 10000 ether);
         uint256 shares = _depositToVault(address(this), amount);
         _depositChecks(amount, amount);
@@ -413,6 +483,8 @@ contract scWETHv2Test is Test {
     }
 
     function test_withdrawToVault(uint256 amount) public {
+        _setUp(BLOCK_BEFORE_EULER_EXPLOIT);
+
         amount = bound(amount, boundMinimum, 10000 ether);
         uint256 maxAssetsDelta = 0.01e18;
         _depositToVault(address(this), amount);
@@ -467,6 +539,8 @@ contract scWETHv2Test is Test {
 
     // we decrease ltv in case of a loss, since the ltv goes higher than the target ltv in such a scenario
     function test_disinvest(uint256 amount) public {
+        _setUp(BLOCK_BEFORE_EULER_EXPLOIT);
+
         amount = bound(amount, boundMinimum, 10000 ether);
         _depositToVault(address(this), amount);
 
@@ -544,6 +618,8 @@ contract scWETHv2Test is Test {
 
     // reallocate from aaveV3 to euler
     function test_reallocate_fromHigherLtvMarket_toLowerLtvMarket(uint256 amount) public {
+        _setUp(BLOCK_BEFORE_EULER_EXPLOIT);
+
         amount = bound(amount, boundMinimum, 15000 ether);
         _depositToVault(address(this), amount);
 
@@ -601,6 +677,8 @@ contract scWETHv2Test is Test {
 
     // reallocate from euler to aaveV3
     function test_reallocate_fromLowerLtvMarket_toHigherLtvMarket(uint256 amount) public {
+        _setUp(BLOCK_BEFORE_EULER_EXPLOIT);
+
         amount = bound(amount, boundMinimum, 15000 ether);
         _depositToVault(address(this), amount);
 
@@ -651,6 +729,8 @@ contract scWETHv2Test is Test {
 
     // reallocating funds from euler to aaveV3 and compoundV3
     function test_reallocate_fromOneMarket_ToTwoMarkets(uint256 amount) public {
+        _setUp(BLOCK_BEFORE_EULER_EXPLOIT);
+
         amount = bound(amount, boundMinimum, 10000 ether);
         _depositToVault(address(this), amount);
 
@@ -696,6 +776,8 @@ contract scWETHv2Test is Test {
 
     // reallocating funds from aveV3 and compoundV3 to euler
     function test_reallocate_fromTwoMarkets_ToOneMarket(uint256 amount) public {
+        _setUp(BLOCK_BEFORE_EULER_EXPLOIT);
+
         amount = bound(amount, boundMinimum, 10000 ether);
         _depositToVault(address(this), amount);
 
@@ -740,6 +822,8 @@ contract scWETHv2Test is Test {
     }
 
     function test_invest_reinvestingProfits_performanceFees(uint256 amount) public {
+        _setUp(BLOCK_BEFORE_EULER_EXPLOIT);
+
         vault.setTreasury(treasury);
         amount = bound(amount, boundMinimum, 5000 ether);
         _depositToVault(address(this), amount);

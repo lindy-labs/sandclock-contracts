@@ -11,9 +11,7 @@ interface IAdapter {
     function withdraw(uint256 amount) external;
     /// @notice method to claim reward tokens if any from the adapter
     function claimRewards(bytes calldata data) external;
-    /// @dev must return 0 in case no funds deposited in the adapter and not revert under any circumstance
     function getCollateral(address account) external view returns (uint256);
-    /// @dev must return 0 in case no funds deposited in the adapter and not revert under any circumstance
     function getDebt(address account) external view returns (uint256);
     function getMaxLtv() external view returns (uint256);
 }
