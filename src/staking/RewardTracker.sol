@@ -68,20 +68,7 @@ contract RewardTracker is BonusTracker, AccessControl {
 
     function beforeWithdraw(uint256 assets, uint256) internal override {
         _updateReward(msg.sender);
-
-        // burn multiplier points
-        uint256 bonus_ = multiplierPointsOf[msg.sender];
-        if (bonus_ > 0) {
-            uint256 balance_ = balanceOf[msg.sender];
-            if (assets == balance_) {
-                multiplierPointsOf[msg.sender] = 0;
-                totalBonus -= bonus_;
-            } else {
-                uint256 burnAmount = bonus_.mulDivDown(assets, balance_);
-                multiplierPointsOf[msg.sender] -= burnAmount;
-                totalBonus -= burnAmount;
-            }
-        }
+        _burnMultiplierPoints(assets, msg.sender);
     }
 
     /// @notice Withdraws all earned rewards
@@ -203,5 +190,40 @@ contract RewardTracker is BonusTracker, AccessControl {
         lastUpdateTime = lastTimeRewardApplicable_;
         rewards[account] = _earned(account, accountBalance, rewardPerToken_, rewards[account]);
         userRewardPerTokenPaid[account] = rewardPerToken_;
+    }
+
+    function transfer(address to, uint256 amount) public override returns (bool) {
+        _updateReward(msg.sender);
+        _updateReward(to);
+        _burnMultiplierPoints(amount, msg.sender);
+        return super.transfer(to, amount);
+    }
+
+    function transferFrom(address from, address to, uint256 amount) public override returns (bool) {
+        _updateReward(from);
+        _updateReward(to);
+        _burnMultiplierPoints(amount, from);
+        return super.transferFrom(from, to, amount);
+    }
+
+    // burn multiplier points
+    function _burnMultiplierPoints(uint256 amount, address sender) internal {
+        uint256 bonus_ = multiplierPointsOf[sender];
+
+        // if the sender has bonus points
+        if (bonus_ > 0) {
+            uint256 balance = balanceOf[sender];
+
+            // if they are sending/redeeming everything then burn everything
+            if (amount == balance) {
+                multiplierPointsOf[sender] = 0;
+                totalBonus -= bonus_;
+            } else {
+                // otherwise burn an equivalent percentage
+                uint256 burnAmount = bonus_.mulDivDown(amount, balance);
+                multiplierPointsOf[sender] -= burnAmount;
+                totalBonus -= burnAmount;
+            }
+        }
     }
 }

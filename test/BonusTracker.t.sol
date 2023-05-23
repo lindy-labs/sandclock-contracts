@@ -34,12 +34,12 @@ contract BonusTrackerTest is DSTestPlus {
         stakingPool.deposit(1 ether, address(this));
     }
 
-    function testGas_claimBonus() public {
+    function testGas_boost() public {
         hevm.warp(7 days);
-        stakingPool.claimBonus();
+        stakingPool.boost();
     }
 
-    function testCorrectness_claimBonus(uint256 amount0, uint256 amount1, uint256 stakeTime) public {
+    function testCorrectness_boost(uint256 amount0, uint256 amount1, uint256 stakeTime) public {
         amount0 = bound(amount0, 1, 1e37);
         amount1 = bound(amount1, 1, 1e37);
         stakeTime = bound(stakeTime, 1, 36500 days);
@@ -82,7 +82,7 @@ contract BonusTrackerTest is DSTestPlus {
         uint256 totalBonusBefore = stakingPool.totalBonus();
         uint256 totalSupplyBefore = stakingPool.totalSupply();
 
-        stakingPool.claimBonus();
+        stakingPool.boost();
 
         uint256 afterBalance = stakingPool.balanceOf(tester);
         uint256 afterBonus = stakingPool.multiplierPointsOf(tester);
@@ -148,7 +148,7 @@ contract BonusTrackerTest is DSTestPlus {
         hevm.warp(stakeTime);
 
         // get bonus
-        stakingPool.claimBonus();
+        stakingPool.boost();
 
         // withdraw
         uint256 beforeBalance = stakingPool.balanceOf(tester);

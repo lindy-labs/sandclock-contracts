@@ -2,6 +2,7 @@
 pragma solidity ^0.8.13;
 
 import "forge-std/console2.sol";
+import "forge-std/Test.sol";
 
 import {DSTestPlus} from "solmate/test/utils/DSTestPlus.sol";
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
@@ -214,7 +215,7 @@ contract BonusTrackerTest is DSTestPlus {
 
         // warp to simulate bonus accrual + claim bonus
         hevm.warp(bonusTime);
-        stakingPool.claimBonus();
+        stakingPool.boost();
         uint256 bonus_ = stakingPool.multiplierPointsOf(tester);
 
         // distribute rewards
@@ -300,6 +301,35 @@ contract BonusTrackerTest is DSTestPlus {
             expectedRewardAmount += ((leftoverRewardAmount + amount) * stakeTimeAsDurationPercentage) / 100;
         }
         assertEqDecimalEpsilonBelow(rewardAmount, expectedRewardAmount, 18, 1e4);
+    }
+
+    function testCorrectness_transfer(uint256 amount, uint256 transferAmount, uint56 warpTime) public {
+        amount = bound(amount, 1e5, 1e27);
+        transferAmount = bound(transferAmount, 1e5, amount);
+        hevm.assume(warpTime > 1 days);
+
+        hevm.startPrank(tester);
+
+        // mint stake tokens
+        stakeToken.mint(tester, amount);
+
+        stakeToken.approve(address(stakingPool), amount);
+        stakingPool.deposit(amount, tester);
+
+        // warp to simulate bonus accrual + claim bonus
+        stakingPool.boost();
+        hevm.warp(warpTime);
+        uint256 bonus_ = stakingPool.boost();
+
+        stakingPool.transfer(address(this), transferAmount);
+        if (amount == transferAmount) {
+            assertEq(stakingPool.multiplierPointsOf(tester), 0);
+            assertEq(stakingPool.totalBonus(), 0);
+        } else {
+            uint256 burnAmount = bonus_.mulDivDown(transferAmount, amount);
+            assertRelApproxEq(stakingPool.multiplierPointsOf(tester), bonus_ - burnAmount, 0.0001e18);
+            assertEq(stakingPool.totalBonus(), stakingPool.multiplierPointsOf(tester));
+        }
     }
 
     function assertEqDecimalEpsilonBelow(uint256 a, uint256 b, uint256 decimals, uint256 epsilonInv) internal {

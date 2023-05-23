@@ -34,7 +34,7 @@ abstract contract BonusTracker is ERC4626, ReentrancyGuard {
     constructor(ERC20 _asset, string memory _name, string memory _symbol) ERC4626(_asset, _name, _symbol) {}
 
     /// @notice Claim bonus
-    function claimBonus() external nonReentrant returns (uint256 _bonus) {
+    function boost() external nonReentrant returns (uint256 _bonus) {
         _updateReward(msg.sender);
         _updateBonus();
         _bonus = bonus[msg.sender];
@@ -58,9 +58,7 @@ abstract contract BonusTracker is ERC4626, ReentrancyGuard {
 
     /// @notice The amount of bonus tokens an account has accrued so far.
     function bonusOf(address account) external view returns (uint256) {
-        return _earnedBonus(
-            account, multiplierPointsOf[account], _bonusPerToken(lastTimeBonusApplicable()), bonus[account]
-        );
+        return _earnedBonus(account, balanceOf[account], _bonusPerToken(lastTimeBonusApplicable()), bonus[account]);
     }
 
     function _earnedBonus(address account, uint256 accountBalance, uint256 bonusPerToken_, uint256 accountBonus)
