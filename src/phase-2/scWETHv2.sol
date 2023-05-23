@@ -234,18 +234,10 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
             wethToWstEthSwapData: wethToWstEthSwapData
         });
 
-        address[] memory tokens = new address[](1);
-        tokens[0] = address(asset);
-
-        uint256[] memory amounts = new uint256[](1);
-        amounts[0] = totalFlashLoanAmount;
-
         // needed otherwise counted as profit during harvest
         totalInvested += totalInvestAmount;
 
-        _initiateFlashLoan();
-        balancerVault.flashLoan(address(this), tokens, amounts, abi.encode(params));
-        _finalizeFlashLoan();
+        _flashLoan(totalFlashLoanAmount, params);
 
         emit Invested(totalInvestAmount, supplyBorrowParams);
     }
@@ -268,16 +260,8 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
             wethToWstEthSwapData: ""
         });
 
-        address[] memory tokens = new address[](1);
-        tokens[0] = address(asset);
-
-        uint256[] memory amounts = new uint256[](1);
-        amounts[0] = totalFlashLoanAmount;
-
         // take flashloan
-        _initiateFlashLoan();
-        balancerVault.flashLoan(address(this), tokens, amounts, abi.encode(params));
-        _finalizeFlashLoan();
+        _flashLoan(totalFlashLoanAmount, params);
 
         emit DisInvested(repayWithdrawParams);
     }
@@ -303,16 +287,8 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
             wethToWstEthSwapData: wethToWstEthSwapData
         });
 
-        address[] memory tokens = new address[](1);
-        tokens[0] = address(asset);
-
-        uint256[] memory amounts = new uint256[](1);
-        amounts[0] = totalFlashLoanAmount;
-
         // take flashloan
-        _initiateFlashLoan();
-        balancerVault.flashLoan(address(this), tokens, amounts, abi.encode(params));
-        _finalizeFlashLoan();
+        _flashLoan(totalFlashLoanAmount, params);
 
         emit Reallocated(from, to);
     }
@@ -470,12 +446,6 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
             }
         }
 
-        address[] memory tokens = new address[](1);
-        tokens[0] = address(asset);
-
-        uint256[] memory amounts = new uint256[](1);
-        amounts[0] = flashLoanAmount;
-
         // needed otherwise counted as loss during harvest
         totalInvested -= amount;
 
@@ -490,9 +460,7 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
         });
 
         // take flashloan
-        _initiateFlashLoan();
-        balancerVault.flashLoan(address(this), tokens, amounts, abi.encode(params));
-        _finalizeFlashLoan();
+        _flashLoan(flashLoanAmount, params);
     }
 
     /// @notice enforce float to be above the minimum required
@@ -518,15 +486,26 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
     }
 
     function _supplyBorrow(SupplyBorrowParam memory params) internal {
-        address adapter = address(protocolAdapters[params.protocolId]);
+        address adapter = protocolAdapters[params.protocolId];
         adapter.functionDelegateCall(abi.encodeWithSelector(IAdapter.supply.selector, params.supplyAmount));
         adapter.functionDelegateCall(abi.encodeWithSelector(IAdapter.borrow.selector, params.borrowAmount));
     }
 
     function _repayWithdraw(RepayWithdrawParam memory params) internal {
-        address adapter = address(protocolAdapters[params.protocolId]);
+        address adapter = protocolAdapters[params.protocolId];
         adapter.functionDelegateCall(abi.encodeWithSelector(IAdapter.repay.selector, params.repayAmount));
         adapter.functionDelegateCall(abi.encodeWithSelector(IAdapter.withdraw.selector, params.withdrawAmount));
+    }
+
+    function _flashLoan(uint256 _totalFlashLoanAmount, RebalanceParams memory _params) internal {
+        address[] memory tokens = new address[](1);
+        tokens[0] = address(asset);
+        uint256[] memory amounts = new uint256[](1);
+        amounts[0] = _totalFlashLoanAmount;
+
+        _initiateFlashLoan();
+        balancerVault.flashLoan(address(this), tokens, amounts, abi.encode(_params));
+        _finalizeFlashLoan();
     }
 }
 
