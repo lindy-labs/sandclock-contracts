@@ -26,6 +26,11 @@ contract AaveV2Adapter is IAdapter {
         WETH(payable(C.WETH)).safeApprove(address(pool), type(uint256).max);
     }
 
+    function revokeApprovals() external override {
+        ERC20(C.USDC).safeApprove(address(pool), 0);
+        WETH(payable(C.WETH)).safeApprove(address(pool), 0);
+    }
+
     function supply(uint256 _amount) external override {
         pool.deposit(address(C.USDC), _amount, address(this), 0);
     }

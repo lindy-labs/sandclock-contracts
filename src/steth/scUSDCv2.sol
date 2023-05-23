@@ -142,6 +142,11 @@ contract scUSDCv2 is scUSDCBase {
         // check if protocol is being used
         if (protocolAdapters[_protocolId].getCollateral(address(this)) > 0) revert ProtocolInUse(_protocolId);
 
+        // remove approvals
+        address(protocolAdapters[_protocolId]).functionDelegateCall(
+            abi.encodeWithSelector(IAdapter.revokeApprovals.selector)
+        );
+
         delete protocolAdapters[_protocolId];
 
         // remove from supportedProtocolIds array

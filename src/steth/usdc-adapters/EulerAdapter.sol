@@ -28,6 +28,11 @@ contract EulerAdapter is IAdapter {
         markets.enterMarket(0, address(C.USDC));
     }
 
+    function revokeApprovals() external override {
+        ERC20(C.USDC).safeApprove(protocol, 0);
+        WETH(payable(C.WETH)).safeApprove(protocol, 0);
+    }
+
     function supply(uint256 _amount) external override {
         eUsdc.deposit(0, _amount);
     }

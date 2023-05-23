@@ -224,6 +224,22 @@ contract scUSDCv2Test is Test {
         vault.supply(aaveV3Id, usdcBalance);
     }
 
+    function test_removeAdapter_ResetsUsdcAndWethApprovals() public {
+        _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
+        // going to remove aave v2
+        uint8 aaveV2Id = aaveV2.id();
+
+        // the vault was set up to support aave v3 & aave v2
+        assertTrue(vault.isSupported(aaveV2Id), "aave v2 should be supported");
+
+        vault.removeAdapter(aaveV2Id);
+
+        assertTrue(!vault.isSupported(aaveV2Id), "aave v2 should not be supported anymore");
+
+        assertEq(usdc.allowance(address(vault), address(aaveV2.pool())), 0, "usdc allowance");
+        assertEq(weth.allowance(address(vault), address(aaveV2.pool())), 0, "weth allowance");
+    }
+
     /// #supply ///
 
     function test_supply_FailsIfCallerIsNotKeeper() public {
