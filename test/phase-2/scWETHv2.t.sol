@@ -154,6 +154,9 @@ contract scWETHv2Test is Test {
             vault.protocolAdapters(IAdapter(dummyAdapter).id()), dummyAdapter, "adapter not added to protocolAdapters"
         );
         assertEq(vault.isSupported(id), true, "adapter not added to supportedProtocols");
+        // Approvals
+        assertEq(ERC20(C.WSTETH).allowance(address(vault), C.AAVE_POOL), type(uint256).max, "allowance not set");
+        assertEq(ERC20(C.WETH).allowance(address(vault), C.AAVE_POOL), type(uint256).max, "allowance not set");
     }
 
     function test_removeAdapter_Reverts() public {
@@ -190,12 +193,27 @@ contract scWETHv2Test is Test {
     }
 
     function test_removeAdapter() public {
-        _setUp(BLOCK_AFTER_EULER_EXPLOIT);
+        _setUp(BLOCK_BEFORE_EULER_EXPLOIT);
 
         uint256 id = aaveV3Adapter.id();
         vault.removeAdapter(id, true);
-        assertEq(vault.protocolAdapters(id), address(0x00), "adapter not removed from protocolAdapters");
-        assertEq(vault.isSupported(id), false, "adapter not removed from supportedProtocols");
+        _removeAdapterChecks(id, C.AAVE_POOL);
+
+        id = compoundV3Adapter.id();
+        vault.removeAdapter(id, true);
+        _removeAdapterChecks(id, C.COMPOUND_V3_COMET_WETH);
+
+        id = eulerAdapter.id();
+        vault.removeAdapter(id, true);
+        _removeAdapterChecks(id, C.EULER);
+    }
+
+    function _removeAdapterChecks(uint256 _id, address _pool) internal {
+        assertEq(vault.protocolAdapters(_id), address(0x00), "adapter not removed from protocolAdapters");
+        assertEq(vault.isSupported(_id), false, "adapter not removed from supportedProtocols");
+
+        assertEq(ERC20(C.WSTETH).allowance(address(vault), _pool), 0, "allowance not revoked");
+        assertEq(ERC20(C.WETH).allowance(address(vault), _pool), 0, "allowance not revoked");
     }
 
     function test_setSwapRouter() public {
@@ -320,6 +338,10 @@ contract scWETHv2Test is Test {
     function test_swap0x_wethToWstEthSwapRouter() public {
         _setUp(17323024);
         address wethToWstEthSwapRouter = vault.wethToWstEthSwapRouter();
+
+        assertEq(ISwapRouter(wethToWstEthSwapRouter).from(), address(weth));
+        assertEq(ISwapRouter(wethToWstEthSwapRouter).to(), address(wstEth));
+
         uint256 wethAmount = 10 ether;
         uint256 expectedWstEthAmount = 8885460263580892781;
         bytes memory swapData =
@@ -336,6 +358,9 @@ contract scWETHv2Test is Test {
     function test_swap0x_wstEthToWethSwapRouter() public {
         _setUp(17323024);
         address wstEthToWethSwapRouter = vault.wstEthToWethSwapRouter();
+        assertEq(ISwapRouter(wstEthToWethSwapRouter).from(), address(wstEth));
+        assertEq(ISwapRouter(wstEthToWethSwapRouter).to(), address(weth));
+
         uint256 wstEthAmount = 10 ether;
         uint256 expectedWethAmount = 11115533999999999999;
         bytes memory swapData =

@@ -157,11 +157,13 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
     function removeAdapter(uint256 _adapterId, bool _checkForFunds) external {
         onlyAdmin();
         if (!supportedProtocols.remove(_adapterId)) revert ProtocolNotSupported();
+        address _adapter = protocolAdapters[_adapterId];
         if (_checkForFunds) {
-            if (IAdapter(protocolAdapters[_adapterId]).getCollateral(address(this)) != 0) {
+            if (IAdapter(_adapter).getCollateral(address(this)) != 0) {
                 revert ProtocolContainsFunds();
             }
         }
+        _adapter.functionDelegateCall(abi.encodeWithSelector(IAdapter.revokeApprovals.selector));
         delete protocolAdapters[_adapterId];
     }
 
