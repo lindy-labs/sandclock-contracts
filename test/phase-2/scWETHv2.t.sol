@@ -86,9 +86,9 @@ contract scWETHv2Test is Test {
         vault = new scWETHv2(params);
         vaultHelper = new scWETHv2Helper(vault, oracleLib);
 
-        weth = vault.weth();
-        stEth = vault.stEth();
-        wstEth = vault.wstETH();
+        weth = WETH(payable(address(vault.asset())));
+        stEth = ILido(C.STETH);
+        wstEth = IwstETH(C.WSTETH);
         stEThToEthPriceFeed = AggregatorV3Interface(C.CHAINLINK_STETH_ETH_PRICE_FEED);
         minimumFloatAmount = vault.minimumFloatAmount();
 
@@ -127,9 +127,7 @@ contract scWETHv2Test is Test {
         _setUp(BLOCK_AFTER_EULER_EXPLOIT);
         assertEq(vault.hasRole(vault.DEFAULT_ADMIN_ROLE(), admin), true, "admin role not set");
         assertEq(vault.hasRole(vault.KEEPER_ROLE(), keeper), true, "keeper role not set");
-        assertEq(address(vault.weth()), C.WETH);
-        assertEq(address(vault.stEth()), C.STETH);
-        assertEq(address(vault.wstETH()), C.WSTETH);
+        assertEq(address(vault.asset()), C.WETH);
         assertEq(address(vault.balancerVault()), C.BALANCER_VAULT);
         assertEq(vault.slippageTolerance(), slippageTolerance);
     }
@@ -1467,8 +1465,6 @@ contract scWETHv2Test is Test {
             admin: admin,
             keeper: keeper,
             slippageTolerance: slippageTolerance,
-            stEth: C.STETH,
-            wstEth: C.WSTETH,
             weth: C.WETH,
             balancerVault: IVault(C.BALANCER_VAULT),
             oracleLib: _oracleLib,

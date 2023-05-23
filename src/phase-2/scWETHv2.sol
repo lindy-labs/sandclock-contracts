@@ -76,17 +76,11 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
         address keeper;
         uint256 slippageTolerance;
         address weth;
-        address stEth;
-        address wstEth;
         IVault balancerVault;
         OracleLib oracleLib;
         address wstEthToWethSwapRouter;
         address wethToWstEthSwapRouter;
     }
-
-    ILido public immutable stEth;
-    IwstETH public immutable wstETH;
-    WETH public immutable weth;
 
     // total invested during last harvest/rebalance
     uint256 public totalInvested;
@@ -115,9 +109,6 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
         if (params.slippageTolerance > C.ONE) revert InvalidSlippageTolerance();
         slippageTolerance = params.slippageTolerance;
         balancerVault = params.balancerVault;
-        stEth = ILido(params.stEth);
-        wstETH = IwstETH(params.wstEth);
-        weth = WETH(payable(params.weth));
         oracleLib = params.oracleLib;
         wstEthToWethSwapRouter = params.wstEthToWethSwapRouter;
         wethToWstEthSwapRouter = params.wethToWstEthSwapRouter;
@@ -244,7 +235,7 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
         });
 
         address[] memory tokens = new address[](1);
-        tokens[0] = address(weth);
+        tokens[0] = address(asset);
 
         uint256[] memory amounts = new uint256[](1);
         amounts[0] = totalFlashLoanAmount;
@@ -278,7 +269,7 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
         });
 
         address[] memory tokens = new address[](1);
-        tokens[0] = address(weth);
+        tokens[0] = address(asset);
 
         uint256[] memory amounts = new uint256[](1);
         amounts[0] = totalFlashLoanAmount;
@@ -313,7 +304,7 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
         });
 
         address[] memory tokens = new address[](1);
-        tokens[0] = address(weth);
+        tokens[0] = address(asset);
 
         uint256[] memory amounts = new uint256[](1);
         amounts[0] = totalFlashLoanAmount;
@@ -372,7 +363,7 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
         require((shares = previewDeposit(assets)) != 0, "ZERO_SHARES");
 
         // wrap eth
-        weth.deposit{value: assets}();
+        WETH(payable(address(asset))).deposit{value: assets}();
 
         _mint(receiver, shares);
 
@@ -480,7 +471,7 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
         }
 
         address[] memory tokens = new address[](1);
-        tokens[0] = address(weth);
+        tokens[0] = address(asset);
 
         uint256[] memory amounts = new uint256[](1);
         amounts[0] = flashLoanAmount;
@@ -542,4 +533,3 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
 // todo:
 // gas optimizations
 // call with nenad to make contract function signatures similar
-// 0xswap tests & tests at most recent block
