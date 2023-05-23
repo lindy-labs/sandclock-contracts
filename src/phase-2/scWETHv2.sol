@@ -167,10 +167,16 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
 
     /// @dev to be used to ideally swap euler rewards to weth using 0x api
     /// @dev can also be used to swap between other tokens
-    function swapTokensWith0x(bytes calldata swapData, address inToken, address outToken, uint256 amountIn) external {
+    /// @param inToken address of the token to swap from (address(0x00) for eth)
+    function swapTokensWith0x(bytes calldata swapData, address inToken, address outToken, uint256 amountIn)
+        external
+        payable
+    {
         onlyKeeper();
-        ERC20(inToken).safeApprove(C.ZEROX_ROUTER, amountIn);
-        C.ZEROX_ROUTER.functionCall(swapData);
+        if (inToken != address(0x00)) {
+            ERC20(inToken).safeApprove(C.ZEROX_ROUTER, amountIn);
+        }
+        C.ZEROX_ROUTER.functionCallWithValue(swapData, msg.value);
 
         emit TokensSwapped(inToken, outToken);
     }
@@ -539,3 +545,4 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
 // todo:
 // gas optimizations
 // call with nenad to make contract function signatures similar
+// 0xswap tests & tests at most recent block

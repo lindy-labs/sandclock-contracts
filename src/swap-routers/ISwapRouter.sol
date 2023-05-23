@@ -5,5 +5,5 @@ interface ISwapRouter {
     function from() external pure returns (address);
     function to() external pure returns (address);
     function swapDefault(uint256 amount, uint256 slippageTolerance) external;
-    function swap0x(bytes calldata swapData, uint256 amount) external;
+    function swap0x(bytes calldata swapData, uint256 amount) external payable;
 }

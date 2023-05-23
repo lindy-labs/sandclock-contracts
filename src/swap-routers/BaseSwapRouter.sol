@@ -14,10 +14,10 @@ abstract contract BaseSwapRouter is ISwapRouter {
 
     function from() public pure virtual returns (address);
 
-    function swap0x(bytes calldata swapData, uint256 amount) external virtual {
-        ERC20(from()).safeApprove(C.ZEROX_ROUTER, amount);
-        C.ZEROX_ROUTER.functionCall(swapData);
-
-        // todo: add minimum Amount Out check if required
+    function swap0x(bytes calldata swapData, uint256 amount) external payable virtual {
+        if (from() != address(0x0)) {
+            ERC20(from()).safeApprove(C.ZEROX_ROUTER, amount);
+        }
+        C.ZEROX_ROUTER.functionCallWithValue(swapData, msg.value);
     }
 }
