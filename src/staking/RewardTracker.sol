@@ -198,6 +198,8 @@ contract RewardTracker is BonusTracker, AccessControl {
     function transfer(address to, uint256 amount) public override returns (bool) {
         _updateReward(msg.sender);
         _updateReward(to);
+        _updateBonus(msg.sender);
+        _updateBonus(to);
         _burnMultiplierPoints(amount, msg.sender);
         return super.transfer(to, amount);
     }
@@ -205,6 +207,8 @@ contract RewardTracker is BonusTracker, AccessControl {
     function transferFrom(address from, address to, uint256 amount) public override returns (bool) {
         _updateReward(from);
         _updateReward(to);
+        _updateBonus(msg.sender);
+        _updateBonus(to);
         _burnMultiplierPoints(amount, from);
         return super.transferFrom(from, to, amount);
     }
