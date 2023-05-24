@@ -5,15 +5,12 @@ import "forge-std/console2.sol";
 import "forge-std/Test.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {WETH} from "solmate/tokens/WETH.sol";
-import {Address} from "openzeppelin-contracts/utils/Address.sol";
 
 import {Constants as C} from "../../src/lib/Constants.sol";
 import {IAdapter} from "../../src/steth/usdc-adapters/IAdapter.sol";
 import {AaveV3Adapter} from "../../src/steth/usdc-adapters/AaveV3Adapter.sol";
 
 contract AaveV3AdapterTest is Test {
-    using Address for address;
-
     AaveV3Adapter adapter;
     ERC20 usdc;
     WETH weth;
@@ -30,69 +27,69 @@ contract AaveV3AdapterTest is Test {
     }
 
     function test_setApprovals() public {
-        address(adapter).functionDelegateCall(abi.encodeWithSelector(IAdapter.setApprovals.selector));
+        adapter.setApprovals();
 
-        assertEq(usdc.allowance(address(this), address(adapter.pool())), type(uint256).max, "usdc allowance");
-        assertEq(weth.allowance(address(this), address(adapter.pool())), type(uint256).max, "weth allowance");
+        assertEq(usdc.allowance(address(adapter), address(adapter.pool())), type(uint256).max, "usdc allowance");
+        assertEq(weth.allowance(address(adapter), address(adapter.pool())), type(uint256).max, "weth allowance");
     }
 
     function test_revokeApprovals() public {
-        address(adapter).functionDelegateCall(abi.encodeWithSelector(IAdapter.setApprovals.selector));
+        adapter.setApprovals();
 
-        address(adapter).functionDelegateCall(abi.encodeWithSelector(IAdapter.revokeApprovals.selector));
+        adapter.revokeApprovals();
 
-        assertEq(usdc.allowance(address(this), address(adapter.pool())), 0, "usdc allowance");
-        assertEq(weth.allowance(address(this), address(adapter.pool())), 0, "weth allowance");
+        assertEq(usdc.allowance(address(adapter), address(adapter.pool())), 0, "usdc allowance");
+        assertEq(weth.allowance(address(adapter), address(adapter.pool())), 0, "weth allowance");
     }
 
     function test_supply() public {
         uint256 usdcAmount = 10_000e6;
-        deal(address(usdc), address(this), usdcAmount);
-        address(adapter).functionDelegateCall(abi.encodeWithSelector(IAdapter.setApprovals.selector));
+        deal(address(usdc), address(adapter), usdcAmount);
+        adapter.setApprovals();
 
-        address(adapter).functionDelegateCall(abi.encodeWithSelector(IAdapter.supply.selector, usdcAmount));
+        adapter.supply(usdcAmount);
 
-        assertEq(adapter.getCollateral(address(this)), usdcAmount, "supply doesn't match");
+        assertEq(adapter.getCollateral(address(adapter)), usdcAmount, "supply doesn't match");
     }
 
     function test_borrow() public {
         uint256 usdcAmount = 10_000e6;
-        deal(address(usdc), address(this), usdcAmount);
-        address(adapter).functionDelegateCall(abi.encodeWithSelector(IAdapter.setApprovals.selector));
-        address(adapter).functionDelegateCall(abi.encodeWithSelector(IAdapter.supply.selector, usdcAmount));
+        deal(address(usdc), address(adapter), usdcAmount);
+        adapter.setApprovals();
+        adapter.supply(usdcAmount);
 
         uint256 borrowAmount = 3 ether;
-        address(adapter).functionDelegateCall(abi.encodeWithSelector(IAdapter.borrow.selector, borrowAmount));
+        adapter.borrow(borrowAmount);
 
-        assertEq(adapter.getDebt(address(this)), borrowAmount, "debt doesn't match");
+        assertEq(adapter.getDebt(address(adapter)), borrowAmount, "debt doesn't match");
     }
 
     function test_repay() public {
         uint256 usdcAmount = 10_000e6;
         uint256 borrowAmount = 3 ether;
-        deal(address(usdc), address(this), usdcAmount);
-        address(adapter).functionDelegateCall(abi.encodeWithSelector(IAdapter.setApprovals.selector));
-        address(adapter).functionDelegateCall(abi.encodeWithSelector(IAdapter.supply.selector, usdcAmount));
-        address(adapter).functionDelegateCall(abi.encodeWithSelector(IAdapter.borrow.selector, borrowAmount));
+        deal(address(usdc), address(adapter), usdcAmount);
+        adapter.setApprovals();
+        adapter.supply(usdcAmount);
+        adapter.borrow(borrowAmount);
 
         uint256 repayAmount = 1 ether;
-        address(adapter).functionDelegateCall(abi.encodeWithSelector(IAdapter.repay.selector, repayAmount));
+        adapter.repay(repayAmount);
 
-        assertEq(adapter.getDebt(address(this)), borrowAmount - repayAmount, "debt doesn't match");
+        assertEq(adapter.getDebt(address(adapter)), borrowAmount - repayAmount, "debt doesn't match");
     }
 
     function test_withdraw() public {
         uint256 usdcAmount = 10_000e6;
         uint256 borrowAmount = 3 ether;
-        deal(address(usdc), address(this), usdcAmount);
-        address(adapter).functionDelegateCall(abi.encodeWithSelector(IAdapter.setApprovals.selector));
-        address(adapter).functionDelegateCall(abi.encodeWithSelector(IAdapter.supply.selector, usdcAmount));
-        address(adapter).functionDelegateCall(abi.encodeWithSelector(IAdapter.borrow.selector, borrowAmount));
+        deal(address(usdc), address(adapter), usdcAmount);
+        adapter.setApprovals();
+        adapter.supply(usdcAmount);
+        adapter.borrow(borrowAmount);
 
         uint256 withdrawAmount = 1000e6;
-        address(adapter).functionDelegateCall(abi.encodeWithSelector(IAdapter.withdraw.selector, withdrawAmount));
+        adapter.withdraw(withdrawAmount);
 
-        assertEq(adapter.getCollateral(address(this)), usdcAmount - withdrawAmount, "supply doesn't match");
-        assertEq(usdc.balanceOf(address(this)), withdrawAmount, "withdraw doesn't match");
+        assertEq(adapter.getCollateral(address(adapter)), usdcAmount - withdrawAmount, "supply doesn't match");
+        assertEq(usdc.balanceOf(address(adapter)), withdrawAmount, "withdraw doesn't match");
     }
 }
