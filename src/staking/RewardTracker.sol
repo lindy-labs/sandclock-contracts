@@ -227,10 +227,11 @@ contract RewardTracker is BonusTracker, AccessControl {
                 totalBonus -= bonus_;
             } else {
                 // otherwise burn an equivalent percentage
-                uint256 burnAmount = bonus_.mulDivDown(amount, balance);
-                multiplierPointsOf[sender] -= burnAmount;
-                totalBonus -= burnAmount;
+                bonus_ = bonus_.mulDivDown(amount, balance);
+                multiplierPointsOf[sender] -= bonus_;
+                totalBonus -= bonus_;
             }
+            emit BonusBurned(sender, bonus_);
         }
     }
 }

@@ -10,6 +10,7 @@ abstract contract BonusTracker is ERC4626, ReentrancyGuard {
     using FixedPointMathLib for uint256;
 
     event BonusPaid(address indexed user, uint256 bonus);
+    event BonusBurned(address indexed user, uint256 bonus);
 
     uint256 internal constant PRECISION = 1e30;
 
