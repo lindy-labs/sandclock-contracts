@@ -134,16 +134,15 @@ contract scUSDCv2 is scUSDCBase {
         address(_adapter).functionDelegateCall(abi.encodeWithSelector(IAdapter.setApprovals.selector));
     }
 
-    function removeAdapter(uint8 _adapterId) external {
+    function removeAdapter(uint8 _adapterId, bool _force) external {
         _onlyAdmin();
         _isSupportedCheck(_adapterId);
 
         // check if protocol is being used
-        if (IAdapter(protocolAdapters.get(_adapterId)).getCollateral(address(this)) > 0) {
+        if (!_force && IAdapter(protocolAdapters.get(_adapterId)).getCollateral(address(this)) > 0) {
             revert ProtocolInUse(_adapterId);
         }
 
-        // remove approvals
         protocolAdapters.get(_adapterId).functionDelegateCall(abi.encodeWithSelector(IAdapter.revokeApprovals.selector));
 
         protocolAdapters.remove(_adapterId);

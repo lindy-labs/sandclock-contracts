@@ -29,6 +29,7 @@ import {ICurvePool} from "../src/interfaces/curve/ICurvePool.sol";
 import {ILido} from "../src/interfaces/lido/ILido.sol";
 import {IwstETH} from "../src/interfaces/lido/IwstETH.sol";
 import "../src/errors/scErrors.sol";
+import {FaultyAdapter} from "./mocks/adapters/FaultyAdapter.sol";
 
 contract scUSDCv2Test is Test {
     using FixedPointMathLib for uint256;
@@ -186,7 +187,7 @@ contract scUSDCv2Test is Test {
 
         vm.prank(keeper);
         vm.expectRevert(CallerNotAdmin.selector);
-        vault.removeAdapter(1);
+        vault.removeAdapter(1, false);
     }
 
     function test_removeAdapter_FailsIfProtocolIsNotSupported() public {
@@ -195,7 +196,7 @@ contract scUSDCv2Test is Test {
         uint8 eulerId = euler.id();
 
         vm.expectRevert(abi.encodeWithSelector(ProtocolNotSupported.selector, eulerId));
-        vault.removeAdapter(eulerId);
+        vault.removeAdapter(eulerId, false);
     }
 
     function test_removeAdapter_FailsIfProtocolIsBeingUsed() public {
@@ -207,7 +208,7 @@ contract scUSDCv2Test is Test {
         vault.supply(aaveV3Id, vault.usdcBalance());
 
         vm.expectRevert(abi.encodeWithSelector(ProtocolInUse.selector, aaveV3Id));
-        vault.removeAdapter(aaveV3Id);
+        vault.removeAdapter(aaveV3Id, false);
     }
 
     function test_removeAdapter_RemovesSupportForProvidedProtocolId() public {
@@ -219,7 +220,7 @@ contract scUSDCv2Test is Test {
         assertTrue(vault.isSupported(aaveV3Id), "aave v3 should be supported");
         assertTrue(vault.isSupported(aaveV2.id()), "aave v2 should be supported");
 
-        vault.removeAdapter(aaveV3Id);
+        vault.removeAdapter(aaveV3Id, false);
 
         assertTrue(!vault.isSupported(aaveV3Id), "aave v3 should not be supported anymore");
         assertTrue(vault.isSupported(aaveV2.id()), "aave v2 should be supported");
@@ -240,12 +241,34 @@ contract scUSDCv2Test is Test {
         // the vault was set up to support aave v3 & aave v2
         assertTrue(vault.isSupported(aaveV2Id), "aave v2 should be supported");
 
-        vault.removeAdapter(aaveV2Id);
+        vault.removeAdapter(aaveV2Id, false);
 
         assertTrue(!vault.isSupported(aaveV2Id), "aave v2 should not be supported anymore");
 
         assertEq(usdc.allowance(address(vault), address(aaveV2.pool())), 0, "usdc allowance");
         assertEq(weth.allowance(address(vault), address(aaveV2.pool())), 0, "weth allowance");
+    }
+
+    function test_removeAdapter_ForceRemovesFaultyAdapters() public {
+        _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
+        // add faulty adapter that reverts on every interaction with the underlying protocol
+        FaultyAdapter faultyAdapter = new FaultyAdapter();
+        vault.addAdapter(faultyAdapter);
+
+        assertTrue(vault.isSupported(faultyAdapter.id()), "faulty adapter should be supported");
+        assertEq(usdc.allowance(address(vault), faultyAdapter.protocol()), type(uint256).max, "usdc allowance");
+        assertEq(weth.allowance(address(vault), faultyAdapter.protocol()), type(uint256).max, "weth allowance");
+
+        uint8 id = faultyAdapter.id();
+
+        vm.expectRevert("not working");
+        vault.removeAdapter(id, false);
+
+        // works if forced
+        vault.removeAdapter(id, true);
+
+        assertEq(usdc.allowance(address(vault), faultyAdapter.protocol()), 0, "usdc allowance");
+        assertEq(weth.allowance(address(vault), faultyAdapter.protocol()), 0, "weth allowance");
     }
 
     /// #supply ///
