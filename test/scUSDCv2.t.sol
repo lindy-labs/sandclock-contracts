@@ -389,6 +389,14 @@ contract scUSDCv2Test is Test {
         vault.invest();
     }
 
+    function test_invest_DoesntRevertWhenWethBalanceIsZero() public {
+        _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
+
+        assertEq(weth.balanceOf(address(vault)), 0, "weth balance not 0");
+
+        vault.invest();
+    }
+
     function test_invest_DepositsWethBalanceToScWETH() public {
         _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
         uint256 wethBalance = 1 ether;
@@ -1098,6 +1106,7 @@ contract scUSDCv2Test is Test {
         tokens[0] = address(weth);
         amounts[0] = 100e18;
 
+        vm.prank(address(vault.balancerVault()));
         vm.expectRevert(InvalidFlashLoanCaller.selector);
         balancer.flashLoan(address(vault), tokens, amounts, abi.encode(0, 0));
     }

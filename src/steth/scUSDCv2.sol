@@ -261,8 +261,6 @@ contract scUSDCv2 is scUSDCBase {
     {
         _isFlashLoanInitiated();
 
-        if (msg.sender != address(balancerVault)) revert InvalidFlashLoanCaller();
-
         uint256 flashLoanAmount = _amounts[0];
         FlashLoanType flashLoanType = abi.decode(_data, (FlashLoanType));
 
