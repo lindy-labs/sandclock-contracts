@@ -26,7 +26,8 @@ import {WETH} from "solmate/tokens/WETH.sol";
 import {IEulerMarkets} from "lib/euler-interfaces/contracts/IEuler.sol";
 import {IPool} from "aave-v3/interfaces/IPool.sol";
 import {Address} from "openzeppelin-contracts/utils/Address.sol";
-import {EnumerableSet} from "openzeppelin-contracts/utils/structs/EnumerableSet.sol";
+// import {EnumerableSet} from "openzeppelin-contracts/utils/structs/EnumerableSet.sol";
+import {EnumerableMap} from "openzeppelin-contracts/utils/structs/EnumerableMap.sol";
 
 import {Constants as C} from "../lib/Constants.sol";
 import {sc4626} from "../sc4626.sol";
@@ -43,7 +44,7 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
     using SafeTransferLib for ERC20;
     using FixedPointMathLib for uint256;
     using Address for address;
-    using EnumerableSet for EnumerableSet.UintSet;
+    using EnumerableMap for EnumerableMap.UintToAddressMap;
 
     event SlippageToleranceUpdated(address indexed admin, uint256 newSlippageTolerance);
     event Harvest(uint256 profitSinceLastHarvest, uint256 performanceFee);
@@ -97,8 +98,7 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
     // external contracts
     OracleLib immutable oracleLib;
 
-    mapping(uint256 => address) public protocolAdapters;
-    EnumerableSet.UintSet private supportedProtocols;
+    EnumerableMap.UintToAddressMap private protocolAdapters;
 
     address public wstEthToWethSwapRouter;
     address public wethToWstEthSwapRouter;
@@ -135,9 +135,11 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
     function addAdapter(address _adapter) external {
         onlyAdmin();
 
-        uint8 id = IAdapter(_adapter).id();
-        if (!supportedProtocols.add(id)) revert ProtocolAlreadySupported();
-        protocolAdapters[id] = _adapter;
+        uint256 id = IAdapter(_adapter).id();
+
+        if (isSupported(id)) revert ProtocolAlreadySupported();
+
+        protocolAdapters.set(id, _adapter);
 
         _adapter.functionDelegateCall(abi.encodeWithSelector(IAdapter.setApprovals.selector));
     }
@@ -147,15 +149,15 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
     /// @param _checkForFunds if true, will revert if the vault still has funds deposited in the adapter
     function removeAdapter(uint256 _adapterId, bool _checkForFunds) external {
         onlyAdmin();
-        if (!supportedProtocols.remove(_adapterId)) revert ProtocolNotSupported();
-        address _adapter = protocolAdapters[_adapterId];
+        if (!isSupported(_adapterId)) revert ProtocolNotSupported();
+        address _adapter = protocolAdapters.get(_adapterId);
         if (_checkForFunds) {
             if (IAdapter(_adapter).getCollateral(address(this)) != 0) {
                 revert ProtocolContainsFunds();
             }
         }
         _adapter.functionDelegateCall(abi.encodeWithSelector(IAdapter.revokeApprovals.selector));
-        delete protocolAdapters[_adapterId];
+        protocolAdapters.remove(_adapterId);
     }
 
     /// @dev to be used to ideally swap euler rewards to weth using 0x api
@@ -171,7 +173,7 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
 
     function claimRewards(uint256 _adapterId, bytes calldata _data) external {
         onlyKeeper();
-        IAdapter(protocolAdapters[_adapterId]).claimRewards(_data);
+        IAdapter(protocolAdapters.get(_adapterId)).claimRewards(_data);
     }
 
     /// @notice invest funds into the strategy and harvest profits if any
@@ -295,8 +297,12 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
 
     //////////////////// VIEW METHODS //////////////////////////
 
-    function isSupported(uint256 id) public view returns (bool) {
-        return supportedProtocols.contains(id);
+    function isSupported(uint256 _adapterId) public view returns (bool) {
+        return protocolAdapters.contains(_adapterId);
+    }
+
+    function getAdapter(uint256 _adapterId) external view returns (address adapter) {
+        (, adapter) = protocolAdapters.tryGet(_adapterId);
     }
 
     /// @notice returns the total assets (WETH) held by the strategy
@@ -313,9 +319,11 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
 
     /// @notice returns the total assets supplied as collateral (in WETH terms)
     function totalCollateral() public view returns (uint256 collateral) {
-        uint256 n = supportedProtocols.length();
+        uint256 n = protocolAdapters.length();
+        address adapter;
         for (uint256 i; i < n; i++) {
-            collateral += IAdapter(protocolAdapters[supportedProtocols.at(i)]).getCollateral(address(this));
+            (, adapter) = protocolAdapters.at(i);
+            collateral += IAdapter(adapter).getCollateral(address(this));
         }
 
         collateral = oracleLib.wstEthToEth(collateral);
@@ -323,9 +331,11 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
 
     /// @notice returns the total ETH borrowed
     function totalDebt() public view returns (uint256 debt) {
-        uint256 n = supportedProtocols.length();
+        uint256 n = protocolAdapters.length();
+        address adapter;
         for (uint256 i; i < n; i++) {
-            debt += IAdapter(protocolAdapters[supportedProtocols.at(i)]).getDebt(address(this));
+            (, adapter) = protocolAdapters.at(i);
+            debt += IAdapter(adapter).getDebt(address(this));
         }
     }
 
@@ -424,7 +434,7 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
     //////////////////// INTERNAL METHODS //////////////////////////
 
     function _withdrawToVault(uint256 amount) internal {
-        uint256 n = supportedProtocols.length();
+        uint256 n = protocolAdapters.length();
         uint256 flashLoanAmount;
         RepayWithdrawParam[] memory repayWithdrawParams = new RepayWithdrawParam[](n);
 
@@ -436,8 +446,7 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
             uint256 protocolId;
             address adapter;
             for (uint256 i; i < n; i++) {
-                protocolId = supportedProtocols.at(i);
-                adapter = protocolAdapters[protocolId];
+                (protocolId, adapter) = protocolAdapters.at(i);
                 (flashLoanAmount_, amount_) = oracleLib.calcFlashLoanAmountWithdrawing(adapter, amount, totalInvested_);
 
                 repayWithdrawParams[i] =
@@ -486,15 +495,13 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
     }
 
     function _supplyBorrow(SupplyBorrowParam memory params) internal {
-        if (!isSupported(params.protocolId)) revert ProtocolNotSupported();
-        address adapter = protocolAdapters[params.protocolId];
+        address adapter = protocolAdapters.get(params.protocolId);
         adapter.functionDelegateCall(abi.encodeWithSelector(IAdapter.supply.selector, params.supplyAmount));
         adapter.functionDelegateCall(abi.encodeWithSelector(IAdapter.borrow.selector, params.borrowAmount));
     }
 
     function _repayWithdraw(RepayWithdrawParam memory params) internal {
-        if (!isSupported(params.protocolId)) revert ProtocolNotSupported();
-        address adapter = protocolAdapters[params.protocolId];
+        address adapter = protocolAdapters.get(params.protocolId);
         adapter.functionDelegateCall(abi.encodeWithSelector(IAdapter.repay.selector, params.repayAmount));
         adapter.functionDelegateCall(abi.encodeWithSelector(IAdapter.withdraw.selector, params.withdrawAmount));
     }
