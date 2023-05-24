@@ -34,12 +34,12 @@ contract scWETHv2Helper {
     }
 
     function getLtv(IAdapter adapter) public view returns (uint256) {
-        return adapter.getDebt(address(vault)).divWadDown(oracleLib.wstEthToEth(adapter.getCollateral(address(vault))));
+        return getDebt(adapter).divWadDown(getCollateral(adapter));
     }
 
     /// @notice method to get the assets deposited in a particular lending market (in terms of weth)
     function getAssets(IAdapter adapter) external view returns (uint256) {
-        return oracleLib.wstEthToEth(adapter.getCollateral(address(vault))) - adapter.getDebt(address(vault));
+        return getCollateral(adapter) - getDebt(adapter);
     }
 
     /// @notice returns the net LTV at which we have borrowed till now (1e18 = 100%)
@@ -52,7 +52,6 @@ contract scWETHv2Helper {
     }
 
     function allocationPercent(IAdapter adapter) external view returns (uint256) {
-        return (oracleLib.wstEthToEth(adapter.getCollateral(address(vault))) - adapter.getDebt(address(vault)))
-            .divWadDown(vault.totalCollateral() - vault.totalDebt());
+        return (getCollateral(adapter) - getDebt(adapter)).divWadDown(vault.totalCollateral() - vault.totalDebt());
     }
 }
