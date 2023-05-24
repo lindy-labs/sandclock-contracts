@@ -31,12 +31,14 @@ abstract contract BonusTracker is ERC4626, ReentrancyGuard {
     /// @notice The bonusOf() value when an account last staked/withdrew bonus
     mapping(address => uint256) public bonus;
 
-    constructor(ERC20 _asset, string memory _name, string memory _symbol) ERC4626(_asset, _name, _symbol) {}
+    constructor(ERC20 _asset, string memory _name, string memory _symbol) ERC4626(_asset, _name, _symbol) {
+        lastBonusUpdateTime = uint64(block.timestamp);
+    }
 
     /// @notice Claim bonus
     function boost() external nonReentrant returns (uint256 _bonus) {
         _updateReward(msg.sender);
-        _updateBonus();
+        _updateBonus(msg.sender);
         _bonus = bonus[msg.sender];
         if (_bonus > 0) {
             bonus[msg.sender] = 0;
@@ -73,17 +75,17 @@ abstract contract BonusTracker is ERC4626, ReentrancyGuard {
         return bonusPerTokenStored + (lastTimeBonusApplicable_ - lastBonusUpdateTime).mulDivDown(PRECISION, 365 days);
     }
 
-    function _updateBonus() internal {
+    function _updateBonus(address account) internal {
         // storage loads
-        uint256 accountBalance = balanceOf[msg.sender];
+        uint256 accountBalance = balanceOf[account];
         uint64 lastTimeBonusApplicable_ = lastTimeBonusApplicable();
         uint256 bonusPerToken_ = _bonusPerToken(lastTimeBonusApplicable_);
 
         // accrue bonus
         bonusPerTokenStored = bonusPerToken_;
         lastBonusUpdateTime = lastTimeBonusApplicable_;
-        bonus[msg.sender] = _earnedBonus(msg.sender, accountBalance, bonusPerToken_, bonus[msg.sender]);
-        userBonusPerTokenPaid[msg.sender] = bonusPerToken_;
+        bonus[account] = _earnedBonus(account, accountBalance, bonusPerToken_, bonus[account]);
+        userBonusPerTokenPaid[account] = bonusPerToken_;
     }
 
     function _updateReward(address) internal virtual {}

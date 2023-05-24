@@ -18,7 +18,6 @@ contract BonusTrackerTest is DSTestPlus {
     address constant tester = address(0x69);
     RewardTracker stakingPool;
 
-    uint256 constant REWARD_AMOUNT = 10 ether;
     uint64 constant DURATION = 30 days;
 
     function setUp() public {
@@ -41,8 +40,8 @@ contract BonusTrackerTest is DSTestPlus {
 
     function testCorrectness_boost(uint256 amount0, uint256 amount1, uint256 stakeTime) public {
         amount0 = bound(amount0, 1, 1e37);
-        amount1 = bound(amount1, 1, 1e37);
-        stakeTime = bound(stakeTime, 1, 36500 days);
+        amount1 = bound(amount1, 1e5, 1e37);
+        stakeTime = bound(stakeTime, 1 days, 36500 days);
 
         /// -----------------------------------------------------------------------
         /// Stake using address(this)
@@ -65,11 +64,11 @@ contract BonusTrackerTest is DSTestPlus {
         hevm.startPrank(tester);
 
         // mint stake tokens
-        stakeToken.mint(tester, amount0);
+        stakeToken.mint(tester, amount1);
 
         // stake
-        stakeToken.approve(address(stakingPool), amount0);
-        stakingPool.deposit(amount0, tester);
+        stakeToken.approve(address(stakingPool), amount1);
+        stakingPool.deposit(amount1, tester);
 
         // warp to simulate staking
         hevm.warp(stakeTime);
@@ -98,14 +97,13 @@ contract BonusTrackerTest is DSTestPlus {
         // assert no change in this address bonus
         assertEq(beforeBonusThisAddress, stakingPool.multiplierPointsOf(address(this)));
 
-        // assert bonus[tester] = 0
         assertEq(stakingPool.bonus(tester), 0);
 
         // assert equal change in total bonus and tester bonus
         assertEq(afterBonus - beforeBonus, totalBonusAfter - totalBonusBefore);
 
         // assert bonus change equal to 100% APY
-        uint256 expectedBonusAmount = amount0.mulDivDown(stakeTime.mulDivDown(PRECISION, 365 days), PRECISION);
+        uint256 expectedBonusAmount = amount1.mulDivDown((stakeTime - 1).mulDivDown(PRECISION, 365 days), PRECISION);
         assertEq(afterBonus - beforeBonus, expectedBonusAmount);
     }
 

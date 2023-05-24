@@ -58,16 +58,19 @@ contract RewardTracker is BonusTracker, AccessControl {
 
     function deposit(uint256 assets, address receiver) public override returns (uint256 shares) {
         _updateReward(receiver);
+        _updateBonus(receiver);
         shares = super.deposit(assets, receiver);
     }
 
     function mint(uint256 assets, address receiver) public override returns (uint256 shares) {
         _updateReward(receiver);
+        _updateBonus(receiver);
         shares = super.deposit(assets, receiver);
     }
 
     function beforeWithdraw(uint256 assets, uint256) internal override {
         _updateReward(msg.sender);
+        _updateBonus(msg.sender);
         _burnMultiplierPoints(assets, msg.sender);
     }
 
