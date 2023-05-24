@@ -3,8 +3,6 @@ pragma solidity ^0.8.13;
 
 import {
     InvalidTargetLtv,
-    InvalidSlippageTolerance,
-    InvalidFloatPercentage,
     InvalidFlashLoanCaller,
     VaultNotUnderwater,
     NoProfitsToSell,
