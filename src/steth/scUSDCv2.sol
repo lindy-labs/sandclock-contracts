@@ -22,6 +22,7 @@ import {ERC4626} from "solmate/mixins/ERC4626.sol";
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 import {Address} from "openzeppelin-contracts/utils/Address.sol";
+import {EnumerableMap} from "openzeppelin-contracts/utils/structs/EnumerableMap.sol";
 
 import {Constants as C} from "../lib/Constants.sol";
 import {IVault} from "../interfaces/balancer/IVault.sol";
@@ -42,6 +43,7 @@ contract scUSDCv2 is scUSDCBase {
     using SafeTransferLib for WETH;
     using FixedPointMathLib for uint256;
     using Address for address;
+    using EnumerableMap for EnumerableMap.UintToAddressMap;
 
     /**
      * @notice Enum indicating the purpose of a flashloan.
@@ -74,10 +76,7 @@ contract scUSDCv2 is scUSDCBase {
     IVault public immutable balancerVault;
 
     // mapping of protocol IDs to adapters
-    mapping(uint8 => IAdapter) protocolAdapters;
-
-    // list of supported protocols IDs
-    uint8[] public supportedProtocolIds;
+    EnumerableMap.UintToAddressMap private protocolAdapters;
 
     struct ConstructorParams {
         address admin;
@@ -132,34 +131,24 @@ contract scUSDCv2 is scUSDCBase {
 
         if (isSupported(id)) revert ProtocolInUse(id);
 
-        protocolAdapters[id] = _adapter;
-        supportedProtocolIds.push(id);
+        protocolAdapters.set(uint256(id), address(_adapter));
 
         address(_adapter).functionDelegateCall(abi.encodeWithSelector(IAdapter.setApprovals.selector));
     }
 
-    function removeAdapter(uint8 _protocolId) external {
+    function removeAdapter(uint8 _adapterId) external {
         _onlyAdmin();
-        _isSupportedCheck(_protocolId);
+        _isSupportedCheck(_adapterId);
 
         // check if protocol is being used
-        if (protocolAdapters[_protocolId].getCollateral(address(this)) > 0) revert ProtocolInUse(_protocolId);
+        if (IAdapter(protocolAdapters.get(_adapterId)).getCollateral(address(this)) > 0) {
+            revert ProtocolInUse(_adapterId);
+        }
 
         // remove approvals
-        address(protocolAdapters[_protocolId]).functionDelegateCall(
-            abi.encodeWithSelector(IAdapter.revokeApprovals.selector)
-        );
+        protocolAdapters.get(_adapterId).functionDelegateCall(abi.encodeWithSelector(IAdapter.revokeApprovals.selector));
 
-        delete protocolAdapters[_protocolId];
-
-        // remove from supportedProtocolIds array
-        for (uint256 i = 0; i < supportedProtocolIds.length; i++) {
-            if (supportedProtocolIds[i] == _protocolId) {
-                supportedProtocolIds[i] = supportedProtocolIds[supportedProtocolIds.length - 1];
-                supportedProtocolIds.pop();
-                break;
-            }
-        }
+        protocolAdapters.remove(_adapterId);
     }
 
     /**
@@ -315,32 +304,32 @@ contract scUSDCv2 is scUSDCBase {
         emit EulerRewardsSold(eulerSold, usdcReceived);
     }
 
-    function supply(uint8 _protocolId, uint256 _amount) external {
+    function supply(uint8 _adapterId, uint256 _amount) external {
         _onlyKeeperOrFlashLoan();
-        _isSupportedCheck(_protocolId);
+        _isSupportedCheck(_adapterId);
 
-        _supply(_protocolId, _amount);
+        _supply(_adapterId, _amount);
     }
 
-    function borrow(uint8 _protocolId, uint256 _amount) external {
+    function borrow(uint8 _adapterId, uint256 _amount) external {
         _onlyKeeperOrFlashLoan();
-        _isSupportedCheck(_protocolId);
+        _isSupportedCheck(_adapterId);
 
-        _borrow(_protocolId, _amount);
+        _borrow(_adapterId, _amount);
     }
 
-    function repay(uint8 _protocolId, uint256 _amount) external {
+    function repay(uint8 _adapterId, uint256 _amount) external {
         _onlyKeeperOrFlashLoan();
-        _isSupportedCheck(_protocolId);
+        _isSupportedCheck(_adapterId);
 
-        _repay(_protocolId, _amount);
+        _repay(_adapterId, _amount);
     }
 
-    function withdraw(uint8 _protocolId, uint256 _amount) external {
+    function withdraw(uint8 _adapterId, uint256 _amount) external {
         _onlyKeeperOrFlashLoan();
-        _isSupportedCheck(_protocolId);
+        _isSupportedCheck(_adapterId);
 
-        _withdraw(_protocolId, _amount);
+        _withdraw(_adapterId, _amount);
     }
 
     function invest() public {
@@ -355,8 +344,8 @@ contract scUSDCv2 is scUSDCBase {
         return _disinvest(_amount);
     }
 
-    function isSupported(uint8 _protocolId) public view returns (bool) {
-        return address(protocolAdapters[_protocolId]) != address(0);
+    function isSupported(uint8 _adapterId) public view returns (bool) {
+        return protocolAdapters.contains(_adapterId);
     }
 
     /**
@@ -383,33 +372,35 @@ contract scUSDCv2 is scUSDCBase {
         return asset.balanceOf(address(this));
     }
 
-    function getCollateral(uint8 _protocolId) external view returns (uint256) {
-        if (!isSupported(_protocolId)) return 0;
+    function getCollateral(uint8 _adapterId) external view returns (uint256) {
+        if (!isSupported(_adapterId)) return 0;
 
-        return protocolAdapters[_protocolId].getCollateral(address(this));
+        return IAdapter(protocolAdapters.get(_adapterId)).getCollateral(address(this));
     }
 
     /**
      * @notice Returns the total USDC supplied as collateral in all money markets.
      */
     function totalCollateral() public view returns (uint256 total) {
-        for (uint8 i = 0; i < supportedProtocolIds.length; i++) {
-            total += protocolAdapters[supportedProtocolIds[i]].getCollateral(address(this));
+        for (uint8 i = 0; i < protocolAdapters.length(); i++) {
+            (, address adapter) = protocolAdapters.at(i);
+            total += IAdapter(adapter).getCollateral(address(this));
         }
     }
 
-    function getDebt(uint8 _protocolId) external view returns (uint256) {
-        if (!isSupported(_protocolId)) return 0;
+    function getDebt(uint8 _adapterId) external view returns (uint256) {
+        if (!isSupported(_adapterId)) return 0;
 
-        return protocolAdapters[_protocolId].getDebt(address(this));
+        return IAdapter(protocolAdapters.get(_adapterId)).getDebt(address(this));
     }
 
     /**
      * @notice Returns the total WETH borrowed in all money markets.
      */
     function totalDebt() public view returns (uint256 total) {
-        for (uint8 i = 0; i < supportedProtocolIds.length; i++) {
-            total += protocolAdapters[supportedProtocolIds[i]].getDebt(address(this));
+        for (uint8 i = 0; i < protocolAdapters.length(); i++) {
+            (, address adapter) = protocolAdapters.at(i);
+            total += IAdapter(adapter).getDebt(address(this));
         }
     }
 
@@ -438,34 +429,28 @@ contract scUSDCv2 is scUSDCBase {
         }
     }
 
-    function _isSupportedCheck(uint8 _protocolId) internal view {
-        if (!isSupported(_protocolId)) revert ProtocolNotSupported(_protocolId);
+    function _isSupportedCheck(uint8 _adapterId) internal view {
+        if (!isSupported(_adapterId)) revert ProtocolNotSupported(_adapterId);
     }
 
-    function _supply(uint8 _protocolId, uint256 _amount) internal {
-        address(protocolAdapters[_protocolId]).functionDelegateCall(
-            abi.encodeWithSelector(IAdapter.supply.selector, _amount)
-        );
+    function _supply(uint8 _adapterId, uint256 _amount) internal {
+        protocolAdapters.get(_adapterId).functionDelegateCall(abi.encodeWithSelector(IAdapter.supply.selector, _amount));
     }
 
-    function _borrow(uint8 _protocolId, uint256 _amount) internal {
-        address(protocolAdapters[_protocolId]).functionDelegateCall(
-            abi.encodeWithSelector(IAdapter.borrow.selector, _amount)
-        );
+    function _borrow(uint8 _adapterId, uint256 _amount) internal {
+        protocolAdapters.get(_adapterId).functionDelegateCall(abi.encodeWithSelector(IAdapter.borrow.selector, _amount));
     }
 
-    function _repay(uint8 _protocolId, uint256 _amount) internal {
+    function _repay(uint8 _adapterId, uint256 _amount) internal {
         uint256 wethBalance = weth.balanceOf(address(this));
 
         _amount = _amount > wethBalance ? wethBalance : _amount;
 
-        address(protocolAdapters[_protocolId]).functionDelegateCall(
-            abi.encodeWithSelector(IAdapter.repay.selector, _amount)
-        );
+        protocolAdapters.get(_adapterId).functionDelegateCall(abi.encodeWithSelector(IAdapter.repay.selector, _amount));
     }
 
-    function _withdraw(uint8 _protocolId, uint256 _amount) internal {
-        address(protocolAdapters[_protocolId]).functionDelegateCall(
+    function _withdraw(uint8 _adapterId, uint256 _amount) internal {
+        protocolAdapters.get(_adapterId).functionDelegateCall(
             abi.encodeWithSelector(IAdapter.withdraw.selector, _amount)
         );
     }
@@ -482,13 +467,13 @@ contract scUSDCv2 is scUSDCBase {
     }
 
     function _exitAllPositionsFlash(uint256 _flashLoanAmount) internal {
-        for (uint8 i = 0; i < supportedProtocolIds.length; i++) {
-            uint8 protocolId = supportedProtocolIds[i];
-            uint256 debt = protocolAdapters[protocolId].getDebt(address(this));
-            uint256 collateral = protocolAdapters[protocolId].getCollateral(address(this));
+        for (uint8 i = 0; i < protocolAdapters.length(); i++) {
+            (uint256 id, address adapter) = protocolAdapters.at(i);
+            uint256 debt = IAdapter(adapter).getDebt(address(this));
+            uint256 collateral = IAdapter(adapter).getCollateral(address(this));
 
-            if (debt > 0) _repay(protocolId, debt);
-            if (collateral > 0) _withdraw(protocolId, collateral);
+            if (debt > 0) _repay(uint8(id), debt);
+            if (collateral > 0) _withdraw(uint8(id), collateral);
         }
 
         asset.approve(address(swapRouter), type(uint256).max);
@@ -548,16 +533,16 @@ contract scUSDCv2 is scUSDCBase {
         uint256 withdrawn = _disinvest(wethNeeded);
 
         // repay debt and withdraw collateral from each protocol in proportion to their collateral allocation
-        for (uint8 i = 0; i < supportedProtocolIds.length; i++) {
-            uint8 protocolId = supportedProtocolIds[i];
-            uint256 collateral = protocolAdapters[protocolId].getCollateral(address(this));
+        for (uint8 i = 0; i < protocolAdapters.length(); i++) {
+            (uint256 id, address adapter) = protocolAdapters.at(i);
+            uint256 collateral = IAdapter(adapter).getCollateral(address(this));
 
             if (collateral == 0) continue;
 
             uint256 allocationPct = collateral.divWadDown(_collateral);
 
-            _repay(protocolId, withdrawn.mulWadDown(allocationPct));
-            _withdraw(protocolId, _usdcNeeded.mulWadDown(allocationPct));
+            _repay(uint8(id), withdrawn.mulWadDown(allocationPct));
+            _withdraw(uint8(id), _usdcNeeded.mulWadDown(allocationPct));
         }
     }
 

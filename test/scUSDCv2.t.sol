@@ -217,16 +217,14 @@ contract scUSDCv2Test is Test {
 
         // the vault was set up to support aave v3 & aave v2
         assertTrue(vault.isSupported(aaveV3Id), "aave v3 should be supported");
-        assertEq(vault.supportedProtocolIds(0), aaveV3Id);
-        assertEq(vault.supportedProtocolIds(1), aaveV2.id());
+        assertTrue(vault.isSupported(aaveV2.id()), "aave v2 should be supported");
 
         vault.removeAdapter(aaveV3Id);
 
         assertTrue(!vault.isSupported(aaveV3Id), "aave v3 should not be supported anymore");
-        assertEq(vault.supportedProtocolIds(0), aaveV2.id());
+        assertTrue(vault.isSupported(aaveV2.id()), "aave v2 should be supported");
 
         vm.expectRevert();
-        vault.supportedProtocolIds(1);
 
         uint256 usdcBalance = 1_000e6;
         deal(address(usdc), address(vault), usdcBalance);
