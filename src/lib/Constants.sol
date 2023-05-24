@@ -29,16 +29,16 @@ library Constants {
     // address of the Uniswap v3 swap router contract
     address public constant UNISWAP_V3_SWAP_ROUTER = 0xE592427A0AEce92De3Edee1F18E0157C05861564;
 
-    // address of the Aave pool contract
+    // address of the Aave v3 pool contract
     address public constant AAVE_POOL = 0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2;
     // address of the Aave pool data provider contract
     address public constant AAVE_POOL_DATA_PROVIDER = 0x7B4EB56E7CD4b454BA8ff71E4518426369a138a3;
 
-    // address of the Aave "aEthUSDC" token (supply token)
+    // address of the Aave v3 "aEthUSDC" token (supply token)
     address public constant AAVE_AUSDC_TOKEN = 0x98C23E9d8f34FEFb1B7BD6a91B7FF122F4e16F5c;
-    // address of the Aave "aEthwstETH" token (supply token)
+    // address of the Aave v3 "aEthwstETH" token (supply token)
     address public constant AAVE_AWSTETH_TOKEN = 0x0B925eD163218f6662a35e0f0371Ac234f9E9371;
-    // address of the Aave "variableDebtEthWETH" token (variable debt token)
+    // address of the Aave v3 "variableDebtEthWETH" token (variable debt token)
     address public constant AAVAAVE_VAR_DEBT_WETH_TOKEN = 0xeA51d7853EEFb32b6ee06b1C12E6dcCA88Be0fFE;
 
     // adress of the Chainlink aggregator for the USDC/eth price feed
@@ -52,25 +52,11 @@ library Constants {
     // address of the 0x swap router contract
     address public constant ZERO_EX_ROUTER = 0xDef1C0ded9bec7F1a1670819833240f027b25EfF;
 
-    // address of the EULER protocol contract
-    address public constant EULER_PROTOCOL = 0x27182842E098f60e3D576794A5bFFb0777E025d3;
-    // address of the EULER markets contract
-    address public constant EULER_MARKETS = 0x3520d5a913427E6F0D6A83E07ccD4A4da316e4d3;
-    // address of the EULER eUSDC token contract (supply token)
-    address public constant EULER_EUSDC_TOKEN = 0xEb91861f8A4e1C12333F42DCE8fB0Ecdc28dA716;
-    // address of the EULER eWETH token contract (debt token)
-    address public constant EULER_DWETH_TOKEN = 0x62e28f054efc24b26A794F5C1249B6349454352C;
     // address of the EULER rewards token contract
     address public constant EULER_REWARDS_TOKEN = 0xd9Fcd98c322942075A5C3860693e9f4f03AAE07b;
     // vaule used to scale the token's collateral/borrow factors from the euler market
     uint32 constant EULER_CONFIG_FACTOR_SCALE = 4_000_000_000;
 
-    // address of the Aave v2 lending pool
-    address public constant AAVE_V2_LENDING_POOL = 0x7d2768dE32b0b80b7a3454c06BdAc94A69DDc7A9;
     // address of the Aave v2 protocol data provider
     address public constant AAVE_V2_PROTOCOL_DATA_PROVIDER = 0x057835Ad21a177dbdd3090bB1CAE03EaCF78Fc6d;
-    /// address of the Aave v2 interest bearing USDC (aUSDC) token
-    address public constant AAVE_V2_AUSDC_TOKEN = 0xBcca60bB61934080951369a648Fb03DF4F96263C;
-    // address of the Aave v2 variable debt bearing WETH (variableDebtWETH) token
-    address public constant AAVE_V2_VAR_DEBT_WETH_TOKEN = 0xF63B34710400CAd3e044cFfDcAb00a0f32E33eCf;
 }

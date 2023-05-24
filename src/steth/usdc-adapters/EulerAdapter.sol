@@ -15,10 +15,14 @@ contract EulerAdapter is IAdapter {
     using SafeTransferLib for ERC20;
     using SafeTransferLib for WETH;
 
-    address public constant protocol = C.EULER_PROTOCOL;
-    IEulerMarkets public constant markets = IEulerMarkets(C.EULER_MARKETS);
-    IEulerEToken public constant eUsdc = IEulerEToken(C.EULER_EUSDC_TOKEN);
-    IEulerDToken public constant dWeth = IEulerDToken(C.EULER_DWETH_TOKEN);
+    // address of the EULER protocol contract
+    address public constant protocol = 0x27182842E098f60e3D576794A5bFFb0777E025d3;
+    // address of the EULER markets contract
+    IEulerMarkets public constant markets = IEulerMarkets(0x3520d5a913427E6F0D6A83E07ccD4A4da316e4d3);
+    // address of the EULER eUSDC token contract (supply token)
+    IEulerEToken public constant eUsdc = IEulerEToken(0xEb91861f8A4e1C12333F42DCE8fB0Ecdc28dA716);
+    // address of the EULER eWETH token contract (debt token)
+    IEulerDToken public constant dWeth = IEulerDToken(0x62e28f054efc24b26A794F5C1249B6349454352C);
 
     uint8 public constant id = 3;
 
