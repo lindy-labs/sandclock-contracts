@@ -11,7 +11,8 @@ import {
     EndUsdcBalanceTooLow,
     AmountReceivedBelowMin,
     ProtocolNotSupported,
-    ProtocolInUse
+    ProtocolInUse,
+    FloatBalanceTooLow
 } from "../errors/scErrors.sol";
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
@@ -50,8 +51,6 @@ contract scUSDCv2 is scUSDCBase {
         Reallocate,
         ExitAllPositions
     }
-
-    error FloatBalanceTooSmall(uint256 actual, uint256 required);
 
     event EmergencyExitExecuted(
         address indexed admin, uint256 wethWithdrawn, uint256 debtRepaid, uint256 collateralReleased
@@ -175,7 +174,7 @@ contract scUSDCv2 is scUSDCBase {
         uint256 floatRequired = totalAssets().mulWadDown(floatPercentage);
 
         if (float < floatRequired) {
-            revert FloatBalanceTooSmall(float, floatRequired);
+            revert FloatBalanceTooLow(float, floatRequired);
         }
 
         emit Rebalanced(totalCollateral(), totalDebt(), float);

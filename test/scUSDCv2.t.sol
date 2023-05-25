@@ -857,7 +857,7 @@ contract scUSDCv2Test is Test {
         callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV3.id(), initialBalance - actualFloat);
         callData[1] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV3.id(), 50 ether);
 
-        vm.expectRevert(abi.encodeWithSelector(scUSDCv2.FloatBalanceTooSmall.selector, actualFloat, expectedFloat));
+        vm.expectRevert(abi.encodeWithSelector(FloatBalanceTooLow.selector, actualFloat, expectedFloat));
         vault.rebalance(callData);
     }
 
