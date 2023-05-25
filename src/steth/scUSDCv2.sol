@@ -58,14 +58,11 @@ contract scUSDCv2 is scUSDCBase {
     event Reallocated();
     event Rebalanced(uint256 totalCollateral, uint256 totalDebt, uint256 floatBalance);
     event ProfitSold(uint256 wethSold, uint256 usdcReceived);
-    event EulerRewardsSold(uint256 eulerSold, uint256 usdcReceived);
+    event TokensSold(address token, uint256 amountSold, uint256 usdcReceived);
     event Supplied(uint8 adapterId, uint256 amount);
     event Borrowed(uint8 adapterId, uint256 amount);
     event Repaid(uint8 adapterId, uint256 amount);
     event Withdrawn(uint8 adapterId, uint256 amount);
-
-    // token representing the rewards from the euler protocol
-    ERC20 public constant eulerRewardsToken = ERC20(C.EULER_REWARDS_TOKEN);
 
     // Uniswap V3 router
     ISwapRouter public constant swapRouter = ISwapRouter(C.UNISWAP_V3_SWAP_ROUTER);
@@ -263,29 +260,26 @@ contract scUSDCv2 is scUSDCBase {
     }
 
     /**
-     * @notice Sell Euler rewards (EUL) for USDC.
-     * @dev Euler rewards are claimed externally, we only swap them here using 0xrouter.
+     * @notice Sell tokens awarded for using some lending market for USDC on 0x exchange.
+     * @param _token The token to sell.
+     * @param _amount The amount of tokens to sell.
      * @param _swapData The swap data for 0xrouter.
      * @param _usdcAmountOutMin The minimum amount of USDC to receive for the swap.
      */
-    function sellEulerRewards(bytes calldata _swapData, uint256 _usdcAmountOutMin) external {
+    function sellTokens(ERC20 _token, uint256 _amount, bytes calldata _swapData, uint256 _usdcAmountOutMin) external {
         _onlyKeeper();
 
-        uint256 eulerBalance = eulerRewardsToken.balanceOf(address(this));
+        uint256 tokenBalance = _token.balanceOf(address(this));
         uint256 initialUsdcBalance = usdcBalance();
 
-        eulerRewardsToken.safeApprove(C.ZERO_EX_ROUTER, eulerBalance);
-
+        _token.safeApprove(C.ZERO_EX_ROUTER, _amount);
         C.ZERO_EX_ROUTER.functionCall(_swapData);
 
         uint256 usdcReceived = usdcBalance() - initialUsdcBalance;
-        uint256 eulerSold = eulerBalance - eulerRewardsToken.balanceOf(address(this));
 
         if (usdcReceived < _usdcAmountOutMin) revert AmountReceivedBelowMin();
 
-        eulerRewardsToken.safeApprove(C.ZERO_EX_ROUTER, 0);
-
-        emit EulerRewardsSold(eulerSold, usdcReceived);
+        emit TokensSold(address(_token), tokenBalance - _token.balanceOf(address(this)), usdcReceived);
     }
 
     /**

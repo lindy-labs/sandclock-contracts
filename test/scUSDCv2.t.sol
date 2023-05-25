@@ -42,7 +42,7 @@ contract scUSDCv2Test is Test {
     event Reallocated();
     event Rebalanced(uint256 totalCollateral, uint256 totalDebt, uint256 floatBalance);
     event ProfitSold(uint256 wethSold, uint256 usdcReceived);
-    event EulerRewardsSold(uint256 eulerSold, uint256 usdcReceived);
+    event TokensSold(address token, uint256 amountSold, uint256 usdcReceived);
     event Supplied(uint8 adapterId, uint256 amount);
     event Borrowed(uint8 adapterId, uint256 amount);
     event Repaid(uint8 adapterId, uint256 amount);
@@ -94,22 +94,12 @@ contract scUSDCv2Test is Test {
 
     function test_constructor() public {
         _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
-        assertEq(address(vault.asset()), address(usdc));
+        assertEq(address(vault.asset()), C.USDC);
         assertEq(address(vault.scWETH()), address(wethVault));
 
         // check approvals
-        assertEq(usdc.allowance(address(vault), address(aaveV3.pool())), type(uint256).max, "usdc->aave v3 allowance");
-        assertEq(usdc.allowance(address(vault), address(euler.protocol())), 0, "usdc->euler allowance");
-        assertEq(usdc.allowance(address(vault), address(aaveV2.pool())), type(uint256).max, "usdc->aave v2 allowance");
-
-        assertEq(weth.allowance(address(vault), address(aaveV3.pool())), type(uint256).max, "weth->aave v3 allowance");
-        assertEq(weth.allowance(address(vault), address(euler.protocol())), 0, "weth->euler allowance");
-        assertEq(weth.allowance(address(vault), address(aaveV2.pool())), type(uint256).max, "weth->aave v2 allowance");
-
-        assertEq(
-            weth.allowance(address(vault), address(vault.swapRouter())), type(uint256).max, "weth->swapRouter allowance"
-        );
-        assertEq(weth.allowance(address(vault), address(vault.scWETH())), type(uint256).max, "weth->scWETH allowance");
+        assertEq(weth.allowance(address(vault), C.UNISWAP_V3_SWAP_ROUTER), type(uint256).max, "swap router allowance");
+        assertEq(weth.allowance(address(vault), address(vault.scWETH())), type(uint256).max, "scWETH allowance");
     }
 
     /// #setUsdcToEthPriceFeed
@@ -1178,14 +1168,14 @@ contract scUSDCv2Test is Test {
 
     function test_receiveFlashLoan_FailsIfInitiatorIsNotVault() public {
         _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
-        IVault balancer = vault.balancerVault();
+        IVault balancer = IVault(C.BALANCER_VAULT);
         address[] memory tokens = new address[](1);
         uint256[] memory amounts = new uint256[](1);
 
         tokens[0] = address(weth);
         amounts[0] = 100e18;
 
-        vm.prank(address(vault.balancerVault()));
+        vm.prank(address(balancer));
         vm.expectRevert(InvalidFlashLoanCaller.selector);
         balancer.flashLoan(address(vault), tokens, amounts, abi.encode(0, 0));
     }
@@ -1603,55 +1593,55 @@ contract scUSDCv2Test is Test {
         vault.exitAllPositions(invalidEndUsdcBalanceMin);
     }
 
-    /// #sellEulerRewards ///
+    /// #sellTokens ///
 
-    function test_sellEulerRewards_FailsIfCallerIsNotKeeper() public {
+    function test_sellTokens_FailsIfCallerIsNotKeeper() public {
         _setUpForkAtBlock(EUL_SWAP_BLOCK);
         vm.startPrank(alice);
         vm.expectRevert(CallerNotKeeper.selector);
-        vault.sellEulerRewards(bytes("0"), 0);
+        vault.sellTokens(ERC20(C.EULER_REWARDS_TOKEN), 0, bytes("0"), 0);
     }
 
-    function test_sellEulerRewards_SwapsEulerForUsdc() public {
+    function test_sellTokens_SwapsEulerForUsdc() public {
         _setUpForkAtBlock(EUL_SWAP_BLOCK);
 
         uint256 initialUsdcBalance = 2_000e6;
         deal(address(usdc), address(vault), initialUsdcBalance);
         deal(C.EULER_REWARDS_TOKEN, address(vault), EUL_AMOUNT * 2);
 
-        assertEq(vault.eulerRewardsToken().balanceOf(address(vault)), EUL_AMOUNT * 2, "euler balance");
+        assertEq(ERC20(C.EULER_REWARDS_TOKEN).balanceOf(address(vault)), EUL_AMOUNT * 2, "euler initial balance");
         assertEq(vault.usdcBalance(), initialUsdcBalance, "usdc balance");
         assertEq(vault.totalAssets(), initialUsdcBalance, "total assets");
 
-        vault.sellEulerRewards(EUL_SWAP_DATA, 0);
+        vault.sellTokens(ERC20(C.EULER_REWARDS_TOKEN), EUL_AMOUNT, EUL_SWAP_DATA, EUL_SWAP_USDC_RECEIVED);
 
-        assertEq(vault.eulerRewardsToken().balanceOf(address(vault)), EUL_AMOUNT, "vault euler balance");
+        assertEq(ERC20(C.EULER_REWARDS_TOKEN).balanceOf(address(vault)), EUL_AMOUNT, "euler end balance");
         assertEq(vault.totalAssets(), initialUsdcBalance + EUL_SWAP_USDC_RECEIVED, "vault total assets");
         assertEq(vault.usdcBalance(), initialUsdcBalance + EUL_SWAP_USDC_RECEIVED, "vault usdc balance");
-        assertEq(vault.eulerRewardsToken().allowance(address(vault), C.ZERO_EX_ROUTER), 0, "0x eul allowance");
+        assertEq(ERC20(C.EULER_REWARDS_TOKEN).allowance(address(vault), C.ZERO_EX_ROUTER), 0, "0x token allowance");
     }
 
-    function test_sellEulerRewards_EmitsEventOnSuccessfulSwap() public {
+    function test_sellTokens_EmitsEventOnSuccessfulSwap() public {
         _setUpForkAtBlock(EUL_SWAP_BLOCK);
 
         deal(C.EULER_REWARDS_TOKEN, address(vault), EUL_AMOUNT);
 
         vm.expectEmit(true, true, true, true);
-        emit EulerRewardsSold(EUL_AMOUNT, EUL_SWAP_USDC_RECEIVED);
+        emit TokensSold(C.EULER_REWARDS_TOKEN, EUL_AMOUNT, EUL_SWAP_USDC_RECEIVED);
 
-        vault.sellEulerRewards(EUL_SWAP_DATA, 0);
+        vault.sellTokens(ERC20(C.EULER_REWARDS_TOKEN), EUL_AMOUNT, EUL_SWAP_DATA, 0);
     }
 
-    function test_sellEulerRewards_FailsIfUsdcAmountReceivedIsLessThanMin() public {
+    function test_sellTokens_FailsIfUsdcAmountReceivedIsLessThanMin() public {
         _setUpForkAtBlock(EUL_SWAP_BLOCK);
 
         deal(C.EULER_REWARDS_TOKEN, address(vault), EUL_AMOUNT);
 
         vm.expectRevert(AmountReceivedBelowMin.selector);
-        vault.sellEulerRewards(EUL_SWAP_DATA, EUL_SWAP_USDC_RECEIVED + 1);
+        vault.sellTokens(ERC20(C.EULER_REWARDS_TOKEN), EUL_AMOUNT, EUL_SWAP_DATA, EUL_SWAP_USDC_RECEIVED + 1);
     }
 
-    function test_sellEulerRewards_FailsIfSwapIsNotSucessful() public {
+    function test_sellTokens_FailsIfSwapIsNotSucessful() public {
         _setUpForkAtBlock(EUL_SWAP_BLOCK);
 
         deal(C.EULER_REWARDS_TOKEN, address(vault), EUL_AMOUNT);
@@ -1659,7 +1649,7 @@ contract scUSDCv2Test is Test {
         bytes memory invalidSwapData = hex"6af479b20000";
 
         vm.expectRevert("Address: low-level call failed");
-        vault.sellEulerRewards(invalidSwapData, 0);
+        vault.sellTokens(ERC20(C.EULER_REWARDS_TOKEN), EUL_AMOUNT, invalidSwapData, 0);
     }
 
     /// #setSlippageTolerance ///
