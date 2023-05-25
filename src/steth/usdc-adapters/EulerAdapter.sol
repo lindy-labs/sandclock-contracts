@@ -11,6 +11,10 @@ import {IEulerMarkets, IEulerEToken, IEulerDToken} from "lib/euler-interfaces/co
 import {Constants as C} from "../../lib/Constants.sol";
 import {IAdapter} from "./IAdapter.sol";
 
+/**
+ * @title Euler Lending Protocol Adapter
+ * @notice Facilitates lending and borrowing for the Euler lending protocol
+ */
 contract EulerAdapter is IAdapter {
     using SafeTransferLib for ERC20;
     using SafeTransferLib for WETH;
@@ -24,39 +28,48 @@ contract EulerAdapter is IAdapter {
     // address of the EULER eWETH token contract (debt token)
     IEulerDToken public constant dWeth = IEulerDToken(0x62e28f054efc24b26A794F5C1249B6349454352C);
 
+    /// @inheritdoc IAdapter
     uint8 public constant id = 3;
 
+    /// @inheritdoc IAdapter
     function setApprovals() external override {
         ERC20(C.USDC).safeApprove(protocol, type(uint256).max);
         WETH(payable(C.WETH)).safeApprove(protocol, type(uint256).max);
         markets.enterMarket(0, address(C.USDC));
     }
 
+    /// @inheritdoc IAdapter
     function revokeApprovals() external override {
         ERC20(C.USDC).safeApprove(protocol, 0);
         WETH(payable(C.WETH)).safeApprove(protocol, 0);
     }
 
+    /// @inheritdoc IAdapter
     function supply(uint256 _amount) external override {
         eUsdc.deposit(0, _amount);
     }
 
+    /// @inheritdoc IAdapter
     function borrow(uint256 _amount) external override {
         dWeth.borrow(0, _amount);
     }
 
+    /// @inheritdoc IAdapter
     function repay(uint256 _amount) external override {
         dWeth.repay(0, _amount);
     }
 
+    /// @inheritdoc IAdapter
     function withdraw(uint256 _amount) external override {
         eUsdc.withdraw(0, _amount);
     }
 
+    /// @inheritdoc IAdapter
     function getCollateral(address _account) external view override returns (uint256) {
         return eUsdc.balanceOfUnderlying(_account);
     }
 
+    /// @inheritdoc IAdapter
     function getDebt(address _account) external view override returns (uint256) {
         return dWeth.balanceOf(_account);
     }

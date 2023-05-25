@@ -33,7 +33,7 @@ import {IAdapter} from "./usdc-adapters/IAdapter.sol";
 /**
  * @title Sandclock USDC Vault version 2
  * @notice A vault that allows users to earn interest on their USDC deposits from leveraged WETH staking.
- * @notice The v2 vault uses multiple money markets to earn yield on USDC deposits and borrow WETH to stake.
+ * @notice The v2 vault uses multiple lending markets to earn yield on USDC deposits and borrow WETH to stake.
  * @dev This vault uses Sandclock's leveraged WETH staking vault - scWETH.
  */
 contract scUSDCv2 is scUSDCBase {
@@ -73,7 +73,7 @@ contract scUSDCv2 is scUSDCBase {
     // Balancer vault for flashloans
     IVault public immutable balancerVault;
 
-    // mapping of protocol IDs to adapters
+    // mapping of IDs to lending protocol adapter contracts
     EnumerableMap.UintToAddressMap private protocolAdapters;
 
     struct ConstructorParams {
@@ -122,6 +122,10 @@ contract scUSDCv2 is scUSDCBase {
         usdcToEthPriceFeed = _newPriceFeed;
     }
 
+    /**
+     * @notice Add a new protocol adapter to the vault.
+     * @param _adapter The adapter to add.
+     */
     function addAdapter(IAdapter _adapter) external {
         _onlyAdmin();
 
@@ -134,6 +138,11 @@ contract scUSDCv2 is scUSDCBase {
         address(_adapter).functionDelegateCall(abi.encodeWithSelector(IAdapter.setApprovals.selector));
     }
 
+    /**
+     * @notice Remove a protocol adapter from the vault. Reverts if the adapter is in use unless _force is true.
+     * @param _adapterId The ID of the adapter to remove.
+     * @param _force Whether or not to force the removal of the adapter.
+     */
     function removeAdapter(uint8 _adapterId, bool _force) external {
         _onlyAdmin();
         _isSupportedCheck(_adapterId);
@@ -149,9 +158,9 @@ contract scUSDCv2 is scUSDCBase {
     }
 
     /**
-     * @notice Rebalance the vault's positions/loans in multiple money markets.
+     * @notice Rebalance the vault's positions/loans in multiple lending markets.
      * @dev Called to increase or decrease the WETH debt to maintain the LTV (loan to value) and avoid liquidation.
-     * @param _callData The encoded data for the calls to be made to the money markets.
+     * @param _callData The encoded data for the calls to be made to the lending markets.
      */
     function rebalance(bytes[] memory _callData) external {
         _onlyKeeper();
@@ -173,10 +182,10 @@ contract scUSDCv2 is scUSDCBase {
     }
 
     /**
-     * @notice Reallocate collateral & debt between lending markets, ie move debt and collateral positions from one protocol (money market) to another.
-     * @dev To move the funds between lending markets, the vault uses flashloans to repay debt and release collateral in one money market enabling it to be moved to anoter mm.
+     * @notice Reallocate collateral & debt between lending markets, ie move debt and collateral positions from one lending market to another.
+     * @dev To move the funds between lending markets, the vault uses flashloans to repay debt and release collateral in one lending market enabling it to be moved to anoter mm.
      * @param _flashLoanAmount The amount of WETH to flashloan from Balancer. Has to be at least equal to amount of WETH debt moved between lending markets.
-     * @param _callData The encoded data for the calls to be made to the money markets.
+     * @param _callData The encoded data for the calls to be made to the lending markets.
      */
     function reallocate(uint256 _flashLoanAmount, bytes[] memory _callData) external {
         _onlyKeeper();
@@ -217,7 +226,7 @@ contract scUSDCv2 is scUSDCBase {
     /**
      * @notice Emergency exit to release collateral if the vault is underwater.
      * @dev In unlikely situation that the vault makes a loss on ETH staked, the total debt would be higher than ETH available to "unstake",
-     *  which can lead to withdrawals being blocked. To handle this situation, the vault can close all positions in all money markets and release all of the assets (realize all losses).
+     *  which can lead to withdrawals being blocked. To handle this situation, the vault can close all positions in all lending markets and release all of the assets (realize all losses).
      * @param _endUsdcBalanceMin The minimum USDC balance to end with after all positions are closed.
      */
     function exitAllPositions(uint256 _endUsdcBalanceMin) external {
@@ -299,6 +308,11 @@ contract scUSDCv2 is scUSDCBase {
         emit EulerRewardsSold(eulerSold, usdcReceived);
     }
 
+    /**
+     * @notice Supply USDC assets to a lending market.
+     * @param _adapterId The ID of the lending market adapter.
+     * @param _amount The amount of USDC to supply.
+     */
     function supply(uint8 _adapterId, uint256 _amount) external {
         _onlyKeeperOrFlashLoan();
         _isSupportedCheck(_adapterId);
@@ -306,6 +320,11 @@ contract scUSDCv2 is scUSDCBase {
         _supply(_adapterId, _amount);
     }
 
+    /**
+     * @notice Borrow WETH from a lending market.
+     * @param _adapterId The ID of the lending market adapter.
+     * @param _amount The amount of WETH to borrow.
+     */
     function borrow(uint8 _adapterId, uint256 _amount) external {
         _onlyKeeperOrFlashLoan();
         _isSupportedCheck(_adapterId);
@@ -313,6 +332,11 @@ contract scUSDCv2 is scUSDCBase {
         _borrow(_adapterId, _amount);
     }
 
+    /**
+     * @notice Repay WETH to a lending market.
+     * @param _adapterId The ID of the lending market adapter.
+     * @param _amount The amount of WETH to repay.
+     */
     function repay(uint8 _adapterId, uint256 _amount) external {
         _onlyKeeperOrFlashLoan();
         _isSupportedCheck(_adapterId);
@@ -320,6 +344,11 @@ contract scUSDCv2 is scUSDCBase {
         _repay(_adapterId, _amount);
     }
 
+    /**
+     * @notice Withdraw USDC assets from a lending market.
+     * @param _adapterId The ID of the lending market adapter.
+     * @param _amount The amount of USDC to withdraw.
+     */
     function withdraw(uint8 _adapterId, uint256 _amount) external {
         _onlyKeeperOrFlashLoan();
         _isSupportedCheck(_adapterId);
@@ -327,18 +356,29 @@ contract scUSDCv2 is scUSDCBase {
         _withdraw(_adapterId, _amount);
     }
 
+    /**
+     * @notice Deposit whole WETH balance into the staking vault (scWETH).
+     */
     function invest() public {
         _onlyKeeper();
 
         _invest();
     }
 
+    /**
+     * @notice Withdraw WETH from the staking vault (scWETH).
+     * @param _amount The amount of WETH to withdraw.
+     */
     function disinvest(uint256 _amount) external returns (uint256) {
         _onlyKeeper();
 
         return _disinvest(_amount);
     }
 
+    /**
+     * @notice Check if a lending market adapter is supported/used.
+     * @param _adapterId The ID of the lending market adapter.
+     */
     function isSupported(uint8 _adapterId) public view returns (bool) {
         return protocolAdapters.contains(_adapterId);
     }
@@ -367,6 +407,10 @@ contract scUSDCv2 is scUSDCBase {
         return asset.balanceOf(address(this));
     }
 
+    /**
+     * @notice Returns the USDC supplied as collateral in a lending market.
+     * @param _adapterId The ID of the lending market adapter.
+     */
     function getCollateral(uint8 _adapterId) external view returns (uint256) {
         if (!isSupported(_adapterId)) return 0;
 
@@ -374,7 +418,7 @@ contract scUSDCv2 is scUSDCBase {
     }
 
     /**
-     * @notice Returns the total USDC supplied as collateral in all money markets.
+     * @notice Returns the total USDC supplied as collateral in all lending markets.
      */
     function totalCollateral() public view returns (uint256 total) {
         for (uint8 i = 0; i < protocolAdapters.length(); i++) {
@@ -383,6 +427,10 @@ contract scUSDCv2 is scUSDCBase {
         }
     }
 
+    /**
+     * @notice Returns the WETH borrowed from a lending market.
+     * @param _adapterId The ID of the lending market adapter.
+     */
     function getDebt(uint8 _adapterId) external view returns (uint256) {
         if (!isSupported(_adapterId)) return 0;
 
@@ -390,7 +438,7 @@ contract scUSDCv2 is scUSDCBase {
     }
 
     /**
-     * @notice Returns the total WETH borrowed in all money markets.
+     * @notice Returns the total WETH borrowed in all lending markets.
      */
     function totalDebt() public view returns (uint256 total) {
         for (uint8 i = 0; i < protocolAdapters.length(); i++) {
@@ -490,6 +538,7 @@ contract scUSDCv2 is scUSDCBase {
     }
 
     function beforeWithdraw(uint256 _assets, uint256) internal override {
+        // here we need to make sure that the vault has enough assets to cover the withdrawal
         uint256 initialBalance = usdcBalance();
         if (initialBalance >= _assets) return;
 
