@@ -407,7 +407,7 @@ contract scUSDCv2Test is Test {
         vm.expectEmit(true, true, true, true);
         emit Repaid(aaveV2.id(), repayAmount);
 
-        vault.repay(aaveV2.id(), repayAmount);        
+        vault.repay(aaveV2.id(), repayAmount);
     }
 
     /// #withdraw ///
@@ -455,7 +455,7 @@ contract scUSDCv2Test is Test {
         emit Withdrawn(aaveV3.id(), withdrawAmount);
 
         vault.withdraw(aaveV3.id(), withdrawAmount);
-    }    
+    }
 
     /// #invest ///
 
