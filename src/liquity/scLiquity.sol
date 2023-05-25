@@ -33,7 +33,7 @@ contract scLiquity is sc4626 {
 
     // need to be able to receive eth rewards
     receive() external payable {
-        require(msg.sender == stabilityPool);     
+        require(msg.sender == address(stabilityPool));     
     }
 
     function totalAssets() public view override returns (uint256 assets) {
