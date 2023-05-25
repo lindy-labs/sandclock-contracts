@@ -33,6 +33,7 @@ import {EulerAdapter} from "../../src/scWeth-adapters/EulerAdapter.sol";
 import {ISwapRouter} from "../../src/swap-routers/ISwapRouter.sol";
 import {WethToWstEthSwapRouter} from "../../src/swap-routers/WethToWstEthSwapRouter.sol";
 import {WstEthToWethSwapRouter} from "../../src/swap-routers/WstEthToWethSwapRouter.sol";
+import {MockAdapter} from "../mocks/adapters/MockAdapter.sol";
 
 contract scWETHv2Test is Test {
     using FixedPointMathLib for uint256;
@@ -43,6 +44,7 @@ contract scWETHv2Test is Test {
 
     uint256 mainnetFork;
 
+    address constant EULER_TOKEN = 0xd9Fcd98c322942075A5C3860693e9f4f03AAE07b;
     address constant keeper = address(0x05);
     address constant alice = address(0x06);
     address constant treasury = address(0x07);
@@ -68,9 +70,9 @@ contract scWETHv2Test is Test {
 
     mapping(IAdapter => uint256) targetLtv;
 
-    uint8 aaveV3AdapterId;
-    uint8 eulerAdapterId;
-    uint8 compoundV3AdapterId;
+    uint256 aaveV3AdapterId;
+    uint256 eulerAdapterId;
+    uint256 compoundV3AdapterId;
 
     IAdapter aaveV3Adapter;
     IAdapter eulerAdapter;
@@ -169,23 +171,23 @@ contract scWETHv2Test is Test {
         vault.removeAdapter(69, true);
 
         // must revert if protocol has funds deposited in it
-        // _depositToVault(address(this), 10e18);
-        // uint256 investAmount = 10e18 - minimumFloatAmount;
-        // (scWETHv2.SupplyBorrowParam[] memory supplyBorrowParams,, uint256 totalFlashLoanAmount) =
-        //     _getInvestParams(investAmount, aaveV3AllocationPercent, eulerAllocationPercent, compoundAllocationPercent);
-        // vm.startPrank(keeper);
-        // vault.investAndHarvest(
-        //     investAmount, supplyBorrowParams, _getSwapDefaultData(investAmount + totalFlashLoanAmount, 0)
-        // );
-        // vm.stopPrank();
+        _depositToVault(address(this), 10e18);
+        uint256 investAmount = 10e18 - minimumFloatAmount;
+        (scWETHv2.SupplyBorrowParam[] memory supplyBorrowParams,, uint256 totalFlashLoanAmount) =
+            _getInvestParams(investAmount, aaveV3AllocationPercent, eulerAllocationPercent, compoundAllocationPercent);
+        vm.startPrank(keeper);
+        vault.investAndHarvest(
+            investAmount, supplyBorrowParams, _getSwapDefaultData(investAmount + totalFlashLoanAmount, 0)
+        );
+        vm.stopPrank();
 
-        // vm.expectRevert(ProtocolContainsFunds.selector);
-        // vault.removeAdapter(id, true);
+        vm.expectRevert(ProtocolContainsFunds.selector);
+        vault.removeAdapter(id, true);
 
-        // // must not revert if checkForFunds is false
-        // vault.removeAdapter(id, false);
-        // assertEq(vault.getAdapter(id), address(0x00), "adapter not removed from protocolAdapters");
-        // assertEq(vault.isSupported(id), false, "adapter not removed from supportedProtocols");
+        // must not revert if checkForFunds is false
+        vault.removeAdapter(id, false);
+        assertEq(vault.getAdapter(id), address(0x00), "adapter not removed from protocolAdapters");
+        assertEq(vault.isSupported(id), false, "adapter not removed from supportedProtocols");
     }
 
     function test_removeAdapter() public {
@@ -202,6 +204,24 @@ contract scWETHv2Test is Test {
         id = eulerAdapter.id();
         vault.removeAdapter(id, true);
         _removeAdapterChecks(id, C.EULER);
+    }
+
+    function test_claimRewards() public {
+        _setUp(BLOCK_AFTER_EULER_EXPLOIT);
+        uint256 rewardAmount = 100e18;
+        MockAdapter mockAdapter = new MockAdapter(ERC20(EULER_TOKEN));
+        deal(EULER_TOKEN, mockAdapter.rewardsHolder(), rewardAmount);
+        vault.addAdapter(address(mockAdapter));
+
+        uint256 id = mockAdapter.id();
+
+        vm.expectRevert(CallerNotKeeper.selector);
+        vault.claimRewards(id, abi.encode(rewardAmount));
+
+        assertEq(ERC20(EULER_TOKEN).balanceOf(address(vault)), 0, "vault has EULER balance");
+        hoax(keeper);
+        vault.claimRewards(id, abi.encode(rewardAmount));
+        assertEq(ERC20(EULER_TOKEN).balanceOf(address(vault)), rewardAmount, "vault has no EULER balance");
     }
 
     function _removeAdapterChecks(uint256 _id, address _pool) internal {
@@ -312,23 +332,22 @@ contract scWETHv2Test is Test {
     function test_swapWith0x_EulerToWeth() public {
         _setUp(17322802);
 
-        address eulerToken = 0xd9Fcd98c322942075A5C3860693e9f4f03AAE07b;
         uint256 expectedWethAmount = 988320853404199400;
 
         bytes memory swapData =
             hex"6af479b2000000000000000000000000000000000000000000000000000000000000008000000000000000000000000000000000000000000000003635c9adc5dea000000000000000000000000000000000000000000000000000000d941bdaa15b045e0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002bd9fcd98c322942075a5c3860693e9f4f03aae07b002710c02aaa39b223fe8d0a0e5c4f27ead9083c756cc2000000000000000000000000000000000000000000869584cd000000000000000000000000100000000000000000000000000000000000001100000000000000000000000000000000000000000000007992ffbce5646cdd8a";
 
         uint256 eulerAmount = 1000e18;
-        deal(eulerToken, address(vault), eulerAmount);
+        deal(EULER_TOKEN, address(vault), eulerAmount);
 
         vm.expectRevert(CallerNotKeeper.selector);
-        vault.swapTokensWith0x(swapData, eulerToken, C.WETH, eulerAmount);
+        vault.swapTokensWith0x(swapData, EULER_TOKEN, C.WETH, eulerAmount);
 
         hoax(keeper);
-        vault.swapTokensWith0x(swapData, eulerToken, C.WETH, eulerAmount);
+        vault.swapTokensWith0x(swapData, EULER_TOKEN, C.WETH, eulerAmount);
 
         assertGe(weth.balanceOf(address(vault)), expectedWethAmount, "weth not received");
-        assertEq(ERC20(eulerToken).balanceOf(address(vault)), 0, "euler token not transferred out");
+        assertEq(ERC20(EULER_TOKEN).balanceOf(address(vault)), 0, "euler token not transferred out");
     }
 
     function test_swap0x_wethToWstEthSwapRouter() public {

@@ -2,7 +2,7 @@
 pragma solidity ^0.8.13;
 
 interface IAdapter {
-    function id() external returns (uint8);
+    function id() external returns (uint256);
     function setApprovals() external;
     function revokeApprovals() external;
     function supply(uint256 amount) external;

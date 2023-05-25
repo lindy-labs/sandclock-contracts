@@ -173,7 +173,9 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
 
     function claimRewards(uint256 _adapterId, bytes calldata _data) external {
         onlyKeeper();
-        IAdapter(protocolAdapters.get(_adapterId)).claimRewards(_data);
+        protocolAdapters.get(_adapterId).functionDelegateCall(
+            abi.encodeWithSelector(IAdapter.claimRewards.selector, _data)
+        );
     }
 
     /// @notice invest funds into the strategy and harvest profits if any

@@ -14,7 +14,7 @@ contract CompoundV3Adapter is IAdapter {
 
     IComet public immutable compoundV3Comet = IComet(C.COMPOUND_V3_COMET_WETH);
 
-    uint8 public constant id = 4;
+    uint256 public constant id = 4;
 
     function setApprovals() external override {
         ERC20(C.WSTETH).safeApprove(address(compoundV3Comet), type(uint256).max);

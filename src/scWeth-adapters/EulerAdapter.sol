@@ -19,7 +19,7 @@ contract EulerAdapter is IAdapter {
     IEulerEToken constant eWstEth = IEulerEToken(C.EULER_ETOKEN_WSTETH);
     IEulerDToken constant dWeth = IEulerDToken(C.EULER_DTOKEN_WETH);
 
-    uint8 public constant id = 3;
+    uint256 public constant id = 3;
 
     function setApprovals() external override {
         ERC20(C.WSTETH).safeApprove(protocol, type(uint256).max);
