@@ -64,11 +64,11 @@ It has the following view functions, which do not change state:
 | 8 | `convertToAssets(shares) <= previewMint(shares)`  | high level | high | Y | Y |
 | 9 | `maxDeposit(address) == 2^256 - 1`  | high level | high | Y | Y |
 | 10 | `maxMint(address) == 2^256 - 1`  | high level | high | Y | Y |
-| 11 | `convertToShares(assets) >= previewDeposit(assets)`  | high level | high | Y | Y |
-| 12 | `deposit(uint256 assets, address receiver) returns (uint256 shares)` mints exactly `shares` Vault shares to `receiver` by depositing exactly `assets` of underlying tokens | variable transition | high | Y | Y |
+| 11 | `convertToShares(assets) >= previewDeposit(assets)`  | high level | high | Y | N |
+| 12 | `deposit(uint256 assets, address receiver) returns (uint256 shares)` mints exactly `shares` Vault shares to `receiver` by depositing exactly `assets` of underlying tokens | variable transition | high | Y | N |
 | 13 | `deposit(uint256 assets, address receiver) returns (uint256 shares)` must revert if all of `assets` cannot be deposited (to complete) | unit test | high | Y | N |
-| 14 | `mint(uint256 shares, address receiver) returns (uint256 assets)` mints exactly `shares` Vault shares to `receiver` | variable transition | high | Y | Y |
+| 14 | `mint(uint256 shares, address receiver) returns (uint256 assets)` mints exactly `shares` Vault shares to `receiver` | variable transition | high | Y | N |
 | 15 | `mint(uint256 shares, address receiver) returns (uint256 assets)` must revert if the minter has not enough assets | unit test | high | Y | N |
-| 16 | `redeem(uint256 shares, address receiver, address owner) returns (uint256 assets)` must burn exactly `shares` from `owner` and sends assets of underlying tokens to `receiver` | variable transition | high | Y | Y |
-| 17 | `redeem(uint256 shares, address receiver, address owner) returns (uint256 assets)` must revert if all of `shares` cannot be redeemed | unit test | high | Y | Y |
-| 18 | `previewRedeem(shares) <= redeem(shares, receiver, owner)`  | high level | high | Y | Y |
+| 16 | `redeem(uint256 shares, address receiver, address owner) returns (uint256 assets)` must burn exactly `shares` from `owner` and sends assets of underlying tokens to `receiver` | variable transition | high | Y | N |
+| 17 | `redeem(uint256 shares, address receiver, address owner) returns (uint256 assets)` must revert if all of `shares` cannot be redeemed | unit test | high | Y | N |
+| 18 | `previewRedeem(shares) <= redeem(shares, receiver, owner)`  | high level | high | Y | N |
