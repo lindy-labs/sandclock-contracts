@@ -409,7 +409,9 @@ contract scUSDCv2 is scUSDCBase {
      * @notice Returns the total USDC supplied as collateral in all lending markets.
      */
     function totalCollateral() public view returns (uint256 total) {
-        for (uint8 i = 0; i < protocolAdapters.length(); i++) {
+        uint256 length = protocolAdapters.length();
+
+        for (uint8 i = 0; i < length; i++) {
             (, address adapter) = protocolAdapters.at(i);
             total += IAdapter(adapter).getCollateral(address(this));
         }
@@ -429,7 +431,9 @@ contract scUSDCv2 is scUSDCBase {
      * @notice Returns the total WETH borrowed in all lending markets.
      */
     function totalDebt() public view returns (uint256 total) {
-        for (uint8 i = 0; i < protocolAdapters.length(); i++) {
+        uint256 length = protocolAdapters.length();
+
+        for (uint8 i = 0; i < length; i++) {
             (, address adapter) = protocolAdapters.at(i);
             total += IAdapter(adapter).getDebt(address(this));
         }
@@ -498,7 +502,9 @@ contract scUSDCv2 is scUSDCBase {
     }
 
     function _exitAllPositionsFlash(uint256 _flashLoanAmount) internal {
-        for (uint8 i = 0; i < protocolAdapters.length(); i++) {
+        uint256 length = protocolAdapters.length();
+
+        for (uint8 i = 0; i < length; i++) {
             (uint256 id, address adapter) = protocolAdapters.at(i);
             uint256 debt = IAdapter(adapter).getDebt(address(this));
             uint256 collateral = IAdapter(adapter).getCollateral(address(this));
@@ -565,7 +571,9 @@ contract scUSDCv2 is scUSDCBase {
         uint256 withdrawn = _disinvest(wethNeeded);
 
         // repay debt and withdraw collateral from each protocol in proportion to their collateral allocation
-        for (uint8 i = 0; i < protocolAdapters.length(); i++) {
+        uint256 length = protocolAdapters.length();
+
+        for (uint8 i = 0; i < length; i++) {
             (uint256 id, address adapter) = protocolAdapters.at(i);
             uint256 collateral = IAdapter(adapter).getCollateral(address(this));
 
