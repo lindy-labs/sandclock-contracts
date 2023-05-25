@@ -32,13 +32,15 @@ contract scLiquity is sc4626 {
     }
 
     // need to be able to receive eth rewards
-    receive() external payable {}
+    receive() external payable {
+        require(msg.sender == stabilityPool);     
+    }
 
     function totalAssets() public view override returns (uint256 assets) {
         uint256 ethBalance = address(this).balance + stabilityPool.getDepositorETHGain(address(this));
 
         // add eth balance in lusd terms using chainlink oracle
-        assets = ethBalance.mulDivDown(uint256(lusd2eth.latestAnswer()), 1e18);
+        assets = ethBalance.mulWadDown(uint256(lusd2eth.latestAnswer()));
 
         // add float
         assets += asset.balanceOf(address(this));
@@ -59,9 +61,8 @@ contract scLiquity is sc4626 {
 
     function beforeWithdraw(uint256 assets, uint256) internal override {
         uint256 float = asset.balanceOf(address(this));
-        if (assets <= float) {
-            return;
-        }
+
+        if (assets <= float) return;
 
         uint256 missing = (totalAssets() - assets).mulWadDown(floatPercentage);
         uint256 withdrawAmount = assets - float + missing;
@@ -81,9 +82,8 @@ contract scLiquity is sc4626 {
     function _depositIntoStrategy() internal {
         uint256 float = asset.balanceOf(address(this));
         uint256 targetFloat = totalAssets().mulWadDown(floatPercentage);
-        if (float <= targetFloat) {
-            return;
-        } // nothing to invest
+
+        if (float <= targetFloat) return; // nothing to invest
 
         uint256 depositAmount = float - targetFloat;
 
@@ -127,10 +127,10 @@ contract scLiquity is sc4626 {
         if (profit > 0) {
             totalProfit += profit;
 
-            uint256 fee = profit.mulDivDown(performanceFee, 1e18);
+            uint256 fee = profit.mulWadDown(performanceFee);
 
             // mint equivalent amount of tokens to the performance fee beneficiary ie the treasury
-            _mint(treasury, fee.mulDivDown(1e18, convertToAssets(1e18)));
+            _mint(treasury, convertToShares(fee));
         }
     }
 }
