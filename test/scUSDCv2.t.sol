@@ -43,6 +43,10 @@ contract scUSDCv2Test is Test {
     event Rebalanced(uint256 totalCollateral, uint256 totalDebt, uint256 floatBalance);
     event ProfitSold(uint256 wethSold, uint256 usdcReceived);
     event EulerRewardsSold(uint256 eulerSold, uint256 usdcReceived);
+    event Supplied(uint8 adapterId, uint256 amount);
+    event Borrowed(uint8 adapterId, uint256 amount);
+    event Repaid(uint8 adapterId, uint256 amount);
+    event Withdrawn(uint8 adapterId, uint256 amount);
 
     // after the exploit, the euler protocol was disabled. At one point it should work again, so having the
     // tests run in both cases (when protocol is working and not) requires two blocks to fork from
@@ -301,6 +305,17 @@ contract scUSDCv2Test is Test {
         assertEq(aaveV2.getCollateral(address(vault)), initialBalance);
     }
 
+    function test_supply_EmitsEvent() public {
+        _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
+        uint256 initialBalance = 1_000e6;
+        deal(address(usdc), address(vault), initialBalance);
+
+        vm.expectEmit(true, true, true, true);
+        emit Supplied(aaveV3.id(), initialBalance);
+
+        vault.supply(aaveV3.id(), initialBalance);
+    }
+
     /// #borrow ///
 
     function test_borrow_FailsIfCallerIsNotKeeper() public {
@@ -333,6 +348,19 @@ contract scUSDCv2Test is Test {
         assertEq(aaveV2.getDebt(address(vault)), borrowAmount);
     }
 
+    function test_borrow_EmitsEvent() public {
+        _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
+        uint256 initialBalance = 10_000e6;
+        deal(address(usdc), address(vault), initialBalance);
+        vault.supply(aaveV2.id(), initialBalance);
+
+        uint256 borrowAmount = 2 ether;
+        vm.expectEmit(true, true, true, true);
+        emit Borrowed(aaveV2.id(), borrowAmount);
+
+        vault.borrow(aaveV2.id(), borrowAmount);
+    }
+
     // #repay ///
 
     function test_repay_FailsIfCallerIsNotKeeper() public {
@@ -359,12 +387,27 @@ contract scUSDCv2Test is Test {
         uint256 borrowAmount = 2 ether;
         deal(address(usdc), address(vault), initialBalance);
         vault.supply(aaveV2.id(), initialBalance);
-        vault.borrow(aaveV2.id(), 2 ether);
+        vault.borrow(aaveV2.id(), borrowAmount);
 
         uint256 repayAmount = 1 ether;
         vault.repay(aaveV2.id(), repayAmount);
 
         assertEq(aaveV2.getDebt(address(vault)), borrowAmount - repayAmount);
+    }
+
+    function test_repay_EmitsEvent() public {
+        _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
+        uint256 initialBalance = 10_000e6;
+        uint256 borrowAmount = 2 ether;
+        deal(address(usdc), address(vault), initialBalance);
+        vault.supply(aaveV2.id(), initialBalance);
+        vault.borrow(aaveV2.id(), borrowAmount);
+
+        uint256 repayAmount = 1 ether;
+        vm.expectEmit(true, true, true, true);
+        emit Repaid(aaveV2.id(), repayAmount);
+
+        vault.repay(aaveV2.id(), repayAmount);        
     }
 
     /// #withdraw ///
@@ -400,6 +443,19 @@ contract scUSDCv2Test is Test {
         assertEq(vault.usdcBalance(), withdrawAmount, "usdc balance");
         assertApproxEqAbs(aaveV2.getCollateral(address(vault)), initialBalance - withdrawAmount, 1, "collateral");
     }
+
+    function test_withdraw_EmitsEvent() public {
+        _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
+        uint256 initialBalance = 10_000e6;
+        deal(address(usdc), address(vault), initialBalance);
+        vault.supply(aaveV3.id(), initialBalance);
+
+        uint256 withdrawAmount = 5_000e6;
+        vm.expectEmit(true, true, true, true);
+        emit Withdrawn(aaveV3.id(), withdrawAmount);
+
+        vault.withdraw(aaveV3.id(), withdrawAmount);
+    }    
 
     /// #invest ///
 

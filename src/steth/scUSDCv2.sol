@@ -59,6 +59,10 @@ contract scUSDCv2 is scUSDCBase {
     event Rebalanced(uint256 totalCollateral, uint256 totalDebt, uint256 floatBalance);
     event ProfitSold(uint256 wethSold, uint256 usdcReceived);
     event EulerRewardsSold(uint256 eulerSold, uint256 usdcReceived);
+    event Supplied(uint8 adapterId, uint256 amount);
+    event Borrowed(uint8 adapterId, uint256 amount);
+    event Repaid(uint8 adapterId, uint256 amount);
+    event Withdrawn(uint8 adapterId, uint256 amount);
 
     // token representing the rewards from the euler protocol
     ERC20 public constant eulerRewardsToken = ERC20(C.EULER_REWARDS_TOKEN);
@@ -317,6 +321,8 @@ contract scUSDCv2 is scUSDCBase {
         _isSupportedCheck(_adapterId);
 
         _supply(_adapterId, _amount);
+
+        emit Supplied(_adapterId, _amount);
     }
 
     /**
@@ -329,6 +335,8 @@ contract scUSDCv2 is scUSDCBase {
         _isSupportedCheck(_adapterId);
 
         _borrow(_adapterId, _amount);
+
+        emit Borrowed(_adapterId, _amount);
     }
 
     /**
@@ -341,6 +349,8 @@ contract scUSDCv2 is scUSDCBase {
         _isSupportedCheck(_adapterId);
 
         _repay(_adapterId, _amount);
+
+        emit Repaid(_adapterId, _amount);
     }
 
     /**
@@ -353,6 +363,8 @@ contract scUSDCv2 is scUSDCBase {
         _isSupportedCheck(_adapterId);
 
         _withdraw(_adapterId, _amount);
+
+        emit Withdrawn(_adapterId, _amount);
     }
 
     /**
