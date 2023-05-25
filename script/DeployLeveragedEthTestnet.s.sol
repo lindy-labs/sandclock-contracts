@@ -5,7 +5,7 @@ import {DeployLeveragedEth} from "./base/DeployLeveragedEth.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 import {MockWETH} from "../test/mocks/MockWETH.sol";
 import {MockUSDC} from "../test/mocks/MockUSDC.sol";
-import {GoerliConstants as C} from "../src/lib/GoerliConstants.sol";
+import {Constants as C} from "../src/lib/Constants.sol";
 
 contract DeployScript is DeployLeveragedEth {
     function deployMockTokens() internal override {
