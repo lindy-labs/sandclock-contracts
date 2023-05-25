@@ -69,7 +69,7 @@ abstract contract BonusTracker is ERC4626, ReentrancyGuard {
         view
         returns (uint256)
     {
-        return accountBalance.mulDivDown((bonusPerToken_) - userBonusPerTokenPaid[account], PRECISION) + accountBonus;
+        return accountBalance.mulDivDown(bonusPerToken_ - userBonusPerTokenPaid[account], PRECISION) + accountBonus;
     }
 
     function _bonusPerToken(uint256 lastTimeBonusApplicable_) internal view returns (uint256) {
