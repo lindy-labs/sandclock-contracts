@@ -383,7 +383,10 @@ contract RewardTrackerTest is DSTestPlus {
         uint256 lastTimeRewardApplicable = stakingPool.lastTimeRewardApplicable();
         uint256 lastRewardUpdateTime = stakingPool.lastUpdateTime();
         uint256 duration = lastTimeRewardApplicable - lastRewardUpdateTime;
-        assertEq(stakingPool.rewardPerToken(), rewardPerTokenStored + rewardRate.mulDivDown(duration * PRECISION, totalSupply + totalBonus));
+        assertEq(
+            stakingPool.rewardPerToken(),
+            rewardPerTokenStored + rewardRate.mulDivDown(duration * PRECISION, totalSupply + totalBonus)
+        );
     }
 
     function testCorrectness_earned(uint256 timeLapsed) public {
@@ -395,7 +398,10 @@ contract RewardTrackerTest is DSTestPlus {
         uint256 accountBalance = stakingPool.balanceOf(address(this)) + stakingPool.multiplierPointsOf(address(this));
         uint256 reward = stakingPool.rewards(address(this));
         uint256 rewardPerTokenPaid = stakingPool.userRewardPerTokenPaid(address(this));
-        assertEq(stakingPool.earned(address(this)), accountBalance.mulDivDown(rewardPerToken - rewardPerTokenPaid, PRECISION) + reward);
+        assertEq(
+            stakingPool.earned(address(this)),
+            accountBalance.mulDivDown(rewardPerToken - rewardPerTokenPaid, PRECISION) + reward
+        );
     }
 
     function assertEqDecimalEpsilonBelow(uint256 a, uint256 b, uint256 decimals, uint256 epsilonInv) internal {
