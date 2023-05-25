@@ -10,13 +10,14 @@ import {ERC4626} from "solmate/mixins/ERC4626.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 import {RewardTracker} from "../src/staking/RewardTracker.sol";
 
-contract BonusTrackerTest is DSTestPlus {
+contract RewardTrackerTest is DSTestPlus {
     using FixedPointMathLib for uint256;
 
     MockERC20 stakeToken;
     MockERC20 rewardToken;
     uint256 internal constant PRECISION = 1e30;
     address constant tester = address(0x69);
+    address constant alice = address(0x70);
     bytes32 public constant DISTRIBUTOR = keccak256("DISTRIBUTOR");
     RewardTracker stakingPool;
 
@@ -301,6 +302,10 @@ contract BonusTrackerTest is DSTestPlus {
             expectedRewardAmount += ((leftoverRewardAmount + amount) * stakeTimeAsDurationPercentage) / 100;
         }
         assertEqDecimalEpsilonBelow(rewardAmount, expectedRewardAmount, 18, 1e4);
+
+        amount = type(uint256).max / PRECISION; // a too large amount
+        hevm.expectRevert(RewardTracker.Error_AmountTooLarge.selector);
+        stakingPool.notifyRewardAmount(amount);
     }
 
     function testCorrectness_transfer(uint256 amount, uint256 transferAmount, uint56 warpTime) public {
@@ -330,6 +335,67 @@ contract BonusTrackerTest is DSTestPlus {
             assertRelApproxEq(stakingPool.multiplierPointsOf(tester), bonus_ - burnAmount, 0.0001e18);
             assertEq(stakingPool.totalBonus(), stakingPool.multiplierPointsOf(tester));
         }
+    }
+
+    function testCorrectness_transferFrom(uint256 amount, uint256 transferAmount, uint56 warpTime) public {
+        amount = bound(amount, 1e5, 1e27);
+        transferAmount = bound(transferAmount, 1e5, amount);
+        hevm.assume(warpTime > 1 days);
+
+        hevm.startPrank(tester);
+
+        // mint stake tokens
+        stakeToken.mint(tester, amount);
+
+        stakeToken.approve(address(stakingPool), amount);
+        stakingPool.deposit(amount, tester);
+        stakingPool.approve(alice, stakingPool.balanceOf(tester));
+
+        // warp to simulate bonus accrual + claim bonus
+        stakingPool.boost();
+        hevm.warp(warpTime);
+        uint256 bonus_ = stakingPool.boost();
+
+        hevm.stopPrank();
+
+        hevm.startPrank(alice);
+
+        stakingPool.transferFrom(tester, address(this), transferAmount);
+        if (amount == transferAmount) {
+            assertEq(stakingPool.multiplierPointsOf(tester), 0);
+            assertEq(stakingPool.totalBonus(), 0);
+        } else {
+            uint256 burnAmount = bonus_.mulDivDown(transferAmount, amount);
+            assertRelApproxEq(stakingPool.multiplierPointsOf(tester), bonus_ - burnAmount, 0.0001e18);
+            assertEq(stakingPool.totalBonus(), stakingPool.multiplierPointsOf(tester));
+        }
+    }
+
+    function testCorrectness_rewardPerToken(uint256 timeLapsed) public {
+        timeLapsed = bound(timeLapsed, 1, 36500 days);
+        hevm.warp(timeLapsed);
+        stakingPool.notifyRewardAmount(REWARD_AMOUNT); // update rewardRate so that it's not zero
+        hevm.warp(timeLapsed * 2);
+        uint256 rewardPerTokenStored = stakingPool.rewardPerTokenStored();
+        uint256 totalSupply = stakingPool.totalSupply();
+        uint256 totalBonus = stakingPool.totalBonus();
+        uint256 rewardRate = stakingPool.rewardRate();
+        uint256 lastTimeRewardApplicable = stakingPool.lastTimeRewardApplicable();
+        uint256 lastRewardUpdateTime = stakingPool.lastUpdateTime();
+        uint256 duration = lastTimeRewardApplicable - lastRewardUpdateTime;
+        assertEq(stakingPool.rewardPerToken(), rewardPerTokenStored + rewardRate.mulDivDown(duration * PRECISION, totalSupply + totalBonus));
+    }
+
+    function testCorrectness_earned(uint256 timeLapsed) public {
+        timeLapsed = bound(timeLapsed, 1, 36500 days);
+        hevm.warp(timeLapsed);
+        stakingPool.notifyRewardAmount(REWARD_AMOUNT); // update rewardRate so that it's not zero
+        hevm.warp(timeLapsed * 2);
+        uint256 rewardPerToken = stakingPool.rewardPerToken();
+        uint256 accountBalance = stakingPool.balanceOf(address(this)) + stakingPool.multiplierPointsOf(address(this));
+        uint256 reward = stakingPool.rewards(address(this));
+        uint256 rewardPerTokenPaid = stakingPool.userRewardPerTokenPaid(address(this));
+        assertEq(stakingPool.earned(address(this)), accountBalance.mulDivDown(rewardPerToken - rewardPerTokenPaid, PRECISION) + reward);
     }
 
     function assertEqDecimalEpsilonBelow(uint256 a, uint256 b, uint256 decimals, uint256 epsilonInv) internal {
