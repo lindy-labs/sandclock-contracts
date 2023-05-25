@@ -52,6 +52,7 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
     event DisInvested(RepayWithdrawParam[] repayWithdrawParams);
     event Reallocated(RepayWithdrawParam[] from, SupplyBorrowParam[] to);
     event TokensSwapped(address inToken, address outToken);
+    event FloatAmountUpdated(address indexed user, uint256 newFloatAmount);
 
     struct RebalanceParams {
         RepayWithdrawParam[] repayWithdrawParams;
@@ -91,6 +92,7 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
 
     // slippage for curve swaps
     uint256 public slippageTolerance;
+    uint256 public minimumFloatAmount = 1 ether;
 
     // Balancer vault for flashloans
     IVault public immutable balancerVault;
@@ -130,6 +132,12 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
         if (newSlippageTolerance > C.ONE) revert InvalidSlippageTolerance();
         slippageTolerance = newSlippageTolerance;
         emit SlippageToleranceUpdated(msg.sender, newSlippageTolerance);
+    }
+
+    function setMinimumFloatAmount(uint256 newFloatAmount) external {
+        onlyAdmin();
+        minimumFloatAmount = newFloatAmount;
+        emit FloatAmountUpdated(msg.sender, newFloatAmount);
     }
 
     function addAdapter(address _adapter) external {

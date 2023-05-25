@@ -28,15 +28,15 @@ abstract contract sc4626 is ERC4626, AccessControl {
 
     bool flashLoanInitiated;
     uint256 public performanceFee = 0.1e18;
-    uint256 public minimumFloatAmount = 1 ether;
+    uint256 public floatPercentage = 0.01e18;
     address public treasury;
 
     /// Role allowed to harvest/reinvest
     bytes32 public constant KEEPER_ROLE = keccak256("KEEPER_ROLE");
 
     event PerformanceFeeUpdated(address indexed user, uint256 newPerformanceFee);
-    event FloatAmountUpdated(address indexed user, uint256 newFloatAmount);
     event TreasuryUpdated(address indexed user, address newTreasury);
+    event FloatPercentageUpdated(address indexed user, uint256 newFloatPercentage);
 
     function onlyAdmin() internal view {
         if (!hasRole(DEFAULT_ADMIN_ROLE, msg.sender)) revert CallerNotAdmin();
@@ -46,17 +46,18 @@ abstract contract sc4626 is ERC4626, AccessControl {
         if (!hasRole(KEEPER_ROLE, msg.sender)) revert CallerNotKeeper();
     }
 
+    function setFloatPercentage(uint256 newFloatPercentage) external {
+        onlyAdmin();
+        require(newFloatPercentage <= 1e18, "float percentage too high");
+        floatPercentage = newFloatPercentage;
+        emit FloatPercentageUpdated(msg.sender, newFloatPercentage);
+    }
+
     function setPerformanceFee(uint256 newPerformanceFee) external {
         onlyAdmin();
         if (newPerformanceFee > 1e18) revert FeesTooHigh();
         performanceFee = newPerformanceFee;
         emit PerformanceFeeUpdated(msg.sender, newPerformanceFee);
-    }
-
-    function setMinimumFloatAmount(uint256 newFloatAmount) external {
-        onlyAdmin();
-        minimumFloatAmount = newFloatAmount;
-        emit FloatAmountUpdated(msg.sender, newFloatAmount);
     }
 
     function setTreasury(address newTreasury) external {
