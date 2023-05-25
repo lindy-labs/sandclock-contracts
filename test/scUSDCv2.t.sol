@@ -1716,18 +1716,7 @@ contract scUSDCv2Test is Test {
     }
 
     function _deployAndSetUpVault() internal {
-        scUSDCv2.ConstructorParams memory params = scUSDCv2.ConstructorParams({
-            admin: address(this),
-            keeper: keeper,
-            scWETH: wethVault,
-            usdc: ERC20(C.USDC),
-            weth: WETH(payable(C.WETH)),
-            uniswapSwapRouter: ISwapRouter(C.UNISWAP_V3_SWAP_ROUTER),
-            chainlinkUsdcToEthPriceFeed: AggregatorV3Interface(C.CHAINLINK_USDC_ETH_PRICE_FEED),
-            balancerVault: IVault(C.BALANCER_VAULT)
-        });
-
-        vault = new scUSDCv2(params);
+        vault = new scUSDCv2(address(this), keeper, wethVault);
 
         vault.addAdapter(aaveV3);
         vault.addAdapter(aaveV2);

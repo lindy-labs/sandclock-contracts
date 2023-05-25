@@ -68,43 +68,20 @@ contract scUSDCv2 is scUSDCBase {
     ERC20 public constant eulerRewardsToken = ERC20(C.EULER_REWARDS_TOKEN);
 
     // Uniswap V3 router
-    ISwapRouter public immutable swapRouter;
+    ISwapRouter public constant swapRouter = ISwapRouter(C.UNISWAP_V3_SWAP_ROUTER);
 
     // Chainlink pricefeed (USDC -> WETH)
-    AggregatorV3Interface public usdcToEthPriceFeed;
+    AggregatorV3Interface public usdcToEthPriceFeed = AggregatorV3Interface(C.CHAINLINK_USDC_ETH_PRICE_FEED);
 
     // Balancer vault for flashloans
-    IVault public immutable balancerVault;
+    IVault public constant balancerVault = IVault(C.BALANCER_VAULT);
 
     // mapping of IDs to lending protocol adapter contracts
     EnumerableMap.UintToAddressMap private protocolAdapters;
 
-    struct ConstructorParams {
-        address admin;
-        address keeper;
-        ERC4626 scWETH;
-        ERC20 usdc;
-        WETH weth;
-        ISwapRouter uniswapSwapRouter;
-        AggregatorV3Interface chainlinkUsdcToEthPriceFeed;
-        IVault balancerVault;
-    }
-
-    constructor(ConstructorParams memory _params)
-        scUSDCBase(
-            _params.admin,
-            _params.keeper,
-            _params.usdc,
-            _params.weth,
-            _params.scWETH,
-            "Sandclock USDC Vault v2",
-            "scUSDCv2"
-        )
+    constructor(address _admin, address _keeper, ERC4626 _scWETH)
+        scUSDCBase(_admin, _keeper, ERC20(C.USDC), WETH(payable(C.WETH)), _scWETH, "Sandclock USDC Vault v2", "scUSDCv2")
     {
-        swapRouter = _params.uniswapSwapRouter;
-        usdcToEthPriceFeed = _params.chainlinkUsdcToEthPriceFeed;
-        balancerVault = _params.balancerVault;
-
         weth.safeApprove(address(swapRouter), type(uint256).max);
         weth.safeApprove(address(scWETH), type(uint256).max);
     }
