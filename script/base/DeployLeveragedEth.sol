@@ -36,49 +36,41 @@ import {MockBalancerVault} from "../../test/mocks/balancer/MockBalancerVault.sol
 import {MockSwapRouter} from "../../test/mocks/uniswap/MockSwapRouter.sol";
 
 abstract contract DeployLeveragedEth is CREATE3Script {
-    MockWETH weth;
-    MockUSDC usdc;
-    MockAavePool aavePool;
-    MockAavePoolDataProvider aavePoolDataProvider;
-    MockAUsdc aaveAUsdc;
-    MockVarDebtWETH aaveVarDWeth;
-    MockStETH stEth;
-    MockWstETH wstEth;
-    MockAwstETH aaveAwstEth;
-    MockCurvePool curveEthStEthPool;
-    MockChainlinkPriceFeed stEthToEthPriceFeed;
-    MockChainlinkPriceFeed usdcToEthPriceFeed;
-    MockBalancerVault balancerVault;
-    MockSwapRouter uniswapRouter;
+    WETH weth = WETH(payable(C.WETH));
+    ERC20 usdc = ERC20(C.USDC);
+    IPool aavePool = IPool(C.AAVE_POOL);
+    ICurvePool curveEthStEthPool = ICurvePool(C.CURVE_ETH_STETH_POOL);
+    ISwapRouter uniswapRouter = ISwapRouter(C.UNISWAP_V3_SWAP_ROUTER);
+
     scWETH wethContract;
     scUSDC usdcContract;
 
+    uint256 deployerPrivateKey = uint256(vm.envBytes32("PRIVATE_KEY"));
+    address deployerAddress = vm.addr(deployerPrivateKey);
+
     address keeper = vm.envAddress("KEEPER");
+    address alice = C.ALICE;
+    address bob = C.BOB;
 
     constructor() CREATE3Script(vm.envString("VERSION")) {}
 
     function deploy() internal {
-        uint256 deployerPrivateKey = uint256(vm.envBytes32("PRIVATE_KEY"));
-
         vm.startBroadcast(deployerPrivateKey);
 
-        deployMockTokens();
-        deployMocks();
-
         scWETH.ConstructorParams memory scWethParams = scWETH.ConstructorParams({
-            admin: address(this),
+            admin: deployerAddress,
             keeper: keeper,
             targetLtv: 0.7e18,
             slippageTolerance: 0.99e18,
             aavePool: aavePool,
-            aaveAwstEth: IAToken(address(aaveAwstEth)),
-            aaveVarDWeth: ERC20(address(aaveVarDWeth)),
+            aaveAwstEth: IAToken(C.AAVE_AWSTETH_TOKEN),
+            aaveVarDWeth: ERC20(C.AAVAAVE_VAR_DEBT_WETH_TOKEN),
             curveEthStEthPool: curveEthStEthPool,
-            stEth: ILido(address(stEth)),
-            wstEth: IwstETH(address(wstEth)),
-            weth: WETH(payable(weth)),
-            stEthToEthPriceFeed: stEthToEthPriceFeed,
-            balancerVault: balancerVault
+            stEth: ILido(C.STETH),
+            wstEth: IwstETH(C.WSTETH),
+            weth: weth,
+            stEthToEthPriceFeed: AggregatorV3Interface(C.CHAINLINK_STETH_ETH_PRICE_FEED),
+            balancerVault: IVault(C.BALANCER_VAULT)
         });
 
         console2.log("");
@@ -90,14 +82,14 @@ abstract contract DeployLeveragedEth is CREATE3Script {
             keeper: keeper,
             scWETH: wethContract,
             usdc: usdc,
-            weth: WETH(payable(weth)),
+            weth: WETH(payable(C.WETH)),
             aavePool: aavePool,
-            aavePoolDataProvider: aavePoolDataProvider,
-            aaveAUsdc: IAToken(address(aaveAUsdc)),
-            aaveVarDWeth: ERC20(address(aaveVarDWeth)),
+            aavePoolDataProvider: IPoolDataProvider(C.AAVE_POOL_DATA_PROVIDER),
+            aaveAUsdc: IAToken(C.AAVE_AUSDC_TOKEN),
+            aaveVarDWeth: ERC20(C.AAVAAVE_VAR_DEBT_WETH_TOKEN),
             uniswapSwapRouter: uniswapRouter,
-            chainlinkUsdcToEthPriceFeed: usdcToEthPriceFeed,
-            balancerVault: balancerVault
+            chainlinkUsdcToEthPriceFeed: AggregatorV3Interface(C.CHAINLINK_USDC_ETH_PRICE_FEED),
+            balancerVault: IVault(C.BALANCER_VAULT)
         });
 
         usdcContract = new scUSDC(scUsdcParams);
@@ -107,44 +99,4 @@ abstract contract DeployLeveragedEth is CREATE3Script {
     }
 
     function deployMockTokens() internal virtual {}
-
-    function deployMocks() internal {
-        stEth = new MockStETH();
-        wstEth = new MockWstETH(stEth);
-        stEthToEthPriceFeed = new MockChainlinkPriceFeed(address(stEth), address(weth), 1e18);
-        usdcToEthPriceFeed = new MockChainlinkPriceFeed(address(usdc), address(weth), 0.001e18);
-        aavePool = new MockAavePool();
-        aavePool.setStEthToEthPriceFeed(stEthToEthPriceFeed, wstEth, weth);
-        aavePoolDataProvider = new MockAavePoolDataProvider(address(usdc), address(weth));
-        aaveAUsdc = new MockAUsdc(aavePool, usdc);
-        aaveVarDWeth = new MockVarDebtWETH(aavePool, weth);
-        aaveAwstEth = new MockAwstETH(aavePool, wstEth);
-        curveEthStEthPool = new MockCurvePool(stEth);
-        balancerVault = new MockBalancerVault(weth);
-        uniswapRouter = new MockSwapRouter();
-
-        console2.log("weth: contract MockWETH", address(weth));
-        console2.log("usdc: contract MockUSDC", address(usdc));
-        console2.log("aavePool: contract MockAavePool", address(aavePool));
-        console2.log("aavePoolDataProvider: contract MockAavePoolDataProvider", address(aavePoolDataProvider));
-        console2.log("aaveAUsdc: contract MockAUsdc", address(aaveAUsdc));
-        console2.log("aaveVarDWeth: contract MockVarDebtWETH", address(aaveVarDWeth));
-        console2.log("stEth: contract MockStETH", address(stEth));
-        console2.log("wstEth: contract MockWstETH", address(wstEth));
-        console2.log("aaveAwstEth: contract MockAwstETH", address(aaveAwstEth));
-        console2.log("curveEthStEthPool: contract MockCurvePool", address(curveEthStEthPool));
-        console2.log("stEthToEthPriceFeed: contract MockChainlinkPriceFeed", address(stEthToEthPriceFeed));
-        console2.log("usdcToEthPriceFeed: contract MockChainlinkPriceFeed", address(usdcToEthPriceFeed));
-        console2.log("balancerVault: contract MockBalancerVault", address(balancerVault));
-        console2.log("uniswapRouter: contract MockSwapRouter", address(uniswapRouter));
-        console2.log("");
-
-        weth.mint(address(balancerVault), 100e18);
-        weth.mint(address(aavePool), 100e18);
-        console2.log("weth: minted 100e18 to balancerVault", address(balancerVault));
-        console2.log("weth: minted 100e18 to aavePool", address(aavePool));
-
-        console2.log("NOTE: 1 mWETH = 1000 mUSDC");
-        console2.log("NOTE: 1 mstETH = 1 ETH");
-    }
 }

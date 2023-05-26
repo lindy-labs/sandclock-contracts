@@ -54,4 +54,14 @@ library Constants {
 
     // address of the 0x swap router contract
     address public constant ZEROX_ROUTER = 0xDef1C0ded9bec7F1a1670819833240f027b25EfF;
+
+    /*//////////////////////////////////////////////////////////////
+                          TESTING ADDRESSES
+    //////////////////////////////////////////////////////////////*/
+
+    // address used for forked node testing
+    address public constant ALICE = 0xe43F4840Dad185BEEF6daA8E7328b521e6a1a2A0;
+
+    // address used for forked node testing
+    address public constant BOB = 0xFCC7e03C00FC57d964AEb22029Df7AD6eA795d49;
 }
