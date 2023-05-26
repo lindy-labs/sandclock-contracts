@@ -27,7 +27,13 @@ contract RewardTrackerTest is DSTestPlus {
     function setUp() public {
         stakeToken = new MockERC20("Mock Quartz", "QUARTZ", 18);
         rewardToken = new MockERC20("Mock WETH", "WETH", 18);
-        stakingPool = new RewardTracker(address(stakeToken), "Staked Quartz", "sQuartz", address(rewardToken), DURATION);
+        stakingPool = new RewardTracker(
+            address(stakeToken),
+            "Staked Quartz",
+            "sQuartz",
+            address(rewardToken),
+            DURATION
+        );
 
         rewardToken.mint(address(this), 1000 ether);
         stakeToken.mint(address(this), 1000 ether);
@@ -77,6 +83,27 @@ contract RewardTrackerTest is DSTestPlus {
         assertEqDecimal(stakeToken.balanceOf(tester), 0, 18);
         assertEqDecimal(stakeToken.balanceOf(address(stakingPool)) - beforeStakingPoolStakeTokenBalance, amount, 18);
         assertEqDecimal(stakingPool.balanceOf(tester), amount, 18);
+    }
+
+    function testCorrectness_mint(uint128 amount_) public {
+        hevm.assume(amount_ > 0);
+        uint256 amount = amount_;
+
+        uint256 shares = stakingPool.previewMint(amount);
+        uint256 beforeStakingPoolStakeTokenBalance = stakeToken.balanceOf(address(stakingPool));
+        assertEq(stakingPool.balanceOf(tester), 0); // tester has no shares
+
+        hevm.startPrank(tester);
+        // mint stake tokens
+        stakeToken.mint(tester, amount);
+        // stake
+        stakeToken.approve(address(stakingPool), amount);
+        stakingPool.mint(shares, tester);
+
+        // check balance
+        assertEq(stakingPool.balanceOf(tester), shares); // tester has shares now
+        assertEqDecimal(stakeToken.balanceOf(tester), 0, 18); // tester's stake tokens gone
+        assertEqDecimal(stakeToken.balanceOf(address(stakingPool)), beforeStakingPoolStakeTokenBalance + amount, 18);
     }
 
     function testCorrectness_withdraw(uint128 amount_, uint56 warpTime, uint56 stakeTime) public {
