@@ -45,6 +45,12 @@ interface IAdapter {
     function withdraw(uint256 amount) external;
 
     /**
+     * @notice Claims rewards awarded by the lending protocol
+     * @param data Any data needed for the claim process
+     */
+    function claimRewards(bytes calldata data) external;
+
+    /**
      * @notice Returns the amount of collateral currently supplied to the lending protocol
      * @param account The account to check
      */

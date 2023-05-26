@@ -63,6 +63,7 @@ contract scUSDCv2 is scUSDCBase {
     event Borrowed(uint8 adapterId, uint256 amount);
     event Repaid(uint8 adapterId, uint256 amount);
     event Withdrawn(uint8 adapterId, uint256 amount);
+    event RewardsClaimed(uint8 adapterId);
 
     // Uniswap V3 router
     ISwapRouter public constant swapRouter = ISwapRouter(C.UNISWAP_V3_SWAP_ROUTER);
@@ -336,6 +337,21 @@ contract scUSDCv2 is scUSDCBase {
         _withdraw(_adapterId, _amount);
 
         emit Withdrawn(_adapterId, _amount);
+    }
+
+    /**
+     * @notice Claim rewards from a lending market.
+     * @param _adapterId The ID of the lending market adapter.
+     * @param _callData The encoded data for the claimRewards function.
+     */
+    function claimRewards(uint8 _adapterId, bytes calldata _callData) external {
+        _onlyKeeper();
+        _isSupportedCheck(_adapterId);
+        protocolAdapters.get(_adapterId).functionDelegateCall(
+            abi.encodeWithSelector(IAdapter.claimRewards.selector, _callData)
+        );
+
+        emit RewardsClaimed(_adapterId);
     }
 
     /**

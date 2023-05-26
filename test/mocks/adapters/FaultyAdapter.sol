@@ -43,6 +43,12 @@ contract FaultyAdapter is IAdapter {
         revert("not working");
     }
 
+    function claimRewards(bytes calldata _data) external view override {
+        address caller = abi.decode(_data, (address));
+
+        require(address(this) == caller, "invalid caller");
+    }
+
     function getCollateral(address) external pure override returns (uint256) {
         revert("not working");
     }

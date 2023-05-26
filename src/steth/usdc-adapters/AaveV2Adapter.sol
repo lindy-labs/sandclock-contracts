@@ -62,6 +62,11 @@ contract AaveV2Adapter is IAdapter {
     }
 
     /// @inheritdoc IAdapter
+    function claimRewards(bytes calldata) external pure override {
+        revert("not applicable");
+    }
+
+    /// @inheritdoc IAdapter
     function getCollateral(address _account) external view override returns (uint256) {
         return aUsdc.balanceOf(_account);
     }

@@ -94,4 +94,9 @@ contract EulerAdapterTest is Test {
         );
         assertEq(usdc.balanceOf(address(adapter)), withdrawAmount, "withdraw doesn't match");
     }
+
+    function test_claimRewards() public {
+        vm.expectRevert();
+        adapter.claimRewards("");
+    }
 }

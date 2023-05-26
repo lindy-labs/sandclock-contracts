@@ -8,10 +8,10 @@ import {WETH} from "solmate/tokens/WETH.sol";
 
 import {Constants as C} from "../../src/lib/Constants.sol";
 import {IAdapter} from "../../src/steth/usdc-adapters/IAdapter.sol";
-import {AaveV3Adapter} from "../../src/steth/usdc-adapters/AaveV3Adapter.sol";
+import {AaveV2Adapter} from "../../src/steth/usdc-adapters/AaveV2Adapter.sol";
 
-contract AaveV3AdapterTest is Test {
-    AaveV3Adapter adapter;
+contract AaveV2AdapterTest is Test {
+    AaveV2Adapter adapter;
     ERC20 usdc;
     WETH weth;
 
@@ -23,7 +23,7 @@ contract AaveV3AdapterTest is Test {
         usdc = ERC20(C.USDC);
         weth = WETH(payable(C.WETH));
 
-        adapter = new AaveV3Adapter();
+        adapter = new AaveV2Adapter();
     }
 
     function test_setApprovals() public {
@@ -91,5 +91,10 @@ contract AaveV3AdapterTest is Test {
 
         assertEq(adapter.getCollateral(address(adapter)), usdcAmount - withdrawAmount, "supply doesn't match");
         assertEq(usdc.balanceOf(address(adapter)), withdrawAmount, "withdraw doesn't match");
+    }
+
+    function test_claimRewards() public {
+        vm.expectRevert();
+        adapter.claimRewards("");
     }
 }

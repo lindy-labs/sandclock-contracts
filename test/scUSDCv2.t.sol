@@ -47,6 +47,7 @@ contract scUSDCv2Test is Test {
     event Borrowed(uint8 adapterId, uint256 amount);
     event Repaid(uint8 adapterId, uint256 amount);
     event Withdrawn(uint8 adapterId, uint256 amount);
+    event RewardsClaimed(uint8 _adapterId);
 
     // after the exploit, the euler protocol was disabled. At one point it should work again, so having the
     // tests run in both cases (when protocol is working and not) requires two blocks to fork from
@@ -1650,6 +1651,26 @@ contract scUSDCv2Test is Test {
 
         vm.expectRevert("Address: low-level call failed");
         vault.sellTokens(ERC20(C.EULER_REWARDS_TOKEN), EUL_AMOUNT, invalidSwapData, 0);
+    }
+
+    /// #claimRewards ///
+
+    function test_claimRewards_FailsIfCallerIsNotKeeper() public {
+        _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
+        vm.startPrank(alice);
+        vm.expectRevert(CallerNotKeeper.selector);
+        vault.claimRewards(0, "");
+    }
+
+    function test_claimRewards_UsesDelegateCallAndEmitsEvent() public {
+        _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
+        IAdapter adapter = new FaultyAdapter();
+        vault.addAdapter(adapter);
+
+        vm.expectEmit(true, true, true, true);
+        emit RewardsClaimed(adapter.id());
+
+        vault.claimRewards(adapter.id(), abi.encode(address(vault)));
     }
 
     /// #setSlippageTolerance ///
