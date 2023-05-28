@@ -130,7 +130,7 @@ contract scUSDCv2 is scUSDCBase {
             revert ProtocolInUse(_adapterId);
         }
 
-        protocolAdapters.get(_adapterId).functionDelegateCall(abi.encodeWithSelector(IAdapter.revokeApprovals.selector));
+        _adapterDelegateCall(_adapterId, abi.encodeWithSelector(IAdapter.revokeApprovals.selector));
 
         protocolAdapters.remove(_adapterId);
     }
@@ -140,7 +140,7 @@ contract scUSDCv2 is scUSDCBase {
      * @dev Called to increase or decrease the WETH debt to maintain the LTV (loan to value) and avoid liquidation.
      * @param _callData The encoded data for the calls to be made to the lending markets.
      */
-    function rebalance(bytes[] memory _callData) external {
+    function rebalance(bytes[] calldata _callData) external {
         _onlyKeeper();
 
         _multiCall(_callData);
@@ -165,7 +165,7 @@ contract scUSDCv2 is scUSDCBase {
      * @param _flashLoanAmount The amount of WETH to flashloan from Balancer. Has to be at least equal to amount of WETH debt moved between lending markets.
      * @param _callData The encoded data for the calls to be made to the lending markets.
      */
-    function reallocate(uint256 _flashLoanAmount, bytes[] memory _callData) external {
+    function reallocate(uint256 _flashLoanAmount, bytes[] calldata _callData) external {
         _onlyKeeper();
 
         if (_flashLoanAmount == 0) revert FlashLoanAmountZero();
@@ -242,7 +242,7 @@ contract scUSDCv2 is scUSDCBase {
      * @param _amounts single elment array containing the amount of WETH being flashloaned.
      * @param _data The encoded data that was passed to the flashloan.
      */
-    function receiveFlashLoan(address[] memory, uint256[] memory _amounts, uint256[] memory, bytes memory _data)
+    function receiveFlashLoan(address[] calldata, uint256[] calldata _amounts, uint256[] calldata, bytes calldata _data)
         external
     {
         _isFlashLoanInitiated();
@@ -347,9 +347,7 @@ contract scUSDCv2 is scUSDCBase {
     function claimRewards(uint8 _adapterId, bytes calldata _callData) external {
         _onlyKeeper();
         _isSupportedCheck(_adapterId);
-        protocolAdapters.get(_adapterId).functionDelegateCall(
-            abi.encodeWithSelector(IAdapter.claimRewards.selector, _callData)
-        );
+        _adapterDelegateCall(_adapterId, abi.encodeWithSelector(IAdapter.claimRewards.selector, _callData));
 
         emit RewardsClaimed(_adapterId);
     }
@@ -474,16 +472,20 @@ contract scUSDCv2 is scUSDCBase {
         }
     }
 
+    function _adapterDelegateCall(uint8 _adapterId, bytes memory _data) internal {
+        protocolAdapters.get(_adapterId).functionDelegateCall(_data);
+    }
+
     function _isSupportedCheck(uint8 _adapterId) internal view {
         if (!isSupported(_adapterId)) revert ProtocolNotSupported(_adapterId);
     }
 
     function _supply(uint8 _adapterId, uint256 _amount) internal {
-        protocolAdapters.get(_adapterId).functionDelegateCall(abi.encodeWithSelector(IAdapter.supply.selector, _amount));
+        _adapterDelegateCall(_adapterId, abi.encodeWithSelector(IAdapter.supply.selector, _amount));
     }
 
     function _borrow(uint8 _adapterId, uint256 _amount) internal {
-        protocolAdapters.get(_adapterId).functionDelegateCall(abi.encodeWithSelector(IAdapter.borrow.selector, _amount));
+        _adapterDelegateCall(_adapterId, abi.encodeWithSelector(IAdapter.borrow.selector, _amount));
     }
 
     function _repay(uint8 _adapterId, uint256 _amount) internal {
@@ -491,13 +493,11 @@ contract scUSDCv2 is scUSDCBase {
 
         _amount = _amount > wethBalance ? wethBalance : _amount;
 
-        protocolAdapters.get(_adapterId).functionDelegateCall(abi.encodeWithSelector(IAdapter.repay.selector, _amount));
+        _adapterDelegateCall(_adapterId, abi.encodeWithSelector(IAdapter.repay.selector, _amount));
     }
 
     function _withdraw(uint8 _adapterId, uint256 _amount) internal {
-        protocolAdapters.get(_adapterId).functionDelegateCall(
-            abi.encodeWithSelector(IAdapter.withdraw.selector, _amount)
-        );
+        _adapterDelegateCall(_adapterId, abi.encodeWithSelector(IAdapter.withdraw.selector, _amount));
     }
 
     function _invest() internal {
