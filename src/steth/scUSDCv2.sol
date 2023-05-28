@@ -52,6 +52,9 @@ contract scUSDCv2 is scUSDCBase {
         ExitAllPositions
     }
 
+    event UsdcToEthPriceFeedUpdated(address indexed admin, address newPriceFeed);
+    event ProtocolAdapterAdded(address indexed admin, uint8 adapterId, address adapter);
+    event ProtocolAdapterRemoved(address indexed admin, uint8 adapterId);
     event EmergencyExitExecuted(
         address indexed admin, uint256 wethWithdrawn, uint256 debtRepaid, uint256 collateralReleased
     );
@@ -63,6 +66,7 @@ contract scUSDCv2 is scUSDCBase {
     event Borrowed(uint8 adapterId, uint256 amount);
     event Repaid(uint8 adapterId, uint256 amount);
     event Withdrawn(uint8 adapterId, uint256 amount);
+    event Disinvested(uint256 wethAmount);
     event RewardsClaimed(uint8 adapterId);
 
     // Uniswap V3 router
@@ -98,6 +102,8 @@ contract scUSDCv2 is scUSDCBase {
         if (address(_newPriceFeed) == address(0)) revert PriceFeedZeroAddress();
 
         usdcToEthPriceFeed = _newPriceFeed;
+
+        emit UsdcToEthPriceFeedUpdated(msg.sender, address(_newPriceFeed));
     }
 
     /**
@@ -114,6 +120,8 @@ contract scUSDCv2 is scUSDCBase {
         protocolAdapters.set(uint256(id), address(_adapter));
 
         address(_adapter).functionDelegateCall(abi.encodeWithSelector(IAdapter.setApprovals.selector));
+
+        emit ProtocolAdapterAdded(msg.sender, id, address(_adapter));
     }
 
     /**
@@ -133,6 +141,8 @@ contract scUSDCv2 is scUSDCBase {
         _adapterDelegateCall(_adapterId, abi.encodeWithSelector(IAdapter.revokeApprovals.selector));
 
         protocolAdapters.remove(_adapterId);
+
+        emit ProtocolAdapterRemoved(msg.sender, _adapterId);
     }
 
     /**
@@ -353,22 +363,13 @@ contract scUSDCv2 is scUSDCBase {
     }
 
     /**
-     * @notice Deposit whole WETH balance into the staking vault (scWETH).
-     */
-    function invest() public {
-        _onlyKeeper();
-
-        _invest();
-    }
-
-    /**
      * @notice Withdraw WETH from the staking vault (scWETH).
      * @param _amount The amount of WETH to withdraw.
      */
-    function disinvest(uint256 _amount) external returns (uint256) {
+    function disinvest(uint256 _amount) external {
         _onlyKeeper();
 
-        return _disinvest(_amount);
+        emit Disinvested(_disinvest(_amount));
     }
 
     /**

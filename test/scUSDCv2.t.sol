@@ -34,6 +34,9 @@ import {FaultyAdapter} from "./mocks/adapters/FaultyAdapter.sol";
 contract scUSDCv2Test is Test {
     using FixedPointMathLib for uint256;
 
+    event UsdcToEthPriceFeedUpdated(address indexed admin, address newPriceFeed);
+    event ProtocolAdapterAdded(address indexed admin, uint8 adapterId, address adapter);
+    event ProtocolAdapterRemoved(address indexed admin, uint8 adapterId);
     event NewTargetLtvApplied(address indexed admin, uint256 newTargetLtv);
     event SlippageToleranceUpdated(address indexed admin, uint256 newSlippageTolerance);
     event EmergencyExitExecuted(
@@ -47,7 +50,8 @@ contract scUSDCv2Test is Test {
     event Borrowed(uint8 adapterId, uint256 amount);
     event Repaid(uint8 adapterId, uint256 amount);
     event Withdrawn(uint8 adapterId, uint256 amount);
-    event RewardsClaimed(uint8 _adapterId);
+    event Disinvested(uint256 wethAmount);
+    event RewardsClaimed(uint8 adapterId);
 
     // after the exploit, the euler protocol was disabled. At one point it should work again, so having the
     // tests run in both cases (when protocol is working and not) requires two blocks to fork from
@@ -107,6 +111,7 @@ contract scUSDCv2Test is Test {
 
     function test_setUsdcToEthPriceFeed_FailsIfCallerIsNotAdmin() public {
         _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
+
         vm.prank(alice);
         vm.expectRevert(CallerNotAdmin.selector);
         vault.setUsdcToEthPriceFeed(AggregatorV3Interface(address(0)));
@@ -114,6 +119,7 @@ contract scUSDCv2Test is Test {
 
     function test_setUsdcToEthPriceFeed_FailsIfNewPriceFeedIsZeroAddress() public {
         _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
+
         vm.expectRevert(PriceFeedZeroAddress.selector);
         vault.setUsdcToEthPriceFeed(AggregatorV3Interface(address(0)));
     }
@@ -121,9 +127,20 @@ contract scUSDCv2Test is Test {
     function test_setUsdcToEthPriceFeed_ChangesThePriceFeed() public {
         _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
         AggregatorV3Interface _newPriceFeed = AggregatorV3Interface(address(0x1));
+
         vault.setUsdcToEthPriceFeed(_newPriceFeed);
 
         assertEq(address(vault.usdcToEthPriceFeed()), address(_newPriceFeed), "price feed has not changed");
+    }
+
+    function test_setUsdcToEthPriceFeed_EmitsEvent() public {
+        _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
+        AggregatorV3Interface _newPriceFeed = AggregatorV3Interface(address(0x1));
+
+        vm.expectEmit(true, true, true, true);
+        emit UsdcToEthPriceFeedUpdated(address(this), address(_newPriceFeed));
+
+        vault.setUsdcToEthPriceFeed(_newPriceFeed);
     }
 
     /// #addAdapter ///
@@ -173,6 +190,17 @@ contract scUSDCv2Test is Test {
         vault.supply(euler.id(), initialBalance);
         assertEq(vault.usdcBalance(), 0, "usdc balance");
         assertApproxEqAbs(euler.getCollateral(address(vault)), initialBalance, 1, "collateral");
+    }
+
+    function test_addAdapter_EmitsEvent() public {
+        _setUpForkAtBlock(BLOCK_BEFORE_EULER_EXPLOIT);
+        uint256 initialBalance = 1000e6;
+        deal(address(usdc), address(vault), initialBalance);
+
+        vm.expectEmit(true, true, true, true);
+        emit ProtocolAdapterAdded(address(this), euler.id(), address(euler));
+
+        vault.addAdapter(euler);
     }
 
     /// #removeAdapter ///
@@ -242,6 +270,17 @@ contract scUSDCv2Test is Test {
 
         assertEq(usdc.allowance(address(vault), address(aaveV2.pool())), 0, "usdc allowance");
         assertEq(weth.allowance(address(vault), address(aaveV2.pool())), 0, "weth allowance");
+    }
+
+    function test_removeAdapter_EmitsEvent() public {
+        _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
+        // going to remove aave v2
+        uint8 aaveV2Id = aaveV2.id();
+
+        vm.expectEmit(true, true, true, true);
+        emit ProtocolAdapterRemoved(address(this), aaveV2Id);
+
+        vault.removeAdapter(aaveV2Id, false);
     }
 
     function test_removeAdapter_ForceRemovesFaultyAdapters() public {
@@ -448,39 +487,6 @@ contract scUSDCv2Test is Test {
         vault.withdraw(aaveV3.id(), withdrawAmount);
     }
 
-    /// #invest ///
-
-    function test_invest_FailsIfCallerIsNotKeeper() public {
-        _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
-        deal(address(weth), address(vault), 1 ether);
-
-        vm.prank(alice);
-        vm.expectRevert(CallerNotKeeper.selector);
-        vault.invest();
-    }
-
-    function test_invest_DoesntRevertWhenWethBalanceIsZero() public {
-        _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
-
-        assertEq(weth.balanceOf(address(vault)), 0, "weth balance not 0");
-
-        vault.invest();
-    }
-
-    function test_invest_DepositsWethBalanceToScWETH() public {
-        _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
-        uint256 wethBalance = 1 ether;
-        deal(address(weth), address(vault), wethBalance);
-
-        vault.invest();
-
-        assertEq(weth.balanceOf(address(vault)), 0, "weth balance not 0");
-        uint256 shares = wethVault.balanceOf(address(vault));
-        assertTrue(shares > 0, "scWETH shares 0");
-        assertApproxEqAbs(vault.wethInvested(), wethBalance, 1, "weth invested");
-        assertApproxEqAbs(wethVault.convertToAssets(shares), wethBalance, 1, "scWETH assets");
-    }
-
     /// #disinvest ///
 
     function test_disinvest_FailsIfCallerIsNotKeeper() public {
@@ -494,15 +500,36 @@ contract scUSDCv2Test is Test {
 
     function test_disinvest_WithdrawsWethInvestedFromScWETH() public {
         _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
-        uint256 initialBalance = 10 ether;
-        deal(address(weth), address(vault), initialBalance);
-        vault.invest();
+        uint256 initialBalance = 1_000_000e6;
+        uint256 initialDebt = 100 ether;
+        deal(address(usdc), address(vault), initialBalance);
+        bytes[] memory callData = new bytes[](2);
+        callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV3.id(), initialBalance);
+        callData[1] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV3.id(), initialDebt);
+        vault.rebalance(callData);
 
         uint256 disinvestAmount = vault.wethInvested() / 2;
         vault.disinvest(disinvestAmount);
 
         assertEq(weth.balanceOf(address(vault)), disinvestAmount, "weth balance");
-        assertEq(vault.wethInvested(), initialBalance - disinvestAmount, "weth invested");
+        assertEq(vault.wethInvested(), initialDebt - disinvestAmount, "weth invested");
+    }
+
+    function test_disinvest_EmitsEvent() public {
+        _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
+        uint256 initialBalance = 1_000_000e6;
+        uint256 initialDebt = 100 ether;
+        deal(address(usdc), address(vault), initialBalance);
+        bytes[] memory callData = new bytes[](2);
+        callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV3.id(), initialBalance);
+        callData[1] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV3.id(), initialDebt);
+        vault.rebalance(callData);
+
+        uint256 disinvestAmount = 1 ether;
+        vm.expectEmit(true, true, true, true);
+        emit Disinvested(disinvestAmount);
+
+        vault.disinvest(disinvestAmount);
     }
 
     /// #rebalance ///
