@@ -2,10 +2,6 @@
 pragma solidity ^0.8.13;
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
-import {WETH} from "solmate/tokens/WETH.sol";
-import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
-import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
-import {Address} from "openzeppelin-contracts/utils/Address.sol";
 import {IEulerMarkets, IEulerEToken, IEulerDToken} from "lib/euler-interfaces/contracts/IEuler.sol";
 
 import {Constants as C} from "../../lib/Constants.sol";
@@ -16,9 +12,6 @@ import {IAdapter} from "./IAdapter.sol";
  * @notice Facilitates lending and borrowing for the Euler lending protocol
  */
 contract EulerAdapter is IAdapter {
-    using SafeTransferLib for ERC20;
-    using SafeTransferLib for WETH;
-
     // address of the EULER protocol contract
     address public constant protocol = 0x27182842E098f60e3D576794A5bFFb0777E025d3;
     // address of the EULER markets contract
@@ -29,19 +22,19 @@ contract EulerAdapter is IAdapter {
     IEulerDToken public constant dWeth = IEulerDToken(0x62e28f054efc24b26A794F5C1249B6349454352C);
 
     /// @inheritdoc IAdapter
-    uint8 public constant id = 3;
+    uint8 public constant override id = 3;
 
     /// @inheritdoc IAdapter
     function setApprovals() external override {
-        ERC20(C.USDC).safeApprove(protocol, type(uint256).max);
-        WETH(payable(C.WETH)).safeApprove(protocol, type(uint256).max);
-        markets.enterMarket(0, address(C.USDC));
+        usdc.approve(protocol, type(uint256).max);
+        weth.approve(protocol, type(uint256).max);
+        markets.enterMarket(0, address(usdc));
     }
 
     /// @inheritdoc IAdapter
     function revokeApprovals() external override {
-        ERC20(C.USDC).safeApprove(protocol, 0);
-        WETH(payable(C.WETH)).safeApprove(protocol, 0);
+        usdc.approve(protocol, 0);
+        weth.approve(protocol, 0);
     }
 
     /// @inheritdoc IAdapter
