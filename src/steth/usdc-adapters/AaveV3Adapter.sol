@@ -3,6 +3,7 @@ pragma solidity ^0.8.19;
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {IPool} from "aave-v3/interfaces/IPool.sol";
+import {IPoolDataProvider} from "aave-v3/interfaces/IPoolDataProvider.sol";
 
 import {Constants as C} from "../../lib/Constants.sol";
 import {IAdapter} from "./IAdapter.sol";
@@ -14,6 +15,8 @@ import {IAdapter} from "./IAdapter.sol";
 contract AaveV3Adapter is IAdapter {
     // Aave v3 pool contract
     IPool public constant pool = IPool(C.AAVE_POOL);
+    // Aave v3 pool data provider contract
+    IPoolDataProvider public constant aaveV3PoolDataProvider = IPoolDataProvider(C.AAVE_POOL_DATA_PROVIDER);
     // Aave v3 "aEthUSDC" token (supply token)
     ERC20 public constant aUsdc = ERC20(C.AAVE_AUSDC_TOKEN);
     // Aave v3 "variableDebtEthWETH" token (variable debt token)
@@ -67,5 +70,13 @@ contract AaveV3Adapter is IAdapter {
     /// @inheritdoc IAdapter
     function getDebt(address _account) external view override returns (uint256) {
         return dWeth.balanceOf(_account);
+    }
+
+    /// @inheritdoc IAdapter
+    function getMaxLtv() external view override returns (uint256) {
+        (, uint256 ltv,,,,,,,,) = aaveV3PoolDataProvider.getReserveConfigurationData(address(usdc));
+
+        // ltv is returned as a percentage with 2 decimals (e.g. 80% = 8000) so we need to multiply by 1e14
+        return ltv * 1e14;
     }
 }

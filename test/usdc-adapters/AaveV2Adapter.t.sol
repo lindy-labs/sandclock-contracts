@@ -97,4 +97,8 @@ contract AaveV2AdapterTest is Test {
         vm.expectRevert();
         adapter.claimRewards("");
     }
+
+    function test_getMaxLtv() public {
+        assertEq(adapter.getMaxLtv(), 0.8e18, "max ltv");
+    }
 }

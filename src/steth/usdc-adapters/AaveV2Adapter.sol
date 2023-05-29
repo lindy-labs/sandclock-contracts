@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-pragma solidity ^0.8.13;
+pragma solidity ^0.8.19;
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
 import {Constants as C} from "../../lib/Constants.sol";
 import {ILendingPool} from "../../interfaces/aave-v2/ILendingPool.sol";
+import {IProtocolDataProvider} from "../../interfaces/aave-v2/IProtocolDataProvider.sol";
 import {IAdapter} from "./IAdapter.sol";
 
 /**
@@ -14,6 +15,9 @@ import {IAdapter} from "./IAdapter.sol";
 contract AaveV2Adapter is IAdapter {
     // Aave v2 lending pool
     ILendingPool public constant pool = ILendingPool(0x7d2768dE32b0b80b7a3454c06BdAc94A69DDc7A9);
+    // Aave v2 protocol data provider
+    IProtocolDataProvider public constant aaveV2ProtocolDataProvider =
+        IProtocolDataProvider(0x057835Ad21a177dbdd3090bB1CAE03EaCF78Fc6d);
     // Aave v2 interest bearing USDC (aUSDC) token
     ERC20 public constant aUsdc = ERC20(0xBcca60bB61934080951369a648Fb03DF4F96263C);
     // Aave v2 variable debt bearing WETH (variableDebtWETH) token
@@ -67,5 +71,13 @@ contract AaveV2Adapter is IAdapter {
     /// @inheritdoc IAdapter
     function getDebt(address _account) external view override returns (uint256) {
         return dWeth.balanceOf(_account);
+    }
+
+    /// @inheritdoc IAdapter
+    function getMaxLtv() external view virtual override returns (uint256) {
+        (, uint256 ltv,,,,,,,,) = aaveV2ProtocolDataProvider.getReserveConfigurationData(address(usdc));
+
+        // ltv is returned as a percentage with 2 decimals (e.g. 80% = 8000) so we need to multiply by 1e14
+        return ltv * 1e14;
     }
 }

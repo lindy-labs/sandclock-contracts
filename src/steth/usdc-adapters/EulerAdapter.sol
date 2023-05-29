@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-pragma solidity ^0.8.13;
+pragma solidity ^0.8.19;
 
+import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {IEulerMarkets, IEulerEToken, IEulerDToken} from "lib/euler-interfaces/contracts/IEuler.sol";
 
@@ -12,6 +13,8 @@ import {IAdapter} from "./IAdapter.sol";
  * @notice Facilitates lending and borrowing for the Euler lending protocol
  */
 contract EulerAdapter is IAdapter {
+    using FixedPointMathLib for uint256;
+
     // address of the EULER protocol contract
     address public constant protocol = 0x27182842E098f60e3D576794A5bFFb0777E025d3;
     // address of the EULER markets contract
@@ -20,6 +23,8 @@ contract EulerAdapter is IAdapter {
     IEulerEToken public constant eUsdc = IEulerEToken(0xEb91861f8A4e1C12333F42DCE8fB0Ecdc28dA716);
     // address of the EULER eWETH token contract (debt token)
     IEulerDToken public constant dWeth = IEulerDToken(0x62e28f054efc24b26A794F5C1249B6349454352C);
+    // vaule used to scale the token's collateral/borrow factors from the euler market
+    uint32 constant EULER_CONFIG_FACTOR_SCALE = 4_000_000_000;
 
     /// @inheritdoc IAdapter
     uint8 public constant override id = 3;
@@ -70,5 +75,16 @@ contract EulerAdapter is IAdapter {
     /// @inheritdoc IAdapter
     function getDebt(address _account) external view override returns (uint256) {
         return dWeth.balanceOf(_account);
+    }
+
+    /// @inheritdoc IAdapter
+    function getMaxLtv() external view override returns (uint256) {
+        uint256 collateralFactor = markets.underlyingToAssetConfig(address(usdc)).collateralFactor;
+        uint256 borrowFactor = markets.underlyingToAssetConfig(address(weth)).borrowFactor;
+
+        uint256 scaledCollateralFactor = collateralFactor.divWadDown(EULER_CONFIG_FACTOR_SCALE);
+        uint256 scaledBorrowFactor = borrowFactor.divWadDown(EULER_CONFIG_FACTOR_SCALE);
+
+        return scaledCollateralFactor.mulWadDown(scaledBorrowFactor);
     }
 }

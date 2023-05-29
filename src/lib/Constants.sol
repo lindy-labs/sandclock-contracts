@@ -54,9 +54,4 @@ library Constants {
 
     // address of the EULER rewards token contract
     address public constant EULER_REWARDS_TOKEN = 0xd9Fcd98c322942075A5C3860693e9f4f03AAE07b;
-    // vaule used to scale the token's collateral/borrow factors from the euler market
-    uint32 constant EULER_CONFIG_FACTOR_SCALE = 4_000_000_000;
-
-    // address of the Aave v2 protocol data provider
-    address public constant AAVE_V2_PROTOCOL_DATA_PROVIDER = 0x057835Ad21a177dbdd3090bB1CAE03EaCF78Fc6d;
 }

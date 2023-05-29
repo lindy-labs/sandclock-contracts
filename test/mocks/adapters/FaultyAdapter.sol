@@ -52,4 +52,8 @@ contract FaultyAdapter is IAdapter {
     function getDebt(address) external pure override returns (uint256) {
         revert("not working");
     }
+
+    function getMaxLtv() external pure override returns (uint256) {
+        revert("not working");
+    }
 }
