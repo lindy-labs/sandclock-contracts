@@ -561,9 +561,9 @@ contract scUSDCv2Test is Test {
         assertEq(vault.totalDebt(), initialDebt, "total debt");
         assertEq(vault.totalCollateral(), initialBalance, "total collateral");
 
-        _assertCollateralAndDebt2(aaveV3.id(), initialBalance, initialDebt);
-        _assertCollateralAndDebt2(aaveV2.id(), 0, 0);
-        _assertCollateralAndDebt2(euler.id(), 0, 0);
+        _assertCollateralAndDebt(aaveV3.id(), initialBalance, initialDebt);
+        _assertCollateralAndDebt(aaveV2.id(), 0, 0);
+        _assertCollateralAndDebt(euler.id(), 0, 0);
     }
 
     function test_rebalance_BorrowOnlyOnEuler() public {
@@ -583,9 +583,9 @@ contract scUSDCv2Test is Test {
         assertApproxEqAbs(vault.totalCollateral(), initialBalance, 1, "total collateral");
         assertApproxEqAbs(vault.totalDebt(), initialDebt, 1, "total debt");
 
-        _assertCollateralAndDebt2(aaveV3.id(), 0, 0);
-        _assertCollateralAndDebt2(aaveV2.id(), 0, 0);
-        _assertCollateralAndDebt2(euler.id(), initialBalance, initialDebt);
+        _assertCollateralAndDebt(aaveV3.id(), 0, 0);
+        _assertCollateralAndDebt(aaveV2.id(), 0, 0);
+        _assertCollateralAndDebt(euler.id(), initialBalance, initialDebt);
     }
 
     function test_rebalance_BorrowOnlyOnAaveV2() public {
@@ -604,9 +604,9 @@ contract scUSDCv2Test is Test {
         assertApproxEqAbs(vault.totalCollateral(), initialBalance, 1, "total collateral");
         assertApproxEqAbs(vault.totalDebt(), initialDebt, 1, "total debt");
 
-        _assertCollateralAndDebt2(aaveV2.id(), initialBalance, initialDebt);
-        _assertCollateralAndDebt2(aaveV3.id(), 0, 0);
-        _assertCollateralAndDebt2(euler.id(), 0, 0);
+        _assertCollateralAndDebt(aaveV2.id(), initialBalance, initialDebt);
+        _assertCollateralAndDebt(aaveV3.id(), 0, 0);
+        _assertCollateralAndDebt(euler.id(), 0, 0);
     }
 
     function test_rebalance_OneProtocolLeverageDown() public {
@@ -634,7 +634,7 @@ contract scUSDCv2Test is Test {
         assertApproxEqAbs(vault.totalCollateral(), initialBalance, 1, "total collateral");
         assertApproxEqAbs(vault.totalDebt(), initialDebt / 2, 1, "total debt");
 
-        _assertCollateralAndDebt2(aaveV2.id(), initialBalance, initialDebt / 2);
+        _assertCollateralAndDebt(aaveV2.id(), initialBalance, initialDebt / 2);
     }
 
     function test_rebalance_OneProtocolLeverageUp() public {
@@ -661,7 +661,7 @@ contract scUSDCv2Test is Test {
         assertApproxEqAbs(vault.totalCollateral(), initialBalance, 1, "total collateral");
         assertApproxEqAbs(vault.totalDebt(), initialDebt * 2, 1, "total debt");
 
-        _assertCollateralAndDebt2(aaveV2.id(), initialBalance, initialDebt * 2);
+        _assertCollateralAndDebt(aaveV2.id(), initialBalance, initialDebt * 2);
     }
 
     function test_rebalance_OneProtocolWithAdditionalDeposits() public {
@@ -710,8 +710,8 @@ contract scUSDCv2Test is Test {
         assertApproxEqAbs(vault.totalCollateral(), initialBalance, 1, "total collateral");
         assertApproxEqAbs(vault.totalDebt(), debtOnAaveV3 + debtOnAaveV2, 1, "total debt");
 
-        _assertCollateralAndDebt2(aaveV3.id(), initialBalance / 2, debtOnAaveV3);
-        _assertCollateralAndDebt2(aaveV2.id(), initialBalance / 2, debtOnAaveV2);
+        _assertCollateralAndDebt(aaveV3.id(), initialBalance / 2, debtOnAaveV3);
+        _assertCollateralAndDebt(aaveV2.id(), initialBalance / 2, debtOnAaveV2);
     }
 
     function test_rebalance_TwoProtocolsWithAdditionalDeposits() public {
@@ -761,10 +761,10 @@ contract scUSDCv2Test is Test {
             "total debt after"
         );
 
-        _assertCollateralAndDebt2(
+        _assertCollateralAndDebt(
             aaveV3.id(), initialBalance / 2 + additionalCollateralOnAaveV3, debtOnAaveV3 + additionalDebtOnAaveV3
         );
-        _assertCollateralAndDebt2(
+        _assertCollateralAndDebt(
             euler.id(), initialBalance / 2 + additionalCollateralOnEuler, debtOnEuler + additionalDebtOnEuler
         );
     }
@@ -812,10 +812,10 @@ contract scUSDCv2Test is Test {
             "total debt after"
         );
 
-        _assertCollateralAndDebt2(
+        _assertCollateralAndDebt(
             aaveV3.id(), initialBalance / 2 + additionalCollateralOnAaveV3, debtOnAaveV3 + additionalDebtOnAaveV3
         );
-        _assertCollateralAndDebt2(euler.id(), initialBalance / 2, debtOnEuler - debtReductionOnEuler);
+        _assertCollateralAndDebt(euler.id(), initialBalance / 2, debtOnEuler - debtReductionOnEuler);
     }
 
     function test_rebalance_ThreeProtocols() public {
@@ -841,9 +841,9 @@ contract scUSDCv2Test is Test {
         assertApproxEqAbs(vault.totalCollateral(), initialBalance, 1, "total collateral");
         assertApproxEqAbs(vault.totalDebt(), debtOnAaveV3 + debtOnEuler + debtOnAaveV2, 1, "total debt");
 
-        _assertCollateralAndDebt2(aaveV3.id(), initialBalance / 3, debtOnAaveV3);
-        _assertCollateralAndDebt2(aaveV2.id(), initialBalance / 3, debtOnAaveV2);
-        _assertCollateralAndDebt2(euler.id(), initialBalance / 3, debtOnEuler);
+        _assertCollateralAndDebt(aaveV3.id(), initialBalance / 3, debtOnAaveV3);
+        _assertCollateralAndDebt(aaveV2.id(), initialBalance / 3, debtOnAaveV2);
+        _assertCollateralAndDebt(euler.id(), initialBalance / 3, debtOnEuler);
     }
 
     function test_rebalance_ThreeProtocolsLeveragingDown() public {
@@ -886,9 +886,9 @@ contract scUSDCv2Test is Test {
         assertApproxEqAbs(vault.totalCollateral(), initialBalance, 1, "total collateral");
         assertApproxEqAbs(vault.totalDebt(), totalDebt - totalDebtReduction, 1, "total debt");
 
-        _assertCollateralAndDebt2(aaveV3.id(), initialBalance / 3, debtOnAaveV3 - debtReductionOnAaveV3);
-        _assertCollateralAndDebt2(aaveV2.id(), initialBalance / 3, debtOnAaveV2 - debtReductionOnAaveV2);
-        _assertCollateralAndDebt2(euler.id(), initialBalance / 3, debtOnEuler - debtReductionOnEuler);
+        _assertCollateralAndDebt(aaveV3.id(), initialBalance / 3, debtOnAaveV3 - debtReductionOnAaveV3);
+        _assertCollateralAndDebt(aaveV2.id(), initialBalance / 3, debtOnAaveV2 - debtReductionOnAaveV2);
+        _assertCollateralAndDebt(euler.id(), initialBalance / 3, debtOnEuler - debtReductionOnEuler);
     }
 
     function test_rebalance_EmitsRebalancedEvent() public {
@@ -966,9 +966,9 @@ contract scUSDCv2Test is Test {
 
         vault.rebalance(callData);
 
-        _assertCollateralAndDebt2(aaveV3.id(), totalCollateral, totalDebt);
-        _assertCollateralAndDebt2(aaveV2.id(), 0, 0);
-        _assertCollateralAndDebt2(euler.id(), 0, 0);
+        _assertCollateralAndDebt(aaveV3.id(), totalCollateral, totalDebt);
+        _assertCollateralAndDebt(aaveV2.id(), 0, 0);
+        _assertCollateralAndDebt(euler.id(), 0, 0);
 
         // move everything from Aave to Euler
         uint256 collateralToMove = totalCollateral;
@@ -990,9 +990,9 @@ contract scUSDCv2Test is Test {
         assertApproxEqAbs(vault.totalCollateral(), totalCollateral, 1, "total collateral after");
         assertApproxEqAbs(vault.totalDebt(), totalDebt, 1, "total debt after");
 
-        _assertCollateralAndDebt2(aaveV3.id(), 0, 0);
-        _assertCollateralAndDebt2(aaveV2.id(), 0, 0);
-        _assertCollateralAndDebt2(euler.id(), totalCollateral, totalDebt);
+        _assertCollateralAndDebt(aaveV3.id(), 0, 0);
+        _assertCollateralAndDebt(aaveV2.id(), 0, 0);
+        _assertCollateralAndDebt(euler.id(), totalCollateral, totalDebt);
     }
 
     function test_reallocate_FailsIfThereIsNoDownsizeOnAtLeastOnProtocol() public {
@@ -1009,9 +1009,9 @@ contract scUSDCv2Test is Test {
 
         vault.rebalance(callData);
 
-        _assertCollateralAndDebt2(aaveV3.id(), totalCollateral, totalDebt);
-        _assertCollateralAndDebt2(aaveV2.id(), 0, 0);
-        _assertCollateralAndDebt2(euler.id(), 0, 0);
+        _assertCollateralAndDebt(aaveV3.id(), totalCollateral, totalDebt);
+        _assertCollateralAndDebt(aaveV2.id(), 0, 0);
+        _assertCollateralAndDebt(euler.id(), 0, 0);
 
         // move everything from Aave to Euler
         uint256 collateralToMove = totalCollateral / 2;
@@ -1042,9 +1042,9 @@ contract scUSDCv2Test is Test {
 
         vault.rebalance(callData);
 
-        _assertCollateralAndDebt2(aaveV3.id(), totalCollateral / 2, totalDebt / 2);
-        _assertCollateralAndDebt2(aaveV2.id(), 0, 0);
-        _assertCollateralAndDebt2(euler.id(), totalCollateral / 2, totalDebt / 2);
+        _assertCollateralAndDebt(aaveV3.id(), totalCollateral / 2, totalDebt / 2);
+        _assertCollateralAndDebt(aaveV2.id(), 0, 0);
+        _assertCollateralAndDebt(euler.id(), totalCollateral / 2, totalDebt / 2);
 
         // move half of the position from Aave to Euler
         uint256 collateralToMove = totalCollateral / 4;
@@ -1062,9 +1062,9 @@ contract scUSDCv2Test is Test {
         assertApproxEqAbs(vault.totalCollateral(), totalCollateral, 1, "total collateral after");
         assertApproxEqAbs(vault.totalDebt(), totalDebt, 1, "total debt after");
 
-        _assertCollateralAndDebt2(aaveV3.id(), totalCollateral / 4, totalDebt / 4);
-        _assertCollateralAndDebt2(aaveV2.id(), 0, 0);
-        _assertCollateralAndDebt2(euler.id(), totalCollateral * 3 / 4, totalDebt * 3 / 4);
+        _assertCollateralAndDebt(aaveV3.id(), totalCollateral / 4, totalDebt / 4);
+        _assertCollateralAndDebt(aaveV2.id(), 0, 0);
+        _assertCollateralAndDebt(euler.id(), totalCollateral * 3 / 4, totalDebt * 3 / 4);
     }
 
     function test_reallocate_MovesDebtFromOneToMultipleOtherProtocols() public {
@@ -1100,11 +1100,11 @@ contract scUSDCv2Test is Test {
 
         vault.reallocate(flashLoanAmount, callData);
 
-        _assertCollateralAndDebt2(
+        _assertCollateralAndDebt(
             aaveV3.id(), totalCollateral - collateralToMoveFromAaveV3, totalDebt - debtToMoveFromAaveV3
         );
-        _assertCollateralAndDebt2(aaveV2.id(), collateralToMoveToAaveV2, debtToMoveToAaveV2);
-        _assertCollateralAndDebt2(euler.id(), collateralToMoveToEuler, debtToMoveToEuler);
+        _assertCollateralAndDebt(aaveV2.id(), collateralToMoveToAaveV2, debtToMoveToAaveV2);
+        _assertCollateralAndDebt(euler.id(), collateralToMoveToEuler, debtToMoveToEuler);
     }
 
     function test_reallocate_WorksWhenCalledMultipleTimes() public {
@@ -1152,8 +1152,8 @@ contract scUSDCv2Test is Test {
         assertApproxEqAbs(vault.totalCollateral(), totalCollateral, 1, "total collateral");
         assertApproxEqAbs(vault.totalDebt(), totalDebt, 1, "total debt");
 
-        _assertCollateralAndDebt2(aaveV3.id(), totalCollateral, totalDebt);
-        _assertCollateralAndDebt2(euler.id(), 0, 0);
+        _assertCollateralAndDebt(aaveV3.id(), totalCollateral, totalDebt);
+        _assertCollateralAndDebt(euler.id(), 0, 0);
     }
 
     function test_reallocate_EmitsReallocatedEvent() public {
@@ -1250,8 +1250,8 @@ contract scUSDCv2Test is Test {
         vault.sellProfit(0);
 
         uint256 expectedUsdcBalance = usdcBalanceBefore + vault.getUsdcFromWeth(profit);
-        _assertCollateralAndDebt2(aaveV3.id(), initialBalance / 2, 50 ether);
-        _assertCollateralAndDebt2(euler.id(), initialBalance / 2, 50 ether);
+        _assertCollateralAndDebt(aaveV3.id(), initialBalance / 2, 50 ether);
+        _assertCollateralAndDebt(euler.id(), initialBalance / 2, 50 ether);
         assertApproxEqRel(vault.usdcBalance(), expectedUsdcBalance, 0.01e18, "usdc balance");
         assertApproxEqRel(vault.wethInvested(), initialWethInvested, 0.001e18, "sold more than actual profit");
     }
@@ -1768,9 +1768,7 @@ contract scUSDCv2Test is Test {
         vault.grantRole(vault.KEEPER_ROLE(), address(this));
     }
 
-    function _assertCollateralAndDebt2(uint8 _protocolId, uint256 _expectedCollateral, uint256 _expectedDebt)
-        internal
-    {
+    function _assertCollateralAndDebt(uint8 _protocolId, uint256 _expectedCollateral, uint256 _expectedDebt) internal {
         uint256 collateral = vault.getCollateral(_protocolId);
         uint256 debt = vault.getDebt(_protocolId);
         string memory protocolName = _protocolIdToString(_protocolId);

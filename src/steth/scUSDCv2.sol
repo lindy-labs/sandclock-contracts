@@ -222,9 +222,7 @@ contract scUSDCv2 is scUSDCBase {
 
         uint256 debt = totalDebt();
 
-        if (wethInvested() >= debt) {
-            revert VaultNotUnderwater();
-        }
+        if (wethInvested() >= debt) revert VaultNotUnderwater();
 
         uint256 wethBalance = scWETH.redeem(scWETH.balanceOf(address(this)), address(this), address(this));
         uint256 collateral = totalCollateral();
