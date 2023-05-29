@@ -1693,11 +1693,12 @@ contract scUSDCv2Test is Test {
         _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
         IAdapter adapter = new FaultyAdapter();
         vault.addAdapter(adapter);
+        uint8 id = adapter.id();
 
         vm.expectEmit(true, true, true, true);
-        emit RewardsClaimed(adapter.id());
+        emit RewardsClaimed(id);
 
-        vault.claimRewards(adapter.id(), abi.encode(address(vault)));
+        vault.claimRewards(id, abi.encode(address(vault)));
     }
 
     /// #setSlippageTolerance ///
