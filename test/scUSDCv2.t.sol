@@ -902,6 +902,46 @@ contract scUSDCv2Test is Test {
         vault.rebalance(callData);
     }
 
+    function testFuzz_rebalance_something(
+        uint256 supplyOnAaveV3,
+        uint256 borrowOnAaveV3,
+        uint256 supplyOnAaveV2,
+        uint256 borrowOnAaveV2
+    ) public {
+        _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
+
+        uint256 floatPercentage = 0.01e18;
+        vault.setFloatPercentage(floatPercentage);
+
+        supplyOnAaveV3 = bound(supplyOnAaveV3, 1e6, 10_000_000e6);
+        supplyOnAaveV2 = bound(supplyOnAaveV2, 1e6, 10_000_000e6);
+
+        uint256 initialBalance = (supplyOnAaveV3 + supplyOnAaveV2).divWadDown(1e18 - floatPercentage);
+        uint256 minFloat = (supplyOnAaveV3 + supplyOnAaveV2).mulWadDown(floatPercentage);
+
+        borrowOnAaveV3 = bound(
+            borrowOnAaveV3, 1, priceConverter.getWethFromUsdc(supplyOnAaveV3).mulWadDown(aaveV3.getMaxLtv() - 0.01e18)
+        );
+        borrowOnAaveV2 = bound(
+            borrowOnAaveV2, 1, priceConverter.getWethFromUsdc(supplyOnAaveV2).mulWadDown(aaveV2.getMaxLtv() - 0.01e18)
+        );
+
+        deal(address(usdc), address(vault), initialBalance);
+
+        bytes[] memory callData = new bytes[](4);
+        callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV3.id(), supplyOnAaveV3);
+        callData[1] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV3.id(), borrowOnAaveV3);
+        callData[2] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV2.id(), supplyOnAaveV2);
+        callData[3] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV2.id(), borrowOnAaveV2);
+
+        vault.rebalance(callData);
+
+        _assertCollateralAndDebt(aaveV3.id(), supplyOnAaveV3, borrowOnAaveV3);
+        _assertCollateralAndDebt(aaveV2.id(), supplyOnAaveV2, borrowOnAaveV2);
+        assertApproxEqAbs(vault.totalAssets(), initialBalance, 1, "total asets");
+        assertTrue(vault.usdcBalance() > minFloat, "float");
+    }
+
     /// #reallocate ///
 
     function test_reallocate_FailsIfCallerIsNotKeeper() public {
