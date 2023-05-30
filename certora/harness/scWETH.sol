@@ -116,7 +116,7 @@ contract scWETH is sc4626, IFlashLoanRecipient {
     /// @param newSlippageTolerance the new slippage tolerance
     /// @dev slippage tolerance is a number between 0 and 1e18
     function setSlippageTolerance(uint256 newSlippageTolerance) external {
-        onlyAdmin();
+        _onlyAdmin();
         if (newSlippageTolerance > C.ONE) revert InvalidSlippageTolerance();
         slippageTolerance = newSlippageTolerance;
         emit SlippageToleranceUpdated(msg.sender, newSlippageTolerance);
@@ -125,7 +125,7 @@ contract scWETH is sc4626, IFlashLoanRecipient {
     /// @notice set stEThToEthPriceFeed address
     /// @param newAddress the new address of the stEThToEthPriceFeed
     function setStEThToEthPriceFeed(address newAddress) external {
-        onlyAdmin();
+        _onlyAdmin();
         if (newAddress == address(0)) revert ZeroAddress();
         stEThToEthPriceFeed = AggregatorV3Interface(newAddress);
     }

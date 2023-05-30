@@ -148,7 +148,7 @@ contract scWETHv2Test is Test {
         vault.addAdapter(dummyAdapter);
 
         uint256 id = IAdapter(dummyAdapter).id();
-        vault.removeAdapter(id, true);
+        vault.removeAdapter(id, false);
         vault.addAdapter(dummyAdapter);
         assertEq(vault.getAdapter(IAdapter(dummyAdapter).id()), dummyAdapter, "adapter not added to protocolAdapters");
         assertEq(vault.isSupported(id), true, "adapter not added to supportedProtocols");
@@ -164,11 +164,11 @@ contract scWETHv2Test is Test {
         // must revert if not called by admin
         vm.expectRevert(CallerNotAdmin.selector);
         vm.prank(alice);
-        vault.removeAdapter(id, true);
+        vault.removeAdapter(id, false);
 
         // must revert if protocol not supported
         vm.expectRevert(ProtocolNotSupported.selector);
-        vault.removeAdapter(69, true);
+        vault.removeAdapter(69, false);
 
         // must revert if protocol has funds deposited in it
         _depositToVault(address(this), 10e18);
@@ -182,10 +182,10 @@ contract scWETHv2Test is Test {
         vm.stopPrank();
 
         vm.expectRevert(ProtocolContainsFunds.selector);
-        vault.removeAdapter(id, true);
-
-        // must not revert if checkForFunds is false
         vault.removeAdapter(id, false);
+
+        // must not revert if force is true
+        vault.removeAdapter(id, true);
         assertEq(vault.getAdapter(id), address(0x00), "adapter not removed from protocolAdapters");
         assertEq(vault.isSupported(id), false, "adapter not removed from supportedProtocols");
     }
@@ -194,15 +194,15 @@ contract scWETHv2Test is Test {
         _setUp(BLOCK_BEFORE_EULER_EXPLOIT);
 
         uint256 id = aaveV3Adapter.id();
-        vault.removeAdapter(id, true);
+        vault.removeAdapter(id, false);
         _removeAdapterChecks(id, C.AAVE_POOL);
 
         id = compoundV3Adapter.id();
-        vault.removeAdapter(id, true);
+        vault.removeAdapter(id, false);
         _removeAdapterChecks(id, C.COMPOUND_V3_COMET_WETH);
 
         id = eulerAdapter.id();
-        vault.removeAdapter(id, true);
+        vault.removeAdapter(id, false);
         _removeAdapterChecks(id, C.EULER);
     }
 

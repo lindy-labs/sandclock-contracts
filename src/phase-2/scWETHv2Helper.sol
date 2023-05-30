@@ -29,8 +29,8 @@ contract scWETHv2Helper {
 
     /// @notice returns the net leverage that the strategy is using right now (1e18 = 100%)
     function getLeverage() public view returns (uint256) {
-        uint256 coll = vault.totalCollateral();
-        return coll > 0 ? coll.divWadUp(coll - vault.totalDebt()) : 0;
+        uint256 collateral = vault.totalCollateral();
+        return collateral > 0 ? collateral.divWadUp(collateral - vault.totalDebt()) : 0;
     }
 
     function getLtv(IAdapter adapter) public view returns (uint256) {

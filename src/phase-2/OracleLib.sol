@@ -28,7 +28,7 @@ contract OracleLib is AccessControl {
         _grantRole(DEFAULT_ADMIN_ROLE, _admin);
     }
 
-    function onlyAdmin() internal view {
+    function _onlyAdmin() internal view {
         if (!hasRole(DEFAULT_ADMIN_ROLE, msg.sender)) revert CallerNotAdmin();
     }
 
@@ -77,7 +77,7 @@ contract OracleLib is AccessControl {
     /// @notice set stEThToEthPriceFeed address
     /// @param newAddress the new address of the stEThToEthPriceFeed
     function setStEThToEthPriceFeed(address newAddress) external {
-        onlyAdmin();
+        _onlyAdmin();
         if (newAddress == address(0)) revert ZeroAddress();
         stEThToEthPriceFeed = AggregatorV3Interface(newAddress);
     }

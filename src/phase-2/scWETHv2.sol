@@ -120,7 +120,7 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
     /////////////////// ADMIN/KEEPER METHODS //////////////////////////////////
 
     function setSwapRouter(address _wstEthToWethSwapRouter, address _wethToWstEthSwapRouter) external {
-        onlyAdmin();
+        _onlyAdmin();
         if (_wstEthToWethSwapRouter != address(0x0)) wstEthToWethSwapRouter = _wstEthToWethSwapRouter;
 
         if (_wethToWstEthSwapRouter != address(0x0)) wethToWstEthSwapRouter = _wethToWstEthSwapRouter;
@@ -130,7 +130,7 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
     /// @param newSlippageTolerance the new slippage tolerance
     /// @dev slippage tolerance is a number between 0 and 1e18
     function setSlippageTolerance(uint256 newSlippageTolerance) external {
-        onlyAdmin();
+        _onlyAdmin();
 
         if (newSlippageTolerance > C.ONE) revert InvalidSlippageTolerance();
 
@@ -139,13 +139,13 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
     }
 
     function setMinimumFloatAmount(uint256 newFloatAmount) external {
-        onlyAdmin();
+        _onlyAdmin();
         minimumFloatAmount = newFloatAmount;
         emit FloatAmountUpdated(msg.sender, newFloatAmount);
     }
 
     function addAdapter(address _adapter) external {
-        onlyAdmin();
+        _onlyAdmin();
 
         uint256 id = IAdapter(_adapter).id();
 
@@ -158,15 +158,15 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
 
     /// @notice removes an adapter from the supported adapters
     /// @param _adapterId the id of the adapter to remove
-    /// @param _checkForFunds if true, will revert if the vault still has funds deposited in the adapter
-    function removeAdapter(uint256 _adapterId, bool _checkForFunds) external {
-        onlyAdmin();
+    /// @param _force if false, will revert if the vault still has funds deposited in the adapter
+    function removeAdapter(uint256 _adapterId, bool _force) external {
+        _onlyAdmin();
 
         if (!isSupported(_adapterId)) revert ProtocolNotSupported();
 
         address _adapter = protocolAdapters.get(_adapterId);
 
-        if (_checkForFunds) {
+        if (!_force) {
             if (IAdapter(_adapter).getCollateral(address(this)) != 0) {
                 revert ProtocolContainsFunds();
             }
@@ -180,7 +180,7 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
     /// @dev can also be used to swap between other tokens
     /// @param inToken address of the token to swap from
     function swapTokensWith0x(bytes calldata swapData, address inToken, address outToken, uint256 amountIn) external {
-        onlyKeeper();
+        _onlyKeeper();
         ERC20(inToken).safeApprove(C.ZEROX_ROUTER, amountIn);
         C.ZEROX_ROUTER.functionCall(swapData);
 
@@ -188,7 +188,7 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
     }
 
     function claimRewards(uint256 _adapterId, bytes calldata _data) external {
-        onlyKeeper();
+        _onlyKeeper();
         protocolAdapters.get(_adapterId).functionDelegateCall(
             abi.encodeWithSelector(IAdapter.claimRewards.selector, _data)
         );
@@ -202,7 +202,7 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
         SupplyBorrowParam[] calldata supplyBorrowParams,
         bytes calldata wethToWstEthSwapData
     ) external {
-        onlyKeeper();
+        _onlyKeeper();
         invest(totalInvestAmount, supplyBorrowParams, wethToWstEthSwapData);
 
         // store the old total
@@ -228,7 +228,7 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
     /// @notice withdraw funds from the strategy into the vault
     /// @param amount : amount of assets to withdraw into the vault
     function withdrawToVault(uint256 amount) external {
-        onlyKeeper();
+        _onlyKeeper();
         _withdrawToVault(amount);
     }
 
@@ -267,7 +267,7 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
     function disinvest(RepayWithdrawParam[] calldata repayWithdrawParams, bytes calldata wstEthToWethSwapData)
         external
     {
-        onlyKeeper();
+        _onlyKeeper();
         uint256 totalFlashLoanAmount;
         for (uint256 i; i < repayWithdrawParams.length; i++) {
             totalFlashLoanAmount += repayWithdrawParams[i].repayAmount;
@@ -294,7 +294,7 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
         bytes calldata wstEthToWethSwapData,
         bytes calldata wethToWstEthSwapData
     ) external {
-        onlyKeeper();
+        _onlyKeeper();
         uint256 totalFlashLoanAmount;
         for (uint256 i; i < from.length; i++) {
             totalFlashLoanAmount += from[i].repayAmount;

@@ -129,7 +129,7 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
      * @param _newSlippageTolerance The new slippage tolerance value.
      */
     function setSlippageTolerance(uint256 _newSlippageTolerance) external {
-        onlyAdmin();
+        _onlyAdmin();
         if (_newSlippageTolerance > C.ONE) revert InvalidSlippageTolerance();
 
         slippageTolerance = _newSlippageTolerance;
@@ -142,7 +142,7 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
      * @param _newTargetLtv The new target LTV value.
      */
     function applyNewTargetLtv(uint256 _newTargetLtv) external {
-        onlyKeeper();
+        _onlyKeeper();
         if (_newTargetLtv > getMaxLtv()) revert InvalidTargetLtv();
 
         targetLtv = _newTargetLtv;
@@ -157,7 +157,7 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
      * @dev Called to increase or decrease the WETH debt to match the target LTV.
      */
     function rebalance() public {
-        onlyKeeper();
+        _onlyKeeper();
 
         uint256 initialBalance = getUsdcBalance();
         uint256 currentBalance = initialBalance;
@@ -199,7 +199,7 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
      * @param _usdcAmountOutMin The minimum amount of USDC to receive.
      */
     function sellProfit(uint256 _usdcAmountOutMin) external {
-        onlyKeeper();
+        _onlyKeeper();
 
         uint256 profits = _calculateWethProfit(getInvested(), getDebt());
 
@@ -216,7 +216,7 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
      * @param _endUsdcBalanceMin The minimum USDC balance to end with after all positions are closed.
      */
     function exitAllPositions(uint256 _endUsdcBalanceMin) external {
-        onlyAdmin();
+        _onlyAdmin();
         uint256 debt = getDebt();
 
         if (getInvested() >= debt) {
