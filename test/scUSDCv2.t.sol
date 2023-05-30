@@ -24,6 +24,8 @@ import {EulerAdapter} from "../src/steth/usdc-adapters/EulerAdapter.sol";
 import {scWETH} from "../src/steth/scWETH.sol";
 import {ISwapRouter} from "../src/interfaces/uniswap/ISwapRouter.sol";
 import {AggregatorV3Interface} from "../src/interfaces/chainlink/AggregatorV3Interface.sol";
+import {PriceConverter} from "../src/steth/PriceConverter.sol";
+import {Swapper} from "../src/steth/Swapper.sol";
 import {IVault} from "../src/interfaces/balancer/IVault.sol";
 import {ICurvePool} from "../src/interfaces/curve/ICurvePool.sol";
 import {ILido} from "../src/interfaces/lido/ILido.sol";
@@ -79,6 +81,8 @@ contract scUSDCv2Test is Test {
     AaveV3Adapter aaveV3;
     AaveV2Adapter aaveV2;
     EulerAdapter euler;
+    Swapper swapper;
+    PriceConverter priceConverter;
 
     function _setUpForkAtBlock(uint256 _forkAtBlock) internal {
         mainnetFork = vm.createFork(vm.envString("RPC_URL_MAINNET"));
@@ -101,46 +105,9 @@ contract scUSDCv2Test is Test {
         _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
         assertEq(address(vault.asset()), C.USDC);
         assertEq(address(vault.scWETH()), address(wethVault));
+        // TODO: assert swapper and price converter
 
-        // check approvals
-        assertEq(weth.allowance(address(vault), C.UNISWAP_V3_SWAP_ROUTER), type(uint256).max, "swap router allowance");
         assertEq(weth.allowance(address(vault), address(vault.scWETH())), type(uint256).max, "scWETH allowance");
-    }
-
-    /// #setUsdcToEthPriceFeed
-
-    function test_setUsdcToEthPriceFeed_FailsIfCallerIsNotAdmin() public {
-        _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
-
-        vm.prank(alice);
-        vm.expectRevert(CallerNotAdmin.selector);
-        vault.setUsdcToEthPriceFeed(AggregatorV3Interface(address(0)));
-    }
-
-    function test_setUsdcToEthPriceFeed_FailsIfNewPriceFeedIsZeroAddress() public {
-        _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
-
-        vm.expectRevert(PriceFeedZeroAddress.selector);
-        vault.setUsdcToEthPriceFeed(AggregatorV3Interface(address(0)));
-    }
-
-    function test_setUsdcToEthPriceFeed_ChangesThePriceFeed() public {
-        _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
-        AggregatorV3Interface _newPriceFeed = AggregatorV3Interface(address(0x1));
-
-        vault.setUsdcToEthPriceFeed(_newPriceFeed);
-
-        assertEq(address(vault.usdcToEthPriceFeed()), address(_newPriceFeed), "price feed has not changed");
-    }
-
-    function test_setUsdcToEthPriceFeed_EmitsEvent() public {
-        _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
-        AggregatorV3Interface _newPriceFeed = AggregatorV3Interface(address(0x1));
-
-        vm.expectEmit(true, true, true, true);
-        emit UsdcToEthPriceFeedUpdated(address(this), address(_newPriceFeed));
-
-        vault.setUsdcToEthPriceFeed(_newPriceFeed);
     }
 
     /// #addAdapter ///
@@ -1249,7 +1216,7 @@ contract scUSDCv2Test is Test {
         vm.prank(keeper);
         vault.sellProfit(0);
 
-        uint256 expectedUsdcBalance = usdcBalanceBefore + vault.getUsdcFromWeth(profit);
+        uint256 expectedUsdcBalance = usdcBalanceBefore + priceConverter.getUsdcFromWeth(profit);
         _assertCollateralAndDebt(aaveV3.id(), initialBalance / 2, 50 ether);
         _assertCollateralAndDebt(euler.id(), initialBalance / 2, 50 ether);
         assertApproxEqRel(vault.usdcBalance(), expectedUsdcBalance, 0.01e18, "usdc balance");
@@ -1303,7 +1270,7 @@ contract scUSDCv2Test is Test {
         uint256 wethInvested = weth.balanceOf(address(wethVault));
         deal(address(weth), address(wethVault), wethInvested * 2);
 
-        uint256 tooLargeUsdcAmountOutMin = vault.getUsdcFromWeth(vault.getProfit()).mulWadDown(1.05e18); // add 5% more than expected
+        uint256 tooLargeUsdcAmountOutMin = priceConverter.getUsdcFromWeth(vault.getProfit()).mulWadDown(1.05e18); // add 5% more than expected
 
         vm.prank(keeper);
         vm.expectRevert("Too little received");
@@ -1395,7 +1362,7 @@ contract scUSDCv2Test is Test {
         uint256 debtBefore = vault.totalDebt();
 
         uint256 profit = vault.getProfit();
-        uint256 expectedUsdcFromProfitSelling = vault.getUsdcFromWeth(profit);
+        uint256 expectedUsdcFromProfitSelling = priceConverter.getUsdcFromWeth(profit);
         uint256 initialFloat = vault.usdcBalance();
         // withdraw double the float amount
         uint256 withdrawAmount = initialFloat * 2;
@@ -1524,7 +1491,7 @@ contract scUSDCv2Test is Test {
         vault.deposit(_amount, alice);
         vm.stopPrank();
 
-        uint256 borrowAmount = _amount.mulWadDown(0.7e18).divWadDown(vault.getUsdcFromWeth(1 ether));
+        uint256 borrowAmount = priceConverter.getWethFromUsdc(_amount.mulWadDown(0.7e18));
 
         bytes[] memory callData = new bytes[](2);
         callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV3.id(), _amount);
@@ -1554,7 +1521,7 @@ contract scUSDCv2Test is Test {
         vault.deposit(_amount, alice);
         vm.stopPrank();
 
-        uint256 borrowAmount = _amount.mulWadDown(0.7e18).divWadDown(vault.getUsdcFromWeth(1 ether));
+        uint256 borrowAmount = priceConverter.getWethFromUsdc(_amount.mulWadDown(0.7e18));
 
         bytes[] memory callData = new bytes[](4);
         callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV3.id(), _amount.mulWadDown(0.3e18));
@@ -1846,7 +1813,10 @@ contract scUSDCv2Test is Test {
     }
 
     function _deployAndSetUpVault() internal {
-        vault = new scUSDCv2(address(this), keeper, wethVault);
+        priceConverter = new PriceConverter(address(this));
+        swapper = new Swapper();
+
+        vault = new scUSDCv2(address(this), keeper, wethVault, priceConverter, swapper);
 
         vault.addAdapter(aaveV3);
         vault.addAdapter(aaveV2);

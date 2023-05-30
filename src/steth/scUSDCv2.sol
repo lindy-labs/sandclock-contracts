@@ -30,6 +30,8 @@ import {AggregatorV3Interface} from "../interfaces/chainlink/AggregatorV3Interfa
 import {IFlashLoanRecipient} from "../interfaces/balancer/IFlashLoanRecipient.sol";
 import {scUSDCBase} from "./scUSDCBase.sol";
 import {IAdapter} from "./usdc-adapters/IAdapter.sol";
+import {PriceConverter} from "./PriceConverter.sol";
+import {Swapper} from "./Swapper.sol";
 
 /**
  * @title Sandclock USDC Vault version 2
@@ -52,7 +54,6 @@ contract scUSDCv2 is scUSDCBase {
         ExitAllPositions
     }
 
-    event UsdcToEthPriceFeedUpdated(address indexed admin, address newPriceFeed);
     event ProtocolAdapterAdded(address indexed admin, uint8 adapterId, address adapter);
     event ProtocolAdapterRemoved(address indexed admin, uint8 adapterId);
     event EmergencyExitExecuted(
@@ -69,42 +70,30 @@ contract scUSDCv2 is scUSDCBase {
     event Disinvested(uint256 wethAmount);
     event RewardsClaimed(uint8 adapterId);
 
-    // Uniswap V3 router
-    ISwapRouter public constant swapRouter = ISwapRouter(C.UNISWAP_V3_SWAP_ROUTER);
-
-    // Chainlink pricefeed (USDC -> WETH)
-    AggregatorV3Interface public usdcToEthPriceFeed = AggregatorV3Interface(C.CHAINLINK_USDC_ETH_PRICE_FEED);
-
     // Balancer vault for flashloans
     IVault public constant balancerVault = IVault(C.BALANCER_VAULT);
 
     // mapping of IDs to lending protocol adapter contracts
     EnumerableMap.UintToAddressMap private protocolAdapters;
 
-    constructor(address _admin, address _keeper, ERC4626 _scWETH)
+    // price converter contract
+    PriceConverter public immutable priceConverter;
+
+    // swapper contract for facilitating token swaps
+    Swapper public immutable swapper;
+
+    constructor(address _admin, address _keeper, ERC4626 _scWETH, PriceConverter _priceConverter, Swapper _swapper)
         scUSDCBase(_admin, _keeper, ERC20(C.USDC), WETH(payable(C.WETH)), _scWETH, "Sandclock USDC Vault v2", "scUSDCv2")
     {
-        weth.safeApprove(address(swapRouter), type(uint256).max);
+        priceConverter = _priceConverter;
+        swapper = _swapper;
+
         weth.safeApprove(address(scWETH), type(uint256).max);
     }
 
     /*//////////////////////////////////////////////////////////////
                             PUBLIC API
     //////////////////////////////////////////////////////////////*/
-
-    /**
-     * @notice Set the chainlink price feed for USDC -> WETH.
-     * @param _newPriceFeed The new price feed.
-     */
-    function setUsdcToEthPriceFeed(AggregatorV3Interface _newPriceFeed) external {
-        _onlyAdmin();
-
-        if (address(_newPriceFeed) == address(0)) revert PriceFeedZeroAddress();
-
-        usdcToEthPriceFeed = _newPriceFeed;
-
-        emit UsdcToEthPriceFeedUpdated(msg.sender, address(_newPriceFeed));
-    }
 
     /**
      * @notice Add a new protocol adapter to the vault.
@@ -278,17 +267,11 @@ contract scUSDCv2 is scUSDCBase {
     function sellTokens(ERC20 _token, uint256 _amount, bytes calldata _swapData, uint256 _usdcAmountOutMin) external {
         _onlyKeeper();
 
-        uint256 tokenBalance = _token.balanceOf(address(this));
-        uint256 initialUsdcBalance = usdcBalance();
+        bytes memory result = address(swapper).functionDelegateCall(
+            abi.encodeWithSelector(Swapper.zeroExSwap.selector, _token, asset, _amount, _usdcAmountOutMin, _swapData)
+        );
 
-        _token.safeApprove(C.ZERO_EX_ROUTER, _amount);
-        C.ZERO_EX_ROUTER.functionCall(_swapData);
-
-        uint256 usdcReceived = usdcBalance() - initialUsdcBalance;
-
-        if (usdcReceived < _usdcAmountOutMin) revert AmountReceivedBelowMin();
-
-        emit TokensSold(address(_token), tokenBalance - _token.balanceOf(address(this)), usdcReceived);
+        emit TokensSold(address(_token), _amount, abi.decode(result, (uint256)));
     }
 
     /**
@@ -383,16 +366,6 @@ contract scUSDCv2 is scUSDCBase {
      */
     function totalAssets() public view override returns (uint256) {
         return _calculateTotalAssets(usdcBalance(), totalCollateral(), wethInvested(), totalDebt());
-    }
-
-    /**
-     * @notice Returns the USDC fair value of the WETH amount.
-     * @param _wethAmount The amount of WETH.
-     */
-    function getUsdcFromWeth(uint256 _wethAmount) public view returns (uint256) {
-        (, int256 usdcPriceInWeth,,,) = usdcToEthPriceFeed.latestRoundData();
-
-        return _wethAmount.divWadDown(uint256(usdcPriceInWeth) * C.WETH_USDC_DECIMALS_DIFF);
     }
 
     /**
@@ -522,22 +495,7 @@ contract scUSDCv2 is scUSDCBase {
             if (collateral > 0) _withdraw(uint8(id), collateral);
         }
 
-        asset.approve(address(swapRouter), type(uint256).max);
-
-        ISwapRouter.ExactOutputSingleParams memory params = ISwapRouter.ExactOutputSingleParams({
-            tokenIn: address(asset),
-            tokenOut: address(weth),
-            fee: 500,
-            recipient: address(this),
-            deadline: block.timestamp,
-            amountOut: _flashLoanAmount,
-            amountInMaximum: type(uint256).max, // ignore slippage
-            sqrtPriceLimitX96: 0
-        });
-
-        swapRouter.exactOutputSingle(params);
-
-        asset.approve(address(swapRouter), 0);
+        _swapUsdcForExactWeth(_flashLoanAmount);
     }
 
     function beforeWithdraw(uint256 _assets, uint256) internal override {
@@ -557,7 +515,7 @@ contract scUSDCv2 is scUSDCBase {
         // first try to sell profits to cover withdrawal amount
         if (profit != 0) {
             uint256 withdrawn = _disinvest(profit);
-            uint256 usdcAmountOutMin = getUsdcFromWeth(withdrawn).mulWadDown(slippageTolerance);
+            uint256 usdcAmountOutMin = priceConverter.getUsdcFromWeth(withdrawn).mulWadDown(slippageTolerance);
             uint256 usdcReceived = _swapWethForUsdc(withdrawn, usdcAmountOutMin);
 
             if (initialBalance + usdcReceived >= _assets) return;
@@ -624,9 +582,9 @@ contract scUSDCv2 is scUSDCBase {
 
         if (profit != 0) {
             // account for slippage when selling weth profits
-            total += getUsdcFromWeth(profit).mulWadDown(slippageTolerance);
+            total += priceConverter.getUsdcFromWeth(profit).mulWadDown(slippageTolerance);
         } else {
-            total -= getUsdcFromWeth(_debt - _invested);
+            total -= priceConverter.getUsdcFromWeth(_debt - _invested);
         }
     }
 
@@ -635,17 +593,24 @@ contract scUSDCv2 is scUSDCBase {
     }
 
     function _swapWethForUsdc(uint256 _wethAmount, uint256 _usdcAmountOutMin) internal returns (uint256) {
-        ISwapRouter.ExactInputSingleParams memory params = ISwapRouter.ExactInputSingleParams({
-            tokenIn: address(weth),
-            tokenOut: address(asset),
-            fee: 500,
-            recipient: address(this),
-            deadline: block.timestamp,
-            amountIn: _wethAmount,
-            amountOutMinimum: _usdcAmountOutMin,
-            sqrtPriceLimitX96: 0
-        });
+        bytes memory result = address(swapper).functionDelegateCall(
+            abi.encodeWithSelector(
+                Swapper.uniswapSwapExactInput.selector, address(weth), address(asset), _wethAmount, _usdcAmountOutMin
+            )
+        );
 
-        return swapRouter.exactInputSingle(params);
+        return abi.decode(result, (uint256));
+    }
+
+    function _swapUsdcForExactWeth(uint256 _wethAmountOut) internal {
+        address(swapper).functionDelegateCall(
+            abi.encodeWithSelector(
+                Swapper.uniswapSwapExactOutput.selector,
+                address(asset),
+                address(weth),
+                _wethAmountOut,
+                type(uint256).max // ignore slippage
+            )
+        );
     }
 }
