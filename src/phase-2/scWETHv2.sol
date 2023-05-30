@@ -109,6 +109,7 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
         sc4626(params.admin, params.keeper, ERC20(params.weth), "Sandclock WETH Vault v2", "scWETHv2")
     {
         if (params.slippageTolerance > C.ONE) revert InvalidSlippageTolerance();
+
         slippageTolerance = params.slippageTolerance;
         balancerVault = params.balancerVault;
         oracleLib = params.oracleLib;
@@ -121,6 +122,7 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
     function setSwapRouter(address _wstEthToWethSwapRouter, address _wethToWstEthSwapRouter) external {
         onlyAdmin();
         if (_wstEthToWethSwapRouter != address(0x0)) wstEthToWethSwapRouter = _wstEthToWethSwapRouter;
+
         if (_wethToWstEthSwapRouter != address(0x0)) wethToWstEthSwapRouter = _wethToWstEthSwapRouter;
     }
 
@@ -129,7 +131,9 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
     /// @dev slippage tolerance is a number between 0 and 1e18
     function setSlippageTolerance(uint256 newSlippageTolerance) external {
         onlyAdmin();
+
         if (newSlippageTolerance > C.ONE) revert InvalidSlippageTolerance();
+
         slippageTolerance = newSlippageTolerance;
         emit SlippageToleranceUpdated(msg.sender, newSlippageTolerance);
     }
@@ -157,13 +161,17 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
     /// @param _checkForFunds if true, will revert if the vault still has funds deposited in the adapter
     function removeAdapter(uint256 _adapterId, bool _checkForFunds) external {
         onlyAdmin();
+
         if (!isSupported(_adapterId)) revert ProtocolNotSupported();
+
         address _adapter = protocolAdapters.get(_adapterId);
+
         if (_checkForFunds) {
             if (IAdapter(_adapter).getCollateral(address(this)) != 0) {
                 revert ProtocolContainsFunds();
             }
         }
+
         _adapter.functionDelegateCall(abi.encodeWithSelector(IAdapter.revokeApprovals.selector));
         protocolAdapters.remove(_adapterId);
     }
@@ -401,10 +409,6 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
     function receiveFlashLoan(address[] memory, uint256[] memory amounts, uint256[] memory, bytes memory userData)
         external
     {
-        if (msg.sender != address(balancerVault)) {
-            revert InvalidFlashLoanCaller();
-        }
-
         _isFlashLoanInitiated();
 
         // the amount flashloaned
@@ -486,6 +490,7 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
     function _enforceFloat() internal view {
         uint256 float = asset.balanceOf(address(this));
         uint256 floatRequired = minimumFloatAmount;
+
         if (float < floatRequired) {
             revert FloatBalanceTooSmall(float, floatRequired);
         }
@@ -493,6 +498,7 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
 
     function beforeWithdraw(uint256 assets, uint256) internal override {
         uint256 float = asset.balanceOf(address(this));
+
         if (assets <= float) {
             return;
         }
