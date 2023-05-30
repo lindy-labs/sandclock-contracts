@@ -59,21 +59,6 @@ contract OracleLib is AccessControl {
         ethAmount = stEthToEth(stEthAmount);
     }
 
-    function calcFlashLoanAmountWithdrawing(address adapter, uint256 totalAmount, uint256 totalInvested_)
-        public
-        view
-        returns (uint256 flashLoanAmount, uint256 amount)
-    {
-        uint256 debt = IAdapter(adapter).getDebt(msg.sender);
-        uint256 assets = wstEthToEth(IAdapter(adapter).getCollateral(msg.sender)) - debt;
-
-        // withdraw from each protocol based on the allocation percent
-        amount = totalAmount.mulDivDown(assets, totalInvested_);
-
-        // calculate the flashloan amount needed
-        flashLoanAmount = amount.mulDivDown(debt, assets);
-    }
-
     /// @notice set stEThToEthPriceFeed address
     /// @param newAddress the new address of the stEThToEthPriceFeed
     function setStEThToEthPriceFeed(address newAddress) external {

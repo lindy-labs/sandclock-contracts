@@ -128,19 +128,19 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
     }
 
     /// @notice set the slippage tolerance for curve swaps
-    /// @param newSlippageTolerance the new slippage tolerance
+    /// @param _newSlippageTolerance the new slippage tolerance
     /// @dev slippage tolerance is a number between 0 and 1e18
     function setSlippageTolerance(uint256 _newSlippageTolerance) external {
         _onlyAdmin();
 
-        if (newSlippageTolerance > C.ONE) revert InvalidSlippageTolerance();
+        if (_newSlippageTolerance > C.ONE) revert InvalidSlippageTolerance();
 
         slippageTolerance = _newSlippageTolerance;
         emit SlippageToleranceUpdated(msg.sender, _newSlippageTolerance);
     }
 
     /// @notice set the minimum amount of weth that must be present in the vault
-    /// @param newFloatAmount the new minimum float amount
+    /// @param _newFloatAmount the new minimum float amount
     function setMinimumFloatAmount(uint256 _newFloatAmount) external {
         _onlyAdmin();
         minimumFloatAmount = _newFloatAmount;
@@ -469,7 +469,7 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
             address adapter;
             for (uint256 i; i < n; i++) {
                 (protocolId, adapter) = protocolAdapters.at(i);
-                (flashLoanAmount_, amount_) = oracleLib.calcFlashLoanAmountWithdrawing(adapter, amount, totalInvested_);
+                (flashLoanAmount_, amount_) = _calcFlashLoanAmountWithdrawing(adapter, amount, totalInvested_);
 
                 repayWithdrawParams[i] =
                     RepayWithdrawParam(protocolId, flashLoanAmount_, oracleLib.ethToWstEth(flashLoanAmount_ + amount_));
@@ -539,5 +539,20 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
         _initiateFlashLoan();
         balancerVault.flashLoan(address(this), tokens, amounts, abi.encode(_params));
         _finalizeFlashLoan();
+    }
+
+    function _calcFlashLoanAmountWithdrawing(address adapter, uint256 totalAmount, uint256 totalInvested_)
+        internal
+        view
+        returns (uint256 flashLoanAmount, uint256 amount)
+    {
+        uint256 debt = IAdapter(adapter).getDebt(address(this));
+        uint256 assets = oracleLib.wstEthToEth(IAdapter(adapter).getCollateral(address(this))) - debt;
+
+        // withdraw from each protocol based on the allocation percent
+        amount = totalAmount.mulDivDown(assets, totalInvested_);
+
+        // calculate the flashloan amount needed
+        flashLoanAmount = amount.mulDivDown(debt, assets);
     }
 }
