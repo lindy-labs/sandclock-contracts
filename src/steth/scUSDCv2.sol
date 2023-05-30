@@ -67,6 +67,7 @@ contract scUSDCv2 is scUSDCBase {
     event Borrowed(uint8 adapterId, uint256 amount);
     event Repaid(uint8 adapterId, uint256 amount);
     event Withdrawn(uint8 adapterId, uint256 amount);
+    event Invested(uint256 wethAmount);
     event Disinvested(uint256 wethAmount);
     event RewardsClaimed(uint8 adapterId);
 
@@ -284,8 +285,6 @@ contract scUSDCv2 is scUSDCBase {
         _isSupportedCheck(_adapterId);
 
         _supply(_adapterId, _amount);
-
-        emit Supplied(_adapterId, _amount);
     }
 
     /**
@@ -298,8 +297,6 @@ contract scUSDCv2 is scUSDCBase {
         _isSupportedCheck(_adapterId);
 
         _borrow(_adapterId, _amount);
-
-        emit Borrowed(_adapterId, _amount);
     }
 
     /**
@@ -312,8 +309,6 @@ contract scUSDCv2 is scUSDCBase {
         _isSupportedCheck(_adapterId);
 
         _repay(_adapterId, _amount);
-
-        emit Repaid(_adapterId, _amount);
     }
 
     /**
@@ -326,8 +321,6 @@ contract scUSDCv2 is scUSDCBase {
         _isSupportedCheck(_adapterId);
 
         _withdraw(_adapterId, _amount);
-
-        emit Withdrawn(_adapterId, _amount);
     }
 
     /**
@@ -350,7 +343,7 @@ contract scUSDCv2 is scUSDCBase {
     function disinvest(uint256 _amount) external {
         _onlyKeeper();
 
-        emit Disinvested(_disinvest(_amount));
+        _disinvest(_amount);
     }
 
     /**
@@ -454,10 +447,14 @@ contract scUSDCv2 is scUSDCBase {
 
     function _supply(uint8 _adapterId, uint256 _amount) internal {
         _adapterDelegateCall(_adapterId, abi.encodeWithSelector(IAdapter.supply.selector, _amount));
+
+        emit Supplied(_adapterId, _amount);
     }
 
     function _borrow(uint8 _adapterId, uint256 _amount) internal {
         _adapterDelegateCall(_adapterId, abi.encodeWithSelector(IAdapter.borrow.selector, _amount));
+
+        emit Borrowed(_adapterId, _amount);
     }
 
     function _repay(uint8 _adapterId, uint256 _amount) internal {
@@ -466,21 +463,34 @@ contract scUSDCv2 is scUSDCBase {
         _amount = _amount > wethBalance ? wethBalance : _amount;
 
         _adapterDelegateCall(_adapterId, abi.encodeWithSelector(IAdapter.repay.selector, _amount));
+
+        emit Repaid(_adapterId, _amount);
     }
 
     function _withdraw(uint8 _adapterId, uint256 _amount) internal {
         _adapterDelegateCall(_adapterId, abi.encodeWithSelector(IAdapter.withdraw.selector, _amount));
+
+        emit Withdrawn(_adapterId, _amount);
     }
 
     function _invest() internal {
         uint256 wethBalance = weth.balanceOf(address(this));
-        if (wethBalance > 0) scWETH.deposit(wethBalance, address(this));
+
+        if (wethBalance > 0) {
+            scWETH.deposit(wethBalance, address(this));
+
+            emit Invested(wethBalance);
+        }
     }
 
     function _disinvest(uint256 _wethAmount) internal returns (uint256) {
         uint256 shares = scWETH.convertToShares(_wethAmount);
 
-        return scWETH.redeem(shares, address(this), address(this));
+        uint256 amount = scWETH.redeem(shares, address(this), address(this));
+
+        emit Disinvested(amount);
+
+        return amount;
     }
 
     function _exitAllPositionsFlash(uint256 _flashLoanAmount) internal {
