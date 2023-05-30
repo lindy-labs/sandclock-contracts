@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.13;
 
-import "forge-std/console.sol";
-
 import {
     InvalidTargetLtv,
     ZeroAddress,
@@ -26,7 +24,6 @@ import {WETH} from "solmate/tokens/WETH.sol";
 import {IEulerMarkets} from "lib/euler-interfaces/contracts/IEuler.sol";
 import {IPool} from "aave-v3/interfaces/IPool.sol";
 import {Address} from "openzeppelin-contracts/utils/Address.sol";
-// import {EnumerableSet} from "openzeppelin-contracts/utils/structs/EnumerableSet.sol";
 import {EnumerableMap} from "openzeppelin-contracts/utils/structs/EnumerableMap.sol";
 
 import {Constants as C} from "../lib/Constants.sol";
@@ -533,7 +530,3 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
         _finalizeFlashLoan();
     }
 }
-
-// todo:
-// gas optimizations
-// call with nenad to make contract function signatures similar
