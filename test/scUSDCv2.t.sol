@@ -1486,6 +1486,97 @@ contract scUSDCv2Test is Test {
         assertApproxEqRel(debtOnAaveV2, endDebt / 2, 0.01e18, "debt on euler");
     }
 
+    function test_withdraw_worksIfThereIsNoDebtPositionOnOneOfTheProtocols() public {
+        _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
+        uint256 initialBalance = 1_000_000e6;
+        deal(address(usdc), alice, initialBalance);
+
+        vm.startPrank(alice);
+        usdc.approve(address(vault), initialBalance);
+        vault.deposit(initialBalance, alice);
+        vm.stopPrank();
+
+        bytes[] memory callData = new bytes[](3);
+        callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV3.id(), initialBalance / 2);
+        callData[1] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV2.id(), initialBalance / 2);
+        callData[2] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV2.id(), 100 ether);
+
+        vault.rebalance(callData);
+
+        uint256 withdrawAmount = vault.convertToAssets(vault.balanceOf(alice));
+        vm.prank(alice);
+        vault.withdraw(withdrawAmount, alice, alice);
+
+        assertEq(usdc.balanceOf(alice), withdrawAmount, "alice usdc balance");
+    }
+
+    function testFuzz_withdraw(uint256 _amount, uint256 _withdrawAmount) public {
+        _setUpForkAtBlock(BLOCK_BEFORE_EULER_EXPLOIT);
+
+        _amount = 36072990718134180857610733478;
+        _withdrawAmount = 0;
+        _amount = bound(_amount, 1e6, 10_000_000e6); // upper limit constrained by weth available on aave v3
+        deal(address(usdc), alice, _amount);
+        console2.log("amount", _amount);
+
+        vm.startPrank(alice);
+        usdc.approve(address(vault), type(uint256).max);
+        vault.deposit(_amount, alice);
+        vm.stopPrank();
+
+        uint256 borrowAmount = _amount.mulWadDown(0.7e18).divWadDown(vault.getUsdcFromWeth(1 ether));
+
+        bytes[] memory callData = new bytes[](2);
+        callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV3.id(), _amount);
+        callData[1] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV3.id(), borrowAmount);
+
+        vault.rebalance(callData);
+
+        uint256 total = vault.totalAssets();
+        _withdrawAmount = bound(_withdrawAmount, 1e6, total);
+        vm.startPrank(alice);
+        vault.withdraw(_withdrawAmount, alice, alice);
+
+        assertApproxEqAbs(vault.totalAssets(), total - _withdrawAmount, 1, "total assets");
+        assertApproxEqAbs(usdc.balanceOf(alice), _withdrawAmount, 0.01e6, "usdc balance");
+    }
+
+    function testFuzz_withdraw_whenInProfit(uint256 _amount, uint256 _withdrawAmount) public {
+        _setUpForkAtBlock(BLOCK_BEFORE_EULER_EXPLOIT);
+
+        _amount = 0;
+        _amount = bound(_amount, 1e6, 10_000_000e6); // upper limit constrained by weth available on aave v3
+        deal(address(usdc), alice, _amount);
+        console2.log("amount", _amount);
+
+        vm.startPrank(alice);
+        usdc.approve(address(vault), type(uint256).max);
+        vault.deposit(_amount, alice);
+        vm.stopPrank();
+
+        uint256 borrowAmount = _amount.mulWadDown(0.7e18).divWadDown(vault.getUsdcFromWeth(1 ether));
+
+        bytes[] memory callData = new bytes[](4);
+        callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV3.id(), _amount.mulWadDown(0.3e18));
+        callData[1] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV3.id(), borrowAmount.mulWadDown(0.3e18));
+        callData[2] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV2.id(), _amount.mulWadDown(0.7e18));
+        callData[3] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV2.id(), borrowAmount.mulWadDown(0.7e18));
+
+        vault.rebalance(callData);
+
+        // add 1% profit to the weth vault
+        uint256 wethInvested = weth.balanceOf(address(wethVault));
+        deal(address(weth), address(wethVault), wethInvested.mulWadUp(1.01e18));
+
+        uint256 total = vault.totalAssets();
+        _withdrawAmount = bound(_withdrawAmount, 1e6, total);
+        vm.startPrank(alice);
+        vault.withdraw(_withdrawAmount, alice, alice);
+
+        assertApproxEqAbs(vault.totalAssets(), total - _withdrawAmount, total.mulWadDown(0.001e18), "total assets");
+        assertApproxEqAbs(usdc.balanceOf(alice), _withdrawAmount, _amount.mulWadDown(0.001e18), "usdc balance");
+    }
+
     /// #exitAllPositions ///
 
     function test_exitAllPositions_FailsIfCallerNotAdmin() public {

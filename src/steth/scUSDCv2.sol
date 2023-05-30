@@ -542,6 +542,7 @@ contract scUSDCv2 is scUSDCBase {
 
     function beforeWithdraw(uint256 _assets, uint256) internal override {
         // here we need to make sure that the vault has enough assets to cover the withdrawal
+        // the idea is to keep the same ltv after the withdrawal as before on every protocol
         uint256 initialBalance = usdcBalance();
         if (initialBalance >= _assets) return;
 
@@ -568,18 +569,22 @@ contract scUSDCv2 is scUSDCBase {
         _repayDebtAndReleaseCollateral(debt, collateral, invested, usdcNeeded);
     }
 
-    function _repayDebtAndReleaseCollateral(uint256 _debt, uint256 _collateral, uint256 _invested, uint256 _usdcNeeded)
-        internal
-    {
+    function _repayDebtAndReleaseCollateral(
+        uint256 _totalDebt,
+        uint256 _totalCollateral,
+        uint256 _invested,
+        uint256 _usdcNeeded
+    ) internal {
         // handle rounding errors when withdrawing everything
-        _usdcNeeded = _usdcNeeded > _collateral ? _collateral : _usdcNeeded;
-        // to keep the same ltv, weth debt to repay has to be proportional to collateral withdrawn
-        uint256 wethNeeded = _usdcNeeded.mulDivUp(_debt, _collateral);
+        _usdcNeeded = _usdcNeeded > _totalCollateral ? _totalCollateral : _usdcNeeded;
+        // to keep the same ltv, total debt in weth to be repaid has to be proportional to total usdc collateral we are withdrawing
+        uint256 wethNeeded = _usdcNeeded.mulDivUp(_totalDebt, _totalCollateral);
         wethNeeded = wethNeeded > _invested ? _invested : wethNeeded;
 
-        uint256 withdrawn = _disinvest(wethNeeded);
+        uint256 wethDisinvested = 0;
+        if (wethNeeded != 0) wethDisinvested = _disinvest(wethNeeded);
 
-        // repay debt and withdraw collateral from each protocol in proportion to their collateral allocation
+        // repay debt and withdraw collateral from each protocol in proportion to usdc supplied
         uint256 length = protocolAdapters.length();
 
         for (uint8 i = 0; i < length; i++) {
@@ -588,10 +593,23 @@ contract scUSDCv2 is scUSDCBase {
 
             if (collateral == 0) continue;
 
-            uint256 allocationPct = collateral.divWadDown(_collateral);
+            uint256 debt = IAdapter(adapter).getDebt(address(this));
+            uint256 toWithdraw = _usdcNeeded.mulDivUp(collateral, _totalCollateral);
 
-            _repay(uint8(id), withdrawn.mulWadDown(allocationPct));
-            _withdraw(uint8(id), _usdcNeeded.mulWadDown(allocationPct));
+            if (wethDisinvested != 0 && debt != 0) {
+                // keep the same ltv when withdrawing usdc supplied from each protocol
+                uint256 toRepay = toWithdraw.mulDivUp(debt, collateral);
+
+                if (toRepay > wethDisinvested) {
+                    toRepay = wethDisinvested;
+                } else {
+                    wethDisinvested -= toRepay;
+                }
+
+                _repay(uint8(id), toRepay);
+            }
+
+            _withdraw(uint8(id), toWithdraw);
         }
     }
 
