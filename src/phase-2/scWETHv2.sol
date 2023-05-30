@@ -116,6 +116,10 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
 
     /////////////////// ADMIN/KEEPER METHODS //////////////////////////////////
 
+    /// @notice set the swaprouter address for wstEthToWethSwapRouter or wethToWstEthSwapRouter or both
+    /// @dev use zero address if you don't want to change the address
+    /// @param _wstEthToWethSwapRouter address of the new wstEthToWethSwapRouter
+    /// @param _wethToWstEthSwapRouter address of the new wethToWstEthSwapRouter
     function setSwapRouter(address _wstEthToWethSwapRouter, address _wethToWstEthSwapRouter) external {
         _onlyAdmin();
         if (_wstEthToWethSwapRouter != address(0x0)) wstEthToWethSwapRouter = _wstEthToWethSwapRouter;
@@ -126,21 +130,25 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
     /// @notice set the slippage tolerance for curve swaps
     /// @param newSlippageTolerance the new slippage tolerance
     /// @dev slippage tolerance is a number between 0 and 1e18
-    function setSlippageTolerance(uint256 newSlippageTolerance) external {
+    function setSlippageTolerance(uint256 _newSlippageTolerance) external {
         _onlyAdmin();
 
         if (newSlippageTolerance > C.ONE) revert InvalidSlippageTolerance();
 
-        slippageTolerance = newSlippageTolerance;
-        emit SlippageToleranceUpdated(msg.sender, newSlippageTolerance);
+        slippageTolerance = _newSlippageTolerance;
+        emit SlippageToleranceUpdated(msg.sender, _newSlippageTolerance);
     }
 
-    function setMinimumFloatAmount(uint256 newFloatAmount) external {
+    /// @notice set the minimum amount of weth that must be present in the vault
+    /// @param newFloatAmount the new minimum float amount
+    function setMinimumFloatAmount(uint256 _newFloatAmount) external {
         _onlyAdmin();
-        minimumFloatAmount = newFloatAmount;
-        emit FloatAmountUpdated(msg.sender, newFloatAmount);
+        minimumFloatAmount = _newFloatAmount;
+        emit FloatAmountUpdated(msg.sender, _newFloatAmount);
     }
 
+    /// @notice adds an adapter to the supported adapters
+    /// @param _adapter the address of the adapter to add (must inherit IAdapter.sol)
     function addAdapter(address _adapter) external {
         _onlyAdmin();
 
@@ -155,7 +163,7 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
 
     /// @notice removes an adapter from the supported adapters
     /// @param _adapterId the id of the adapter to remove
-    /// @param _force if false, will revert if the vault still has funds deposited in the adapter
+    /// @param _force if true, it will not check if there are funds deposited in the respective protocol
     function removeAdapter(uint256 _adapterId, bool _force) external {
         _onlyAdmin();
 
@@ -284,7 +292,6 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
     }
 
     /// @notice reallocate funds between protocols (without any slippage)
-    // @param wstEthSwapAmount: amount of wstEth to swap to weth
     function reallocate(
         RepayWithdrawParam[] calldata from,
         SupplyBorrowParam[] calldata to,
@@ -312,15 +319,19 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
 
     //////////////////// VIEW METHODS //////////////////////////
 
+    /// @notice check if an adapter is supported by this vault
+    /// @param _adapterId the id of the adapter to check
     function isSupported(uint256 _adapterId) public view returns (bool) {
         return protocolAdapters.contains(_adapterId);
     }
 
+    /// @notice returns the adapter address given the adapterId (only if the adaapterId is supported else returns zero address)
+    /// @param _adapterId the id of the adapter to check
     function getAdapter(uint256 _adapterId) external view returns (address adapter) {
         (, adapter) = protocolAdapters.tryGet(_adapterId);
     }
 
-    /// @notice returns the total assets (WETH) held by the strategy
+    /// @notice returns the total assets (in WETH) held by the strategy
     function totalAssets() public view override returns (uint256 assets) {
         // value of the supplied collateral in eth terms using chainlink oracle
         assets = totalCollateral();
@@ -344,7 +355,7 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
         collateral = oracleLib.wstEthToEth(collateral);
     }
 
-    /// @notice returns the total ETH borrowed
+    /// @notice returns the total WETH borrowed
     function totalDebt() public view returns (uint256 debt) {
         uint256 n = protocolAdapters.length();
         address adapter;
