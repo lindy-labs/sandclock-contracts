@@ -15,6 +15,7 @@ contract RewardTracker is BonusTracker, AccessControl {
 
     event RewardAdded(uint256 reward);
     event RewardPaid(address indexed user, uint256 reward);
+    event VaultAdded(address vault);
 
     error Error_AmountTooLarge();
 
@@ -183,6 +184,7 @@ contract RewardTracker is BonusTracker, AccessControl {
     function addVault(address vault) external onlyRole(DEFAULT_ADMIN_ROLE) {
         require(ERC4626(vault).asset() == rewardToken, "only WETH assets");
         isVault[vault] = true;
+        emit VaultAdded(vault);
     }
 
     function _earned(address account, uint256 accountBalance, uint256 rewardPerToken_, uint256 accountRewards)
