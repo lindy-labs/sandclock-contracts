@@ -6,7 +6,9 @@ import "forge-std/Test.sol";
 
 import {DSTestPlus} from "solmate/test/utils/DSTestPlus.sol";
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
+import {MockERC4626} from "solmate/test/utils/mocks/MockERC4626.sol";
 import {ERC4626} from "solmate/mixins/ERC4626.sol";
+import {ERC20} from "solmate/tokens/ERC20.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 import {RewardTracker} from "../src/staking/RewardTracker.sol";
 
@@ -15,6 +17,7 @@ contract RewardTrackerTest is DSTestPlus {
 
     MockERC20 stakeToken;
     MockERC20 rewardToken;
+    MockERC4626 vault;
     uint256 internal constant PRECISION = 1e30;
     address constant tester = address(0x69);
     address constant alice = address(0x70);
@@ -27,6 +30,7 @@ contract RewardTrackerTest is DSTestPlus {
     function setUp() public {
         stakeToken = new MockERC20("Mock Quartz", "QUARTZ", 18);
         rewardToken = new MockERC20("Mock WETH", "WETH", 18);
+        vault = new MockERC4626(ERC20(rewardToken), "Vault", "scWETH");
         stakingPool = new RewardTracker(
             address(stakeToken),
             "Staked Quartz",
@@ -429,6 +433,36 @@ contract RewardTrackerTest is DSTestPlus {
             stakingPool.earned(address(this)),
             accountBalance.mulDivDown(rewardPerToken - rewardPerTokenPaid, PRECISION) + reward
         );
+    }
+
+    function testCorrectness_fetchRewards(uint256 amount) public {
+        amount = bound(amount, 1e5, 1e27);
+        rewardToken.mint(address(this), amount);
+        rewardToken.approve(address(vault), amount);
+        vault.deposit(amount, address(stakingPool));
+        stakingPool.grantRole(DISTRIBUTOR, address(this));
+        stakingPool.addVault(address(vault));
+        stakingPool.fetchRewards(ERC4626(vault));
+    }
+
+    function testFail_fetchRewards_notWhitelisted(uint256 amount) public {
+        amount = bound(amount, 1e5, 1e27);
+        rewardToken.mint(address(this), amount);
+        rewardToken.approve(address(vault), amount);
+        vault.deposit(amount, address(stakingPool));
+        stakingPool.grantRole(DISTRIBUTOR, address(this));
+        stakingPool.fetchRewards(ERC4626(vault));
+    }
+
+    function testFail_fetchRewards_notSupportedAsset(uint256 amount) public {
+        amount = bound(amount, 1e5, 1e27);
+        vault = new MockERC4626(ERC20(stakeToken), "Vault", "scQuartz");
+        stakeToken.mint(address(this), amount);
+        stakeToken.approve(address(vault), amount);
+        vault.deposit(amount, address(stakingPool));
+        stakingPool.grantRole(DISTRIBUTOR, address(this));
+        stakingPool.addVault(address(vault));
+        stakingPool.fetchRewards(ERC4626(vault));
     }
 
     function assertEqDecimalEpsilonBelow(uint256 a, uint256 b, uint256 decimals, uint256 epsilonInv) internal {

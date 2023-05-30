@@ -2,6 +2,7 @@
 pragma solidity ^0.8.10;
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
+import {ERC4626} from "solmate/mixins/ERC4626.sol";
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 import {AccessControl} from "openzeppelin-contracts/access/AccessControl.sol";
@@ -37,6 +38,9 @@ contract RewardTracker is BonusTracker, AccessControl {
 
     /// @notice The earned() value when an account last staked/withdrew/withdrew rewards
     mapping(address => uint256) public rewards;
+
+    /// @notice A whitelist of vaults staking contract is collecting fees from
+    mapping(address => bool) public isVault;
 
     /// @notice The token being rewarded to stakers
     ERC20 public immutable rewardToken;
@@ -115,6 +119,10 @@ contract RewardTracker is BonusTracker, AccessControl {
     /// this function will revert.
     /// @param reward The amount of reward tokens to use in the new reward period.
     function notifyRewardAmount(uint256 reward) external onlyRole(DISTRIBUTOR) {
+        _notifyRewardAmount(reward);
+    }
+
+    function _notifyRewardAmount(uint256 reward) internal {
         /// -----------------------------------------------------------------------
         /// Validation
         /// -----------------------------------------------------------------------
@@ -159,6 +167,22 @@ contract RewardTracker is BonusTracker, AccessControl {
         periodFinish = uint64(block.timestamp + DURATION_);
 
         emit RewardAdded(reward);
+    }
+
+    /// @notice Lets a reward distributor fetch performance fees from
+    /// a vault and start a new reward period.
+    function fetchRewards(ERC4626 vault) external onlyRole(DISTRIBUTOR) {
+        require(isVault[address(vault)], "vault not whitelisted");
+        uint256 beforeBalance = rewardToken.balanceOf(address(this));
+        vault.redeem(vault.balanceOf(address(this)), address(this), address(this));
+        uint256 afterBalance = rewardToken.balanceOf(address(this));
+        _notifyRewardAmount(afterBalance - beforeBalance);
+    }
+
+    /// @notice Lets an admin add a vault for collecting fees from.
+    function addVault(address vault) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(ERC4626(vault).asset() == rewardToken, "only WETH assets");
+        isVault[vault] = true;
     }
 
     function _earned(address account, uint256 accountBalance, uint256 rewardPerToken_, uint256 accountRewards)
@@ -221,16 +245,10 @@ contract RewardTracker is BonusTracker, AccessControl {
         if (bonus_ > 0) {
             uint256 balance = balanceOf[sender];
 
-            // if they are sending/redeeming everything then burn everything
-            if (amount == balance) {
-                multiplierPointsOf[sender] = 0;
-                totalBonus -= bonus_;
-            } else {
-                // otherwise burn an equivalent percentage
-                bonus_ = bonus_.mulDivDown(amount, balance);
-                multiplierPointsOf[sender] -= bonus_;
-                totalBonus -= bonus_;
-            }
+            // burn an equivalent percentage
+            bonus_ = bonus_.mulDivDown(amount, balance);
+            multiplierPointsOf[sender] -= bonus_;
+            totalBonus -= bonus_;
             emit BonusBurned(sender, bonus_);
         }
     }
