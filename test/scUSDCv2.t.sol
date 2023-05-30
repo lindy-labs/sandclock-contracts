@@ -902,7 +902,44 @@ contract scUSDCv2Test is Test {
         vault.rebalance(callData);
     }
 
-    function testFuzz_rebalance_something(
+    function test_rebalance_canBeUsedToSellProfitsAndReinvest() public {
+        _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
+
+        uint256 targetLtv = 0.7e18;
+        uint256 initialBalance = 1_000_000e6;
+        uint256 initialDebt = priceConverter.getWethFromUsdc(initialBalance.mulWadDown(targetLtv));
+        deal(address(usdc), address(vault), initialBalance);
+
+        bytes[] memory callData = new bytes[](2);
+        callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV2.id(), initialBalance);
+        callData[1] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV2.id(), initialDebt);
+
+        vault.rebalance(callData);
+
+        // add 10% profit to the weth vault
+        uint256 totalBefore = vault.totalAssets();
+        uint256 wethProfit = vault.wethInvested().mulWadUp(0.1e18);
+        uint256 usdcProfit = priceConverter.getUsdcFromWeth(wethProfit);
+        deal(address(weth), address(wethVault), vault.wethInvested() + wethProfit);
+
+        assertApproxEqRel(vault.totalAssets(), totalBefore + usdcProfit, 0.01e18, "total assets before reinvest");
+
+        uint256 minUsdcAmountOut = usdcProfit.mulWadDown(vault.slippageTolerance());
+        uint256 wethToReinvest = priceConverter.getWethFromUsdc(minUsdcAmountOut);
+        callData = new bytes[](3);
+        callData[0] = abi.encodeWithSelector(scUSDCv2.sellProfit.selector, minUsdcAmountOut);
+        callData[1] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV2.id(), minUsdcAmountOut);
+        callData[2] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV2.id(), wethToReinvest);
+
+        vault.rebalance(callData);
+
+        assertApproxEqRel(vault.totalAssets(), totalBefore + usdcProfit, 0.01e18, "total assets after reinvest");
+        assertApproxEqAbs(vault.getCollateral(aaveV2.id()), initialBalance + minUsdcAmountOut, 1, "collateral");
+        assertTrue(vault.getDebt(aaveV2.id()) > initialDebt + wethToReinvest, "debt");
+        assertApproxEqAbs(vault.getDebt(aaveV2.id()), vault.wethInvested(), 1, "debt and weth invested mismatch");
+    }
+
+    function testFuzz_rebalance(
         uint256 supplyOnAaveV3,
         uint256 borrowOnAaveV3,
         uint256 supplyOnAaveV2,
@@ -920,10 +957,12 @@ contract scUSDCv2Test is Test {
         uint256 minFloat = (supplyOnAaveV3 + supplyOnAaveV2).mulWadDown(floatPercentage);
 
         borrowOnAaveV3 = bound(
-            borrowOnAaveV3, 1, priceConverter.getWethFromUsdc(supplyOnAaveV3).mulWadDown(aaveV3.getMaxLtv() - 0.01e18)
+            borrowOnAaveV3,
+            1,
+            priceConverter.getWethFromUsdc(supplyOnAaveV3).mulWadDown(aaveV3.getMaxLtv() - 0.005e18) // -0.5% to avoid borrowing at max ltv
         );
         borrowOnAaveV2 = bound(
-            borrowOnAaveV2, 1, priceConverter.getWethFromUsdc(supplyOnAaveV2).mulWadDown(aaveV2.getMaxLtv() - 0.01e18)
+            borrowOnAaveV2, 1, priceConverter.getWethFromUsdc(supplyOnAaveV2).mulWadDown(aaveV2.getMaxLtv() - 0.005e18)
         );
 
         deal(address(usdc), address(vault), initialBalance);
@@ -938,8 +977,8 @@ contract scUSDCv2Test is Test {
 
         _assertCollateralAndDebt(aaveV3.id(), supplyOnAaveV3, borrowOnAaveV3);
         _assertCollateralAndDebt(aaveV2.id(), supplyOnAaveV2, borrowOnAaveV2);
-        assertApproxEqAbs(vault.totalAssets(), initialBalance, 1, "total asets");
-        assertTrue(vault.usdcBalance() > minFloat, "float");
+        assertApproxEqAbs(vault.totalAssets(), initialBalance, 2, "total asets");
+        assertApproxEqAbs(vault.usdcBalance(), minFloat, vault.totalAssets().mulWadDown(floatPercentage), "float");
     }
 
     /// #reallocate ///
