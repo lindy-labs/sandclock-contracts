@@ -54,8 +54,8 @@ contract scUSDCv2 is scUSDCBase {
         ExitAllPositions
     }
 
-    event ProtocolAdapterAdded(address indexed admin, uint8 adapterId, address adapter);
-    event ProtocolAdapterRemoved(address indexed admin, uint8 adapterId);
+    event ProtocolAdapterAdded(address indexed admin, uint256 adapterId, address adapter);
+    event ProtocolAdapterRemoved(address indexed admin, uint256 adapterId);
     event EmergencyExitExecuted(
         address indexed admin, uint256 wethWithdrawn, uint256 debtRepaid, uint256 collateralReleased
     );
@@ -63,13 +63,13 @@ contract scUSDCv2 is scUSDCBase {
     event Rebalanced(uint256 totalCollateral, uint256 totalDebt, uint256 floatBalance);
     event ProfitSold(uint256 wethSold, uint256 usdcReceived);
     event TokensSold(address token, uint256 amountSold, uint256 usdcReceived);
-    event Supplied(uint8 adapterId, uint256 amount);
-    event Borrowed(uint8 adapterId, uint256 amount);
-    event Repaid(uint8 adapterId, uint256 amount);
-    event Withdrawn(uint8 adapterId, uint256 amount);
+    event Supplied(uint256 adapterId, uint256 amount);
+    event Borrowed(uint256 adapterId, uint256 amount);
+    event Repaid(uint256 adapterId, uint256 amount);
+    event Withdrawn(uint256 adapterId, uint256 amount);
     event Invested(uint256 wethAmount);
     event Disinvested(uint256 wethAmount);
-    event RewardsClaimed(uint8 adapterId);
+    event RewardsClaimed(uint256 adapterId);
 
     // Balancer vault for flashloans
     IVault public constant balancerVault = IVault(C.BALANCER_VAULT);
@@ -103,11 +103,11 @@ contract scUSDCv2 is scUSDCBase {
     function addAdapter(IAdapter _adapter) external {
         _onlyAdmin();
 
-        uint8 id = _adapter.id();
+        uint256 id = _adapter.id();
 
         if (isSupported(id)) revert ProtocolInUse(id);
 
-        protocolAdapters.set(uint256(id), address(_adapter));
+        protocolAdapters.set(id, address(_adapter));
 
         address(_adapter).functionDelegateCall(abi.encodeWithSelector(IAdapter.setApprovals.selector));
 
@@ -119,7 +119,7 @@ contract scUSDCv2 is scUSDCBase {
      * @param _adapterId The ID of the adapter to remove.
      * @param _force Whether or not to force the removal of the adapter.
      */
-    function removeAdapter(uint8 _adapterId, bool _force) external {
+    function removeAdapter(uint256 _adapterId, bool _force) external {
         _onlyAdmin();
         _isSupportedCheck(_adapterId);
 
@@ -280,7 +280,7 @@ contract scUSDCv2 is scUSDCBase {
      * @param _adapterId The ID of the lending market adapter.
      * @param _amount The amount of USDC to supply.
      */
-    function supply(uint8 _adapterId, uint256 _amount) external {
+    function supply(uint256 _adapterId, uint256 _amount) external {
         _onlyKeeperOrFlashLoan();
         _isSupportedCheck(_adapterId);
 
@@ -292,7 +292,7 @@ contract scUSDCv2 is scUSDCBase {
      * @param _adapterId The ID of the lending market adapter.
      * @param _amount The amount of WETH to borrow.
      */
-    function borrow(uint8 _adapterId, uint256 _amount) external {
+    function borrow(uint256 _adapterId, uint256 _amount) external {
         _onlyKeeperOrFlashLoan();
         _isSupportedCheck(_adapterId);
 
@@ -304,7 +304,7 @@ contract scUSDCv2 is scUSDCBase {
      * @param _adapterId The ID of the lending market adapter.
      * @param _amount The amount of WETH to repay.
      */
-    function repay(uint8 _adapterId, uint256 _amount) external {
+    function repay(uint256 _adapterId, uint256 _amount) external {
         _onlyKeeperOrFlashLoan();
         _isSupportedCheck(_adapterId);
 
@@ -316,7 +316,7 @@ contract scUSDCv2 is scUSDCBase {
      * @param _adapterId The ID of the lending market adapter.
      * @param _amount The amount of USDC to withdraw.
      */
-    function withdraw(uint8 _adapterId, uint256 _amount) external {
+    function withdraw(uint256 _adapterId, uint256 _amount) external {
         _onlyKeeperOrFlashLoan();
         _isSupportedCheck(_adapterId);
 
@@ -328,7 +328,7 @@ contract scUSDCv2 is scUSDCBase {
      * @param _adapterId The ID of the lending market adapter.
      * @param _callData The encoded data for the claimRewards function.
      */
-    function claimRewards(uint8 _adapterId, bytes calldata _callData) external {
+    function claimRewards(uint256 _adapterId, bytes calldata _callData) external {
         _onlyKeeper();
         _isSupportedCheck(_adapterId);
         _adapterDelegateCall(_adapterId, abi.encodeWithSelector(IAdapter.claimRewards.selector, _callData));
@@ -350,7 +350,7 @@ contract scUSDCv2 is scUSDCBase {
      * @notice Check if a lending market adapter is supported/used.
      * @param _adapterId The ID of the lending market adapter.
      */
-    function isSupported(uint8 _adapterId) public view returns (bool) {
+    function isSupported(uint256 _adapterId) public view returns (bool) {
         return protocolAdapters.contains(_adapterId);
     }
 
@@ -372,7 +372,7 @@ contract scUSDCv2 is scUSDCBase {
      * @notice Returns the USDC supplied as collateral in a lending market.
      * @param _adapterId The ID of the lending market adapter.
      */
-    function getCollateral(uint8 _adapterId) external view returns (uint256) {
+    function getCollateral(uint256 _adapterId) external view returns (uint256) {
         if (!isSupported(_adapterId)) return 0;
 
         return IAdapter(protocolAdapters.get(_adapterId)).getCollateral(address(this));
@@ -384,7 +384,7 @@ contract scUSDCv2 is scUSDCBase {
     function totalCollateral() public view returns (uint256 total) {
         uint256 length = protocolAdapters.length();
 
-        for (uint8 i = 0; i < length; i++) {
+        for (uint256 i = 0; i < length; i++) {
             (, address adapter) = protocolAdapters.at(i);
             total += IAdapter(adapter).getCollateral(address(this));
         }
@@ -394,7 +394,7 @@ contract scUSDCv2 is scUSDCBase {
      * @notice Returns the WETH borrowed from a lending market.
      * @param _adapterId The ID of the lending market adapter.
      */
-    function getDebt(uint8 _adapterId) external view returns (uint256) {
+    function getDebt(uint256 _adapterId) external view returns (uint256) {
         if (!isSupported(_adapterId)) return 0;
 
         return IAdapter(protocolAdapters.get(_adapterId)).getDebt(address(this));
@@ -406,7 +406,7 @@ contract scUSDCv2 is scUSDCBase {
     function totalDebt() public view returns (uint256 total) {
         uint256 length = protocolAdapters.length();
 
-        for (uint8 i = 0; i < length; i++) {
+        for (uint256 i = 0; i < length; i++) {
             (, address adapter) = protocolAdapters.at(i);
             total += IAdapter(adapter).getDebt(address(this));
         }
@@ -432,32 +432,32 @@ contract scUSDCv2 is scUSDCBase {
     //////////////////////////////////////////////////////////////*/
 
     function _multiCall(bytes[] memory _callData) internal {
-        for (uint8 i = 0; i < _callData.length; i++) {
+        for (uint256 i = 0; i < _callData.length; i++) {
             address(this).functionDelegateCall(_callData[i]);
         }
     }
 
-    function _adapterDelegateCall(uint8 _adapterId, bytes memory _data) internal {
+    function _adapterDelegateCall(uint256 _adapterId, bytes memory _data) internal {
         protocolAdapters.get(_adapterId).functionDelegateCall(_data);
     }
 
-    function _isSupportedCheck(uint8 _adapterId) internal view {
+    function _isSupportedCheck(uint256 _adapterId) internal view {
         if (!isSupported(_adapterId)) revert ProtocolNotSupported(_adapterId);
     }
 
-    function _supply(uint8 _adapterId, uint256 _amount) internal {
+    function _supply(uint256 _adapterId, uint256 _amount) internal {
         _adapterDelegateCall(_adapterId, abi.encodeWithSelector(IAdapter.supply.selector, _amount));
 
         emit Supplied(_adapterId, _amount);
     }
 
-    function _borrow(uint8 _adapterId, uint256 _amount) internal {
+    function _borrow(uint256 _adapterId, uint256 _amount) internal {
         _adapterDelegateCall(_adapterId, abi.encodeWithSelector(IAdapter.borrow.selector, _amount));
 
         emit Borrowed(_adapterId, _amount);
     }
 
-    function _repay(uint8 _adapterId, uint256 _amount) internal {
+    function _repay(uint256 _adapterId, uint256 _amount) internal {
         uint256 wethBalance = weth.balanceOf(address(this));
 
         _amount = _amount > wethBalance ? wethBalance : _amount;
@@ -467,7 +467,7 @@ contract scUSDCv2 is scUSDCBase {
         emit Repaid(_adapterId, _amount);
     }
 
-    function _withdraw(uint8 _adapterId, uint256 _amount) internal {
+    function _withdraw(uint256 _adapterId, uint256 _amount) internal {
         _adapterDelegateCall(_adapterId, abi.encodeWithSelector(IAdapter.withdraw.selector, _amount));
 
         emit Withdrawn(_adapterId, _amount);
@@ -496,13 +496,13 @@ contract scUSDCv2 is scUSDCBase {
     function _exitAllPositionsFlash(uint256 _flashLoanAmount) internal {
         uint256 length = protocolAdapters.length();
 
-        for (uint8 i = 0; i < length; i++) {
+        for (uint256 i = 0; i < length; i++) {
             (uint256 id, address adapter) = protocolAdapters.at(i);
             uint256 debt = IAdapter(adapter).getDebt(address(this));
             uint256 collateral = IAdapter(adapter).getCollateral(address(this));
 
-            if (debt > 0) _repay(uint8(id), debt);
-            if (collateral > 0) _withdraw(uint8(id), collateral);
+            if (debt > 0) _repay(id, debt);
+            if (collateral > 0) _withdraw(id, collateral);
         }
 
         _swapUsdcForExactWeth(_flashLoanAmount);
@@ -555,7 +555,7 @@ contract scUSDCv2 is scUSDCBase {
         // repay debt and withdraw collateral from each protocol in proportion to usdc supplied
         uint256 length = protocolAdapters.length();
 
-        for (uint8 i = 0; i < length; i++) {
+        for (uint256 i = 0; i < length; i++) {
             (uint256 id, address adapter) = protocolAdapters.at(i);
             uint256 collateral = IAdapter(adapter).getCollateral(address(this));
 
@@ -574,10 +574,10 @@ contract scUSDCv2 is scUSDCBase {
                     wethDisinvested -= toRepay;
                 }
 
-                _repay(uint8(id), toRepay);
+                _repay(id, toRepay);
             }
 
-            _withdraw(uint8(id), toWithdraw);
+            _withdraw(id, toWithdraw);
         }
     }
 

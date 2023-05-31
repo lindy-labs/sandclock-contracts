@@ -37,8 +37,8 @@ contract scUSDCv2Test is Test {
     using FixedPointMathLib for uint256;
 
     event UsdcToEthPriceFeedUpdated(address indexed admin, address newPriceFeed);
-    event ProtocolAdapterAdded(address indexed admin, uint8 adapterId, address adapter);
-    event ProtocolAdapterRemoved(address indexed admin, uint8 adapterId);
+    event ProtocolAdapterAdded(address indexed admin, uint256 adapterId, address adapter);
+    event ProtocolAdapterRemoved(address indexed admin, uint256 adapterId);
     event NewTargetLtvApplied(address indexed admin, uint256 newTargetLtv);
     event SlippageToleranceUpdated(address indexed admin, uint256 newSlippageTolerance);
     event EmergencyExitExecuted(
@@ -48,12 +48,12 @@ contract scUSDCv2Test is Test {
     event Rebalanced(uint256 totalCollateral, uint256 totalDebt, uint256 floatBalance);
     event ProfitSold(uint256 wethSold, uint256 usdcReceived);
     event TokensSold(address token, uint256 amountSold, uint256 usdcReceived);
-    event Supplied(uint8 adapterId, uint256 amount);
-    event Borrowed(uint8 adapterId, uint256 amount);
-    event Repaid(uint8 adapterId, uint256 amount);
-    event Withdrawn(uint8 adapterId, uint256 amount);
+    event Supplied(uint256 adapterId, uint256 amount);
+    event Borrowed(uint256 adapterId, uint256 amount);
+    event Repaid(uint256 adapterId, uint256 amount);
+    event Withdrawn(uint256 adapterId, uint256 amount);
     event Disinvested(uint256 wethAmount);
-    event RewardsClaimed(uint8 adapterId);
+    event RewardsClaimed(uint256 adapterId);
 
     // after the exploit, the euler protocol was disabled. At one point it should work again, so having the
     // tests run in both cases (when protocol is working and not) requires two blocks to fork from
@@ -183,7 +183,7 @@ contract scUSDCv2Test is Test {
     function test_removeAdapter_FailsIfProtocolIsNotSupported() public {
         _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
 
-        uint8 eulerId = euler.id();
+        uint256 eulerId = euler.id();
 
         vm.expectRevert(abi.encodeWithSelector(ProtocolNotSupported.selector, eulerId));
         vault.removeAdapter(eulerId, false);
@@ -193,7 +193,7 @@ contract scUSDCv2Test is Test {
         _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
         deal(address(usdc), address(vault), 1_000e6);
 
-        uint8 aaveV3Id = aaveV3.id();
+        uint256 aaveV3Id = aaveV3.id();
 
         vault.supply(aaveV3Id, vault.usdcBalance());
 
@@ -204,7 +204,7 @@ contract scUSDCv2Test is Test {
     function test_removeAdapter_RemovesSupportForProvidedProtocolId() public {
         _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
         // going to remove aave v3
-        uint8 aaveV3Id = aaveV3.id();
+        uint256 aaveV3Id = aaveV3.id();
 
         // the vault was set up to support aave v3 & aave v2
         assertTrue(vault.isSupported(aaveV3Id), "aave v3 should be supported");
@@ -226,7 +226,7 @@ contract scUSDCv2Test is Test {
     function test_removeAdapter_ResetsUsdcAndWethApprovals() public {
         _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
         // going to remove aave v2
-        uint8 aaveV2Id = aaveV2.id();
+        uint256 aaveV2Id = aaveV2.id();
 
         // the vault was set up to support aave v3 & aave v2
         assertTrue(vault.isSupported(aaveV2Id), "aave v2 should be supported");
@@ -242,7 +242,7 @@ contract scUSDCv2Test is Test {
     function test_removeAdapter_EmitsEvent() public {
         _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
         // going to remove aave v2
-        uint8 aaveV2Id = aaveV2.id();
+        uint256 aaveV2Id = aaveV2.id();
 
         vm.expectEmit(true, true, true, true);
         emit ProtocolAdapterRemoved(address(this), aaveV2Id);
@@ -260,7 +260,7 @@ contract scUSDCv2Test is Test {
         assertEq(usdc.allowance(address(vault), faultyAdapter.protocol()), type(uint256).max, "usdc allowance");
         assertEq(weth.allowance(address(vault), faultyAdapter.protocol()), type(uint256).max, "weth allowance");
 
-        uint8 id = faultyAdapter.id();
+        uint256 id = faultyAdapter.id();
 
         vm.expectRevert("not working");
         vault.removeAdapter(id, false);
@@ -286,7 +286,7 @@ contract scUSDCv2Test is Test {
         _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
 
         //  euler is not supported by default
-        uint8 protocolId = euler.id();
+        uint256 protocolId = euler.id();
 
         vm.expectRevert(abi.encodeWithSelector(ProtocolNotSupported.selector, protocolId));
         vault.supply(protocolId, 1);
@@ -327,7 +327,7 @@ contract scUSDCv2Test is Test {
         _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
 
         //  euler is not supported by default
-        uint8 protocolId = euler.id();
+        uint256 protocolId = euler.id();
 
         vm.expectRevert(abi.encodeWithSelector(ProtocolNotSupported.selector, protocolId));
         vault.borrow(protocolId, 1);
@@ -372,7 +372,7 @@ contract scUSDCv2Test is Test {
         _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
 
         //  euler is not supported by default
-        uint8 protocolId = euler.id();
+        uint256 protocolId = euler.id();
 
         vm.expectRevert(abi.encodeWithSelector(ProtocolNotSupported.selector, protocolId));
         vault.repay(protocolId, 1);
@@ -421,7 +421,7 @@ contract scUSDCv2Test is Test {
         _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
 
         //  euler is not supported by default
-        uint8 protocolId = euler.id();
+        uint256 protocolId = euler.id();
 
         vm.expectRevert(abi.encodeWithSelector(ProtocolNotSupported.selector, protocolId));
         vault.withdraw(protocolId, 1);
@@ -1830,7 +1830,7 @@ contract scUSDCv2Test is Test {
         _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
         IAdapter adapter = new FaultyAdapter();
         vault.addAdapter(adapter);
-        uint8 id = adapter.id();
+        uint256 id = adapter.id();
 
         vm.expectEmit(true, true, true, true);
         emit RewardsClaimed(id);
@@ -1908,7 +1908,9 @@ contract scUSDCv2Test is Test {
         vault.grantRole(vault.KEEPER_ROLE(), address(this));
     }
 
-    function _assertCollateralAndDebt(uint8 _protocolId, uint256 _expectedCollateral, uint256 _expectedDebt) internal {
+    function _assertCollateralAndDebt(uint256 _protocolId, uint256 _expectedCollateral, uint256 _expectedDebt)
+        internal
+    {
         uint256 collateral = vault.getCollateral(_protocolId);
         uint256 debt = vault.getDebt(_protocolId);
         string memory protocolName = _protocolIdToString(_protocolId);
@@ -1917,7 +1919,7 @@ contract scUSDCv2Test is Test {
         assertApproxEqAbs(debt, _expectedDebt, 1, string(abi.encodePacked("debt on ", protocolName)));
     }
 
-    function _protocolIdToString(uint8 _protocolId) public view returns (string memory) {
+    function _protocolIdToString(uint256 _protocolId) public view returns (string memory) {
         if (_protocolId == aaveV3.id()) {
             return "Aave v3";
         } else if (_protocolId == aaveV2.id()) {

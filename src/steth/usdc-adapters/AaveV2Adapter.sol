@@ -24,7 +24,7 @@ contract AaveV2Adapter is IAdapter {
     ERC20 public constant dWeth = ERC20(0xF63B34710400CAd3e044cFfDcAb00a0f32E33eCf);
 
     /// @inheritdoc IAdapter
-    uint8 public constant override id = 2;
+    uint256 public constant override id = 2;
 
     /// @inheritdoc IAdapter
     function setApprovals() external override {

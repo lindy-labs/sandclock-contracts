@@ -15,7 +15,7 @@ abstract contract IAdapter {
     /**
      * @notice Returns the adapter's ID
      */
-    function id() external virtual returns (uint8);
+    function id() external virtual returns (uint256);
 
     /**
      * @notice Sets the necessary approvals (allowances) for interacting with the lending protocol

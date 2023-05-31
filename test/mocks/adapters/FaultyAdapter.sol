@@ -8,7 +8,7 @@ import {Constants as C} from "../../../src/lib/Constants.sol";
 import {IAdapter} from "../../../src/steth/usdc-adapters/IAdapter.sol";
 
 contract FaultyAdapter is IAdapter {
-    uint8 public constant override id = 0;
+    uint256 public constant override id = 0;
 
     // dummy address for token approvals
     address public constant protocol = address(0x123);

@@ -23,7 +23,7 @@ contract AaveV3Adapter is IAdapter {
     ERC20 public constant dWeth = ERC20(C.AAVAAVE_VAR_DEBT_WETH_TOKEN);
 
     /// @inheritdoc IAdapter
-    uint8 public constant override id = 1;
+    uint256 public constant override id = 1;
 
     /// @inheritdoc IAdapter
     function setApprovals() external override {

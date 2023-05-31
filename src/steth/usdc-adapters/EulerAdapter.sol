@@ -27,7 +27,7 @@ contract EulerAdapter is IAdapter {
     uint32 constant EULER_CONFIG_FACTOR_SCALE = 4_000_000_000;
 
     /// @inheritdoc IAdapter
-    uint8 public constant override id = 3;
+    uint256 public constant override id = 3;
 
     /// @inheritdoc IAdapter
     function setApprovals() external override {
