@@ -604,9 +604,7 @@ contract scUSDCv2 is scUSDCBase {
 
     function _swapWethForUsdc(uint256 _wethAmount, uint256 _usdcAmountOutMin) internal returns (uint256) {
         bytes memory result = address(swapper).functionDelegateCall(
-            abi.encodeWithSelector(
-                Swapper.uniswapSwapExactInput.selector, weth, asset, _wethAmount, _usdcAmountOutMin
-            )
+            abi.encodeWithSelector(Swapper.uniswapSwapExactInput.selector, weth, asset, _wethAmount, _usdcAmountOutMin)
         );
 
         return abi.decode(result, (uint256));
