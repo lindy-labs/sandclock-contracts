@@ -268,9 +268,22 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
         }
     }
 
-    function swapWethToWstEth(bytes calldata _swapdata) external {
+    function swapWethToWstEth(uint256 _amount) external {
         // TODO: only keeper or flashloan
-        wethToWstEthSwapRouter.functionDelegateCall(_swapdata);
+
+        // TODO: move this functionality to Swapper.sol once merged with scUSDCv2 branch
+        WETH weth = WETH(payable(C.WETH));
+        ILido stEth = ILido(C.STETH);
+        IwstETH wstETH = IwstETH(C.WSTETH);
+
+        // weth to eth
+        weth.withdraw(_amount);
+        // stake to lido / eth => stETH
+        stEth.submit{value: _amount}(address(0x00));
+        //  stETH to wstEth
+        uint256 stEthBalance = stEth.balanceOf(address(this));
+        ERC20(address(stEth)).safeApprove(address(wstETH), stEthBalance);
+        wstETH.wrap(stEthBalance);
     }
 
     function swapWstEthToWeth(bytes calldata _swapdata) external {

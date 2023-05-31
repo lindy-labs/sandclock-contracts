@@ -537,10 +537,9 @@ contract scWETHv2Test is Test {
         uint256 aaveV3FlashLoanAmount = _calcSupplyBorrowFlashLoanAmount(aaveV3Adapter, investAmount);
         uint256 aaveV3SupplyAmount =
             oracleLib.ethToWstEth(investAmount + aaveV3FlashLoanAmount).mulWadDown(stEthRateTolerance);
-        bytes memory wethToWstEthSwapData = _getSwapDefaultData(investAmount + aaveV3FlashLoanAmount, 0);
 
         bytes[] memory callData = new bytes[](2);
-        callData[0] = abi.encodeWithSelector(scWETHv2.swapWethToWstEth.selector, wethToWstEthSwapData);
+        callData[0] = abi.encodeWithSelector(scWETHv2.swapWethToWstEth.selector, investAmount + aaveV3FlashLoanAmount);
         callData[1] = abi.encodeWithSelector(
             scWETHv2.supplyAndBorrow.selector, aaveV3AdapterId, aaveV3SupplyAmount, aaveV3FlashLoanAmount
         );
