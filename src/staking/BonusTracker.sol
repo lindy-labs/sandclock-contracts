@@ -60,8 +60,8 @@ abstract contract BonusTracker is ERC4626, ReentrancyGuard {
     }
 
     /// @notice The amount of bonus tokens an account has accrued so far.
-    function bonusOf(address account) external view returns (uint256) {
-        return _earnedBonus(account, balanceOf[account], _bonusPerToken(lastTimeBonusApplicable()), bonus[account]);
+    function bonusOf(address _account) external view returns (uint256) {
+        return _earnedBonus(_account, balanceOf[_account], _bonusPerToken(lastTimeBonusApplicable()), bonus[_account]);
     }
 
     function _earnedBonus(address account, uint256 accountBalance, uint256 bonusPerToken_, uint256 accountBonus)
@@ -76,17 +76,17 @@ abstract contract BonusTracker is ERC4626, ReentrancyGuard {
         return bonusPerTokenStored + (lastTimeBonusApplicable_ - lastBonusUpdateTime).mulDivDown(PRECISION, 365 days);
     }
 
-    function _updateBonus(address account) internal {
+    function _updateBonus(address _account) internal {
         // storage loads
-        uint256 accountBalance = balanceOf[account];
+        uint256 accountBalance = balanceOf[_account];
         uint64 lastTimeBonusApplicable_ = lastTimeBonusApplicable();
         uint256 bonusPerToken_ = _bonusPerToken(lastTimeBonusApplicable_);
 
         // accrue bonus
         bonusPerTokenStored = bonusPerToken_;
         lastBonusUpdateTime = lastTimeBonusApplicable_;
-        bonus[account] = _earnedBonus(account, accountBalance, bonusPerToken_, bonus[account]);
-        userBonusPerTokenPaid[account] = bonusPerToken_;
+        bonus[_account] = _earnedBonus(_account, accountBalance, bonusPerToken_, bonus[_account]);
+        userBonusPerTokenPaid[_account] = bonusPerToken_;
     }
 
     function _updateReward(address) internal virtual {}

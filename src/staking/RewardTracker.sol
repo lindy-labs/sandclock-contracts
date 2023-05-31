@@ -47,36 +47,58 @@ contract RewardTracker is BonusTracker, AccessControl {
     ERC20 public immutable rewardToken;
 
     /// @notice The length of each reward period, in seconds
-    uint64 immutable DURATION;
+    uint64 immutable duration;
 
-    constructor(address _stakeToken, string memory _name, string memory _symbol, address _rewardToken, uint64 _DURATION)
+    constructor(address _stakeToken, string memory _name, string memory _symbol, address _rewardToken, uint64 _duration)
         BonusTracker(ERC20(_stakeToken), _name, _symbol)
     {
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
         rewardToken = ERC20(_rewardToken);
-        DURATION = _DURATION;
+        duration = _duration;
     }
 
-    function totalAssets() public view override returns (uint256 assets) {
-        assets = totalSupply;
+    modifier onlyDistributor() {
+        require(hasRole(DISTRIBUTOR, msg.sender), "RewardTracker: only distributor");
+        _;
     }
 
-    function deposit(uint256 assets, address receiver) public override returns (uint256 shares) {
-        _updateReward(receiver);
-        _updateBonus(receiver);
-        shares = super.deposit(assets, receiver);
+    modifier onlyAdmin() {
+        require(hasRole(DEFAULT_ADMIN_ROLE, msg.sender), "RewardTracker: only admin");
+        _;
     }
 
-    function mint(uint256 shares, address receiver) public override returns (uint256 assets) {
-        _updateReward(receiver);
-        _updateBonus(receiver);
-        assets = super.mint(shares, receiver);
+    function totalAssets() public view override returns (uint256) {
+        return totalSupply;
     }
 
-    function beforeWithdraw(uint256 assets, uint256) internal override {
+    function deposit(uint256 _assets, address _receiver) public override returns (uint256 shares) {
+        _updateReward(_receiver);
+        _updateBonus(_receiver);
+        shares = super.deposit(_assets, _receiver);
+    }
+
+    function mint(uint256 _shares, address _receiver) public override returns (uint256 assets) {
+        _updateReward(_receiver);
+        _updateBonus(_receiver);
+        assets = super.mint(_shares, _receiver);
+    }
+
+    function transfer(address _to, uint256 _amount) public override returns (bool) {
         _updateReward(msg.sender);
+        _updateReward(_to);
         _updateBonus(msg.sender);
-        _burnMultiplierPoints(assets, msg.sender);
+        _updateBonus(_to);
+        _burnMultiplierPoints(_amount, msg.sender);
+        return super.transfer(_to, _amount);
+    }
+
+    function transferFrom(address _from, address _to, uint256 _amount) public override returns (bool) {
+        _updateReward(_from);
+        _updateReward(_to);
+        _updateBonus(_from);
+        _updateBonus(_to);
+        _burnMultiplierPoints(_amount, _from);
+        return super.transferFrom(_from, _to, _amount);
     }
 
     /// @notice Withdraws all earned rewards
@@ -97,17 +119,17 @@ contract RewardTracker is BonusTracker, AccessControl {
 
     /// @notice The amount of reward tokens each staked token has earned so far
     function rewardPerToken() external view returns (uint256) {
-        return _rewardPerToken(totalSupply + totalBonus, lastTimeRewardApplicable(), rewardRate);
+        return _calcRewardPerToken(totalSupply + totalBonus, lastTimeRewardApplicable(), rewardRate);
     }
 
     /// @notice The amount of reward tokens an account has accrued so far. Does not
     /// include already withdrawn rewards.
-    function earned(address account) external view returns (uint256) {
+    function earned(address _account) external view returns (uint256) {
         return _earned(
-            account,
-            balanceOf[account] + multiplierPointsOf[account],
-            _rewardPerToken(totalSupply + totalBonus, lastTimeRewardApplicable(), rewardRate),
-            rewards[account]
+            _account,
+            balanceOf[_account] + multiplierPointsOf[_account],
+            _calcRewardPerToken(totalSupply + totalBonus, lastTimeRewardApplicable(), rewardRate),
+            rewards[_account]
         );
     }
 
@@ -118,17 +140,34 @@ contract RewardTracker is BonusTracker, AccessControl {
     /// the newly sent rewards as the reward.
     /// @dev If the reward amount will cause an overflow when computing rewardPerToken, then
     /// this function will revert.
-    /// @param reward The amount of reward tokens to use in the new reward period.
-    function notifyRewardAmount(uint256 reward) external onlyRole(DISTRIBUTOR) {
-        _notifyRewardAmount(reward);
+    /// @param _reward The amount of reward tokens to use in the new reward period.
+    function notifyRewardAmount(uint256 _reward) external onlyDistributor {
+        _notifyRewardAmount(_reward);
     }
 
-    function _notifyRewardAmount(uint256 reward) internal {
+    /// @notice Lets a reward distributor fetch performance fees from
+    /// a vault and start a new reward period.
+    function fetchRewards(ERC4626 _vault) external onlyDistributor {
+        require(isVault[address(_vault)], "vault not whitelisted");
+        uint256 beforeBalance = rewardToken.balanceOf(address(this));
+        _vault.redeem(_vault.balanceOf(address(this)), address(this), address(this));
+        uint256 afterBalance = rewardToken.balanceOf(address(this));
+        _notifyRewardAmount(afterBalance - beforeBalance);
+    }
+
+    /// @notice Lets an admin add a vault for collecting fees from.
+    function addVault(address _vault) external onlyAdmin {
+        require(ERC4626(_vault).asset() == rewardToken, "only WETH assets");
+        isVault[_vault] = true;
+        emit VaultAdded(_vault);
+    }
+
+    function _notifyRewardAmount(uint256 _reward) internal {
         /// -----------------------------------------------------------------------
         /// Validation
         /// -----------------------------------------------------------------------
 
-        if (reward == 0) {
+        if (_reward == 0) {
             return;
         }
 
@@ -139,7 +178,7 @@ contract RewardTracker is BonusTracker, AccessControl {
         uint256 rewardRate_ = rewardRate;
         uint64 periodFinish_ = periodFinish;
         uint64 lastTimeRewardApplicable_ = block.timestamp < periodFinish_ ? uint64(block.timestamp) : periodFinish_;
-        uint64 DURATION_ = DURATION;
+        uint64 duration_ = duration;
         uint256 totalSupply_ = totalSupply + totalBonus;
 
         /// -----------------------------------------------------------------------
@@ -147,111 +186,84 @@ contract RewardTracker is BonusTracker, AccessControl {
         /// -----------------------------------------------------------------------
 
         // accrue rewards
-        rewardPerTokenStored = _rewardPerToken(totalSupply_, lastTimeRewardApplicable_, rewardRate_);
+        rewardPerTokenStored = _calcRewardPerToken(totalSupply_, lastTimeRewardApplicable_, rewardRate_);
         lastUpdateTime = lastTimeRewardApplicable_;
 
         // record new reward
         uint256 newRewardRate;
         if (block.timestamp >= periodFinish_) {
-            newRewardRate = reward / DURATION_;
+            newRewardRate = _reward / duration_;
         } else {
             uint256 remaining = periodFinish_ - block.timestamp;
             uint256 leftover = remaining * rewardRate_;
-            newRewardRate = (reward + leftover) / DURATION_;
+            newRewardRate = (_reward + leftover) / duration_;
         }
         // prevent overflow when computing rewardPerToken
-        if (newRewardRate >= ((type(uint256).max / PRECISION) / DURATION_)) {
+        if (newRewardRate >= ((type(uint256).max / PRECISION) / duration_)) {
             revert Error_AmountTooLarge();
         }
         rewardRate = newRewardRate;
         lastUpdateTime = uint64(block.timestamp);
-        periodFinish = uint64(block.timestamp + DURATION_);
+        periodFinish = uint64(block.timestamp + duration_);
 
-        emit RewardAdded(reward);
+        emit RewardAdded(_reward);
     }
 
-    /// @notice Lets a reward distributor fetch performance fees from
-    /// a vault and start a new reward period.
-    function fetchRewards(ERC4626 vault) external onlyRole(DISTRIBUTOR) {
-        require(isVault[address(vault)], "vault not whitelisted");
-        uint256 beforeBalance = rewardToken.balanceOf(address(this));
-        vault.redeem(vault.balanceOf(address(this)), address(this), address(this));
-        uint256 afterBalance = rewardToken.balanceOf(address(this));
-        _notifyRewardAmount(afterBalance - beforeBalance);
+    function beforeWithdraw(uint256 _assets, uint256) internal override {
+        _updateReward(msg.sender);
+        _updateBonus(msg.sender);
+        _burnMultiplierPoints(_assets, msg.sender);
     }
 
-    /// @notice Lets an admin add a vault for collecting fees from.
-    function addVault(address vault) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        require(ERC4626(vault).asset() == rewardToken, "only WETH assets");
-        isVault[vault] = true;
-        emit VaultAdded(vault);
-    }
-
-    function _earned(address account, uint256 accountBalance, uint256 rewardPerToken_, uint256 accountRewards)
+    function _earned(address _account, uint256 _accountBalance, uint256 rewardPerToken_, uint256 _accountRewards)
         internal
         view
         returns (uint256)
     {
-        return accountBalance.mulDivDown(rewardPerToken_ - userRewardPerTokenPaid[account], PRECISION) + accountRewards;
+        return
+            _accountBalance.mulDivDown(rewardPerToken_ - userRewardPerTokenPaid[_account], PRECISION) + _accountRewards;
     }
 
-    function _rewardPerToken(uint256 totalSupply_, uint256 lastTimeRewardApplicable_, uint256 rewardRate_)
+    function _calcRewardPerToken(uint256 _totalSupply, uint256 _lastTimeRewardApplicable, uint256 _rewardRate)
         internal
         view
         returns (uint256)
     {
-        if (totalSupply_ == 0) {
+        if (_totalSupply == 0) {
             return rewardPerTokenStored;
         }
+
         return rewardPerTokenStored
-            + rewardRate_.mulDivDown((lastTimeRewardApplicable_ - lastUpdateTime) * PRECISION, totalSupply_);
+            + _rewardRate.mulDivDown((_lastTimeRewardApplicable - lastUpdateTime) * PRECISION, _totalSupply);
     }
 
-    function _updateReward(address account) internal override {
+    function _updateReward(address _account) internal override {
         // storage loads
-        uint256 accountBalance = balanceOf[account] + multiplierPointsOf[account];
+        uint256 accountBalance = balanceOf[_account] + multiplierPointsOf[_account];
         uint64 lastTimeRewardApplicable_ = lastTimeRewardApplicable();
         uint256 totalSupply_ = totalSupply + totalBonus;
-        uint256 rewardPerToken_ = _rewardPerToken(totalSupply_, lastTimeRewardApplicable_, rewardRate);
+        uint256 rewardPerToken_ = _calcRewardPerToken(totalSupply_, lastTimeRewardApplicable_, rewardRate);
 
         // accrue rewards
         rewardPerTokenStored = rewardPerToken_;
         lastUpdateTime = lastTimeRewardApplicable_;
-        rewards[account] = _earned(account, accountBalance, rewardPerToken_, rewards[account]);
-        userRewardPerTokenPaid[account] = rewardPerToken_;
-    }
-
-    function transfer(address to, uint256 amount) public override returns (bool) {
-        _updateReward(msg.sender);
-        _updateReward(to);
-        _updateBonus(msg.sender);
-        _updateBonus(to);
-        _burnMultiplierPoints(amount, msg.sender);
-        return super.transfer(to, amount);
-    }
-
-    function transferFrom(address from, address to, uint256 amount) public override returns (bool) {
-        _updateReward(from);
-        _updateReward(to);
-        _updateBonus(from);
-        _updateBonus(to);
-        _burnMultiplierPoints(amount, from);
-        return super.transferFrom(from, to, amount);
+        rewards[_account] = _earned(_account, accountBalance, rewardPerToken_, rewards[_account]);
+        userRewardPerTokenPaid[_account] = rewardPerToken_;
     }
 
     // burn multiplier points
-    function _burnMultiplierPoints(uint256 amount, address sender) internal {
-        uint256 bonus_ = multiplierPointsOf[sender];
+    function _burnMultiplierPoints(uint256 _amount, address _sender) internal {
+        uint256 bonus_ = multiplierPointsOf[_sender];
 
         // if the sender has bonus points
         if (bonus_ > 0) {
-            uint256 balance = balanceOf[sender];
+            uint256 balance = balanceOf[_sender];
 
             // burn an equivalent percentage
-            bonus_ = bonus_.mulDivDown(amount, balance);
-            multiplierPointsOf[sender] -= bonus_;
+            bonus_ = bonus_.mulDivDown(_amount, balance);
+            multiplierPointsOf[_sender] -= bonus_;
             totalBonus -= bonus_;
-            emit BonusBurned(sender, bonus_);
+            emit BonusBurned(_sender, bonus_);
         }
     }
 }
