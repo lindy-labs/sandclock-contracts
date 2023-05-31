@@ -31,7 +31,7 @@ contract DeployScript is DeployLeveragedEth, Test {
         rebalance(wethContract);
         rebalance(usdcContract);
 
-        // profit();
+        profit();
 
         // redeem(alice);
 
@@ -90,22 +90,22 @@ contract DeployScript is DeployLeveragedEth, Test {
         vm.stopPrank();
     }
 
-    // function profit() internal {
-    //     console2.log("generate profit for scUSDC vault");
+    function profit() internal {
+        console2.log("generate profit for scUSDC vault");
 
-    //     (, uint256 borrowAmount) = aavePool.book(address(wethContract), address(weth));
+        (, uint256 borrowAmount) = aavePool.book(address(wethContract), address(weth));
 
-    //     // Reduce amount of debt so that there is less debt than the original to create profit
-    //     vm.startPrank(address(wethContract));
-    //     deal(address(weth), address(wethContract), 100e18);
-    //     aavePool.repay(
-    //         address(weth),
-    //         borrowAmount / 2,
-    //         C.AAVE_VAR_INTEREST_RATE_MODE, // does not impact mock
-    //         address(wethContract) // does not impact mock
-    //     );
-    //     vm.stopPrank();
-    // }
+        // Reduce amount of debt so that there is less debt than the original to create profit
+        vm.startPrank(address(wethContract));
+        deal(address(weth), address(wethContract), 100e18);
+        aavePool.repay(
+            address(weth),
+            borrowAmount / 2,
+            C.AAVE_VAR_INTEREST_RATE_MODE, // does not impact mock
+            address(wethContract) // does not impact mock
+        );
+        vm.stopPrank();
+    }
 
     // function redeem(address redeemer) internal {
     //     console2.log("redeeming", redeemer);

@@ -6,7 +6,6 @@ import "forge-std/console2.sol";
 import {CREATE3Script} from "./CREATE3Script.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {WETH} from "solmate/tokens/WETH.sol";
-import {IPool} from "aave-v3/interfaces/IPool.sol";
 import {IAToken} from "aave-v3/interfaces/IAToken.sol";
 import {IPoolDataProvider} from "aave-v3/interfaces/IPoolDataProvider.sol";
 
@@ -38,7 +37,7 @@ import {MockSwapRouter} from "../../test/mocks/uniswap/MockSwapRouter.sol";
 abstract contract DeployLeveragedEth is CREATE3Script {
     WETH weth = WETH(payable(C.WETH));
     ERC20 usdc = ERC20(C.USDC);
-    IPool aavePool = IPool(C.AAVE_POOL);
+    MockAavePool aavePool = MockAavePool(C.AAVE_POOL);
     ICurvePool curveEthStEthPool = ICurvePool(C.CURVE_ETH_STETH_POOL);
     ISwapRouter uniswapRouter = ISwapRouter(C.UNISWAP_V3_SWAP_ROUTER);
 
@@ -78,7 +77,7 @@ abstract contract DeployLeveragedEth is CREATE3Script {
         console2.log("scWETH: ", address(wethContract));
 
         scUSDC.ConstructorParams memory scUsdcParams = scUSDC.ConstructorParams({
-            admin: address(this),
+            admin: deployerAddress,
             keeper: keeper,
             scWETH: wethContract,
             usdc: usdc,
@@ -97,6 +96,4 @@ abstract contract DeployLeveragedEth is CREATE3Script {
 
         vm.stopBroadcast();
     }
-
-    function deployMockTokens() internal virtual {}
 }
