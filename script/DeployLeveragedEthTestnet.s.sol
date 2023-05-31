@@ -93,18 +93,9 @@ contract DeployScript is DeployLeveragedEth, Test {
     function profit() internal {
         console2.log("generate profit for scUSDC vault");
 
-        (, uint256 borrowAmount) = aavePool.book(address(wethContract), address(weth));
-
-        // Reduce amount of debt so that there is less debt than the original to create profit
-        vm.startPrank(address(wethContract));
-        deal(address(weth), address(wethContract), 100e18);
-        aavePool.repay(
-            address(weth),
-            borrowAmount / 2,
-            C.AAVE_VAR_INTEREST_RATE_MODE, // does not impact mock
-            address(wethContract) // does not impact mock
-        );
-        vm.stopPrank();
+        console2.log("scUSDC profit before", usdcContract.getProfit());
+        vm.etch(C.AAVAAVE_VAR_DEBT_WETH_TOKEN, address(weth).code);
+        console2.log("scUSDC profit after", usdcContract.getProfit());
     }
 
     // function redeem(address redeemer) internal {
