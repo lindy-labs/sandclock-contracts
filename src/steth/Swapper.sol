@@ -30,15 +30,15 @@ contract Swapper {
      * @param _amountIn Amount of the token to swap.
      * @param _amountOutMin Minimum amount of the token to receive.
      */
-    function uniswapSwapExactInput(address _tokenIn, address _tokenOut, uint256 _amountIn, uint256 _amountOutMin)
+    function uniswapSwapExactInput(ERC20 _tokenIn, ERC20 _tokenOut, uint256 _amountIn, uint256 _amountOutMin)
         external
         returns (uint256)
     {
         ERC20(_tokenIn).safeApprove(address(swapRouter), _amountIn);
 
         ISwapRouter.ExactInputSingleParams memory params = ISwapRouter.ExactInputSingleParams({
-            tokenIn: _tokenIn,
-            tokenOut: _tokenOut,
+            tokenIn: address(_tokenIn),
+            tokenOut: address(_tokenOut),
             fee: 500,
             recipient: address(this),
             deadline: block.timestamp,
@@ -57,13 +57,13 @@ contract Swapper {
      * @param _amountOut Amount of the token to receive.
      * @param _amountInMaximum Maximum amount of the token to swap.
      */
-    function uniswapSwapExactOutput(address _tokenIn, address _tokenOut, uint256 _amountOut, uint256 _amountInMaximum)
+    function uniswapSwapExactOutput(ERC20 _tokenIn, ERC20 _tokenOut, uint256 _amountOut, uint256 _amountInMaximum)
         external
         returns (uint256)
     {
         ISwapRouter.ExactOutputSingleParams memory params = ISwapRouter.ExactOutputSingleParams({
-            tokenIn: _tokenIn,
-            tokenOut: _tokenOut,
+            tokenIn: address(_tokenIn),
+            tokenOut: address(_tokenOut),
             fee: 500,
             recipient: address(this),
             deadline: block.timestamp,
@@ -72,11 +72,11 @@ contract Swapper {
             sqrtPriceLimitX96: 0
         });
 
-        ERC20(_tokenIn).safeApprove(address(swapRouter), _amountInMaximum);
+        _tokenIn.safeApprove(address(swapRouter), _amountInMaximum);
 
         uint256 amountIn = swapRouter.exactOutputSingle(params);
 
-        ERC20(_tokenIn).safeApprove(address(swapRouter), 0);
+        _tokenIn.safeApprove(address(swapRouter), 0);
 
         return amountIn;
     }
@@ -98,7 +98,7 @@ contract Swapper {
     ) external returns (uint256) {
         uint256 tokenOutInitialBalance = _tokenOut.balanceOf(address(this));
 
-        _tokenIn.safeApprove(C.ZERO_EX_ROUTER, _amountIn);
+        _tokenIn.safeApprove(zeroExRouter, _amountIn);
 
         zeroExRouter.functionCall(_swapData);
 
@@ -106,7 +106,7 @@ contract Swapper {
 
         if (amountReceived < _amountOutMin) revert AmountReceivedBelowMin();
 
-        _tokenIn.approve(C.ZERO_EX_ROUTER, 0);
+        _tokenIn.approve(zeroExRouter, 0);
 
         return amountReceived;
     }
