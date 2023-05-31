@@ -8,6 +8,7 @@ import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 import {AccessControl} from "openzeppelin-contracts/access/AccessControl.sol";
 import {ReentrancyGuard} from "openzeppelin-contracts/security/ReentrancyGuard.sol";
 import {BonusTracker} from "./BonusTracker.sol";
+import {CallerNotAdmin} from "../errors/scErrors.sol";
 
 contract RewardTracker is BonusTracker, AccessControl {
     using SafeTransferLib for ERC20;
@@ -18,6 +19,7 @@ contract RewardTracker is BonusTracker, AccessControl {
     event VaultAdded(address vault);
 
     error Error_AmountTooLarge();
+    error CallerNotDistirbutor();
 
     /// @notice The last Unix timestamp (in seconds) when rewardPerTokenStored was updated
     uint64 public lastUpdateTime;
@@ -58,12 +60,12 @@ contract RewardTracker is BonusTracker, AccessControl {
     }
 
     modifier onlyDistributor() {
-        require(hasRole(DISTRIBUTOR, msg.sender), "RewardTracker: only distributor");
+        if (!hasRole(DISTRIBUTOR, msg.sender)) revert CallerNotDistirbutor();
         _;
     }
 
     modifier onlyAdmin() {
-        require(hasRole(DEFAULT_ADMIN_ROLE, msg.sender), "RewardTracker: only admin");
+        if (!hasRole(DEFAULT_ADMIN_ROLE, msg.sender)) revert CallerNotAdmin();
         _;
     }
 
