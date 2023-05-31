@@ -526,6 +526,35 @@ contract scWETHv2Test is Test {
         _investChecks(investAmount, oracleLib.wstEthToEth(totalSupplyAmount), totalDebtTaken);
     }
 
+    function test_invest_usingMulticalls() public {
+        _setUp(BLOCK_BEFORE_EULER_EXPLOIT);
+
+        uint256 amount = 100 ether;
+        _depositToVault(address(this), amount);
+
+        uint256 investAmount = amount - minimumFloatAmount;
+        uint256 stEthRateTolerance = 0.999e18;
+        uint256 aaveV3FlashLoanAmount = _calcSupplyBorrowFlashLoanAmount(aaveV3Adapter, investAmount);
+        uint256 aaveV3SupplyAmount =
+            oracleLib.ethToWstEth(investAmount + aaveV3FlashLoanAmount).mulWadDown(stEthRateTolerance);
+        bytes memory wethToWstEthSwapData = _getSwapDefaultData(investAmount + aaveV3FlashLoanAmount, 0);
+
+        bytes[] memory callData = new bytes[](2);
+        callData[0] = abi.encodeWithSelector(scWETHv2.swapWethToWstEth.selector, wethToWstEthSwapData);
+        callData[1] = abi.encodeWithSelector(
+            scWETHv2.supplyAndBorrow.selector, aaveV3AdapterId, aaveV3SupplyAmount, aaveV3FlashLoanAmount
+        );
+
+        // deposit into strategy
+        hoax(keeper);
+        vault.investAndHarvest2(investAmount, aaveV3FlashLoanAmount, callData);
+
+        _floatCheck();
+
+        uint256 aaveV3Deposited = vaultHelper.getCollateral(aaveV3Adapter) - vaultHelper.getDebt(aaveV3Adapter);
+        assertApproxEqRel(aaveV3Deposited, investAmount, 0.005e18, "aaveV3 allocation not correct");
+    }
+
     function test_deposit_invest_redeem(uint256 amount) public {
         _setUp(BLOCK_BEFORE_EULER_EXPLOIT);
 

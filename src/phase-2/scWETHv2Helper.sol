@@ -40,6 +40,10 @@ contract scWETHv2Helper {
     /// @notice returns the loan to value ration of the vault contract in a particular protocol
     /// @param adapter the address of the adapter contract of the protocol
     function getLtv(IAdapter adapter) public view returns (uint256) {
+        uint256 collateral = getCollateral(adapter);
+
+        if (collateral == 0) return 0;
+
         return getDebt(adapter).divWadDown(getCollateral(adapter));
     }
 

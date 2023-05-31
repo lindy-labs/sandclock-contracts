@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.13;
 
+import "forge-std/console2.sol";
 import {
     InvalidTargetLtv,
     ZeroAddress,
@@ -232,6 +233,51 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
         }
     }
 
+    function investAndHarvest2(uint256 _totalInvestAmount, uint256 _flashLoanAmount, bytes[] calldata _multicallData)
+        external
+    {
+        _onlyKeeper();
+
+        if (_totalInvestAmount > asset.balanceOf(address(this))) revert InsufficientDepositBalance();
+
+        // TODO: completely remove this params struct at the end of recfactor
+        RebalanceParams memory params;
+
+        // needed otherwise counted as profit during harvest
+        totalInvested += _totalInvestAmount;
+
+        _flashLoan(_flashLoanAmount, params, true, _multicallData);
+
+        // store the old total
+        uint256 oldTotalInvested = totalInvested;
+        uint256 assets = totalCollateral() - totalDebt();
+
+        if (assets > oldTotalInvested) {
+            totalInvested = assets;
+
+            // profit since last harvest, zero if there was a loss
+            uint256 profit = assets - oldTotalInvested;
+            totalProfit += profit;
+
+            uint256 fee = profit.mulWadDown(performanceFee);
+
+            // mint equivalent amount of tokens to the performance fee beneficiary ie the treasury
+            _mint(treasury, convertToShares(fee));
+
+            emit Harvest(profit, fee);
+        }
+    }
+
+    function swapWethToWstEth(bytes calldata _swapdata) external {
+        // TODO: only keeper or flashloan
+        wethToWstEthSwapRouter.functionDelegateCall(_swapdata);
+    }
+
+    function swapWstEthToWeth(bytes calldata _swapdata) external {
+        // TODO: only keeper or flashloan
+        wstEthToWethSwapRouter.functionDelegateCall(_swapdata);
+    }
+
     /// @notice withdraw funds from the strategy into the vault
     /// @param _amount : amount of assets to withdraw into the vault
     function withdrawToVault(uint256 _amount) external {
@@ -265,7 +311,7 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
         // needed otherwise counted as profit during harvest
         totalInvested += _totalInvestAmount;
 
-        _flashLoan(totalFlashLoanAmount, params);
+        _flashLoan(totalFlashLoanAmount, params, false, new bytes[](0));
 
         emit Invested(_totalInvestAmount, _supplyBorrowParams);
     }
@@ -290,7 +336,7 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
         });
 
         // take flashloan
-        _flashLoan(totalFlashLoanAmount, params);
+        _flashLoan(totalFlashLoanAmount, params, false, new bytes[](0));
 
         emit DisInvested(_repayWithdrawParams);
     }
@@ -320,7 +366,7 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
         });
 
         // take flashloan
-        _flashLoan(totalFlashLoanAmount, params);
+        _flashLoan(totalFlashLoanAmount, params, false, new bytes[](0));
 
         emit Reallocated(_from, _to);
     }
@@ -432,31 +478,69 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
         uint256 flashLoanAmount = amounts[0];
 
         // decode user data
-        (RebalanceParams memory rebalanceParams) = abi.decode(userData, (RebalanceParams));
+        (RebalanceParams memory rebalanceParams, bool useMulticalls, bytes[] memory callData) =
+            abi.decode(userData, (RebalanceParams, bool, bytes[]));
 
-        // repay and withdraw first
-        for (uint256 i; i < rebalanceParams.repayWithdrawParams.length; i++) {
-            _repayWithdraw(rebalanceParams.repayWithdrawParams[i]);
+        if (!useMulticalls) {
+            // repay and withdraw first
+            for (uint256 i; i < rebalanceParams.repayWithdrawParams.length; i++) {
+                _repayWithdraw(rebalanceParams.repayWithdrawParams[i]);
+            }
+
+            if (rebalanceParams.wstEthToWethSwapData.length != 0) {
+                // wstEth to weth
+                wstEthToWethSwapRouter.functionDelegateCall(rebalanceParams.wstEthToWethSwapData);
+            }
+
+            if (rebalanceParams.wethToWstEthSwapData.length != 0) {
+                // weth to wstEth
+                wethToWstEthSwapRouter.functionDelegateCall(rebalanceParams.wethToWstEthSwapData);
+            }
+
+            for (uint256 i; i < rebalanceParams.supplyBorrowParams.length; i++) {
+                _supplyBorrow(rebalanceParams.supplyBorrowParams[i]);
+            }
+
+            // payback flashloan
+            asset.safeTransfer(address(balancerVault), flashLoanAmount);
+
+            _enforceFloat();
+        } else {
+            // TODO: next step to refactor this to use multicall
+            // repay and withdraw first
+            for (uint256 i; i < rebalanceParams.repayWithdrawParams.length; i++) {
+                _repayWithdraw(rebalanceParams.repayWithdrawParams[i]);
+            }
+
+            if (rebalanceParams.wstEthToWethSwapData.length != 0) {
+                // wstEth to weth
+                wstEthToWethSwapRouter.functionDelegateCall(rebalanceParams.wstEthToWethSwapData);
+            }
+
+            // if (rebalanceParams.wethToWstEthSwapData.length != 0) {
+            //     // weth to wstEth
+            //     wethToWstEthSwapRouter.functionDelegateCall(rebalanceParams.wethToWstEthSwapData);
+            // }
+
+            // for (uint256 i; i < rebalanceParams.supplyBorrowParams.length; i++) {
+            //     _supplyBorrow(rebalanceParams.supplyBorrowParams[i]);
+            // }
+
+            //  multicall
+            console2.log("calldata.length", callData.length);
+            for (uint256 i = 0; i < callData.length; i++) {
+                address(this).functionDelegateCall(callData[i]);
+            }
+
+            console2.log("repay flash loan");
+
+            // payback flashloan
+            asset.safeTransfer(address(balancerVault), flashLoanAmount);
+
+            console2.log("flash loan repaid");
+
+            _enforceFloat();
         }
-
-        if (rebalanceParams.wstEthToWethSwapData.length != 0) {
-            // wstEth to weth
-            wstEthToWethSwapRouter.functionDelegateCall(rebalanceParams.wstEthToWethSwapData);
-        }
-
-        if (rebalanceParams.wethToWstEthSwapData.length != 0) {
-            // weth to wstEth
-            wethToWstEthSwapRouter.functionDelegateCall(rebalanceParams.wethToWstEthSwapData);
-        }
-
-        for (uint256 i; i < rebalanceParams.supplyBorrowParams.length; i++) {
-            _supplyBorrow(rebalanceParams.supplyBorrowParams[i]);
-        }
-
-        // payback flashloan
-        asset.safeTransfer(address(balancerVault), flashLoanAmount);
-
-        _enforceFloat();
     }
 
     // need to be able to receive eth
@@ -500,7 +584,7 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
         });
 
         // take flashloan
-        _flashLoan(flashLoanAmount, params);
+        _flashLoan(flashLoanAmount, params, false, new bytes[](0));
     }
 
     /// @notice enforce float to be above the minimum required
@@ -527,6 +611,13 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
         _withdrawToVault(missing);
     }
 
+    function supplyAndBorrow(uint256 _adapterId, uint256 _supplyAmount, uint256 _borrowAmount) external {
+        // TODO: only keeper or flashloan
+        address adapter = protocolAdapters.get(_adapterId);
+        _adapterDelegateCall(adapter, IAdapter.supply.selector, _supplyAmount);
+        _adapterDelegateCall(adapter, IAdapter.borrow.selector, _borrowAmount);
+    }
+
     function _supplyBorrow(SupplyBorrowParam memory _params) internal {
         address adapter = protocolAdapters.get(_params.protocolId);
         _adapterDelegateCall(adapter, IAdapter.supply.selector, _params.supplyAmount);
@@ -543,14 +634,19 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
         _adapter.functionDelegateCall(abi.encodeWithSelector(_selector, _amount));
     }
 
-    function _flashLoan(uint256 _totalFlashLoanAmount, RebalanceParams memory _params) internal {
+    function _flashLoan(
+        uint256 _totalFlashLoanAmount,
+        RebalanceParams memory _params,
+        bool _useMulticalls, // TODO: remove this param at the end of the refactoring
+        bytes[] memory callData
+    ) internal {
         address[] memory tokens = new address[](1);
         tokens[0] = address(asset);
         uint256[] memory amounts = new uint256[](1);
         amounts[0] = _totalFlashLoanAmount;
 
         _initiateFlashLoan();
-        balancerVault.flashLoan(address(this), tokens, amounts, abi.encode(_params));
+        balancerVault.flashLoan(address(this), tokens, amounts, abi.encode(_params, _useMulticalls, callData));
         _finalizeFlashLoan();
     }
 
