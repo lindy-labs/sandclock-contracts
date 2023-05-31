@@ -104,8 +104,9 @@ contract scUSDCv2Test is Test {
     function test_constructor() public {
         _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
         assertEq(address(vault.asset()), C.USDC);
-        assertEq(address(vault.scWETH()), address(wethVault));
-        // TODO: assert swapper and price converter
+        assertEq(address(vault.scWETH()), address(wethVault), "weth vault");
+        assertEq(address(vault.priceConverter()), address(priceConverter), "price converter");
+        assertEq(address(vault.swapper()), address(swapper), "swapper");
 
         assertEq(weth.allowance(address(vault), address(vault.scWETH())), type(uint256).max, "scWETH allowance");
     }
