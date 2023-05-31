@@ -554,6 +554,69 @@ contract scWETHv2Test is Test {
         assertApproxEqRel(aaveV3Deposited, investAmount, 0.005e18, "aaveV3 allocation not correct");
     }
 
+    function test_disinvest_usingMulticalls() public {
+        _setUp(BLOCK_BEFORE_EULER_EXPLOIT);
+
+        uint256 amount = 100 ether;
+        _depositToVault(address(this), amount);
+
+        uint256 investAmount = amount - minimumFloatAmount;
+        uint256 stEthRateTolerance = 0.999e18;
+        uint256 aaveV3FlashLoanAmount = _calcSupplyBorrowFlashLoanAmount(aaveV3Adapter, investAmount);
+        uint256 aaveV3SupplyAmount =
+            oracleLib.ethToWstEth(investAmount + aaveV3FlashLoanAmount).mulWadDown(stEthRateTolerance);
+
+        uint256 minimumDust = amount.mulWadDown(0.01e18) + (amount - investAmount);
+
+        bytes[] memory callData = new bytes[](2);
+        callData[0] = abi.encodeWithSelector(scWETHv2.swapWethToWstEth.selector, investAmount + aaveV3FlashLoanAmount);
+        callData[1] = abi.encodeWithSelector(
+            scWETHv2.supplyAndBorrow.selector, aaveV3AdapterId, aaveV3SupplyAmount, aaveV3FlashLoanAmount
+        );
+
+        // deposit into strategy
+        hoax(keeper);
+        vault.investAndHarvest2(investAmount, aaveV3FlashLoanAmount, callData);
+
+        assertLt(weth.balanceOf(address(vault)), minimumDust, "weth dust after invest");
+        assertLt(wstEth.balanceOf(address(vault)), minimumDust, "wstEth dust after invest");
+
+        uint256 aaveV3Ltv = vaultHelper.getLtv(aaveV3Adapter);
+
+        // disinvest to decrease the ltv on each protocol
+        uint256 ltvDecrease = 0.1e18;
+
+        aaveV3FlashLoanAmount = _calcRepayWithdrawFlashLoanAmount(aaveV3Adapter, 0, aaveV3Ltv - ltvDecrease);
+
+        uint256 assets = vault.totalAssets();
+        uint256 leverage = vaultHelper.getLeverage();
+        uint256 ltv = vaultHelper.getLtv();
+
+        callData = new bytes[](2);
+        callData[0] = abi.encodeWithSelector(
+            scWETHv2.repayAndWithdraw.selector,
+            aaveV3AdapterId,
+            aaveV3FlashLoanAmount,
+            oracleLib.ethToWstEth(aaveV3FlashLoanAmount)
+        );
+        callData[1] = abi.encodeWithSelector(scWETHv2.swapWstEthToWeth2.selector, type(uint256).max, slippageTolerance);
+
+        hoax(keeper);
+        vault.disinvest2(aaveV3FlashLoanAmount, callData);
+
+        _floatCheck();
+
+        assertApproxEqRel(
+            vaultHelper.getLtv(aaveV3Adapter), aaveV3Ltv - ltvDecrease, 0.0000001e18, "aavev3 ltv not decreased"
+        );
+        assertApproxEqRel(vaultHelper.getLtv(), ltv - ltvDecrease, 0.01e18, "net ltv not decreased");
+
+        assertLt(weth.balanceOf(address(vault)), minimumDust, "weth dust after disinvest");
+        assertLt(wstEth.balanceOf(address(vault)), minimumDust, "wstEth dust after disinvest");
+        assertApproxEqRel(vault.totalAssets(), assets, 0.001e18, "disinvest must not change total assets");
+        assertGe(leverage - vaultHelper.getLeverage(), 0.4e18, "leverage not decreased after disinvest");
+    }
+
     function test_deposit_invest_redeem(uint256 amount) public {
         _setUp(BLOCK_BEFORE_EULER_EXPLOIT);
 

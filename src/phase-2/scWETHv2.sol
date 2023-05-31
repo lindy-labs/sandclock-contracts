@@ -291,6 +291,23 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
         wstEthToWethSwapRouter.functionDelegateCall(_swapdata);
     }
 
+    function swapWstEthToWeth2(uint256 _amount, uint256 _slippageTolerance) external {
+        // TODO: only keeper or flashloan
+
+        // TODO: move this functionality to Swapper.sol once merged with scUSDCv2 branch
+        WETH weth = WETH(payable(C.WETH));
+        ILido stEth = ILido(C.STETH);
+        IwstETH wstETH = IwstETH(C.WSTETH);
+        ICurvePool curvePool = ICurvePool(C.CURVE_ETH_STETH_POOL);
+
+        uint256 stEthAmount = wstETH.unwrap(_amount == type(uint256).max ? wstETH.balanceOf(address(this)) : _amount);
+        // stETH to eth
+        ERC20(address(stEth)).safeApprove(address(curvePool), stEthAmount);
+        curvePool.exchange(1, 0, stEthAmount, oracleLib.stEthToEth(stEthAmount).mulWadDown(_slippageTolerance));
+        // eth to weth
+        weth.deposit{value: address(this).balance}();
+    }
+
     /// @notice withdraw funds from the strategy into the vault
     /// @param _amount : amount of assets to withdraw into the vault
     function withdrawToVault(uint256 _amount) external {
@@ -352,6 +369,19 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
         _flashLoan(totalFlashLoanAmount, params, false, new bytes[](0));
 
         emit DisInvested(_repayWithdrawParams);
+    }
+
+    function disinvest2(uint256 _flashLoanAmount, bytes[] calldata _multicallData) external {
+        _onlyKeeper();
+
+        // TODO: remove
+        RebalanceParams memory params;
+
+        // take flashloan
+        _flashLoan(_flashLoanAmount, params, true, _multicallData);
+
+        // TODO: fix event
+        // emit DisInvested(_repayWithdrawParams);
     }
 
     /// @notice reallocate funds between protocols (without any slippage)
@@ -519,38 +549,14 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
 
             _enforceFloat();
         } else {
-            // TODO: next step to refactor this to use multicall
-            // repay and withdraw first
-            for (uint256 i; i < rebalanceParams.repayWithdrawParams.length; i++) {
-                _repayWithdraw(rebalanceParams.repayWithdrawParams[i]);
-            }
-
-            if (rebalanceParams.wstEthToWethSwapData.length != 0) {
-                // wstEth to weth
-                wstEthToWethSwapRouter.functionDelegateCall(rebalanceParams.wstEthToWethSwapData);
-            }
-
-            // if (rebalanceParams.wethToWstEthSwapData.length != 0) {
-            //     // weth to wstEth
-            //     wethToWstEthSwapRouter.functionDelegateCall(rebalanceParams.wethToWstEthSwapData);
-            // }
-
-            // for (uint256 i; i < rebalanceParams.supplyBorrowParams.length; i++) {
-            //     _supplyBorrow(rebalanceParams.supplyBorrowParams[i]);
-            // }
-
             //  multicall
             console2.log("calldata.length", callData.length);
             for (uint256 i = 0; i < callData.length; i++) {
                 address(this).functionDelegateCall(callData[i]);
             }
 
-            console2.log("repay flash loan");
-
             // payback flashloan
             asset.safeTransfer(address(balancerVault), flashLoanAmount);
-
-            console2.log("flash loan repaid");
 
             _enforceFloat();
         }
@@ -629,6 +635,13 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
         address adapter = protocolAdapters.get(_adapterId);
         _adapterDelegateCall(adapter, IAdapter.supply.selector, _supplyAmount);
         _adapterDelegateCall(adapter, IAdapter.borrow.selector, _borrowAmount);
+    }
+
+    function repayAndWithdraw(uint256 _adapterId, uint256 _repayAmount, uint256 _withdrawAmount) external {
+        // TODO: only keeper or flashloan
+        address adapter = protocolAdapters.get(_adapterId);
+        _adapterDelegateCall(adapter, IAdapter.repay.selector, _repayAmount);
+        _adapterDelegateCall(adapter, IAdapter.withdraw.selector, _withdrawAmount);
     }
 
     function _supplyBorrow(SupplyBorrowParam memory _params) internal {
