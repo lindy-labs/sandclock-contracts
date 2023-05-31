@@ -89,6 +89,7 @@ contract RewardTracker is BonusTracker, AccessControl {
         _updateBonus(msg.sender);
         _updateBonus(_to);
         _burnMultiplierPoints(_amount, msg.sender);
+
         return super.transfer(_to, _amount);
     }
 
@@ -98,6 +99,7 @@ contract RewardTracker is BonusTracker, AccessControl {
         _updateBonus(_from);
         _updateBonus(_to);
         _burnMultiplierPoints(_amount, _from);
+
         return super.transferFrom(_from, _to, _amount);
     }
 
@@ -105,6 +107,7 @@ contract RewardTracker is BonusTracker, AccessControl {
     function claimRewards(address _receiver) external nonReentrant returns (uint256 reward) {
         _updateReward(_receiver);
         reward = rewards[_receiver];
+
         if (reward > 0) {
             rewards[_receiver] = 0;
             rewardToken.safeTransfer(_receiver, reward);
@@ -149,8 +152,10 @@ contract RewardTracker is BonusTracker, AccessControl {
     /// a vault and start a new reward period.
     function fetchRewards(ERC4626 _vault) external onlyDistributor {
         require(isVault[address(_vault)], "vault not whitelisted");
+
         uint256 beforeBalance = rewardToken.balanceOf(address(this));
         _vault.redeem(_vault.balanceOf(address(this)), address(this), address(this));
+
         uint256 afterBalance = rewardToken.balanceOf(address(this));
         _notifyRewardAmount(afterBalance - beforeBalance);
     }
@@ -158,7 +163,9 @@ contract RewardTracker is BonusTracker, AccessControl {
     /// @notice Lets an admin add a vault for collecting fees from.
     function addVault(address _vault) external onlyAdmin {
         require(ERC4626(_vault).asset() == rewardToken, "only WETH assets");
+
         isVault[_vault] = true;
+
         emit VaultAdded(_vault);
     }
 
@@ -191,6 +198,7 @@ contract RewardTracker is BonusTracker, AccessControl {
 
         // record new reward
         uint256 newRewardRate;
+
         if (block.timestamp >= periodFinish_) {
             newRewardRate = _reward / duration_;
         } else {
@@ -198,10 +206,12 @@ contract RewardTracker is BonusTracker, AccessControl {
             uint256 leftover = remaining * rewardRate_;
             newRewardRate = (_reward + leftover) / duration_;
         }
+
         // prevent overflow when computing rewardPerToken
         if (newRewardRate >= ((type(uint256).max / PRECISION) / duration_)) {
             revert Error_AmountTooLarge();
         }
+
         rewardRate = newRewardRate;
         lastUpdateTime = uint64(block.timestamp);
         periodFinish = uint64(block.timestamp + duration_);

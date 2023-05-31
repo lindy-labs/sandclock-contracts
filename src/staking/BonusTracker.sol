@@ -41,6 +41,7 @@ abstract contract BonusTracker is ERC4626, ReentrancyGuard {
         _updateReward(msg.sender);
         _updateBonus(msg.sender);
         _bonus = bonus[msg.sender];
+
         if (_bonus > 0) {
             bonus[msg.sender] = 0;
             multiplierPointsOf[msg.sender] += _bonus;
