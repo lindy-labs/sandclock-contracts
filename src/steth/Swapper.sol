@@ -2,6 +2,10 @@
 pragma solidity ^0.8.19;
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
+import {WETH} from "solmate/tokens/WETH.sol";
+import {ILido} from "../interfaces/lido/ILido.sol";
+import {IwstETH} from "../interfaces/lido/IwstETH.sol";
+import {ICurvePool} from "../interfaces/curve/ICurvePool.sol";
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 import {Address} from "openzeppelin-contracts/utils/Address.sol";
 
@@ -23,6 +27,12 @@ contract Swapper {
 
     // 0x router address
     address public constant zeroExRouter = 0xDef1C0ded9bec7F1a1670819833240f027b25EfF;
+
+    ICurvePool public constant curvePool = ICurvePool(C.CURVE_ETH_STETH_POOL);
+
+    WETH public constant weth = WETH(payable(C.WETH));
+    ILido public constant stEth = ILido(C.STETH);
+    IwstETH public constant wstETH = IwstETH(C.WSTETH);
 
     /**
      * @notice Swap tokens on Uniswap V3 using exact input single function.
@@ -110,5 +120,29 @@ contract Swapper {
         _tokenIn.approve(zeroExRouter, 0);
 
         return amountReceived;
+    }
+
+    function lidoSwapWethToWstEth(uint256 _wethAmount) external {
+        // weth to eth
+        weth.withdraw(_wethAmount);
+
+        // stake to lido / eth => stETH
+        stEth.submit{value: _wethAmount}(address(0x00));
+
+        //  stETH to wstEth
+        uint256 stEthBalance = stEth.balanceOf(address(this));
+        ERC20(address(stEth)).safeApprove(address(wstETH), stEthBalance);
+
+        wstETH.wrap(stEthBalance);
+    }
+
+    function curveSwapStEthToWeth(uint256 _stEthAmount, uint256 _wethAmountOutMin) external {
+        // stETH to eth
+        ERC20(address(stEth)).safeApprove(address(curvePool), _stEthAmount);
+
+        curvePool.exchange(1, 0, _stEthAmount, _wethAmountOutMin);
+
+        // eth to weth
+        weth.deposit{value: address(this).balance}();
     }
 }

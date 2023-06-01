@@ -107,6 +107,8 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
 
     Swapper public immutable swapper;
 
+    IwstETH constant wstETH = IwstETH(C.WSTETH);
+
     constructor(ConstructorParams memory _params)
         sc4626(_params.admin, _params.keeper, ERC20(_params.weth), "Sandclock WETH Vault v2", "scWETHv2")
     {
@@ -277,48 +279,35 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
         }
     }
 
-    function swapWethToWstEth(uint256 _amount) external {
+    function swapWethToWstEth(uint256 _wethAmount) external {
         // TODO: only keeper or flashloan
 
-        // TODO: move this functionality to Swapper.sol once merged with scUSDCv2 branch
-        WETH weth = WETH(payable(C.WETH));
-        ILido stEth = ILido(C.STETH);
-        IwstETH wstETH = IwstETH(C.WSTETH);
-
-        // weth to eth
-        weth.withdraw(_amount);
-        // stake to lido / eth => stETH
-        stEth.submit{value: _amount}(address(0x00));
-        //  stETH to wstEth
-        uint256 stEthBalance = stEth.balanceOf(address(this));
-        ERC20(address(stEth)).safeApprove(address(wstETH), stEthBalance);
-        wstETH.wrap(stEthBalance);
+        address(swapper).functionDelegateCall(
+            abi.encodeWithSelector(Swapper.lidoSwapWethToWstEth.selector, _wethAmount)
+        );
     }
 
-    function swapWstEthToWeth(uint256 _amount, uint256 _slippageTolerance) external {
+    function swapWstEthToWeth(uint256 _wstEthAmount, uint256 _slippageTolerance) external {
         // TODO: only keeper or flashloan
+        uint256 wstEthBalance = wstETH.balanceOf(address(this));
 
-        // TODO: move this functionality to Swapper.sol once merged with scUSDCv2 branch
-        WETH weth = WETH(payable(C.WETH));
-        ILido stEth = ILido(C.STETH);
-        IwstETH wstETH = IwstETH(C.WSTETH);
-        ICurvePool curvePool = ICurvePool(C.CURVE_ETH_STETH_POOL);
+        if (_wstEthAmount > wstEthBalance) {
+            _wstEthAmount = wstEthBalance;
+        }
 
-        uint256 stEthAmount = wstETH.unwrap(_amount == type(uint256).max ? wstETH.balanceOf(address(this)) : _amount);
-        // stETH to eth
-        ERC20(address(stEth)).safeApprove(address(curvePool), stEthAmount);
-        curvePool.exchange(1, 0, stEthAmount, oracleLib.stEthToEth(stEthAmount).mulWadDown(_slippageTolerance));
-        // eth to weth
-        weth.deposit{value: address(this).balance}();
+        uint256 stEthAmount = wstETH.unwrap(_wstEthAmount);
+
+        uint256 wethAmountOutMin = oracleLib.stEthToEth(stEthAmount).mulWadDown(_slippageTolerance);
+
+        address(swapper).functionDelegateCall(
+            abi.encodeWithSelector(Swapper.curveSwapStEthToWeth.selector, stEthAmount, wethAmountOutMin)
+        );
     }
 
     function swapWstEthToWethOnZeroEx(uint256 _wstEthAmount, uint256 _wethAmountOutMin, bytes calldata _swapData)
         external
     {
         // TODO: only keeper or flashloan
-
-        IwstETH wstETH = IwstETH(C.WSTETH);
-
         address(swapper).functionDelegateCall(
             abi.encodeWithSelector(
                 Swapper.zeroExSwap.selector, wstETH, asset, _wstEthAmount, _wethAmountOutMin, _swapData
