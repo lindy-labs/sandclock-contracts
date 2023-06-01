@@ -1084,12 +1084,12 @@ contract scWETHv2Test is Test {
         scWETHv2.SupplyBorrowParam[] memory supplyBorrowParamsAfterProfits = new scWETHv2.SupplyBorrowParam[](2);
 
         supplyBorrowParamsAfterProfits[0] = scWETHv2.SupplyBorrowParam({
-            protocolId: aaveV3AdapterId,
+            adapterId: aaveV3AdapterId,
             supplyAmount: aaveV3SupplyAmount,
             borrowAmount: aaveV3FlashLoanAmount
         });
         supplyBorrowParamsAfterProfits[1] = scWETHv2.SupplyBorrowParam({
-            protocolId: compoundV3AdapterId,
+            adapterId: compoundV3AdapterId,
             supplyAmount: compoundSupplyAmount,
             borrowAmount: compoundFlashLoanAmount
         });
@@ -1223,13 +1223,13 @@ contract scWETHv2Test is Test {
         uint256 delta = withdrawAmount - (aaveV3SupplyAmount + compoundSupplyAmount);
 
         supplyBorrowParamsReallocation[0] = scWETHv2.SupplyBorrowParam({
-            protocolId: aaveV3AdapterId,
+            adapterId: aaveV3AdapterId,
             supplyAmount: oracleLib.ethToWstEth(aaveV3SupplyAmount),
             borrowAmount: aaveV3BorrowAmount
         });
 
         supplyBorrowParamsReallocation[1] = scWETHv2.SupplyBorrowParam({
-            protocolId: compoundV3AdapterId,
+            adapterId: compoundV3AdapterId,
             supplyAmount: oracleLib.ethToWstEth(compoundSupplyAmount),
             borrowAmount: compoundBorrowAmount
         });
@@ -1306,17 +1306,17 @@ contract scWETHv2Test is Test {
             oracleLib.ethToWstEth(compoundAmount + compoundFlashLoanAmount).mulWadDown(stEthRateTolerance);
 
         supplyBorrowParams[0] = scWETHv2.SupplyBorrowParam({
-            protocolId: aaveV3AdapterId,
+            adapterId: aaveV3AdapterId,
             supplyAmount: aaveV3SupplyAmount,
             borrowAmount: aaveV3FlashLoanAmount
         });
         supplyBorrowParams[1] = scWETHv2.SupplyBorrowParam({
-            protocolId: eulerAdapterId,
+            adapterId: eulerAdapterId,
             supplyAmount: eulerSupplyAmount,
             borrowAmount: eulerFlashLoanAmount
         });
         supplyBorrowParams[2] = scWETHv2.SupplyBorrowParam({
-            protocolId: compoundV3AdapterId,
+            adapterId: compoundV3AdapterId,
             supplyAmount: compoundSupplyAmount,
             borrowAmount: compoundFlashLoanAmount
         });

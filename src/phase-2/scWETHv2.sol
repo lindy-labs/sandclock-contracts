@@ -61,13 +61,13 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
     }
 
     struct RepayWithdrawParam {
-        uint256 protocolId;
+        uint256 adapterId;
         uint256 repayAmount; // flashLoanAmount (in WETH)
         uint256 withdrawAmount; // amount of wstEth to withdraw from the market (amount + flashLoanAmount) (in wstEth)
     }
 
     struct SupplyBorrowParam {
-        uint256 protocolId;
+        uint256 adapterId;
         uint256 supplyAmount; // amount of wstEth to supply to the market (in wstEth)
         uint256 borrowAmount; // flashLoanAmount (in WETH)
     }
@@ -593,17 +593,17 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
 
         uint256 flashLoanAmount_;
         uint256 amount_;
-        uint256 protocolId;
+        uint256 adapterId;
         address adapter;
         for (uint256 i; i < n; i++) {
-            (protocolId, adapter) = protocolAdapters.at(i);
+            (adapterId, adapter) = protocolAdapters.at(i);
             (flashLoanAmount_, amount_) = _calcFlashLoanAmountWithdrawing(adapter, _amount, totalInvested_);
 
             flashLoanAmount += flashLoanAmount_;
 
             callData[i] = abi.encodeWithSelector(
                 this.repayAndWithdraw.selector,
-                protocolId,
+                adapterId,
                 flashLoanAmount_,
                 oracleLib.ethToWstEth(flashLoanAmount_ + amount_)
             );
@@ -660,13 +660,13 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
     }
 
     function _supplyBorrow(SupplyBorrowParam memory _params) internal {
-        address adapter = protocolAdapters.get(_params.protocolId);
+        address adapter = protocolAdapters.get(_params.adapterId);
         _adapterDelegateCall(adapter, IAdapter.supply.selector, _params.supplyAmount);
         _adapterDelegateCall(adapter, IAdapter.borrow.selector, _params.borrowAmount);
     }
 
     function _repayWithdraw(RepayWithdrawParam memory _params) internal {
-        address adapter = protocolAdapters.get(_params.protocolId);
+        address adapter = protocolAdapters.get(_params.adapterId);
         _adapterDelegateCall(adapter, IAdapter.repay.selector, _params.repayAmount);
         _adapterDelegateCall(adapter, IAdapter.withdraw.selector, _params.withdrawAmount);
     }
