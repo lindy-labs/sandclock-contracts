@@ -2,12 +2,25 @@
 
 This folder contains formal verification of scWETHv2 properties using the [hevm symbolic execution tool]([https://github.com/ethereum/hevm/releases/tag/release/0.51.0]).
 
-The hevm tool does not support all features used in scWETHv2 and thus some adjustments were necessary:
+The hevm tool does not support all features used in scWETHv2 and thus some adjustments are necessary:
 
-* `scErrors.sol` needed to be removed from the folder `out`;
+* The folder `scErrors.sol` needs to be removed from the folder `out` before running hevm;
 * hevm does not support cheatcodes yet;
 * `scWETHv2.sol` and `scWETHv2props.sol` needed to be adjusted on the `weth` state variable. For some reason, hevm does not support this constructor call `constructor(ConstructorParams memory params)
-        sc4626(params.admin, params.keeper, ERC20(params.weth), "Sandclock WETH Vault v2", "scWETHv2")`, in particular this type cast `ERC20(params.weth)`.
+        sc4626(params.admin, params.keeper, ERC20(params.weth), "Sandclock WETH Vault v2", "scWETHv2"), in particular this type cast `ERC20(params.weth)`.
+
+## Running hevm
+
+To run hevm, simply do the following steps:
+
+* `rm -rf ./out/scErrors.sol/scErrors.json`
+* `hevm test` (to run all properties) or `hevm test --match property_name` (to run just the property `property_name`)
+
+## Current limitations
+
+As pointed out previously, hevm does not handle the `out` folder well im its current version. Thus, by running hevm on a specific property of running `forge test`, the `out` folder will be filled with contents that can confuse hevm. If this happens, it is enough to delete the `out` folder at all or just the entries that are confusing hevm. After that, the command `hevm test` turns back to normal.
+
+## Current result of running hevm on scWETHv2
 
 Running hevm on `scWETHv2props.sol` results in:
 

@@ -24,14 +24,14 @@ import {IVault} from "../interfaces/balancer/IVault.sol";
 import {ISwapRouter} from "../interfaces/uniswap/ISwapRouter.sol";
 import {AggregatorV3Interface} from "../interfaces/chainlink/AggregatorV3Interface.sol";
 import {IFlashLoanRecipient} from "../interfaces/balancer/IFlashLoanRecipient.sol";
-import {scUSDCBase} from "./scUSDCBase.sol";
+import {sc4626} from "../sc4626.sol";
 
 /**
  * @title Sandclock USDC Vault
  * @notice A vault that allows users to earn interest on their USDC deposits from leveraged WETH staking.
  * @dev This vault uses Sandclock's leveraged WETH staking vault - scWETH.
  */
-contract scUSDC is scUSDCBase, IFlashLoanRecipient {
+contract scUSDC is sc4626, IFlashLoanRecipient {
     using SafeTransferLib for ERC20;
     using SafeTransferLib for WETH;
     using FixedPointMathLib for uint256;
@@ -101,7 +101,7 @@ contract scUSDC is scUSDCBase, IFlashLoanRecipient {
     }
 
     constructor(ConstructorParams memory _params)
-        scUSDCBase(_params.admin, _params.keeper, _params.usdc, "Sandclock USDC Vault", "scUSDC")
+        sc4626(_params.admin, _params.keeper, _params.usdc, "Sandclock USDC Vault", "scUSDC")
     {
         scWETH = _params.scWETH;
         weth = _params.weth;
@@ -129,7 +129,7 @@ contract scUSDC is scUSDCBase, IFlashLoanRecipient {
      * @param _newSlippageTolerance The new slippage tolerance value.
      */
     function setSlippageTolerance(uint256 _newSlippageTolerance) external {
-        onlyAdmin();
+        _onlyAdmin();
         if (_newSlippageTolerance > C.ONE) revert InvalidSlippageTolerance();
 
         slippageTolerance = _newSlippageTolerance;
@@ -142,7 +142,7 @@ contract scUSDC is scUSDCBase, IFlashLoanRecipient {
      * @param _newTargetLtv The new target LTV value.
      */
     function applyNewTargetLtv(uint256 _newTargetLtv) external {
-        onlyKeeper();
+        _onlyKeeper();
         if (_newTargetLtv > getMaxLtv()) revert InvalidTargetLtv();
 
         targetLtv = _newTargetLtv;
@@ -157,7 +157,7 @@ contract scUSDC is scUSDCBase, IFlashLoanRecipient {
      * @dev Called to increase or decrease the WETH debt to match the target LTV.
      */
     function rebalance() public {
-        onlyKeeper();
+        _onlyKeeper();
 
         uint256 initialBalance = getUsdcBalance();
         uint256 currentBalance = initialBalance;
@@ -199,7 +199,7 @@ contract scUSDC is scUSDCBase, IFlashLoanRecipient {
      * @param _usdcAmountOutMin The minimum amount of USDC to receive.
      */
     function sellProfit(uint256 _usdcAmountOutMin) external {
-        onlyKeeper();
+        _onlyKeeper();
 
         uint256 profits = _calculateWethProfit(getInvested(), getDebt());
 
@@ -216,7 +216,7 @@ contract scUSDC is scUSDCBase, IFlashLoanRecipient {
      * @param _endUsdcBalanceMin The minimum USDC balance to end with after all positions are closed.
      */
     function exitAllPositions(uint256 _endUsdcBalanceMin) external {
-        onlyAdmin();
+        _onlyAdmin();
         uint256 debt = getDebt();
 
         if (getInvested() >= debt) {

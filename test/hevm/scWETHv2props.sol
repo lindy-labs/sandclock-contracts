@@ -13,28 +13,29 @@ import {Errors} from "aave-v3/protocol/libraries/helpers/Errors.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {Address} from "openzeppelin-contracts/utils/Address.sol";
 
-import {Constants as C} from "../lib/Constants.sol";
+import {Constants as C} from "../../src/lib/Constants.sol";
 import {scWETHv2Harness} from "./harness/scWETHv2Harness.sol";
 import {WETH} from "solmate/tokens/WETH.sol";
-import {ILido} from "../interfaces/lido/ILido.sol";
-import {IwstETH} from "../interfaces/lido/IwstETH.sol";
-import {ICurvePool} from "../interfaces/curve/ICurvePool.sol";
-import {IVault} from "../interfaces/balancer/IVault.sol";
-import {AggregatorV3Interface} from "../interfaces/chainlink/AggregatorV3Interface.sol";
-import {sc4626} from "../sc4626.sol";
-import {scWETHv2Helper} from "../phase-2/scWETHv2Helper.sol";
-import {OracleLib} from "../phase-2/OracleLib.sol";
-//import "../errors/scErrors.sol";
+import {ILido} from "../../src/interfaces/lido/ILido.sol";
+import {IwstETH} from "../../src/interfaces/lido/IwstETH.sol";
+import {ICurvePool} from "../../src/interfaces/curve/ICurvePool.sol";
+import {IVault} from "../../src/interfaces/balancer/IVault.sol";
+import {AggregatorV3Interface} from "../../src/interfaces/chainlink/AggregatorV3Interface.sol";
+import {sc4626} from "../../src/sc4626.sol";
+import {scWETHv2Helper} from "../../src/phase-2/scWETHv2Helper.sol";
+import {OracleLib} from "../../src/phase-2/OracleLib.sol";
+import "../../src/errors/scErrors.sol";
 
-import {IAdapter} from "../scWeth-adapters/IAdapter.sol";
-import {AaveV3Adapter} from "../scWeth-adapters/AaveV3Adapter.sol";
-import {CompoundV3Adapter} from "../scWeth-adapters/CompoundV3Adapter.sol";
-import {EulerAdapter} from "../scWeth-adapters/EulerAdapter.sol";
-import {ISwapRouter} from "../swap-routers/ISwapRouter.sol";
-import {WethToWstEthSwapRouter} from "../swap-routers/WethToWstEthSwapRouter.sol";
-import {WstEthToWethSwapRouter} from "../swap-routers/WstEthToWethSwapRouter.sol";
+import {IAdapter} from "../../src/scWeth-adapters/IAdapter.sol";
+import {AaveV3Adapter} from "../../src/scWeth-adapters/AaveV3Adapter.sol";
+import {CompoundV3Adapter} from "../../src/scWeth-adapters/CompoundV3Adapter.sol";
+import {EulerAdapter} from "../../src/scWeth-adapters/EulerAdapter.sol";
+import {ISwapRouter} from "../../src/swap-routers/ISwapRouter.sol";
+import {WethToWstEthSwapRouter} from "../../src/swap-routers/WethToWstEthSwapRouter.sol";
+import {WstEthToWethSwapRouter} from "../../src/swap-routers/WstEthToWethSwapRouter.sol";
+import {MockAdapter} from "../mocks/adapters/MockAdapter.sol";
 
-import {MockWETH} from "../../test/mocks/MockWETH.sol";
+import {MockWETH} from "../mocks/MockWETH.sol";
 
 
 contract scWETHv2Props is Test {
@@ -46,6 +47,7 @@ contract scWETHv2Props is Test {
 
     uint256 mainnetFork;
 
+    address constant EULER_TOKEN = 0xd9Fcd98c322942075A5C3860693e9f4f03AAE07b;
     address constant keeper = address(0x05);
     address constant alice = address(0x06);
     address constant treasury = address(0x07);
@@ -71,9 +73,9 @@ contract scWETHv2Props is Test {
 
     mapping(IAdapter => uint256) targetLtv;
 
-    uint8 aaveV3AdapterId;
-    uint8 eulerAdapterId;
-    uint8 compoundV3AdapterId;
+    uint256 aaveV3AdapterId;
+    uint256 eulerAdapterId;
+    uint256 compoundV3AdapterId;
 
     IAdapter aaveV3Adapter;
     IAdapter eulerAdapter;
@@ -99,7 +101,7 @@ contract scWETHv2Props is Test {
         // set vault eth balance to zero
         //vm.deal(address(vault), 0);
 
-        _setupAdapters(0);//_blockNumber);
+        //_setupAdapters(0);//_blockNumber);
 
         targetLtv[aaveV3Adapter] = 0.7e18;
         targetLtv[compoundV3Adapter] = 0.7e18;
@@ -114,8 +116,8 @@ contract scWETHv2Props is Test {
         aaveV3Adapter = new AaveV3Adapter();
         compoundV3Adapter = new CompoundV3Adapter();
 
-        //vault.addAdapter(address(aaveV3Adapter));
-        //vault.addAdapter(address(compoundV3Adapter));
+        vault.addAdapter(address(aaveV3Adapter));
+        vault.addAdapter(address(compoundV3Adapter));
 
         aaveV3AdapterId = aaveV3Adapter.id();
         compoundV3AdapterId = compoundV3Adapter.id();
@@ -188,7 +190,7 @@ contract scWETHv2Props is Test {
         }
     }
 
-    function prove_convertToShares_gte_previewDeposit(uint256 assets) public { // OK
+    function prove_convertToShares_gte_previewDeposit(uint256 assets) public view { // OK
         assert(vault.convertToShares(assets) >= vault.previewDeposit(assets));
     }
 
@@ -223,7 +225,7 @@ contract scWETHv2Props is Test {
 	    }
     }
 
-    function prove_convertRoundTrip2(uint256 amount) public { // OK
+    function prove_convertRoundTrip2(uint256 amount) public view { // OK
         uint256 tokensWithdrawn = vault.convertToAssets(amount);
         uint256 sharesMinted = vault.convertToShares(tokensWithdrawn);
         if(amount>=sharesMinted) assert(true);
@@ -266,7 +268,12 @@ contract scWETHv2Props is Test {
         }
     }
 
-/*    function prove_integrity_of_mint(uint256 shares, address receiver) public { // Not OK
+    function prove_convertToAssets_lte_previewMint(uint256 shares) public view { // OK
+        if(shares > 1e10)
+	        assert(vault.convertToAssets(shares) <= vault.previewMint(shares));
+    }
+
+/*    function prove_integrity_of_mint(uint256 shares, address receiver) public { // OK
         if(shares != 0 && receiver != address(0) && receiver != address(vault) && msg.sender != address(vault)) {
             uint256 _userAssets = weth.balanceOf(msg.sender);
             uint256 _totalAssets = weth.balanceOf(address(vault));
@@ -286,75 +293,6 @@ contract scWETHv2Props is Test {
         }
     }
 
-    function prove_mint_reverts_if_not_enough_assets(uint256 shares, address receiver) public { // Not OK
-        if(shares != 0 && receiver != address(0) && receiver != address(vault) && msg.sender != address(vault)) {
-            uint256 assets = vault.previewMint(shares);
-
-            if(weth.balanceOf(msg.sender) < assets) {
-
-                try vault.mint(shares, receiver) {
-                    assert(false);
-                }
-                catch {
-                    assert(true);
-                }
-            }
-        }
-    }
-
-    function prove_integrity_of_redeem(uint256 shares, address receiver, address owner) public { // Maybe not OK
-        if(msg.sender != address(vault) && receiver != address(0) && receiver != address(vault) && vault.previewRedeem(shares) != 0 && vault.allowance(owner, msg.sender) >= shares && vault.balanceOf(owner)>=shares) {
-            uint256 _receiverAssets = weth.balanceOf(receiver);
-            uint256 _totalAssets = weth.balanceOf(address(vault));
-            uint256 _ownerShares = vault.balanceOf(owner);
-            uint256 _senderAllowance = vault.allowance(owner, msg.sender);
-
-            uint256 assets = vault.redeem(shares, receiver, owner);
-
-            uint256 receiverAssets_ = weth.balanceOf(receiver);
-            uint256 totalAssets_ = weth.balanceOf(address(vault));
-            uint256 ownerShares_ = vault.balanceOf(owner);
-            uint256 senderAllowance_ = vault.allowance(owner, msg.sender);
-
-            assertEq(_totalAssets - assets, totalAssets_, "Issue in total assets"); // OK
-            assertEq(_receiverAssets + assets, receiverAssets_, "Issue in received assets"); // OK
-            assertEq(_ownerShares - shares, ownerShares_,"Issue in owner shares"); // OK
-            assert(msg.sender != owner && ((_senderAllowance == 2**256 -1 && senderAllowance_ == 2**256 -1) || (_senderAllowance - shares == senderAllowance_))); // OK
-        }
-    }
-
-    function prove_redeem_reverts_if_not_enough_shares(uint256 shares, address receiver, address owner) public { // OK
-        if(vault.balanceOf(owner) < shares || msg.sender != owner && vault.allowance(owner, msg.sender) < shares)
-            try vault.redeem(shares, receiver, owner) {
-                assert(false);
-            }
-            catch {
-                assert(true);
-            }
-    }
-
-    function prove_previewRedeem_lte_redeem(uint256 shares, address receiver, address owner) public { // Maybe not OK
-        if(msg.sender != address(vault) && receiver != address(0) && receiver != address(vault) && vault.previewRedeem(shares) != 0 && vault.allowance(owner, msg.sender) >= shares && vault.balanceOf(owner)>=shares)
-            assert(vault.previewRedeem(shares) <= vault.redeem(shares, receiver, owner));
-    }
-
-    function prove_receiveFlashLoan_FailsIfInitiatorIsNotVault() public { // hevm freezes
-        IVault balancer = IVault(C.BALANCER_VAULT);
-        address[] memory tokens = new address[](1);
-        uint256[] memory amounts = new uint256[](1);
-        bytes memory ebytes = new bytes(2);
-
-        tokens[0] = address(weth);
-        amounts[0] = 100e18;
-
-        try balancer.flashLoan(address(vault), tokens, amounts, ebytes) { // abi.encode(0, 0)
-            assert(false);
-        }
-        catch {
-            assert(true);
-        }
-    }
-
     function prove_withdraw_revert(uint256 anyUint, address anyAddr1, address anyAddr2) public { // OK
         try vault.withdraw(anyUint, anyAddr1, anyAddr2) {
             assert(false);
@@ -363,7 +301,28 @@ contract scWETHv2Props is Test {
             assert(true);
         }
     }
+
+    function prove_integrity_of_deposit(uint256 assets, address receiver) public { // OK
+        if(assets > 1e10 && receiver != address(0) && receiver != address(vault) && msg.sender != address(vault)) {
+            uint256 _userAssets = weth.balanceOf(msg.sender);
+            uint256 _totalAssets = weth.balanceOf(address(vault));
+            uint256 _receiverShares = vault.balanceOf(receiver);
+
+
+            uint256 shares = vault.deposit(assets, receiver);
+        
+            uint256 userAssets_ = weth.balanceOf(msg.sender);
+            uint256 totalAssets_ = weth.balanceOf(address(vault));
+            uint256 receiverShares_ = vault.balanceOf(receiver);
+
+            assert(_userAssets <= userAssets_ + assets); // OK
+            assert(_totalAssets + assets >= totalAssets_); // OK
+            assertEq(_receiverShares + shares, receiverShares_, "Vault did not receive the shares"); // OK
+            assertEq(vault.balanceOf(receiver), assets, "balanceOf assertion failed"); // OK
+        }
+    }
 */
+
 /*
     function prove_deposit_eth(uint256 amount) public { // Not OK
         if(weth.balanceOf(address(this)) == 0 && address(this).balance == amount) {
@@ -394,30 +353,23 @@ contract scWETHv2Props is Test {
         assert(true);
     }
 
-    function prove_convertToAssets_lte_previewMint(uint256 shares) public { // Not OK
-        if(shares > 1e10)
-	        assert(vault.convertToAssets(shares) <= vault.previewMint(shares));
-    }
+    function prove_receiveFlashLoan_FailsIfInitiatorIsNotVault() public { // hevm freezes
+        IVault balancer = IVault(C.BALANCER_VAULT);
+        address[] memory tokens = new address[](1);
+        uint256[] memory amounts = new uint256[](1);
+        bytes memory ebytes = new bytes(2);
 
-    function prove_deposit(uint256 assets, address receiver) public { // Not OK
-        if(assets > 1e10 && receiver != address(0) && receiver != address(vault) && msg.sender != address(vault)) {
-            uint256 _userAssets = weth.balanceOf(msg.sender);
-            uint256 _totalAssets = weth.balanceOf(address(vault));
-            uint256 _receiverShares = vault.balanceOf(receiver);
+        tokens[0] = address(weth);
+        amounts[0] = 100e18;
 
-
-            uint256 shares = vault.deposit(assets, receiver);
-        
-            uint256 userAssets_ = weth.balanceOf(msg.sender);
-            uint256 totalAssets_ = weth.balanceOf(address(vault));
-            uint256 receiverShares_ = vault.balanceOf(receiver);
-
-            assert(_userAssets <= userAssets_ + assets); // OK
-            assert(_totalAssets + assets >= totalAssets_); // OK
-            assertEq(_receiverShares + shares, receiverShares_, "Vault did not receive the shares"); // OK
-            assertEq(vault.balanceOf(receiver), assets, "balanceOf assertion failed"); // OK
+        try balancer.flashLoan(address(vault), tokens, amounts, ebytes) { // abi.encode(0, 0)
+            assert(false);
+        }
+        catch {
+            assert(true);
         }
     }
+
     function prove_deposit_reverts_if_not_enough_assets(uint256 assets, address receiver) public { // Not OK
         if(assets > 1e10 && receiver != address(0) && receiver != address(vault) && msg.sender != address(vault)) {
             uint256 userAssets = weth.balanceOf(msg.sender);
@@ -430,6 +382,60 @@ contract scWETHv2Props is Test {
                 }
             }
         }
+    }
+
+    function prove_mint_reverts_if_not_enough_assets(uint256 shares, address receiver) public { // Not OK
+        if(shares != 0 && receiver != address(0) && receiver != address(vault) && msg.sender != address(vault)) {
+            uint256 assets = vault.previewMint(shares);
+
+            if(weth.balanceOf(msg.sender) < assets) {
+
+                try vault.mint(shares, receiver) {
+                    assert(false);
+                }
+                catch {
+                    assert(true);
+                }
+            }
+        }
+    }
+
+    function prove_previewRedeem_lte_redeem(uint256 shares, address receiver, address owner) public { // Maybe not OK
+        if(msg.sender != address(vault) && receiver != address(0) && receiver != address(vault) && vault.previewRedeem(shares) != 0 && vault.allowance(owner, msg.sender) >= shares && vault.balanceOf(owner)>=shares)
+            assert(vault.previewRedeem(shares) <= vault.redeem(shares, receiver, owner));
+    }
+*/
+/*
+    function prove_integrity_of_redeem(uint256 shares, address receiver, address owner) public { // OK (But with a lot of simplifications)
+        if(msg.sender != address(vault) && receiver != address(0) && receiver != address(vault) && vault.previewRedeem(shares) != 0 && vault.allowance(owner, msg.sender) >= shares && vault.balanceOf(owner)>=shares) {
+            uint256 _receiverAssets = weth.balanceOf(receiver);
+            uint256 _totalAssets = weth.balanceOf(address(vault));
+            uint256 _ownerShares = vault.balanceOf(owner);
+            uint256 _senderAllowance = vault.allowance(owner, msg.sender);
+
+            uint256 assets = vault.redeem(shares, receiver, owner);
+
+            uint256 receiverAssets_ = weth.balanceOf(receiver);
+            uint256 totalAssets_ = weth.balanceOf(address(vault));
+            uint256 ownerShares_ = vault.balanceOf(owner);
+            uint256 senderAllowance_ = vault.allowance(owner, msg.sender);
+
+            assertEq(_totalAssets - assets, totalAssets_, "Issue in total assets"); // OK
+            assertEq(_receiverAssets + assets, receiverAssets_, "Issue in received assets"); // OK
+            assertEq(_ownerShares - shares, ownerShares_,"Issue in owner shares"); // OK
+            assert(msg.sender != owner && ((_senderAllowance == 2**256 -1 && senderAllowance_ == 2**256 -1) || (_senderAllowance - shares == senderAllowance_))); // OK
+            
+        }
+    }
+*/
+/*    function prove_redeem_reverts_if_not_enough_shares(uint256 shares, address receiver, address owner) public { // Not OK
+        if(vault.balanceOf(owner) < shares || msg.sender != owner && vault.allowance(owner, msg.sender) < shares)
+            try vault.redeem(shares, receiver, owner) {
+                assert(false);
+            }
+            catch {
+                assert(true);
+            }
     }
 */
 
@@ -447,7 +453,7 @@ contract scWETHv2Props is Test {
             admin: admin,
             keeper: keeper,
             slippageTolerance: slippageTolerance,
-            weth: WETH(payable(weth)), //C.WETH,
+            weth: WETH(payable(weth)), // C.WETH
             balancerVault: IVault(C.BALANCER_VAULT),
             oracleLib: _oracleLib,
             wstEthToWethSwapRouter: address(new WstEthToWethSwapRouter(_oracleLib)),
