@@ -31,6 +31,11 @@ contract scWETHv2Helper {
         return oracleLib.wstEthToEth(adapter.getCollateral(address(vault)));
     }
 
+    // TODO: would prefer to use this function instead of the one above because collateral is in wstEth and not weth
+    function getCollateral2(IAdapter adapter) public view returns (uint256) {
+        return adapter.getCollateral(address(vault));
+    }
+
     /// @notice returns the net leverage that the strategy is using right now (1e18 = 100%)
     function getLeverage() public view returns (uint256) {
         uint256 collateral = vault.totalCollateral();

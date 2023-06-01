@@ -996,6 +996,56 @@ contract scWETHv2Test is Test {
         );
     }
 
+    function test_reallocate_fromAaveV3ToCompoundV3() public {
+        _setUp(BLOCK_BEFORE_EULER_EXPLOIT);
+
+        uint256 amount = 1000 ether;
+        _depositToVault(address(this), amount);
+
+        uint256 investAmount = amount - minimumFloatAmount;
+        uint256 stEthRateTolerance = 0.999e18;
+        uint256 aaveV3FlashLoanAmount = _calcSupplyBorrowFlashLoanAmount(aaveV3Adapter, investAmount);
+        uint256 aaveV3SupplyAmount =
+            oracleLib.ethToWstEth(investAmount + aaveV3FlashLoanAmount).mulWadDown(stEthRateTolerance);
+
+        bytes[] memory callData = new bytes[](2);
+        callData[0] = abi.encodeWithSelector(scWETHv2.swapWethToWstEth.selector, investAmount + aaveV3FlashLoanAmount);
+        callData[1] = abi.encodeWithSelector(
+            scWETHv2.supplyAndBorrow.selector, aaveV3AdapterId, aaveV3SupplyAmount, aaveV3FlashLoanAmount
+        );
+
+        // deposit into strategy
+        hoax(keeper);
+        vault.investAndHarvest2(investAmount, aaveV3FlashLoanAmount, callData);
+
+        // move half position from aave v3 to compound v3
+        uint256 totalCollateral = vault.totalCollateral2();
+        uint256 totalDebt = vault.totalDebt();
+        uint256 collateralToMove = vaultHelper.getCollateral2(aaveV3Adapter) / 2;
+        uint256 debtToMove = vaultHelper.getDebt(aaveV3Adapter) / 2;
+
+        callData = new bytes[](2);
+        callData[0] =
+            abi.encodeWithSelector(scWETHv2.repayAndWithdraw.selector, aaveV3AdapterId, debtToMove, collateralToMove);
+        callData[1] =
+            abi.encodeWithSelector(scWETHv2.supplyAndBorrow.selector, compoundV3AdapterId, collateralToMove, debtToMove);
+
+        uint256 flashLoanAmount = debtToMove;
+        hoax(keeper);
+        vault.reallocate2(flashLoanAmount, callData);
+
+        assertApproxEqAbs(vault.totalCollateral2(), totalCollateral, 2, "total collateral changed");
+        assertApproxEqAbs(
+            vaultHelper.getCollateral2(aaveV3Adapter), totalCollateral - collateralToMove, 2, "collateral on aave v3"
+        );
+        assertApproxEqAbs(
+            vaultHelper.getCollateral2(compoundV3Adapter), collateralToMove, 2, "collateral on compound v3"
+        );
+        assertApproxEqAbs(vault.totalDebt(), totalDebt, 2, "total debt changed");
+        assertApproxEqAbs(vaultHelper.getDebt(aaveV3Adapter), totalDebt - debtToMove, 2, "debt on aave v3");
+        assertApproxEqAbs(vaultHelper.getDebt(compoundV3Adapter), debtToMove, 2, "debt on compound v3");
+    }
+
     // reallocating funds from aveV3 and compoundV3 to euler
     function test_reallocate_fromTwoMarkets_ToOneMarket(uint256 amount) public {
         _setUp(BLOCK_BEFORE_EULER_EXPLOIT);
@@ -1467,6 +1517,7 @@ contract scWETHv2Test is Test {
         // totalAssets must not change
         assertApproxEqRel(vault.totalAssets(), totalAssets, 0.001e18, "total assets must not change");
 
+        // TODO: i wouldn't say this is correct, total ltv must not change that's true, but ltv-s on different protocols are allowed to change in the reallocate process
         // ltvs must not change
         assertApproxEqRel(vaultHelper.getLtv(aaveV3Adapter), initialAaveV3Ltv, 0.001e18, "aavev3 ltv must not change");
 

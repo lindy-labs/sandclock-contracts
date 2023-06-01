@@ -426,6 +426,20 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
         emit Reallocated(_from, _to);
     }
 
+    // TODO: now reallocate2 and disinvest2 look the same, we can merge them into something like "multicallWithFlashLoan"
+    function reallocate2(uint256 _flashLoanAmount, bytes[] calldata _multicallData) external {
+        _onlyKeeper();
+
+        // TODO: remove this
+        RebalanceParams memory params;
+
+        // take flashloan
+        _flashLoan(_flashLoanAmount, params, true, _multicallData);
+
+        // TODO: fix event
+        // emit Reallocated(_from, _to);
+    }
+
     //////////////////// VIEW METHODS //////////////////////////
 
     /// @notice check if an adapter is supported by this vault
@@ -461,7 +475,18 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
             collateral += IAdapter(adapter).getCollateral(address(this));
         }
 
+        // TODO: I wouldn't use this coversion here since it's confusing to have collateral returned in weth and repaying debt in wstEth
         collateral = oracleLib.wstEthToEth(collateral);
+    }
+
+    // TODO: would prefer to use this instead of the above because we are supplying and withdrawing wstEth and not eth
+    function totalCollateral2() public view returns (uint256 collateral) {
+        uint256 n = protocolAdapters.length();
+        address adapter;
+        for (uint256 i; i < n; i++) {
+            (, adapter) = protocolAdapters.at(i);
+            collateral += IAdapter(adapter).getCollateral(address(this));
+        }
     }
 
     /// @notice returns the total WETH borrowed
