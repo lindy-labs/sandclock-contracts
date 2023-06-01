@@ -167,6 +167,7 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
         protocolAdapters.set(id, _adapter);
 
         _adapter.functionDelegateCall(abi.encodeWithSelector(IAdapter.setApprovals.selector));
+        // TODO: add event
     }
 
     /// @notice removes an adapter from the supported adapters
@@ -187,6 +188,7 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
 
         _adapter.functionDelegateCall(abi.encodeWithSelector(IAdapter.revokeApprovals.selector));
         protocolAdapters.remove(_adapterId);
+        // TODO: add event
     }
 
     /// @dev to be used to ideally swap euler rewards to weth using 0x api
@@ -203,6 +205,7 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
             )
         );
 
+        // TODO: fix event
         emit TokensSwapped(_inToken, address(asset));
     }
 
@@ -211,6 +214,7 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
         protocolAdapters.get(_adapterId).functionDelegateCall(
             abi.encodeWithSelector(IAdapter.claimRewards.selector, _data)
         );
+        // TODO: add event
     }
 
     /// @notice invest funds into the strategy and harvest profits if any
@@ -275,6 +279,7 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
             // mint equivalent amount of tokens to the performance fee beneficiary ie the treasury
             _mint(treasury, convertToShares(fee));
 
+            // TODO: change name to Harvested
             emit Harvest(profit, fee);
         }
     }

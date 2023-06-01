@@ -136,11 +136,11 @@ contract Swapper {
         wstETH.wrap(stEthBalance);
     }
 
-    function curveSwapStEthToWeth(uint256 _stEthAmount, uint256 _wethAmountOutMin) external {
+    function curveSwapStEthToWeth(uint256 _stEthAmount, uint256 _wethAmountOutMin) external returns (uint256 wethReceived) {
         // stETH to eth
         ERC20(address(stEth)).safeApprove(address(curvePool), _stEthAmount);
 
-        curvePool.exchange(1, 0, _stEthAmount, _wethAmountOutMin);
+        wethReceived = curvePool.exchange(1, 0, _stEthAmount, _wethAmountOutMin);
 
         // eth to weth
         weth.deposit{value: address(this).balance}();
