@@ -12,6 +12,7 @@ import {IAdapter} from "../scWeth-adapters/IAdapter.sol";
 
 import {CallerNotAdmin, ZeroAddress} from "../errors/scErrors.sol";
 
+// TODO: this contract can be merged with the PriceConverter.sol from scUSDCv2 branch, since the purpose of both is the same
 contract OracleLib is AccessControl {
     using FixedPointMathLib for uint256;
 
