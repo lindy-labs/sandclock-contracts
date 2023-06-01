@@ -35,6 +35,10 @@ contract MorphoAaveV3AdapterTest is Test {
         address(adapter).functionDelegateCall(abi.encodeWithSelector(IAdapter.setApprovals.selector));
     }
 
+    function test_id() public {
+        assertEq(adapter.id(), uint256(keccak256("MorphoAaveV3Adapter")));
+    }
+
     function test_supply() public {
         uint256 amount = 1 ether;
 

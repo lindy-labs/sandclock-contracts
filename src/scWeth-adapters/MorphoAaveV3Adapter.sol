@@ -57,6 +57,6 @@ contract MorphoAaveV3Adapter is IAdapter {
     }
 
     function getMaxLtv() external view override returns (uint256) {
-        // return FixedPointMathLib.fixedDiv(morpho.getReserveFactor(C.WSTETH), 1e18);
+        // same as the maxLtv for aave v3
     }
 }

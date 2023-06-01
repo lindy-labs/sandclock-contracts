@@ -17,7 +17,7 @@ contract AaveV3Adapter is IAdapter {
     ERC20 public constant aWstEth = ERC20(C.AAVE_AWSTETH_TOKEN);
     ERC20 public constant dWeth = ERC20(C.AAVAAVE_VAR_DEBT_WETH_TOKEN);
 
-    uint256 public constant id = 1;
+    uint256 public constant id = uint256(keccak256("AaveV3Adapter"));
 
     function setApprovals() external override {
         ERC20(C.WSTETH).safeApprove(address(pool), type(uint256).max);
