@@ -588,40 +588,37 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
     function _withdrawToVault(uint256 _amount) internal {
         uint256 n = protocolAdapters.length();
         uint256 flashLoanAmount;
-        RepayWithdrawParam[] memory repayWithdrawParams = new RepayWithdrawParam[](n);
-
         uint256 totalInvested_ = totalCollateral() - totalDebt();
+        bytes[] memory callData = new bytes[](n + 1);
 
-        {
-            uint256 flashLoanAmount_;
-            uint256 amount_;
-            uint256 protocolId;
-            address adapter;
-            for (uint256 i; i < n; i++) {
-                (protocolId, adapter) = protocolAdapters.at(i);
-                (flashLoanAmount_, amount_) = _calcFlashLoanAmountWithdrawing(adapter, _amount, totalInvested_);
+        uint256 flashLoanAmount_;
+        uint256 amount_;
+        uint256 protocolId;
+        address adapter;
+        for (uint256 i; i < n; i++) {
+            (protocolId, adapter) = protocolAdapters.at(i);
+            (flashLoanAmount_, amount_) = _calcFlashLoanAmountWithdrawing(adapter, _amount, totalInvested_);
 
-                repayWithdrawParams[i] =
-                    RepayWithdrawParam(protocolId, flashLoanAmount_, oracleLib.ethToWstEth(flashLoanAmount_ + amount_));
-                flashLoanAmount += flashLoanAmount_;
-            }
+            flashLoanAmount += flashLoanAmount_;
+
+            callData[i] = abi.encodeWithSelector(
+                this.repayAndWithdraw.selector,
+                protocolId,
+                flashLoanAmount_,
+                oracleLib.ethToWstEth(flashLoanAmount_ + amount_)
+            );
         }
 
         // needed otherwise counted as loss during harvest
         totalInvested -= _amount;
 
-        SupplyBorrowParam[] memory empty;
-        RebalanceParams memory params = RebalanceParams({
-            repayWithdrawParams: repayWithdrawParams,
-            supplyBorrowParams: empty,
-            wstEthToWethSwapData: abi.encodeWithSelector(
-                ISwapRouter.swapDefault.selector, type(uint256).max, slippageTolerance
-                ),
-            wethToWstEthSwapData: ""
-        });
+        // TODO: remove
+        RebalanceParams memory params;
+
+        callData[n] = abi.encodeWithSelector(scWETHv2.swapWstEthToWeth.selector, type(uint256).max, slippageTolerance);
 
         // take flashloan
-        _flashLoan(flashLoanAmount, params, false, new bytes[](0));
+        _flashLoan(flashLoanAmount, params, true, callData);
     }
 
     /// @notice enforce float to be above the minimum required
