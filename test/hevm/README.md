@@ -13,7 +13,7 @@ The hevm tool does not support all features used in scWETHv2 and thus some adjus
 
 To run hevm, simply do the following steps:
 
-* `rm -rf ./out/scErrors.sol/scErrors.json`
+* `rm -rf ./out/scErrors.sol`
 * `hevm test` (to run all properties) or `hevm test --match property_name` (to run just the property `property_name`)
 
 ## Current limitations
