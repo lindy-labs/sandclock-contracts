@@ -13,6 +13,7 @@ import {WETH} from "solmate/tokens/WETH.sol";
 import {ICurvePool} from "../interfaces/curve/ICurvePool.sol";
 import {OracleLib} from "../phase-2/OracleLib.sol";
 
+// TODO: remove this at the end of the refactor
 contract WstEthToWethSwapRouter is BaseSwapRouter {
     using SafeTransferLib for ERC20;
     using FixedPointMathLib for uint256;

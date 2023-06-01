@@ -8,6 +8,7 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 import {ISwapRouter} from "./ISwapRouter.sol";
 import {Constants as C} from "../lib/Constants.sol";
 
+// TODO: remove this at the end of the refactor
 abstract contract BaseSwapRouter is ISwapRouter {
     using SafeTransferLib for ERC20;
     using Address for address;

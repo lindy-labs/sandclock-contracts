@@ -330,6 +330,7 @@ contract scWETHv2Test is Test {
         vault.withdraw(1e18, address(this), address(this));
     }
 
+    // TODO: the following 3 tests can be moved to Swapper.t.sol after scUSDCv2 is merged
     function test_swapWith0x_EulerToWeth() public {
         _setUp(17322802);
 
@@ -839,6 +840,10 @@ contract scWETHv2Test is Test {
     }
 
     // reallocate from aaveV3 to euler
+    // TODO: these tests that are testing higer to lower ltv markets and stuff are not really testing anything with the new design using multicalls,
+    // they actually represent different scenarios in which can happen and they all rely on doing some swaps between supply&borrow and repay&withdraw.
+    // With new multicall design they will become more of a backend fixture than a real vault test since having swaps happen is a matter of adding another call in the multicall calldata.
+    // I'm not saying to remove them but modifying them with the correct order of the calls in the multical calldata will achieve the same
     function test_reallocate_fromHigherLtvMarket_toLowerLtvMarket(uint256 amount) public {
         _setUp(BLOCK_BEFORE_EULER_EXPLOIT);
 

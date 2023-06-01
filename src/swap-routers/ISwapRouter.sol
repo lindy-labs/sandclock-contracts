@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.13;
 
+// TODO: remove this at the end of the refactor
 interface ISwapRouter {
     function from() external pure returns (address);
     function to() external pure returns (address);

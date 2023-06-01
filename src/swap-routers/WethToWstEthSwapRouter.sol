@@ -13,6 +13,7 @@ import {WETH} from "solmate/tokens/WETH.sol";
 import {ICurvePool} from "../interfaces/curve/ICurvePool.sol";
 import {ILido} from "../interfaces/lido/ILido.sol";
 
+// TODO: remove this at the end of the refactor
 contract WethToWstEthSwapRouter is BaseSwapRouter {
     using Address for address;
     using SafeTransferLib for ERC20;
