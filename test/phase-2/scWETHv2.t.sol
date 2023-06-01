@@ -31,6 +31,7 @@ import {AaveV3Adapter} from "../../src/scWeth-adapters/AaveV3Adapter.sol";
 import {CompoundV3Adapter} from "../../src/scWeth-adapters/CompoundV3Adapter.sol";
 import {EulerAdapter} from "../../src/scWeth-adapters/EulerAdapter.sol";
 import {ISwapRouter} from "../../src/swap-routers/ISwapRouter.sol";
+import {Swapper} from "../../src/steth/Swapper.sol";
 import {WethToWstEthSwapRouter} from "../../src/swap-routers/WethToWstEthSwapRouter.sol";
 import {WstEthToWethSwapRouter} from "../../src/swap-routers/WstEthToWethSwapRouter.sol";
 import {MockAdapter} from "../mocks/adapters/MockAdapter.sol";
@@ -341,10 +342,10 @@ contract scWETHv2Test is Test {
         deal(EULER_TOKEN, address(vault), eulerAmount);
 
         vm.expectRevert(CallerNotKeeper.selector);
-        vault.swapTokensWith0x(swapData, EULER_TOKEN, C.WETH, eulerAmount);
+        vault.swapTokensWith0x(swapData, EULER_TOKEN, eulerAmount, 0);
 
         hoax(keeper);
-        vault.swapTokensWith0x(swapData, EULER_TOKEN, C.WETH, eulerAmount);
+        vault.swapTokensWith0x(swapData, EULER_TOKEN, eulerAmount, 0);
 
         assertGe(weth.balanceOf(address(vault)), expectedWethAmount, "weth not received");
         assertEq(ERC20(EULER_TOKEN).balanceOf(address(vault)), 0, "euler token not transferred out");
@@ -599,7 +600,7 @@ contract scWETHv2Test is Test {
             aaveV3FlashLoanAmount,
             oracleLib.ethToWstEth(aaveV3FlashLoanAmount)
         );
-        callData[1] = abi.encodeWithSelector(scWETHv2.swapWstEthToWeth2.selector, type(uint256).max, slippageTolerance);
+        callData[1] = abi.encodeWithSelector(scWETHv2.swapWstEthToWeth.selector, type(uint256).max, slippageTolerance);
 
         hoax(keeper);
         vault.disinvest2(aaveV3FlashLoanAmount, callData);
@@ -615,6 +616,62 @@ contract scWETHv2Test is Test {
         assertLt(wstEth.balanceOf(address(vault)), minimumDust, "wstEth dust after disinvest");
         assertApproxEqRel(vault.totalAssets(), assets, 0.001e18, "disinvest must not change total assets");
         assertGe(leverage - vaultHelper.getLeverage(), 0.4e18, "leverage not decreased after disinvest");
+    }
+
+    function test_disinvest_usingMulticallsAndZeroExSwap() public {
+        _setUp(17323024);
+
+        uint256 amount = 100 ether;
+        _depositToVault(address(this), amount);
+
+        uint256 investAmount = amount - minimumFloatAmount;
+        uint256 stEthRateTolerance = 0.998e18;
+        uint256 compoundV3FlashLoanAmount = _calcSupplyBorrowFlashLoanAmount(compoundV3Adapter, investAmount);
+        uint256 compoundV3SupplyAmount =
+            oracleLib.ethToWstEth(investAmount + compoundV3FlashLoanAmount).mulWadDown(stEthRateTolerance);
+
+        uint256 minimumDust = amount.mulWadDown(0.01e18) + (amount - investAmount);
+
+        bytes[] memory callData = new bytes[](2);
+        callData[0] =
+            abi.encodeWithSelector(scWETHv2.swapWethToWstEth.selector, investAmount + compoundV3FlashLoanAmount);
+        callData[1] = abi.encodeWithSelector(
+            scWETHv2.supplyAndBorrow.selector, compoundV3AdapterId, compoundV3SupplyAmount, compoundV3FlashLoanAmount
+        );
+
+        // deposit into strategy
+        hoax(keeper);
+        vault.investAndHarvest2(investAmount, compoundV3FlashLoanAmount, callData);
+
+        assertLt(weth.balanceOf(address(vault)), minimumDust, "weth dust after invest");
+        assertLt(wstEth.balanceOf(address(vault)), minimumDust, "wstEth dust after invest");
+
+        uint256 wstEthAmountToWithdraw = 10 ether;
+        uint256 expectedWethAmountAfterSwap = 11115533999999999999;
+        bytes memory swapData =
+            hex"6af479b200000000000000000000000000000000000000000000000000000000000000800000000000000000000000000000000000000000000000008ac7230489e800000000000000000000000000000000000000000000000000009a774c31cfce1ae70000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002b7f39c581f595b53c5cb19bd0b3f8da6c935e2ca00001f4c02aaa39b223fe8d0a0e5c4f27ead9083c756cc2000000000000000000000000000000000000000000869584cd00000000000000000000000010000000000000000000000000000000000000110000000000000000000000000000000000000000000000513368369c646ce7f5";
+
+        compoundV3FlashLoanAmount = expectedWethAmountAfterSwap;
+
+        uint256 assets = vault.totalAssets();
+        uint256 leverage = vaultHelper.getLeverage();
+
+        callData = new bytes[](2);
+        callData[0] = abi.encodeWithSelector(
+            scWETHv2.repayAndWithdraw.selector, compoundV3AdapterId, expectedWethAmountAfterSwap, wstEthAmountToWithdraw
+        );
+        callData[1] =
+            abi.encodeWithSelector(scWETHv2.swapWstEthToWethOnZeroEx.selector, wstEthAmountToWithdraw, 0, swapData);
+
+        hoax(keeper);
+        vault.disinvest2(expectedWethAmountAfterSwap, callData);
+
+        _floatCheck();
+
+        assertLt(weth.balanceOf(address(vault)), minimumDust, "weth dust after disinvest");
+        assertLt(wstEth.balanceOf(address(vault)), minimumDust, "wstEth dust after disinvest");
+        assertApproxEqRel(vault.totalAssets(), assets, 0.001e18, "disinvest must not change total assets");
+        assertGe(leverage, vaultHelper.getLeverage(), "leverage not decreased after disinvest");
     }
 
     function test_deposit_invest_redeem(uint256 amount) public {
@@ -1577,7 +1634,8 @@ contract scWETHv2Test is Test {
             balancerVault: IVault(C.BALANCER_VAULT),
             oracleLib: _oracleLib,
             wstEthToWethSwapRouter: address(new WstEthToWethSwapRouter(_oracleLib)),
-            wethToWstEthSwapRouter: address(new WethToWstEthSwapRouter())
+            wethToWstEthSwapRouter: address(new WethToWstEthSwapRouter()),
+            swapper: new Swapper()
         });
     }
 

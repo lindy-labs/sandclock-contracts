@@ -37,6 +37,7 @@ import {IFlashLoanRecipient} from "../interfaces/balancer/IFlashLoanRecipient.so
 import {OracleLib} from "./OracleLib.sol";
 import {IAdapter} from "../scWeth-adapters/IAdapter.sol";
 import {ISwapRouter} from "../swap-routers/ISwapRouter.sol";
+import {Swapper} from "../steth/Swapper.sol";
 
 contract scWETHv2 is sc4626, IFlashLoanRecipient {
     using SafeTransferLib for ERC20;
@@ -80,6 +81,7 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
         OracleLib oracleLib;
         address wstEthToWethSwapRouter;
         address wethToWstEthSwapRouter;
+        Swapper swapper;
     }
 
     // total invested during last harvest/rebalance
@@ -103,16 +105,19 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
     address public wstEthToWethSwapRouter;
     address public wethToWstEthSwapRouter;
 
-    constructor(ConstructorParams memory params)
-        sc4626(params.admin, params.keeper, ERC20(params.weth), "Sandclock WETH Vault v2", "scWETHv2")
-    {
-        if (params.slippageTolerance > C.ONE) revert InvalidSlippageTolerance();
+    Swapper public immutable swapper;
 
-        slippageTolerance = params.slippageTolerance;
-        balancerVault = params.balancerVault;
-        oracleLib = params.oracleLib;
-        wstEthToWethSwapRouter = params.wstEthToWethSwapRouter;
-        wethToWstEthSwapRouter = params.wethToWstEthSwapRouter;
+    constructor(ConstructorParams memory _params)
+        sc4626(_params.admin, _params.keeper, ERC20(_params.weth), "Sandclock WETH Vault v2", "scWETHv2")
+    {
+        if (_params.slippageTolerance > C.ONE) revert InvalidSlippageTolerance();
+
+        slippageTolerance = _params.slippageTolerance;
+        balancerVault = _params.balancerVault;
+        oracleLib = _params.oracleLib;
+        wstEthToWethSwapRouter = _params.wstEthToWethSwapRouter;
+        wethToWstEthSwapRouter = _params.wethToWstEthSwapRouter;
+        swapper = _params.swapper;
     }
 
     /////////////////// ADMIN/KEEPER METHODS //////////////////////////////////
@@ -185,14 +190,18 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
     /// @dev to be used to ideally swap euler rewards to weth using 0x api
     /// @dev can also be used to swap between other tokens
     /// @param _inToken address of the token to swap from
-    function swapTokensWith0x(bytes calldata _swapData, address _inToken, address _outToken, uint256 _amountIn)
+    function swapTokensWith0x(bytes calldata _swapData, address _inToken, uint256 _amountIn, uint256 _wethAmountOutMin)
         external
     {
         _onlyKeeper();
-        ERC20(_inToken).safeApprove(C.ZEROX_ROUTER, _amountIn);
-        C.ZEROX_ROUTER.functionCall(_swapData);
 
-        emit TokensSwapped(_inToken, _outToken);
+        address(swapper).functionDelegateCall(
+            abi.encodeWithSelector(
+                Swapper.zeroExSwap.selector, _inToken, asset, _amountIn, _wethAmountOutMin, _swapData
+            )
+        );
+
+        emit TokensSwapped(_inToken, address(asset));
     }
 
     function claimRewards(uint256 _adapterId, bytes calldata _data) external {
@@ -286,12 +295,7 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
         wstETH.wrap(stEthBalance);
     }
 
-    function swapWstEthToWeth(bytes calldata _swapdata) external {
-        // TODO: only keeper or flashloan
-        wstEthToWethSwapRouter.functionDelegateCall(_swapdata);
-    }
-
-    function swapWstEthToWeth2(uint256 _amount, uint256 _slippageTolerance) external {
+    function swapWstEthToWeth(uint256 _amount, uint256 _slippageTolerance) external {
         // TODO: only keeper or flashloan
 
         // TODO: move this functionality to Swapper.sol once merged with scUSDCv2 branch
@@ -306,6 +310,20 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
         curvePool.exchange(1, 0, stEthAmount, oracleLib.stEthToEth(stEthAmount).mulWadDown(_slippageTolerance));
         // eth to weth
         weth.deposit{value: address(this).balance}();
+    }
+
+    function swapWstEthToWethOnZeroEx(uint256 _wstEthAmount, uint256 _wethAmountOutMin, bytes calldata _swapData)
+        external
+    {
+        // TODO: only keeper or flashloan
+
+        IwstETH wstETH = IwstETH(C.WSTETH);
+
+        address(swapper).functionDelegateCall(
+            abi.encodeWithSelector(
+                Swapper.zeroExSwap.selector, wstETH, asset, _wstEthAmount, _wethAmountOutMin, _swapData
+            )
+        );
     }
 
     /// @notice withdraw funds from the strategy into the vault
