@@ -74,7 +74,7 @@ contract scWETHv2Harness is sc4626, IFlashLoanRecipient {
         address admin;
         address keeper;
         uint256 slippageTolerance;
-        WETH/*address*/ weth;
+        WETH /*address*/ weth;
         IVault balancerVault;
         OracleLib oracleLib;
         address wstEthToWethSwapRouter;

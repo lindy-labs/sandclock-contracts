@@ -37,7 +37,6 @@ import {MockAdapter} from "../mocks/adapters/MockAdapter.sol";
 
 import {MockWETH} from "../mocks/MockWETH.sol";
 
-
 contract scWETHv2Props is Test {
     using FixedPointMathLib for uint256;
     using Address for address;
@@ -81,7 +80,8 @@ contract scWETHv2Props is Test {
     IAdapter eulerAdapter;
     IAdapter compoundV3Adapter;
 
-    function setUp() public { //uint256 _blockNumber) internal {
+    function setUp() public {
+        //uint256 _blockNumber) internal {
         /*vm.createFork(vm.envString("RPC_URL_MAINNET"));
         vm.selectFork(mainnetFork);
         vm.rollFork(_blockNumber);*/
@@ -107,7 +107,7 @@ contract scWETHv2Props is Test {
         targetLtv[compoundV3Adapter] = 0.7e18;
 
         //if (_blockNumber == BLOCK_BEFORE_EULER_EXPLOIT) {
-            targetLtv[eulerAdapter] = 0.5e18;
+        targetLtv[eulerAdapter] = 0.5e18;
         //}
     }
 
@@ -128,152 +128,159 @@ contract scWETHv2Props is Test {
             eulerAdapterId = eulerAdapter.id();
         }
     }
-    function prove_integrity_of_setSlippageTolerance(uint256 newslippageTolerance) public { // OK
-        if(newslippageTolerance <= C.ONE) {
+
+    function prove_integrity_of_setSlippageTolerance(uint256 newslippageTolerance) public {
+        // OK
+        if (newslippageTolerance <= C.ONE) {
             vault.setSlippageTolerance(newslippageTolerance);
             assertEq(vault.slippageTolerance(), newslippageTolerance);
         }
     }
 
-    function prove_reverts_setSlippageTolerance(uint256 newslippageTolerance) public { // OK
-        if(newslippageTolerance > C.ONE) {
+    function prove_reverts_setSlippageTolerance(uint256 newslippageTolerance) public {
+        // OK
+        if (newslippageTolerance > C.ONE) {
             try vault.setSlippageTolerance(newslippageTolerance) {
                 assert(false);
-            }
-            catch {
+            } catch {
                 assert(true);
             }
         }
     }
-    
-    function prove_integrity_of_setMinimumFloatAmount(uint256 newFloatAmount) public { // OK
+
+    function prove_integrity_of_setMinimumFloatAmount(uint256 newFloatAmount) public {
+        // OK
         vault.setMinimumFloatAmount(newFloatAmount);
         assertEq(vault.minimumFloatAmount(), newFloatAmount);
     }
 
-    function prove_integrity_of_setTreasury(address newTreasury) public { // OK
-	    if(newTreasury != address(0)) {
-		    vault.setTreasury(newTreasury);
-		    assertEq(vault.treasury(), newTreasury, "prove_integrity_of_setTreasury");
-	    }
-    }
-
-    function prove_setTreasury_reverts_if_address_is_zero() public { // OK
-	    try vault.setTreasury(address(0)) {
-		    assert(false);
-	    }
-	    catch {
-		    assert(true);
-	    }
-    }
-
-    function prove_convertToAssets_rounds_down_towards_0(uint256 shares) public { // OK
-    	if(vault.totalSupply() != 0) {
-	        assertEq((shares * vault.totalAssets()) / vault.totalSupply(), vault.convertToAssets(shares), "convertToAssets_rounds_down_towards_0");
-	    }
-    } 
-
-    function prove_converToShares_rounds_down_towards_0(uint256 assets) public {
-        if(vault.totalSupply() != 0)
-            assertEq((assets * vault.totalSupply()) / vault.totalAssets(), vault.convertToShares(assets));
-    }
-    
-    function prove_maxDeposit_returns_correct_value(address receiver) public { // OK
-    	if(receiver != address(0)) {
-	    	assertEq(vault.maxDeposit(receiver), 2**256 - 1, "maxDeposit_returns_correct_value");
-	    }
-    }
-
-    function prove_maxMint_returns_correct_value(address receiver) public { // OK
-        if(receiver != address(0)) {
-            assertEq(vault.maxMint(receiver), 2**256 - 1, "maxMint_returns_correct_value");
+    function prove_integrity_of_setTreasury(address newTreasury) public {
+        // OK
+        if (newTreasury != address(0)) {
+            vault.setTreasury(newTreasury);
+            assertEq(vault.treasury(), newTreasury, "prove_integrity_of_setTreasury");
         }
     }
 
-    function prove_convertToShares_gte_previewDeposit(uint256 assets) public view { // OK
+    function prove_setTreasury_reverts_if_address_is_zero() public {
+        // OK
+        try vault.setTreasury(address(0)) {
+            assert(false);
+        } catch {
+            assert(true);
+        }
+    }
+
+    function prove_convertToAssets_rounds_down_towards_0(uint256 shares) public {
+        // OK
+        if (vault.totalSupply() != 0) {
+            assertEq(
+                (shares * vault.totalAssets()) / vault.totalSupply(),
+                vault.convertToAssets(shares),
+                "convertToAssets_rounds_down_towards_0"
+            );
+        }
+    }
+
+    function prove_converToShares_rounds_down_towards_0(uint256 assets) public {
+        if (vault.totalSupply() != 0) {
+            assertEq((assets * vault.totalSupply()) / vault.totalAssets(), vault.convertToShares(assets));
+        }
+    }
+
+    function prove_maxDeposit_returns_correct_value(address receiver) public {
+        // OK
+        if (receiver != address(0)) {
+            assertEq(vault.maxDeposit(receiver), 2 ** 256 - 1, "maxDeposit_returns_correct_value");
+        }
+    }
+
+    function prove_maxMint_returns_correct_value(address receiver) public {
+        // OK
+        if (receiver != address(0)) {
+            assertEq(vault.maxMint(receiver), 2 ** 256 - 1, "maxMint_returns_correct_value");
+        }
+    }
+
+    function prove_convertToShares_gte_previewDeposit(uint256 assets) public view {
+        // OK
         assert(vault.convertToShares(assets) >= vault.previewDeposit(assets));
     }
 
-    function prove_previewMintRoundingDirection(uint256 shares) public { // OK
-        if(shares > 0) {
-        	uint256 tokensConsumed = vault.previewMint(shares);
-        	assertGt(
-            	tokensConsumed,
-           	    0,
-            	"previewMint() must never mint shares at no cost"
-        	);
-	    }
-    } 
+    function prove_previewMintRoundingDirection(uint256 shares) public {
+        // OK
+        if (shares > 0) {
+            uint256 tokensConsumed = vault.previewMint(shares);
+            assertGt(tokensConsumed, 0, "previewMint() must never mint shares at no cost");
+        }
+    }
 
-    function prove_convertToSharesRoundingDirection() public { // OK
+    function prove_convertToSharesRoundingDirection() public {
+        // OK
         uint256 tokensWithdrawn = vault.convertToShares(0);
-        assertEq(
-            tokensWithdrawn,
-            0,
-            "convertToShares() must not allow shares to be minted at no cost"
-        );
+        assertEq(tokensWithdrawn, 0, "convertToShares() must not allow shares to be minted at no cost");
     }
 
-    function prove_previewWithdrawRoundingDirection(uint256 tokens) public { // OK
-        if(tokens > 0) {
-	        uint256 sharesRedeemed = vault.previewWithdraw(tokens);
-       		assertGt(
-            		sharesRedeemed,
-            		0,
-            		"previewWithdraw() must not allow assets to be withdrawn at no cost"
-        	);
-	    }
+    function prove_previewWithdrawRoundingDirection(uint256 tokens) public {
+        // OK
+        if (tokens > 0) {
+            uint256 sharesRedeemed = vault.previewWithdraw(tokens);
+            assertGt(sharesRedeemed, 0, "previewWithdraw() must not allow assets to be withdrawn at no cost");
+        }
     }
 
-    function prove_convertRoundTrip2(uint256 amount) public view { // OK
+    function prove_convertRoundTrip2(uint256 amount) public view {
+        // OK
         uint256 tokensWithdrawn = vault.convertToAssets(amount);
         uint256 sharesMinted = vault.convertToShares(tokensWithdrawn);
-        if(amount>=sharesMinted) assert(true);
+        if (amount >= sharesMinted) assert(true);
         else assert(false);
     }
 
-   function prove_invest_performanceFee() public { // OK
+    function prove_invest_performanceFee() public {
+        // OK
         uint256 balance = vault.convertToAssets(vault.balanceOf(treasury));
         uint256 profit = vault.totalProfit();
         assertApproxEqRel(balance, profit.mulWadDown(vault.performanceFee()), 0.015e18);
     }
 
-    function prove_integrity_of_setStEThToEthPriceFeed(address newStEthPriceFeed) public { // OK
-        if(newStEthPriceFeed != address(0x00)) {
+    function prove_integrity_of_setStEThToEthPriceFeed(address newStEthPriceFeed) public {
+        // OK
+        if (newStEthPriceFeed != address(0x00)) {
             oracleLib.setStEThToEthPriceFeed(newStEthPriceFeed);
             assertEq(address(oracleLib.stEThToEthPriceFeed()), newStEthPriceFeed);
         }
-
     }
 
-    function prove_revert_of_setStEThToEthPriceFeed() public { // OK
+    function prove_revert_of_setStEThToEthPriceFeed() public {
+        // OK
         try oracleLib.setStEThToEthPriceFeed(address(0x00)) {
             assert(false);
-        }
-        catch {
+        } catch {
             assert(true);
         }
     }
 
-
-    function prove_receiveFlashLoan_InvalidFlashLoanCaller() public { // OK
+    function prove_receiveFlashLoan_InvalidFlashLoanCaller() public {
+        // OK
         address[] memory empty;
         uint256[] memory amounts = new uint[](1);
         amounts[0] = 1;
         try vault.receiveFlashLoan(empty, amounts, amounts, abi.encode(1)) {
             assert(false);
-        }
-        catch {
+        } catch {
             assert(true);
         }
     }
 
-    function prove_convertToAssets_lte_previewMint(uint256 shares) public view { // OK
-        if(shares > 1e10)
-	        assert(vault.convertToAssets(shares) <= vault.previewMint(shares));
+    function prove_convertToAssets_lte_previewMint(uint256 shares) public view {
+        // OK
+        if (shares > 1e10) {
+            assert(vault.convertToAssets(shares) <= vault.previewMint(shares));
+        }
     }
 
-/*    function prove_integrity_of_mint(uint256 shares, address receiver) public { // OK
+    /*    function prove_integrity_of_mint(uint256 shares, address receiver) public { // OK
         if(shares != 0 && receiver != address(0) && receiver != address(vault) && msg.sender != address(vault)) {
             uint256 _userAssets = weth.balanceOf(msg.sender);
             uint256 _totalAssets = weth.balanceOf(address(vault));
@@ -321,9 +328,9 @@ contract scWETHv2Props is Test {
             assertEq(vault.balanceOf(receiver), assets, "balanceOf assertion failed"); // OK
         }
     }
-*/
+    */
 
-/*
+    /*
     function prove_deposit_eth(uint256 amount) public { // Not OK
         if(weth.balanceOf(address(this)) == 0 && address(this).balance == amount) {
 
@@ -404,8 +411,8 @@ contract scWETHv2Props is Test {
         if(msg.sender != address(vault) && receiver != address(0) && receiver != address(vault) && vault.previewRedeem(shares) != 0 && vault.allowance(owner, msg.sender) >= shares && vault.balanceOf(owner)>=shares)
             assert(vault.previewRedeem(shares) <= vault.redeem(shares, receiver, owner));
     }
-*/
-/*
+    */
+    /*
     function prove_integrity_of_redeem(uint256 shares, address receiver, address owner) public { // OK (But with a lot of simplifications)
         if(msg.sender != address(vault) && receiver != address(0) && receiver != address(vault) && vault.previewRedeem(shares) != 0 && vault.allowance(owner, msg.sender) >= shares && vault.balanceOf(owner)>=shares) {
             uint256 _receiverAssets = weth.balanceOf(receiver);
@@ -427,8 +434,8 @@ contract scWETHv2Props is Test {
             
         }
     }
-*/
-/*    function prove_redeem_reverts_if_not_enough_shares(uint256 shares, address receiver, address owner) public { // Not OK
+    */
+    /*    function prove_redeem_reverts_if_not_enough_shares(uint256 shares, address receiver, address owner) public { // Not OK
         if(vault.balanceOf(owner) < shares || msg.sender != owner && vault.allowance(owner, msg.sender) < shares)
             try vault.redeem(shares, receiver, owner) {
                 assert(false);
@@ -437,7 +444,7 @@ contract scWETHv2Props is Test {
                 assert(true);
             }
     }
-*/
+    */
 
     //////////////////////////// INTERNAL METHODS ////////////////////////////////////////
 
@@ -460,5 +467,4 @@ contract scWETHv2Props is Test {
             wethToWstEthSwapRouter: address(new WethToWstEthSwapRouter())
         });
     }
-
 }
