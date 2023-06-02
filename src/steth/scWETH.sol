@@ -97,6 +97,7 @@ contract scWETH is sc4626, IFlashLoanRecipient {
         weth = _params.weth;
         stEThToEthPriceFeed = _params.stEthToEthPriceFeed;
         balancerVault = _params.balancerVault;
+        treasury = _params.admin;
 
         ERC20(address(stEth)).safeApprove(address(wstETH), type(uint256).max);
         ERC20(address(stEth)).safeApprove(address(curvePool), type(uint256).max);
@@ -117,6 +118,7 @@ contract scWETH is sc4626, IFlashLoanRecipient {
     /// @dev slippage tolerance is a number between 0 and 1e18
     function setSlippageTolerance(uint256 newSlippageTolerance) external {
         _onlyAdmin();
+
         if (newSlippageTolerance > C.ONE) revert InvalidSlippageTolerance();
         slippageTolerance = newSlippageTolerance;
         emit SlippageToleranceUpdated(msg.sender, newSlippageTolerance);
@@ -126,6 +128,7 @@ contract scWETH is sc4626, IFlashLoanRecipient {
     /// @param newAddress the new address of the stEThToEthPriceFeed
     function setStEThToEthPriceFeed(address newAddress) external {
         _onlyAdmin();
+
         if (newAddress == address(0)) revert ZeroAddress();
         stEThToEthPriceFeed = AggregatorV3Interface(newAddress);
     }
@@ -166,6 +169,7 @@ contract scWETH is sc4626, IFlashLoanRecipient {
     /// @dev the new target ltv must be less than the max ltv allowed on aave
     function applyNewTargetLtv(uint256 newTargetLtv) public {
         _onlyKeeper();
+
         if (newTargetLtv >= getMaxLtv()) revert InvalidTargetLtv();
 
         targetLtv = newTargetLtv;
@@ -179,6 +183,7 @@ contract scWETH is sc4626, IFlashLoanRecipient {
     /// @param amount : amount of assets to withdraw into the vault
     function withdrawToVault(uint256 amount) external {
         _onlyKeeper();
+
         _withdrawToVault(amount);
     }
 

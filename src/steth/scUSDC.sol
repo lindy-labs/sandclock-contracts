@@ -4,6 +4,7 @@ pragma solidity ^0.8.13;
 import {
     InvalidTargetLtv,
     InvalidSlippageTolerance,
+    InvalidFloatPercentage,
     InvalidFlashLoanCaller,
     VaultNotUnderwater,
     NoProfitsToSell,
@@ -24,20 +25,19 @@ import {IVault} from "../interfaces/balancer/IVault.sol";
 import {ISwapRouter} from "../interfaces/uniswap/ISwapRouter.sol";
 import {AggregatorV3Interface} from "../interfaces/chainlink/AggregatorV3Interface.sol";
 import {IFlashLoanRecipient} from "../interfaces/balancer/IFlashLoanRecipient.sol";
-import {sc4626} from "../sc4626.sol";
+import {scUSDCBase} from "./scUSDCBase.sol";
 
 /**
  * @title Sandclock USDC Vault
  * @notice A vault that allows users to earn interest on their USDC deposits from leveraged WETH staking.
  * @dev This vault uses Sandclock's leveraged WETH staking vault - scWETH.
  */
-contract scUSDC is sc4626, IFlashLoanRecipient {
+contract scUSDC is scUSDCBase {
     using SafeTransferLib for ERC20;
     using SafeTransferLib for WETH;
     using FixedPointMathLib for uint256;
 
     event NewTargetLtvApplied(address indexed admin, uint256 newTargetLtv);
-    event SlippageToleranceUpdated(address indexed admin, uint256 newSlippageTolerance);
     event EmergencyExitExecuted(
         address indexed admin, uint256 wethWithdrawn, uint256 debtRepaid, uint256 collateralReleased
     );
@@ -51,8 +51,6 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
         uint256 finalUsdcBalance
     );
     event ProfitSold(uint256 wethSold, uint256 usdcReceived);
-
-    WETH public immutable weth;
 
     // delta threshold for rebalancing in percentage
     uint256 constant DEBT_DELTA_THRESHOLD = 0.01e18;
@@ -78,12 +76,7 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
 
     // USDC / WETH target LTV
     uint256 public targetLtv = 0.65e18;
-    // max slippage for swapping WETH -> USDC
-    uint256 public slippageTolerance = 0.99e18; // 1% default
     uint256 public constant rebalanceMinimum = 10e6; // 10 USDC
-
-    // leveraged (w)eth vault
-    ERC4626 public immutable scWETH;
 
     struct ConstructorParams {
         address admin;
@@ -101,10 +94,16 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
     }
 
     constructor(ConstructorParams memory _params)
-        sc4626(_params.admin, _params.keeper, _params.usdc, "Sandclock USDC Vault", "scUSDC")
+        scUSDCBase(
+            _params.admin,
+            _params.keeper,
+            _params.usdc,
+            _params.weth,
+            _params.scWETH,
+            "Sandclock USDC Vault",
+            "scUSDC"
+        )
     {
-        scWETH = _params.scWETH;
-        weth = _params.weth;
         aavePool = _params.aavePool;
         aavePoolDataProvider = _params.aavePoolDataProvider;
         aUsdc = _params.aaveAUsdc;
@@ -125,24 +124,12 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
     //////////////////////////////////////////////////////////////*/
 
     /**
-     * @notice Set the slippage tolerance for swapping WETH to USDC on Uniswap.
-     * @param _newSlippageTolerance The new slippage tolerance value.
-     */
-    function setSlippageTolerance(uint256 _newSlippageTolerance) external {
-        _onlyAdmin();
-        if (_newSlippageTolerance > C.ONE) revert InvalidSlippageTolerance();
-
-        slippageTolerance = _newSlippageTolerance;
-
-        emit SlippageToleranceUpdated(msg.sender, _newSlippageTolerance);
-    }
-
-    /**
      * @notice Apply a new target LTV and trigger a rebalance.
      * @param _newTargetLtv The new target LTV value.
      */
     function applyNewTargetLtv(uint256 _newTargetLtv) external {
         _onlyKeeper();
+
         if (_newTargetLtv > getMaxLtv()) revert InvalidTargetLtv();
 
         targetLtv = _newTargetLtv;
@@ -217,6 +204,7 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
      */
     function exitAllPositions(uint256 _endUsdcBalanceMin) external {
         _onlyAdmin();
+
         uint256 debt = getDebt();
 
         if (getInvested() >= debt) {
@@ -327,6 +315,10 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
         return scWETH.convertToAssets(scWETH.balanceOf(address(this)));
     }
 
+    /**
+     * @notice Returns the amount of profit made by the vault.
+     * @return The profit amount in WETH.
+     */
     function getProfit() public view returns (uint256) {
         return _calculateWethProfit(getInvested(), getDebt());
     }

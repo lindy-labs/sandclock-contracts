@@ -176,7 +176,7 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
     function removeAdapter(uint256 _adapterId, bool _force) external {
         _onlyAdmin();
 
-        if (!isSupported(_adapterId)) revert ProtocolNotSupported();
+        if (!isSupported(_adapterId)) revert ProtocolNotSupported(_adapterId);
 
         address _adapter = protocolAdapters.get(_adapterId);
 

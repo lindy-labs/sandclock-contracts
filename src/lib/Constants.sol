@@ -2,6 +2,9 @@
 pragma solidity ^0.8.13;
 
 library Constants {
+    // address of the multisig. meant to have default admin role
+    address public constant MULTISIG = 0x035F210e5d14054E8AE5A6CFA76d643aA200D56E;
+
     uint256 public constant ONE = 1e18;
     // decimals difference between WETH and USDC (18 - 6)
     uint256 public constant WETH_USDC_DECIMALS_DIFF = 1e12;
@@ -29,15 +32,16 @@ library Constants {
     // address of the Uniswap v3 swap router contract
     address public constant UNISWAP_V3_SWAP_ROUTER = 0xE592427A0AEce92De3Edee1F18E0157C05861564;
 
-    // address of the Aave pool contract
+    // address of the Aave v3 pool contract
     address public constant AAVE_POOL = 0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2;
     // address of the Aave pool data provider contract
     address public constant AAVE_POOL_DATA_PROVIDER = 0x7B4EB56E7CD4b454BA8ff71E4518426369a138a3;
-    // address of the Aave "aEthUSDC" token (supply token)
+
+    // address of the Aave v3 "aEthUSDC" token (supply token)
     address public constant AAVE_AUSDC_TOKEN = 0x98C23E9d8f34FEFb1B7BD6a91B7FF122F4e16F5c;
-    // address of the Aave "aEthwstETH" token (supply token)
+    // address of the Aave v3 "aEthwstETH" token (supply token)
     address public constant AAVE_AWSTETH_TOKEN = 0x0B925eD163218f6662a35e0f0371Ac234f9E9371;
-    // address of the Aave "variableDebtEthWETH" token (variable debt token)
+    // address of the Aave v3 "variableDebtEthWETH" token (variable debt token)
     address public constant AAVAAVE_VAR_DEBT_WETH_TOKEN = 0xeA51d7853EEFb32b6ee06b1C12E6dcCA88Be0fFE;
 
     // EULER Contracts
@@ -63,4 +67,9 @@ library Constants {
 
     // Compound v3
     address public constant COMPOUND_V3_COMET_WETH = 0xA17581A9E3356d9A858b789D68B4d866e593aE94;
+
+    address public constant ZERO_EX_ROUTER = 0xDef1C0ded9bec7F1a1670819833240f027b25EfF;
+
+    // address of the EULER rewards token contract
+    address public constant EULER_REWARDS_TOKEN = 0xd9Fcd98c322942075A5C3860693e9f4f03AAE07b;
 }
