@@ -18,7 +18,7 @@ contract RewardTracker is BonusTracker, AccessControl {
     event RewardPaid(address indexed user, uint256 reward);
     event VaultAdded(address vault);
 
-    error Error_AmountTooLarge();
+    error OverflowAmountTooLarge();
     error CallerNotDistirbutor();
     error VaultNotWhitelisted();
     error VaultAssetNotSupported();
@@ -213,7 +213,7 @@ contract RewardTracker is BonusTracker, AccessControl {
 
         // prevent overflow when computing rewardPerToken
         if (newRewardRate >= ((type(uint256).max / PRECISION) / duration_)) {
-            revert Error_AmountTooLarge();
+            revert OverflowAmountTooLarge();
         }
 
         rewardRate = newRewardRate;

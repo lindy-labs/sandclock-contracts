@@ -335,7 +335,7 @@ contract RewardTrackerTest is DSTestPlus {
         assertEqDecimalEpsilonBelow(rewardAmount, expectedRewardAmount, 18, 1e4);
 
         amount = type(uint256).max / PRECISION; // a too large amount
-        hevm.expectRevert(RewardTracker.Error_AmountTooLarge.selector);
+        hevm.expectRevert(RewardTracker.OverflowAmountTooLarge.selector);
         stakingPool.notifyRewardAmount(amount);
     }
 
