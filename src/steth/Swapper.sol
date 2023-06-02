@@ -13,7 +13,6 @@ import {AmountReceivedBelowMin} from "../errors/scErrors.sol";
 import {ISwapRouter} from "../interfaces/uniswap/ISwapRouter.sol";
 import {Constants as C} from "../lib/Constants.sol";
 
-// TODO: contract code copied from scUSDCv2 branch
 /**
  * @title Swapper
  * @notice Contract facilitating token swaps on Uniswap V3 and 0x.
@@ -136,7 +135,10 @@ contract Swapper {
         wstETH.wrap(stEthBalance);
     }
 
-    function curveSwapStEthToWeth(uint256 _stEthAmount, uint256 _wethAmountOutMin) external returns (uint256 wethReceived) {
+    function curveSwapStEthToWeth(uint256 _stEthAmount, uint256 _wethAmountOutMin)
+        external
+        returns (uint256 wethReceived)
+    {
         // stETH to eth
         ERC20(address(stEth)).safeApprove(address(curvePool), _stEthAmount);
 

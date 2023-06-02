@@ -16,8 +16,6 @@ abstract contract BaseSwapRouter is ISwapRouter {
     function from() public pure virtual returns (address);
 
     function swap0x(bytes calldata swapData, uint256 amount) external payable virtual {
-        // TODO: move this functionality to Swapper.sol once merged with scUSDCv2 branch
-
         if (from() != address(0x0)) {
             ERC20(from()).safeApprove(C.ZEROX_ROUTER, amount);
         }

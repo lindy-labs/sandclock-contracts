@@ -285,7 +285,7 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
     }
 
     function swapWethToWstEth(uint256 _wethAmount) external {
-        // TODO: only keeper or flashloan
+        _onlyKeeperOrFlashLoan();
 
         address(swapper).functionDelegateCall(
             abi.encodeWithSelector(Swapper.lidoSwapWethToWstEth.selector, _wethAmount)
@@ -293,7 +293,8 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
     }
 
     function swapWstEthToWeth(uint256 _wstEthAmount, uint256 _slippageTolerance) external {
-        // TODO: only keeper or flashloan
+        _onlyKeeperOrFlashLoan();
+
         uint256 wstEthBalance = wstETH.balanceOf(address(this));
 
         if (_wstEthAmount > wstEthBalance) {
@@ -312,7 +313,8 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
     function swapWstEthToWethOnZeroEx(uint256 _wstEthAmount, uint256 _wethAmountOutMin, bytes calldata _swapData)
         external
     {
-        // TODO: only keeper or flashloan
+        _onlyKeeperOrFlashLoan();
+
         address(swapper).functionDelegateCall(
             abi.encodeWithSelector(
                 Swapper.zeroExSwap.selector, wstETH, asset, _wstEthAmount, _wethAmountOutMin, _swapData
@@ -665,15 +667,19 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
     }
 
     function supplyAndBorrow(uint256 _adapterId, uint256 _supplyAmount, uint256 _borrowAmount) external {
-        // TODO: only keeper or flashloan
+        _onlyKeeperOrFlashLoan();
+
         address adapter = protocolAdapters.get(_adapterId);
+
         _adapterDelegateCall(adapter, IAdapter.supply.selector, _supplyAmount);
         _adapterDelegateCall(adapter, IAdapter.borrow.selector, _borrowAmount);
     }
 
     function repayAndWithdraw(uint256 _adapterId, uint256 _repayAmount, uint256 _withdrawAmount) external {
-        // TODO: only keeper or flashloan
+        _onlyKeeperOrFlashLoan();
+
         address adapter = protocolAdapters.get(_adapterId);
+
         _adapterDelegateCall(adapter, IAdapter.repay.selector, _repayAmount);
         _adapterDelegateCall(adapter, IAdapter.withdraw.selector, _withdrawAmount);
     }
