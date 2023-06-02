@@ -174,12 +174,10 @@ contract scWETHv2Test is Test {
         // must revert if protocol has funds deposited in it
         _depositToVault(address(this), 10e18);
         uint256 investAmount = 10e18 - minimumFloatAmount;
-        (scWETHv2.SupplyBorrowParam[] memory supplyBorrowParams,, uint256 totalFlashLoanAmount) =
+        (bytes[] memory callData,, uint256 totalFlashLoanAmount) =
             _getInvestParams(investAmount, aaveV3AllocationPercent, eulerAllocationPercent, compoundAllocationPercent);
         vm.startPrank(keeper);
-        vault.investAndHarvest(
-            investAmount, supplyBorrowParams, _getSwapDefaultData(investAmount + totalFlashLoanAmount, 0)
-        );
+        vault.investAndHarvest(investAmount, totalFlashLoanAmount, callData);
         vm.stopPrank();
 
         vm.expectRevert(ProtocolContainsFunds.selector);
@@ -231,28 +229,6 @@ contract scWETHv2Test is Test {
 
         assertEq(ERC20(C.WSTETH).allowance(address(vault), _pool), 0, "allowance not revoked");
         assertEq(ERC20(C.WETH).allowance(address(vault), _pool), 0, "allowance not revoked");
-    }
-
-    function test_setSwapRouter() public {
-        _setUp(BLOCK_AFTER_EULER_EXPLOIT);
-
-        address oldWethToWstEthSwapRouter = vault.wethToWstEthSwapRouter();
-        // revert if not called by admin
-        vm.expectRevert(CallerNotAdmin.selector);
-        vm.prank(alice);
-        vault.setSwapRouter(address(0x00), address(0x00));
-
-        // set wstEthToWethSwapRouter
-        address wstEthToWethSwapRouter = address(new WstEthToWethSwapRouter(oracleLib));
-        vault.setSwapRouter(wstEthToWethSwapRouter, address(0x00));
-        assertEq(vault.wstEthToWethSwapRouter(), wstEthToWethSwapRouter);
-        assertEq(vault.wethToWstEthSwapRouter(), oldWethToWstEthSwapRouter);
-
-        // set wethToWstEthSwapRouter
-        address wethToWstEthSwapRouter = address(new WethToWstEthSwapRouter());
-        vault.setSwapRouter(address(0x00), wethToWstEthSwapRouter);
-        assertEq(vault.wethToWstEthSwapRouter(), wethToWstEthSwapRouter);
-        assertEq(vault.wstEthToWethSwapRouter(), wstEthToWethSwapRouter);
     }
 
     function test_setSlippageTolerance() public {
@@ -352,44 +328,44 @@ contract scWETHv2Test is Test {
         assertEq(ERC20(EULER_TOKEN).balanceOf(address(vault)), 0, "euler token not transferred out");
     }
 
-    function test_swap0x_wethToWstEthSwapRouter() public {
-        _setUp(17323024);
-        address wethToWstEthSwapRouter = vault.wethToWstEthSwapRouter();
+    // function test_swap0x_wethToWstEthSwapRouter() public {
+    //     _setUp(17323024);
+    //     address wethToWstEthSwapRouter = vault.wethToWstEthSwapRouter();
 
-        assertEq(ISwapRouter(wethToWstEthSwapRouter).from(), address(weth));
-        assertEq(ISwapRouter(wethToWstEthSwapRouter).to(), address(wstEth));
+    //     assertEq(ISwapRouter(wethToWstEthSwapRouter).from(), address(weth));
+    //     assertEq(ISwapRouter(wethToWstEthSwapRouter).to(), address(wstEth));
 
-        uint256 wethAmount = 10 ether;
-        uint256 expectedWstEthAmount = 8885460263580892781;
-        bytes memory swapData =
-            hex"6af479b200000000000000000000000000000000000000000000000000000000000000800000000000000000000000000000000000000000000000008ac7230489e800000000000000000000000000000000000000000000000000007a13d23e01d26dcd0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002bc02aaa39b223fe8d0a0e5c4f27ead9083c756cc20001f47f39c581f595b53c5cb19bd0b3f8da6c935e2ca0000000000000000000000000000000000000000000869584cd0000000000000000000000001000000000000000000000000000000000000011000000000000000000000000000000000000000000000037e6411f4d646ce741";
+    //     uint256 wethAmount = 10 ether;
+    //     uint256 expectedWstEthAmount = 8885460263580892781;
+    //     bytes memory swapData =
+    //         hex"6af479b200000000000000000000000000000000000000000000000000000000000000800000000000000000000000000000000000000000000000008ac7230489e800000000000000000000000000000000000000000000000000007a13d23e01d26dcd0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002bc02aaa39b223fe8d0a0e5c4f27ead9083c756cc20001f47f39c581f595b53c5cb19bd0b3f8da6c935e2ca0000000000000000000000000000000000000000000869584cd0000000000000000000000001000000000000000000000000000000000000011000000000000000000000000000000000000000000000037e6411f4d646ce741";
 
-        deal(address(weth), address(this), wethAmount);
-        wethToWstEthSwapRouter.functionDelegateCall(
-            abi.encodeWithSelector(ISwapRouter.swap0x.selector, swapData, wethAmount)
-        );
-        assertGe(wstEth.balanceOf(address(this)), expectedWstEthAmount, "wstEth not received");
-        assertEq(weth.balanceOf(address(this)), 0, "weth not transferred out");
-    }
+    //     deal(address(weth), address(this), wethAmount);
+    //     wethToWstEthSwapRouter.functionDelegateCall(
+    //         abi.encodeWithSelector(ISwapRouter.swap0x.selector, swapData, wethAmount)
+    //     );
+    //     assertGe(wstEth.balanceOf(address(this)), expectedWstEthAmount, "wstEth not received");
+    //     assertEq(weth.balanceOf(address(this)), 0, "weth not transferred out");
+    // }
 
-    function test_swap0x_wstEthToWethSwapRouter() public {
-        _setUp(17323024);
-        address wstEthToWethSwapRouter = vault.wstEthToWethSwapRouter();
-        assertEq(ISwapRouter(wstEthToWethSwapRouter).from(), address(wstEth));
-        assertEq(ISwapRouter(wstEthToWethSwapRouter).to(), address(weth));
+    // function test_swap0x_wstEthToWethSwapRouter() public {
+    //     _setUp(17323024);
+    //     address wstEthToWethSwapRouter = vault.wstEthToWethSwapRouter();
+    //     assertEq(ISwapRouter(wstEthToWethSwapRouter).from(), address(wstEth));
+    //     assertEq(ISwapRouter(wstEthToWethSwapRouter).to(), address(weth));
 
-        uint256 wstEthAmount = 10 ether;
-        uint256 expectedWethAmount = 11115533999999999999;
-        bytes memory swapData =
-            hex"6af479b200000000000000000000000000000000000000000000000000000000000000800000000000000000000000000000000000000000000000008ac7230489e800000000000000000000000000000000000000000000000000009a774c31cfce1ae70000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002b7f39c581f595b53c5cb19bd0b3f8da6c935e2ca00001f4c02aaa39b223fe8d0a0e5c4f27ead9083c756cc2000000000000000000000000000000000000000000869584cd00000000000000000000000010000000000000000000000000000000000000110000000000000000000000000000000000000000000000513368369c646ce7f5";
+    //     uint256 wstEthAmount = 10 ether;
+    //     uint256 expectedWethAmount = 11115533999999999999;
+    //     bytes memory swapData =
+    //         hex"6af479b200000000000000000000000000000000000000000000000000000000000000800000000000000000000000000000000000000000000000008ac7230489e800000000000000000000000000000000000000000000000000009a774c31cfce1ae70000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002b7f39c581f595b53c5cb19bd0b3f8da6c935e2ca00001f4c02aaa39b223fe8d0a0e5c4f27ead9083c756cc2000000000000000000000000000000000000000000869584cd00000000000000000000000010000000000000000000000000000000000000110000000000000000000000000000000000000000000000513368369c646ce7f5";
 
-        deal(address(wstEth), address(this), wstEthAmount);
-        wstEthToWethSwapRouter.functionDelegateCall(
-            abi.encodeWithSelector(ISwapRouter.swap0x.selector, swapData, wstEthAmount)
-        );
-        assertGe(weth.balanceOf(address(this)), expectedWethAmount, "weth not received");
-        assertEq(wstEth.balanceOf(address(this)), 0, "wstEth not transferred out");
-    }
+    //     deal(address(wstEth), address(this), wstEthAmount);
+    //     wstEthToWethSwapRouter.functionDelegateCall(
+    //         abi.encodeWithSelector(ISwapRouter.swap0x.selector, swapData, wstEthAmount)
+    //     );
+    //     assertGe(weth.balanceOf(address(this)), expectedWethAmount, "weth not received");
+    //     assertEq(wstEth.balanceOf(address(this)), 0, "wstEth not transferred out");
+    // }
 
     function test_invest_FloatBalanceTooSmall(uint256 amount) public {
         _setUp(BLOCK_BEFORE_EULER_EXPLOIT);
@@ -399,7 +375,7 @@ contract scWETHv2Test is Test {
 
         uint256 investAmount = amount - minimumFloatAmount + 1;
 
-        (scWETHv2.SupplyBorrowParam[] memory supplyBorrowParams,, uint256 totalFlashLoanAmount) =
+        (bytes[] memory callData,, uint256 totalFlashLoanAmount) =
             _getInvestParams(investAmount, aaveV3AllocationPercent, eulerAllocationPercent, compoundAllocationPercent);
 
         // deposit into strategy
@@ -407,9 +383,7 @@ contract scWETHv2Test is Test {
         vm.expectRevert(
             abi.encodeWithSelector(FloatBalanceTooSmall.selector, minimumFloatAmount - 1, minimumFloatAmount)
         );
-        vault.investAndHarvest(
-            investAmount, supplyBorrowParams, _getSwapDefaultData(investAmount + totalFlashLoanAmount, 0)
-        );
+        vault.investAndHarvest(investAmount, totalFlashLoanAmount, callData);
     }
 
     function test_invest_TooMuch(uint256 amount) public {
@@ -420,15 +394,13 @@ contract scWETHv2Test is Test {
 
         uint256 investAmount = amount + 1;
 
-        (scWETHv2.SupplyBorrowParam[] memory supplyBorrowParams,, uint256 totalFlashLoanAmount) =
+        (bytes[] memory callData,, uint256 totalFlashLoanAmount) =
             _getInvestParams(investAmount, aaveV3AllocationPercent, eulerAllocationPercent, compoundAllocationPercent);
 
         // deposit into strategy
         vm.startPrank(keeper);
         vm.expectRevert(InsufficientDepositBalance.selector);
-        vault.investAndHarvest(
-            investAmount, supplyBorrowParams, _getSwapDefaultData(investAmount + totalFlashLoanAmount, 0)
-        );
+        vault.investAndHarvest(investAmount, totalFlashLoanAmount, callData);
     }
 
     function test_deposit_eth(uint256 amount) public {
@@ -517,106 +489,15 @@ contract scWETHv2Test is Test {
 
         uint256 investAmount = amount - minimumFloatAmount;
 
-        (scWETHv2.SupplyBorrowParam[] memory supplyBorrowParams, uint256 totalSupplyAmount, uint256 totalDebtTaken) =
+        (bytes[] memory callData, uint256 totalSupplyAmount, uint256 totalFlashLoanAmount) =
             _getInvestParams(investAmount, aaveV3AllocationPercent, eulerAllocationPercent, compoundAllocationPercent);
 
         // deposit into strategy
         hoax(keeper);
-        vault.investAndHarvest(investAmount, supplyBorrowParams, _getSwapDefaultData(investAmount + totalDebtTaken, 0));
+        vault.investAndHarvest(investAmount, totalFlashLoanAmount, callData);
         _floatCheck();
 
-        _investChecks(investAmount, oracleLib.wstEthToEth(totalSupplyAmount), totalDebtTaken);
-    }
-
-    function test_invest_usingMulticalls() public {
-        _setUp(BLOCK_BEFORE_EULER_EXPLOIT);
-
-        uint256 amount = 100 ether;
-        _depositToVault(address(this), amount);
-
-        uint256 investAmount = amount - minimumFloatAmount;
-        uint256 stEthRateTolerance = 0.999e18;
-        uint256 aaveV3FlashLoanAmount = _calcSupplyBorrowFlashLoanAmount(aaveV3Adapter, investAmount);
-        uint256 aaveV3SupplyAmount =
-            oracleLib.ethToWstEth(investAmount + aaveV3FlashLoanAmount).mulWadDown(stEthRateTolerance);
-
-        bytes[] memory callData = new bytes[](2);
-        callData[0] = abi.encodeWithSelector(scWETHv2.swapWethToWstEth.selector, investAmount + aaveV3FlashLoanAmount);
-        callData[1] = abi.encodeWithSelector(
-            scWETHv2.supplyAndBorrow.selector, aaveV3AdapterId, aaveV3SupplyAmount, aaveV3FlashLoanAmount
-        );
-
-        // deposit into strategy
-        hoax(keeper);
-        vault.investAndHarvest2(investAmount, aaveV3FlashLoanAmount, callData);
-
-        _floatCheck();
-
-        uint256 aaveV3Deposited = vaultHelper.getCollateral(aaveV3Adapter) - vaultHelper.getDebt(aaveV3Adapter);
-        assertApproxEqRel(aaveV3Deposited, investAmount, 0.005e18, "aaveV3 allocation not correct");
-    }
-
-    function test_disinvest_usingMulticalls() public {
-        _setUp(BLOCK_BEFORE_EULER_EXPLOIT);
-
-        uint256 amount = 100 ether;
-        _depositToVault(address(this), amount);
-
-        uint256 investAmount = amount - minimumFloatAmount;
-        uint256 stEthRateTolerance = 0.999e18;
-        uint256 aaveV3FlashLoanAmount = _calcSupplyBorrowFlashLoanAmount(aaveV3Adapter, investAmount);
-        uint256 aaveV3SupplyAmount =
-            oracleLib.ethToWstEth(investAmount + aaveV3FlashLoanAmount).mulWadDown(stEthRateTolerance);
-
-        uint256 minimumDust = amount.mulWadDown(0.01e18) + (amount - investAmount);
-
-        bytes[] memory callData = new bytes[](2);
-        callData[0] = abi.encodeWithSelector(scWETHv2.swapWethToWstEth.selector, investAmount + aaveV3FlashLoanAmount);
-        callData[1] = abi.encodeWithSelector(
-            scWETHv2.supplyAndBorrow.selector, aaveV3AdapterId, aaveV3SupplyAmount, aaveV3FlashLoanAmount
-        );
-
-        // deposit into strategy
-        hoax(keeper);
-        vault.investAndHarvest2(investAmount, aaveV3FlashLoanAmount, callData);
-
-        assertLt(weth.balanceOf(address(vault)), minimumDust, "weth dust after invest");
-        assertLt(wstEth.balanceOf(address(vault)), minimumDust, "wstEth dust after invest");
-
-        uint256 aaveV3Ltv = vaultHelper.getLtv(aaveV3Adapter);
-
-        // disinvest to decrease the ltv on each protocol
-        uint256 ltvDecrease = 0.1e18;
-
-        aaveV3FlashLoanAmount = _calcRepayWithdrawFlashLoanAmount(aaveV3Adapter, 0, aaveV3Ltv - ltvDecrease);
-
-        uint256 assets = vault.totalAssets();
-        uint256 leverage = vaultHelper.getLeverage();
-        uint256 ltv = vaultHelper.getLtv();
-
-        callData = new bytes[](2);
-        callData[0] = abi.encodeWithSelector(
-            scWETHv2.repayAndWithdraw.selector,
-            aaveV3AdapterId,
-            aaveV3FlashLoanAmount,
-            oracleLib.ethToWstEth(aaveV3FlashLoanAmount)
-        );
-        callData[1] = abi.encodeWithSelector(scWETHv2.swapWstEthToWeth.selector, type(uint256).max, slippageTolerance);
-
-        hoax(keeper);
-        vault.disinvest2(aaveV3FlashLoanAmount, callData);
-
-        _floatCheck();
-
-        assertApproxEqRel(
-            vaultHelper.getLtv(aaveV3Adapter), aaveV3Ltv - ltvDecrease, 0.0000001e18, "aavev3 ltv not decreased"
-        );
-        assertApproxEqRel(vaultHelper.getLtv(), ltv - ltvDecrease, 0.01e18, "net ltv not decreased");
-
-        assertLt(weth.balanceOf(address(vault)), minimumDust, "weth dust after disinvest");
-        assertLt(wstEth.balanceOf(address(vault)), minimumDust, "wstEth dust after disinvest");
-        assertApproxEqRel(vault.totalAssets(), assets, 0.001e18, "disinvest must not change total assets");
-        assertGe(leverage - vaultHelper.getLeverage(), 0.4e18, "leverage not decreased after disinvest");
+        _investChecks(investAmount, oracleLib.wstEthToEth(totalSupplyAmount), totalFlashLoanAmount);
     }
 
     function test_disinvest_usingMulticallsAndZeroExSwap() public {
@@ -642,7 +523,7 @@ contract scWETHv2Test is Test {
 
         // deposit into strategy
         hoax(keeper);
-        vault.investAndHarvest2(investAmount, compoundV3FlashLoanAmount, callData);
+        vault.investAndHarvest(investAmount, compoundV3FlashLoanAmount, callData);
 
         assertLt(weth.balanceOf(address(vault)), minimumDust, "weth dust after invest");
         assertLt(wstEth.balanceOf(address(vault)), minimumDust, "wstEth dust after invest");
@@ -665,7 +546,7 @@ contract scWETHv2Test is Test {
             abi.encodeWithSelector(scWETHv2.swapWstEthToWethOnZeroEx.selector, wstEthAmountToWithdraw, 0, swapData);
 
         hoax(keeper);
-        vault.disinvest2(expectedWethAmountAfterSwap, callData);
+        vault.disinvest(expectedWethAmountAfterSwap, callData);
 
         _floatCheck();
 
@@ -684,14 +565,12 @@ contract scWETHv2Test is Test {
 
         uint256 investAmount = amount - minimumFloatAmount;
 
-        (scWETHv2.SupplyBorrowParam[] memory supplyBorrowParams,, uint256 totalFlashLoanAmount) =
+        (bytes[] memory callData,, uint256 totalFlashLoanAmount) =
             _getInvestParams(investAmount, aaveV3AllocationPercent, eulerAllocationPercent, compoundAllocationPercent);
 
         // deposit into strategy
         hoax(keeper);
-        vault.investAndHarvest(
-            investAmount, supplyBorrowParams, _getSwapDefaultData(investAmount + totalFlashLoanAmount, 0)
-        );
+        vault.investAndHarvest(investAmount, totalFlashLoanAmount, callData);
 
         assertApproxEqRel(vault.totalAssets(), amount, 0.01e18, "totalAssets error");
         assertEq(vault.balanceOf(address(this)), shares, "shares error");
@@ -715,14 +594,12 @@ contract scWETHv2Test is Test {
 
         uint256 investAmount = amount - minimumFloatAmount;
 
-        (scWETHv2.SupplyBorrowParam[] memory supplyBorrowParams,, uint256 totalFlashLoanAmount) =
+        (bytes[] memory callData,, uint256 totalFlashLoanAmount) =
             _getInvestParams(investAmount, aaveV3AllocationPercent, eulerAllocationPercent, compoundAllocationPercent);
 
         // deposit into strategy
         hoax(keeper);
-        vault.investAndHarvest(
-            investAmount, supplyBorrowParams, _getSwapDefaultData(investAmount + totalFlashLoanAmount, 0)
-        );
+        vault.investAndHarvest(investAmount, totalFlashLoanAmount, callData);
 
         uint256 assets = vault.totalCollateral() - vault.totalDebt();
         uint256 floatBalance = amount - investAmount;
@@ -760,7 +637,7 @@ contract scWETHv2Test is Test {
         assertApproxEqRel(vault.totalInvested(), investAmount - assets, 0.001e18, "totalInvested not reduced");
     }
 
-    // we decrease ltv in case of a loss, since the ltv goes higher than the target ltv in such a scenario
+    // // we decrease ltv in case of a loss, since the ltv goes higher than the target ltv in such a scenario
     function test_disinvest(uint256 amount) public {
         _setUp(BLOCK_BEFORE_EULER_EXPLOIT);
 
@@ -771,13 +648,11 @@ contract scWETHv2Test is Test {
 
         uint256 minimumDust = amount.mulWadDown(0.01e18) + (amount - investAmount);
 
-        (scWETHv2.SupplyBorrowParam[] memory supplyBorrowParams,, uint256 totalFlashLoanAmount) =
+        (bytes[] memory callData,, uint256 totalFlashLoanAmount) =
             _getInvestParams(investAmount, aaveV3AllocationPercent, eulerAllocationPercent, compoundAllocationPercent);
 
         hoax(keeper);
-        vault.investAndHarvest(
-            investAmount, supplyBorrowParams, _getSwapDefaultData(investAmount + totalFlashLoanAmount, 0)
-        );
+        vault.investAndHarvest(investAmount, totalFlashLoanAmount, callData);
 
         assertLt(weth.balanceOf(address(vault)), minimumDust, "weth dust after invest");
         assertLt(wstEth.balanceOf(address(vault)), minimumDust, "wstEth dust after invest");
@@ -793,7 +668,7 @@ contract scWETHv2Test is Test {
         uint256 eulerAllocation = vaultHelper.allocationPercent(eulerAdapter);
         uint256 compoundAllocation = vaultHelper.allocationPercent(compoundV3Adapter);
 
-        scWETHv2.RepayWithdrawParam[] memory repayWithdrawParams =
+        (callData, totalFlashLoanAmount) =
             _getDisInvestParams(aaveV3Ltv - ltvDecrease, eulerLtv - ltvDecrease, compoundLtv - ltvDecrease);
 
         uint256 assets = vault.totalAssets();
@@ -801,7 +676,7 @@ contract scWETHv2Test is Test {
         uint256 ltv = vaultHelper.getLtv();
 
         hoax(keeper);
-        vault.disinvest(repayWithdrawParams, _getSwapDefaultData(type(uint256).max, slippageTolerance));
+        vault.disinvest(totalFlashLoanAmount, callData);
 
         _floatCheck();
 
@@ -855,13 +730,11 @@ contract scWETHv2Test is Test {
         uint256 aaveV3Allocation = 0.7e18;
         uint256 eulerAllocation = 0.3e18;
 
-        (scWETHv2.SupplyBorrowParam[] memory supplyBorrowParams,, uint256 totalFlashLoanAmount) =
+        (bytes[] memory callData,, uint256 totalFlashLoanAmount) =
             _getInvestParams(investAmount, aaveV3Allocation, eulerAllocation, 0);
 
         hoax(keeper);
-        vault.investAndHarvest(
-            investAmount, supplyBorrowParams, _getSwapDefaultData(investAmount + totalFlashLoanAmount, 0)
-        );
+        vault.investAndHarvest(investAmount, totalFlashLoanAmount, callData);
 
         uint256 aaveV3Assets = vaultHelper.getAssets(aaveV3Adapter);
         uint256 eulerAssets = vaultHelper.getAssets(eulerAdapter);
@@ -872,21 +745,12 @@ contract scWETHv2Test is Test {
         // reallocate 10% of the totalAssets from aavev3 to euler
         uint256 reallocationAmount = investAmount.mulWadDown(0.1e18); // in weth
 
-        (
-            scWETHv2.RepayWithdrawParam[] memory repayWithdrawParamsReallocation,
-            scWETHv2.SupplyBorrowParam[] memory supplyBorrowParamsReallocation,
-            uint256 delta
-        ) = _getReallocationParamsWhenMarket1HasHigherLtv(reallocationAmount, aaveV3Assets, eulerLtv);
+        (callData, totalFlashLoanAmount) =
+            _getReallocationParamsWhenMarket1HasHigherLtv(reallocationAmount, aaveV3Assets, eulerLtv);
 
         // so after reallocation aaveV3 must have 60% and euler must have 40% funds respectively
-        uint256 deltaWstEth = oracleLib.ethToWstEth(delta);
         hoax(keeper);
-        vault.reallocate(
-            repayWithdrawParamsReallocation,
-            supplyBorrowParamsReallocation,
-            _getSwapDefaultData(deltaWstEth, slippageTolerance),
-            ""
-        );
+        vault.reallocate(totalFlashLoanAmount, callData);
 
         _floatCheck();
 
@@ -902,7 +766,7 @@ contract scWETHv2Test is Test {
         );
     }
 
-    // reallocate from euler to aaveV3
+    // // reallocate from euler to aaveV3
     function test_reallocate_fromLowerLtvMarket_toHigherLtvMarket(uint256 amount) public {
         _setUp(BLOCK_BEFORE_EULER_EXPLOIT);
 
@@ -914,13 +778,11 @@ contract scWETHv2Test is Test {
         uint256 aaveV3Allocation = 0.7e18;
         uint256 eulerAllocation = 0.3e18;
 
-        (scWETHv2.SupplyBorrowParam[] memory supplyBorrowParams,, uint256 totalFlashLoanAmount) =
+        (bytes[] memory callData,, uint256 totalFlashLoanAmount) =
             _getInvestParams(investAmount, aaveV3Allocation, eulerAllocation, 0);
 
         hoax(keeper);
-        vault.investAndHarvest(
-            investAmount, supplyBorrowParams, _getSwapDefaultData(investAmount + totalFlashLoanAmount, 0)
-        );
+        vault.investAndHarvest(investAmount, totalFlashLoanAmount, callData);
 
         uint256 aaveV3Assets = vaultHelper.getAssets(aaveV3Adapter);
         uint256 eulerAssets = vaultHelper.getAssets(eulerAdapter);
@@ -931,21 +793,12 @@ contract scWETHv2Test is Test {
         // reallocate 10% of the totalAssets from euler to aaveV3
         uint256 reallocationAmount = investAmount.mulWadDown(0.1e18); // in weth
 
-        (
-            scWETHv2.RepayWithdrawParam[] memory repayWithdrawParamsReallocation,
-            scWETHv2.SupplyBorrowParam[] memory supplyBorrowParamsReallocation,
-            uint256 delta
-        ) = _getReallocationParamsWhenMarket1HasLowerLtv(reallocationAmount, eulerAssets, aaveV3Ltv);
+        (callData, totalFlashLoanAmount) =
+            _getReallocationParamsWhenMarket1HasLowerLtv(reallocationAmount, eulerAssets, aaveV3Ltv);
 
         // so after reallocation aaveV3 must have 80% and euler must have 20% funds respectively
-        uint256 deltaWstEth = oracleLib.ethToWstEth(delta);
         hoax(keeper);
-        vault.reallocate(
-            repayWithdrawParamsReallocation,
-            supplyBorrowParamsReallocation,
-            _getSwapDefaultData(deltaWstEth, slippageTolerance),
-            ""
-        );
+        vault.reallocate(totalFlashLoanAmount, callData);
 
         _floatCheck();
 
@@ -954,7 +807,7 @@ contract scWETHv2Test is Test {
         );
     }
 
-    // reallocating funds from euler to aaveV3 and compoundV3
+    // // reallocating funds from euler to aaveV3 and compoundV3
     function test_reallocate_fromOneMarket_ToTwoMarkets(uint256 amount) public {
         _setUp(BLOCK_BEFORE_EULER_EXPLOIT);
 
@@ -963,13 +816,11 @@ contract scWETHv2Test is Test {
 
         uint256 investAmount = amount - minimumFloatAmount;
 
-        (scWETHv2.SupplyBorrowParam[] memory supplyBorrowParams,, uint256 totalFlashLoanAmount) =
+        (bytes[] memory callData,, uint256 totalFlashLoanAmount) =
             _getInvestParams(investAmount, aaveV3AllocationPercent, eulerAllocationPercent, compoundAllocationPercent);
 
         hoax(keeper);
-        vault.investAndHarvest(
-            investAmount, supplyBorrowParams, _getSwapDefaultData(investAmount + totalFlashLoanAmount, 0)
-        );
+        vault.investAndHarvest(investAmount, totalFlashLoanAmount, callData);
 
         uint256 aaveV3Assets = vaultHelper.getAssets(aaveV3Adapter);
         uint256 eulerAssets = vaultHelper.getAssets(eulerAdapter);
@@ -981,20 +832,10 @@ contract scWETHv2Test is Test {
 
         uint256 reallocationAmount = investAmount.mulWadDown(0.1e18); // in weth
 
-        (
-            scWETHv2.RepayWithdrawParam[] memory repayWithdrawParamsReallocation,
-            scWETHv2.SupplyBorrowParam[] memory supplyBorrowParamsReallocation,
-            uint256 delta
-        ) = _getReallocationParamsFromOneMarketToTwoMarkets(reallocationAmount);
+        (callData, totalFlashLoanAmount) = _getReallocationParamsFromOneMarketToTwoMarkets(reallocationAmount);
 
-        uint256 deltaWstEth = oracleLib.ethToWstEth(delta);
         hoax(keeper);
-        vault.reallocate(
-            repayWithdrawParamsReallocation,
-            supplyBorrowParamsReallocation,
-            _getSwapDefaultData(deltaWstEth, slippageTolerance),
-            ""
-        );
+        vault.reallocate(totalFlashLoanAmount, callData);
 
         _reallocationChecksFromOneMarketToTwoMarkets(
             totalAssets, aaveV3Assets, eulerAssets, compoundAssets, aaveV3Ltv, eulerLtv, compoundLtv, reallocationAmount
@@ -1021,7 +862,7 @@ contract scWETHv2Test is Test {
 
         // deposit into strategy
         hoax(keeper);
-        vault.investAndHarvest2(investAmount, aaveV3FlashLoanAmount, callData);
+        vault.investAndHarvest(investAmount, aaveV3FlashLoanAmount, callData);
 
         // move half position from aave v3 to compound v3
         uint256 totalCollateral = vault.totalCollateral2();
@@ -1037,7 +878,7 @@ contract scWETHv2Test is Test {
 
         uint256 flashLoanAmount = debtToMove;
         hoax(keeper);
-        vault.reallocate2(flashLoanAmount, callData);
+        vault.reallocate(flashLoanAmount, callData);
 
         assertApproxEqAbs(vault.totalCollateral2(), totalCollateral, 2, "total collateral changed");
         assertApproxEqAbs(
@@ -1060,13 +901,11 @@ contract scWETHv2Test is Test {
 
         uint256 investAmount = amount - minimumFloatAmount;
 
-        (scWETHv2.SupplyBorrowParam[] memory supplyBorrowParams,, uint256 totalFlashLoanAmount) =
+        (bytes[] memory callData,, uint256 totalFlashLoanAmount) =
             _getInvestParams(investAmount, aaveV3AllocationPercent, eulerAllocationPercent, compoundAllocationPercent);
 
         hoax(keeper);
-        vault.investAndHarvest(
-            investAmount, supplyBorrowParams, _getSwapDefaultData(investAmount + totalFlashLoanAmount, 0)
-        );
+        vault.investAndHarvest(investAmount, totalFlashLoanAmount, callData);
 
         uint256 aaveV3Assets = vaultHelper.getAssets(aaveV3Adapter);
         uint256 eulerAssets = vaultHelper.getAssets(eulerAdapter);
@@ -1078,20 +917,10 @@ contract scWETHv2Test is Test {
 
         uint256 reallocationAmount = investAmount.mulWadDown(0.1e18); // in weth
 
-        (
-            scWETHv2.RepayWithdrawParam[] memory repayWithdrawParamsReallocation,
-            scWETHv2.SupplyBorrowParam[] memory supplyBorrowParamsReallocation,
-            uint256 delta
-        ) = _getReallocationParamsFromTwoMarketsToOneMarket(reallocationAmount);
+        (callData, totalFlashLoanAmount) = _getReallocationParamsFromTwoMarketsToOneMarket(reallocationAmount);
 
-        uint256 deltaWstEth = oracleLib.ethToWstEth(delta);
         hoax(keeper);
-        vault.reallocate(
-            repayWithdrawParamsReallocation,
-            supplyBorrowParamsReallocation,
-            _getSwapDefaultData(deltaWstEth, slippageTolerance),
-            ""
-        );
+        vault.reallocate(totalFlashLoanAmount, callData);
 
         _reallocationChecksFromTwoMarkets_TwoOneMarket(
             totalAssets, aaveV3Assets, eulerAssets, compoundAssets, aaveV3Ltv, eulerLtv, compoundLtv, reallocationAmount
@@ -1108,13 +937,10 @@ contract scWETHv2Test is Test {
         uint256 investAmount = amount - minimumFloatAmount;
 
         // note: simulating profits testing only for aave and compound and not for euler due to the shitty interest rates of euler after getting rekt
-        (scWETHv2.SupplyBorrowParam[] memory supplyBorrowParams,, uint256 totalFlashLoanAmount) =
-            _getInvestParams(investAmount, 0.8e18, 0, 0.2e18);
+        (bytes[] memory callData,, uint256 totalFlashLoanAmount) = _getInvestParams(investAmount, 0.8e18, 0, 0.2e18);
 
         hoax(keeper);
-        vault.investAndHarvest(
-            investAmount, supplyBorrowParams, _getSwapDefaultData(investAmount + totalFlashLoanAmount, 0)
-        );
+        vault.investAndHarvest(investAmount, totalFlashLoanAmount, callData);
 
         uint256 altv = vaultHelper.getLtv(aaveV3Adapter);
         uint256 compoundLtv = vaultHelper.getLtv(compoundV3Adapter);
@@ -1136,23 +962,21 @@ contract scWETHv2Test is Test {
         uint256 aaveV3SupplyAmount = oracleLib.ethToWstEth(aaveV3FlashLoanAmount).mulWadDown(stEthRateTolerance);
         uint256 compoundSupplyAmount = oracleLib.ethToWstEth(compoundFlashLoanAmount).mulWadDown(stEthRateTolerance);
 
-        scWETHv2.SupplyBorrowParam[] memory supplyBorrowParamsAfterProfits = new scWETHv2.SupplyBorrowParam[](2);
+        bytes[] memory callDataAfterProfits = new bytes[](3);
 
-        supplyBorrowParamsAfterProfits[0] = scWETHv2.SupplyBorrowParam({
-            adapterId: aaveV3AdapterId,
-            supplyAmount: aaveV3SupplyAmount,
-            borrowAmount: aaveV3FlashLoanAmount
-        });
-        supplyBorrowParamsAfterProfits[1] = scWETHv2.SupplyBorrowParam({
-            adapterId: compoundV3AdapterId,
-            supplyAmount: compoundSupplyAmount,
-            borrowAmount: compoundFlashLoanAmount
-        });
+        callDataAfterProfits[0] =
+            abi.encodeWithSelector(scWETHv2.swapWethToWstEth.selector, aaveV3FlashLoanAmount + compoundFlashLoanAmount);
+
+        callDataAfterProfits[1] = abi.encodeWithSelector(
+            scWETHv2.supplyAndBorrow.selector, aaveV3AdapterId, aaveV3SupplyAmount, aaveV3FlashLoanAmount
+        );
+
+        callDataAfterProfits[2] = abi.encodeWithSelector(
+            scWETHv2.supplyAndBorrow.selector, compoundV3AdapterId, compoundSupplyAmount, compoundFlashLoanAmount
+        );
 
         hoax(keeper);
-        vault.investAndHarvest(
-            0, supplyBorrowParamsAfterProfits, _getSwapDefaultData(aaveV3FlashLoanAmount + compoundFlashLoanAmount, 0)
-        );
+        vault.investAndHarvest(0, aaveV3FlashLoanAmount + compoundFlashLoanAmount, callDataAfterProfits);
 
         _floatCheck();
 
@@ -1205,15 +1029,15 @@ contract scWETHv2Test is Test {
         uint256 reallocationAmount,
         uint256 market1Assets,
         uint256 market2Ltv
-    ) internal view returns (scWETHv2.RepayWithdrawParam[] memory, scWETHv2.SupplyBorrowParam[] memory, uint256) {
-        scWETHv2.RepayWithdrawParam[] memory repayWithdrawParamsReallocation = new scWETHv2.RepayWithdrawParam[](1);
-        scWETHv2.SupplyBorrowParam[] memory supplyBorrowParamsReallocation = new scWETHv2.SupplyBorrowParam[](1);
-
+    ) internal view returns (bytes[] memory, uint256) {
         uint256 repayAmount = reallocationAmount.mulDivDown(vaultHelper.getDebt(aaveV3Adapter), market1Assets);
         uint256 withdrawAmount = reallocationAmount + repayAmount;
 
-        repayWithdrawParamsReallocation[0] =
-            scWETHv2.RepayWithdrawParam(aaveV3AdapterId, repayAmount, oracleLib.ethToWstEth(withdrawAmount));
+        bytes[] memory callData = new bytes[](3);
+
+        callData[0] = abi.encodeWithSelector(
+            scWETHv2.repayAndWithdraw.selector, aaveV3AdapterId, repayAmount, oracleLib.ethToWstEth(withdrawAmount)
+        );
 
         // since the ltv of the second protocol euler is less than the first protocol aaveV3
         // we cannot supply the withdraw amount and borrow the repay Amount since that will increase the ltv of euler
@@ -1221,51 +1045,65 @@ contract scWETHv2Test is Test {
         uint256 market2SupplyAmount = withdrawAmount - delta;
         uint256 market2BorrowAmount = repayAmount - delta;
 
-        supplyBorrowParamsReallocation[0] =
-            scWETHv2.SupplyBorrowParam(eulerAdapterId, oracleLib.ethToWstEth(market2SupplyAmount), market2BorrowAmount);
+        callData[1] =
+            abi.encodeWithSelector(scWETHv2.swapWstEthToWeth.selector, oracleLib.ethToWstEth(delta), slippageTolerance);
 
-        return (repayWithdrawParamsReallocation, supplyBorrowParamsReallocation, delta);
+        callData[2] = abi.encodeWithSelector(
+            scWETHv2.supplyAndBorrow.selector,
+            eulerAdapterId,
+            oracleLib.ethToWstEth(market2SupplyAmount),
+            market2BorrowAmount
+        );
+
+        return (callData, repayAmount);
     }
 
     function _getReallocationParamsWhenMarket1HasLowerLtv(
         uint256 reallocationAmount,
         uint256 market1Assets,
         uint256 market2Ltv
-    ) internal view returns (scWETHv2.RepayWithdrawParam[] memory, scWETHv2.SupplyBorrowParam[] memory, uint256) {
-        scWETHv2.RepayWithdrawParam[] memory repayWithdrawParamsReallocation = new scWETHv2.RepayWithdrawParam[](1);
-        scWETHv2.SupplyBorrowParam[] memory supplyBorrowParamsReallocation = new scWETHv2.SupplyBorrowParam[](1);
+    ) internal view returns (bytes[] memory, uint256) {
+        bytes[] memory callData = new bytes[](3);
 
         uint256 repayAmount = reallocationAmount.mulDivDown(vaultHelper.getDebt(eulerAdapter), market1Assets);
         uint256 withdrawAmount = reallocationAmount + repayAmount;
 
-        repayWithdrawParamsReallocation[0] =
-            scWETHv2.RepayWithdrawParam(eulerAdapterId, repayAmount, oracleLib.ethToWstEth(withdrawAmount));
+        callData[0] = abi.encodeWithSelector(
+            scWETHv2.repayAndWithdraw.selector, eulerAdapterId, repayAmount, oracleLib.ethToWstEth(withdrawAmount)
+        );
 
         uint256 market2SupplyAmount = repayAmount.divWadDown(market2Ltv);
         uint256 market2BorrowAmount = repayAmount;
 
         uint256 delta = withdrawAmount - market2SupplyAmount;
 
-        supplyBorrowParamsReallocation[0] =
-            scWETHv2.SupplyBorrowParam(aaveV3AdapterId, oracleLib.ethToWstEth(market2SupplyAmount), market2BorrowAmount);
+        callData[1] =
+            abi.encodeWithSelector(scWETHv2.swapWstEthToWeth.selector, oracleLib.ethToWstEth(delta), slippageTolerance);
 
-        return (repayWithdrawParamsReallocation, supplyBorrowParamsReallocation, delta);
+        callData[2] = abi.encodeWithSelector(
+            scWETHv2.supplyAndBorrow.selector,
+            aaveV3AdapterId,
+            oracleLib.ethToWstEth(market2SupplyAmount),
+            market2BorrowAmount
+        );
+
+        return (callData, repayAmount);
     }
 
     function _getReallocationParamsFromOneMarketToTwoMarkets(uint256 reallocationAmount)
         internal
         view
-        returns (scWETHv2.RepayWithdrawParam[] memory, scWETHv2.SupplyBorrowParam[] memory, uint256)
+        returns (bytes[] memory, uint256)
     {
-        scWETHv2.RepayWithdrawParam[] memory repayWithdrawParamsReallocation = new scWETHv2.RepayWithdrawParam[](1);
-        scWETHv2.SupplyBorrowParam[] memory supplyBorrowParamsReallocation = new scWETHv2.SupplyBorrowParam[](2);
+        bytes[] memory callData = new bytes[](4);
 
         uint256 repayAmount =
             reallocationAmount.mulDivDown(vaultHelper.getDebt(eulerAdapter), vaultHelper.getAssets(eulerAdapter));
         uint256 withdrawAmount = reallocationAmount + repayAmount;
 
-        repayWithdrawParamsReallocation[0] =
-            scWETHv2.RepayWithdrawParam(eulerAdapterId, repayAmount, oracleLib.ethToWstEth(withdrawAmount));
+        callData[0] = abi.encodeWithSelector(
+            scWETHv2.repayAndWithdraw.selector, eulerAdapterId, repayAmount, oracleLib.ethToWstEth(withdrawAmount)
+        );
 
         // supply 50% of the reallocationAmount to aaveV3 and 50% to compoundV3
         // we are using the below style of calculating since aaveV3 and compoundV3 both have higher ltv than euler
@@ -1277,28 +1115,32 @@ contract scWETHv2Test is Test {
 
         uint256 delta = withdrawAmount - (aaveV3SupplyAmount + compoundSupplyAmount);
 
-        supplyBorrowParamsReallocation[0] = scWETHv2.SupplyBorrowParam({
-            adapterId: aaveV3AdapterId,
-            supplyAmount: oracleLib.ethToWstEth(aaveV3SupplyAmount),
-            borrowAmount: aaveV3BorrowAmount
-        });
+        callData[1] =
+            abi.encodeWithSelector(scWETHv2.swapWstEthToWeth.selector, oracleLib.ethToWstEth(delta), slippageTolerance);
 
-        supplyBorrowParamsReallocation[1] = scWETHv2.SupplyBorrowParam({
-            adapterId: compoundV3AdapterId,
-            supplyAmount: oracleLib.ethToWstEth(compoundSupplyAmount),
-            borrowAmount: compoundBorrowAmount
-        });
+        callData[2] = abi.encodeWithSelector(
+            scWETHv2.supplyAndBorrow.selector,
+            aaveV3AdapterId,
+            oracleLib.ethToWstEth(aaveV3SupplyAmount),
+            aaveV3BorrowAmount
+        );
 
-        return (repayWithdrawParamsReallocation, supplyBorrowParamsReallocation, delta);
+        callData[3] = abi.encodeWithSelector(
+            scWETHv2.supplyAndBorrow.selector,
+            compoundV3AdapterId,
+            oracleLib.ethToWstEth(compoundSupplyAmount),
+            compoundBorrowAmount
+        );
+
+        return (callData, repayAmount);
     }
 
     function _getReallocationParamsFromTwoMarketsToOneMarket(uint256 reallocationAmount)
         internal
         view
-        returns (scWETHv2.RepayWithdrawParam[] memory, scWETHv2.SupplyBorrowParam[] memory, uint256)
+        returns (bytes[] memory, uint256)
     {
-        scWETHv2.RepayWithdrawParam[] memory repayWithdrawParamsReallocation = new scWETHv2.RepayWithdrawParam[](2);
-        scWETHv2.SupplyBorrowParam[] memory supplyBorrowParamsReallocation = new scWETHv2.SupplyBorrowParam[](1);
+        bytes[] memory callData = new bytes[](4);
 
         // we will withdraw 50% of the reallocation amount from aaveV3 and the other 50% from compoundV3
         uint256 reallocationAmountPerMarket = reallocationAmount / 2;
@@ -1313,11 +1155,18 @@ contract scWETHv2Test is Test {
         );
         uint256 withdrawAmountCompoundV3 = reallocationAmountPerMarket + repayAmountCompoundV3;
 
-        repayWithdrawParamsReallocation[0] =
-            scWETHv2.RepayWithdrawParam(aaveV3AdapterId, repayAmountAaveV3, oracleLib.ethToWstEth(withdrawAmountAaveV3));
+        callData[0] = abi.encodeWithSelector(
+            scWETHv2.repayAndWithdraw.selector,
+            aaveV3AdapterId,
+            repayAmountAaveV3,
+            oracleLib.ethToWstEth(withdrawAmountAaveV3)
+        );
 
-        repayWithdrawParamsReallocation[1] = scWETHv2.RepayWithdrawParam(
-            compoundV3AdapterId, repayAmountCompoundV3, oracleLib.ethToWstEth(withdrawAmountCompoundV3)
+        callData[1] = abi.encodeWithSelector(
+            scWETHv2.repayAndWithdraw.selector,
+            compoundV3AdapterId,
+            repayAmountCompoundV3,
+            oracleLib.ethToWstEth(withdrawAmountCompoundV3)
         );
 
         uint256 repayAmount = repayAmountAaveV3 + repayAmountCompoundV3;
@@ -1328,10 +1177,17 @@ contract scWETHv2Test is Test {
         uint256 eulerSupplyAmount = withdrawAmount - delta;
         uint256 eulerBorrowAmount = repayAmount - delta;
 
-        supplyBorrowParamsReallocation[0] =
-            scWETHv2.SupplyBorrowParam(eulerAdapterId, oracleLib.ethToWstEth(eulerSupplyAmount), eulerBorrowAmount);
+        callData[2] =
+            abi.encodeWithSelector(scWETHv2.swapWstEthToWeth.selector, oracleLib.ethToWstEth(delta), slippageTolerance);
 
-        return (repayWithdrawParamsReallocation, supplyBorrowParamsReallocation, delta);
+        callData[3] = abi.encodeWithSelector(
+            scWETHv2.supplyAndBorrow.selector,
+            eulerAdapterId,
+            oracleLib.ethToWstEth(eulerSupplyAmount),
+            eulerBorrowAmount
+        );
+
+        return (callData, repayAmount);
     }
 
     /// @return : supplyBorrowParams, totalSupplyAmount, totalDebtTaken
@@ -1340,14 +1196,13 @@ contract scWETHv2Test is Test {
         uint256 aaveV3Allocation,
         uint256 eulerAllocation,
         uint256 compoundAllocation
-    ) internal view returns (scWETHv2.SupplyBorrowParam[] memory, uint256, uint256) {
+    ) internal view returns (bytes[] memory, uint256, uint256) {
+        uint256 investAmount = amount;
         uint256 stEthRateTolerance = 0.999e18;
-        scWETHv2.SupplyBorrowParam[] memory supplyBorrowParams = new scWETHv2.SupplyBorrowParam[](3);
 
-        // supply 70% to aaveV3 and 30% to Euler
-        uint256 aaveV3Amount = amount.mulWadDown(aaveV3Allocation);
-        uint256 eulerAmount = amount.mulWadDown(eulerAllocation);
-        uint256 compoundAmount = amount.mulWadDown(compoundAllocation);
+        uint256 aaveV3Amount = investAmount.mulWadDown(aaveV3Allocation);
+        uint256 eulerAmount = investAmount.mulWadDown(eulerAllocation);
+        uint256 compoundAmount = investAmount.mulWadDown(compoundAllocation);
 
         uint256 aaveV3FlashLoanAmount = _calcSupplyBorrowFlashLoanAmount(aaveV3Adapter, aaveV3Amount);
         uint256 eulerFlashLoanAmount = _calcSupplyBorrowFlashLoanAmount(eulerAdapter, eulerAmount);
@@ -1360,53 +1215,61 @@ contract scWETHv2Test is Test {
         uint256 compoundSupplyAmount =
             oracleLib.ethToWstEth(compoundAmount + compoundFlashLoanAmount).mulWadDown(stEthRateTolerance);
 
-        supplyBorrowParams[0] = scWETHv2.SupplyBorrowParam({
-            adapterId: aaveV3AdapterId,
-            supplyAmount: aaveV3SupplyAmount,
-            borrowAmount: aaveV3FlashLoanAmount
-        });
-        supplyBorrowParams[1] = scWETHv2.SupplyBorrowParam({
-            adapterId: eulerAdapterId,
-            supplyAmount: eulerSupplyAmount,
-            borrowAmount: eulerFlashLoanAmount
-        });
-        supplyBorrowParams[2] = scWETHv2.SupplyBorrowParam({
-            adapterId: compoundV3AdapterId,
-            supplyAmount: compoundSupplyAmount,
-            borrowAmount: compoundFlashLoanAmount
-        });
+        uint256 totalFlashLoanAmount = aaveV3FlashLoanAmount + eulerFlashLoanAmount + compoundFlashLoanAmount;
 
-        uint256 totalSupplyAmount = aaveV3SupplyAmount + eulerSupplyAmount + compoundSupplyAmount;
-        uint256 totalDebtTaken = aaveV3FlashLoanAmount + eulerFlashLoanAmount + compoundFlashLoanAmount;
+        bytes[] memory callData = new bytes[](4);
 
-        return (supplyBorrowParams, totalSupplyAmount, totalDebtTaken);
+        callData[0] = abi.encodeWithSelector(scWETHv2.swapWethToWstEth.selector, investAmount + totalFlashLoanAmount);
+
+        callData[1] = abi.encodeWithSelector(
+            scWETHv2.supplyAndBorrow.selector, aaveV3AdapterId, aaveV3SupplyAmount, aaveV3FlashLoanAmount
+        );
+        callData[2] = abi.encodeWithSelector(
+            scWETHv2.supplyAndBorrow.selector, eulerAdapterId, eulerSupplyAmount, eulerFlashLoanAmount
+        );
+        callData[3] = abi.encodeWithSelector(
+            scWETHv2.supplyAndBorrow.selector, compoundV3AdapterId, compoundSupplyAmount, compoundFlashLoanAmount
+        );
+
+        return (callData, aaveV3SupplyAmount + eulerSupplyAmount + compoundSupplyAmount, totalFlashLoanAmount);
     }
 
     /// @return : repayWithdrawParams
     function _getDisInvestParams(uint256 newAaveV3Ltv, uint256 newEulerLtv, uint256 newCompoundLtv)
         internal
         view
-        returns (scWETHv2.RepayWithdrawParam[] memory)
+        returns (bytes[] memory, uint256)
     {
         uint256 aaveV3FlashLoanAmount = _calcRepayWithdrawFlashLoanAmount(aaveV3Adapter, 0, newAaveV3Ltv);
         uint256 eulerFlashLoanAmount = _calcRepayWithdrawFlashLoanAmount(eulerAdapter, 0, newEulerLtv);
         uint256 compoundFlashLoanAmount = _calcRepayWithdrawFlashLoanAmount(compoundV3Adapter, 0, newCompoundLtv);
 
-        scWETHv2.RepayWithdrawParam[] memory repayWithdrawParams = new scWETHv2.RepayWithdrawParam[](3);
+        bytes[] memory callData = new bytes[](4);
 
-        repayWithdrawParams[0] = scWETHv2.RepayWithdrawParam(
-            aaveV3AdapterId, aaveV3FlashLoanAmount, oracleLib.ethToWstEth(aaveV3FlashLoanAmount)
+        callData[0] = abi.encodeWithSelector(
+            scWETHv2.repayAndWithdraw.selector,
+            aaveV3AdapterId,
+            aaveV3FlashLoanAmount,
+            oracleLib.ethToWstEth(aaveV3FlashLoanAmount)
         );
 
-        repayWithdrawParams[1] = scWETHv2.RepayWithdrawParam(
-            eulerAdapterId, eulerFlashLoanAmount, oracleLib.ethToWstEth(eulerFlashLoanAmount)
+        callData[1] = abi.encodeWithSelector(
+            scWETHv2.repayAndWithdraw.selector,
+            eulerAdapterId,
+            eulerFlashLoanAmount,
+            oracleLib.ethToWstEth(eulerFlashLoanAmount)
         );
 
-        repayWithdrawParams[2] = scWETHv2.RepayWithdrawParam(
-            compoundV3AdapterId, compoundFlashLoanAmount, oracleLib.ethToWstEth(compoundFlashLoanAmount)
+        callData[2] = abi.encodeWithSelector(
+            scWETHv2.repayAndWithdraw.selector,
+            compoundV3AdapterId,
+            compoundFlashLoanAmount,
+            oracleLib.ethToWstEth(compoundFlashLoanAmount)
         );
 
-        return repayWithdrawParams;
+        callData[3] = abi.encodeWithSelector(scWETHv2.swapWstEthToWeth.selector, type(uint256).max, slippageTolerance);
+
+        return (callData, aaveV3FlashLoanAmount + eulerFlashLoanAmount + compoundFlashLoanAmount);
     }
 
     function _depositChecks(uint256 amount, uint256 preDepositBal) internal {
@@ -1689,8 +1552,6 @@ contract scWETHv2Test is Test {
             weth: C.WETH,
             balancerVault: IVault(C.BALANCER_VAULT),
             oracleLib: _oracleLib,
-            wstEthToWethSwapRouter: address(new WstEthToWethSwapRouter(_oracleLib)),
-            wethToWstEthSwapRouter: address(new WethToWstEthSwapRouter()),
             swapper: new Swapper()
         });
     }
