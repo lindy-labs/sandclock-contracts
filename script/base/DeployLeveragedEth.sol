@@ -41,8 +41,8 @@ abstract contract DeployLeveragedEth is CREATE3Script {
     ICurvePool _curveEthStEthPool = ICurvePool(C.CURVE_ETH_STETH_POOL);
     ISwapRouter _uniswapRouter = ISwapRouter(C.UNISWAP_V3_SWAP_ROUTER);
 
-    scWETH _wethContract;
-    scUSDC _usdcContract;
+    scWETH _scWETH;
+    scUSDC _scUSDC;
 
     uint256 _deployerPrivateKey = uint256(vm.envBytes32("PRIVATE_KEY"));
     address _deployerAddress = vm.addr(_deployerPrivateKey);
@@ -73,13 +73,13 @@ abstract contract DeployLeveragedEth is CREATE3Script {
         });
 
         console2.log("");
-        _wethContract = new scWETH(scWethParams);
-        console2.log("scWETH: ", address(_wethContract));
+        _scWETH = new scWETH(scWethParams);
+        console2.log("scWETH: ", address(_scWETH));
 
         scUSDC.ConstructorParams memory scUsdcParams = scUSDC.ConstructorParams({
             admin: _deployerAddress,
             keeper: _keeper,
-            scWETH: _wethContract,
+            scWETH: _scWETH,
             usdc: _usdc,
             weth: WETH(payable(C.WETH)),
             aavePool: _aavePool,
@@ -91,8 +91,8 @@ abstract contract DeployLeveragedEth is CREATE3Script {
             balancerVault: IVault(C.BALANCER_VAULT)
         });
 
-        _usdcContract = new scUSDC(scUsdcParams);
-        console2.log("scUSDC: ", address(_usdcContract));
+        _scUSDC = new scUSDC(scUsdcParams);
+        console2.log("scUSDC: ", address(_scUSDC));
 
         vm.stopBroadcast();
     }

@@ -25,11 +25,11 @@ contract DeployScript is DeployLeveragedEth, Test {
 
         _fund();
 
-        _depositForUsers(_weth, _wethContract);
-        _depositForUsers(_usdc, _usdcContract);
+        _depositForUsers(_weth, _scWETH);
+        _depositForUsers(_usdc, _scUSDC);
 
-        _rebalance(_wethContract);
-        _rebalance(_usdcContract);
+        _rebalance(_scWETH);
+        _rebalance(_scUSDC);
 
         _profit();
 
@@ -93,9 +93,9 @@ contract DeployScript is DeployLeveragedEth, Test {
     function _profit() internal {
         console2.log("generate profit for scUSDC vault");
 
-        console2.log("scUSDC profit before", _usdcContract.getProfit());
+        console2.log("scUSDC profit before", _scUSDC.getProfit());
         vm.etch(C.AAVAAVE_VAR_DEBT_WETH_TOKEN, address(_weth).code);
-        console2.log("scUSDC profit after", _usdcContract.getProfit());
+        console2.log("scUSDC profit after", _scUSDC.getProfit());
     }
 
     // function _redeem(address redeemer) internal {
