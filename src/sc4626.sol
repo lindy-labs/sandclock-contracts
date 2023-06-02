@@ -4,13 +4,15 @@ pragma solidity ^0.8.10;
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {ERC4626} from "solmate/mixins/ERC4626.sol";
 import {AccessControl} from "openzeppelin-contracts/access/AccessControl.sol";
+import {Constants as C} from "./lib/Constants.sol";
 import {
-    TreasuryCannotBeZero,
-    FeesTooHigh,
     CallerNotAdmin,
     CallerNotKeeper,
     ZeroAddress,
-    InvalidFlashLoanCaller
+    InvalidFlashLoanCaller,
+    TreasuryCannotBeZero,
+    FeesTooHigh,
+    InvalidFloatPercentage
 } from "./errors/scErrors.sol";
 
 abstract contract sc4626 is ERC4626, AccessControl {
@@ -22,48 +24,71 @@ abstract contract sc4626 is ERC4626, AccessControl {
 
         _grantRole(DEFAULT_ADMIN_ROLE, _admin);
         _grantRole(KEEPER_ROLE, _keeper);
-
-        treasury = _admin;
     }
 
-    bool flashLoanInitiated;
-    uint256 public performanceFee = 0.1e18;
-    uint256 public floatPercentage = 0.01e18;
-    address public treasury;
+    event TreasuryUpdated(address indexed user, address newTreasury);
+    event PerformanceFeeUpdated(address indexed user, uint256 newPerformanceFee);
+    event FloatPercentageUpdated(address indexed user, uint256 newFloatPercentage);
 
     /// Role allowed to harvest/reinvest
     bytes32 public constant KEEPER_ROLE = keccak256("KEEPER_ROLE");
 
-    event PerformanceFeeUpdated(address indexed user, uint256 newPerformanceFee);
-    event FloatPercentageUpdated(address indexed user, uint256 newFloatPercentage);
-    event TreasuryUpdated(address indexed user, address newTreasury);
+    // flag for checking flash loan caller
+    bool public flashLoanInitiated;
 
-    modifier onlyAdmin() {
+    // address of the treasury to send performance fees to
+    address public treasury;
+
+    // performance fee percentage
+    uint256 public performanceFee = 0.1e18; // 10%
+
+    // percentage of the total assets to be kept in the vault as a withdrawal buffer
+    uint256 public floatPercentage = 0.01e18;
+
+    /// @notice set the treasury address
+    /// @param _newTreasury the new treasury address
+    function setTreasury(address _newTreasury) external {
+        _onlyAdmin();
+
+        if (_newTreasury == address(0)) revert TreasuryCannotBeZero();
+        treasury = _newTreasury;
+        emit TreasuryUpdated(msg.sender, _newTreasury);
+    }
+
+    /// @notice set the performance fee percentage
+    /// @param _newPerformanceFee the new performance fee percentage
+    /// @dev performance fee is a number between 0 and 1e18
+    function setPerformanceFee(uint256 _newPerformanceFee) external {
+        _onlyAdmin();
+
+        if (_newPerformanceFee > 1e18) revert FeesTooHigh();
+        performanceFee = _newPerformanceFee;
+        emit PerformanceFeeUpdated(msg.sender, _newPerformanceFee);
+    }
+
+    /**
+     * @notice Set the percentage of the total assets to be kept in the vault as a withdrawal buffer.
+     * @param _newFloatPercentage The new float percentage value.
+     */
+    function setFloatPercentage(uint256 _newFloatPercentage) external {
+        _onlyAdmin();
+
+        if (_newFloatPercentage > C.ONE) revert InvalidFloatPercentage();
+
+        floatPercentage = _newFloatPercentage;
+        emit FloatPercentageUpdated(msg.sender, _newFloatPercentage);
+    }
+
+    function _onlyAdmin() internal view {
         if (!hasRole(DEFAULT_ADMIN_ROLE, msg.sender)) revert CallerNotAdmin();
-        _;
     }
 
-    modifier onlyKeeper() {
+    function _onlyKeeper() internal view {
         if (!hasRole(KEEPER_ROLE, msg.sender)) revert CallerNotKeeper();
-        _;
     }
 
-    function setPerformanceFee(uint256 newPerformanceFee) external onlyAdmin {
-        if (newPerformanceFee > 1e18) revert FeesTooHigh();
-        performanceFee = newPerformanceFee;
-        emit PerformanceFeeUpdated(msg.sender, newPerformanceFee);
-    }
-
-    function setFloatPercentage(uint256 newFloatPercentage) external onlyAdmin {
-        require(newFloatPercentage <= 1e18, "float percentage too high");
-        floatPercentage = newFloatPercentage;
-        emit FloatPercentageUpdated(msg.sender, newFloatPercentage);
-    }
-
-    function setTreasury(address newTreasury) external onlyAdmin {
-        if (newTreasury == address(0)) revert TreasuryCannotBeZero();
-        treasury = newTreasury;
-        emit TreasuryUpdated(msg.sender, newTreasury);
+    function _onlyKeeperOrFlashLoan() internal view {
+        if (!flashLoanInitiated) _onlyKeeper();
     }
 
     function _initiateFlashLoan() internal {
