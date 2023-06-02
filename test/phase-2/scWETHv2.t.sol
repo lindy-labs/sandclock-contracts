@@ -167,7 +167,7 @@ contract scWETHv2Test is Test {
         vault.removeAdapter(id, false);
 
         // must revert if protocol not supported
-        vm.expectRevert(ProtocolNotSupported.selector);
+        vm.expectRevert(abi.encodeWithSelector(ProtocolNotSupported.selector, 69));
         vault.removeAdapter(69, false);
 
         // must revert if protocol has funds deposited in it
