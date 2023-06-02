@@ -183,7 +183,8 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
         // TODO: add event
     }
 
-    function investAndHarvest(uint256 _totalInvestAmount, uint256 _flashLoanAmount, bytes[] calldata _multicallData)
+    /// @dev _totalInvestAmount must be zero in case of disinvest or reallocation
+    function rebalance(uint256 _totalInvestAmount, uint256 _flashLoanAmount, bytes[] calldata _multicallData)
         external
     {
         _onlyKeeper();
@@ -195,25 +196,7 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
 
         _flashLoan(_flashLoanAmount, _multicallData);
 
-        // store the old total
-        uint256 oldTotalInvested = totalInvested;
-        uint256 assets = totalCollateral() - totalDebt();
-
-        if (assets > oldTotalInvested) {
-            totalInvested = assets;
-
-            // profit since last harvest, zero if there was a loss
-            uint256 profit = assets - oldTotalInvested;
-            totalProfit += profit;
-
-            uint256 fee = profit.mulWadDown(performanceFee);
-
-            // mint equivalent amount of tokens to the performance fee beneficiary ie the treasury
-            _mint(treasury, convertToShares(fee));
-
-            // TODO: change name to Harvested
-            emit Harvest(profit, fee);
-        }
+        _harvest();
     }
 
     function swapWethToWstEth(uint256 _wethAmount) external {
@@ -259,27 +242,6 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
     function withdrawToVault(uint256 _amount) external {
         _onlyKeeper();
         _withdrawToVault(_amount);
-    }
-
-    function disinvest(uint256 _flashLoanAmount, bytes[] calldata _multicallData) external {
-        _onlyKeeper();
-
-        // take flashloan
-        _flashLoan(_flashLoanAmount, _multicallData);
-
-        // TODO: fix event
-        // emit DisInvested(_repayWithdrawParams);
-    }
-
-    // TODO: now reallocate2 and disinvest2 look the same, we can merge them into something like "multicallWithFlashLoan"
-    function reallocate(uint256 _flashLoanAmount, bytes[] calldata _multicallData) external {
-        _onlyKeeper();
-
-        // take flashloan
-        _flashLoan(_flashLoanAmount, _multicallData);
-
-        // TODO: fix event
-        // emit Reallocated(_from, _to);
     }
 
     //////////////////// VIEW METHODS //////////////////////////
@@ -520,5 +482,27 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
 
         // calculate the flashloan amount needed
         flashLoanAmount = amount.mulDivDown(debt, assets);
+    }
+
+    function _harvest() internal {
+        // store the old total
+        uint256 oldTotalInvested = totalInvested;
+        uint256 assets = totalCollateral() - totalDebt();
+
+        if (assets > oldTotalInvested) {
+            totalInvested = assets;
+
+            // profit since last harvest, zero if there was a loss
+            uint256 profit = assets - oldTotalInvested;
+            totalProfit += profit;
+
+            uint256 fee = profit.mulWadDown(performanceFee);
+
+            // mint equivalent amount of tokens to the performance fee beneficiary ie the treasury
+            _mint(treasury, convertToShares(fee));
+
+            // TODO: change name to Harvested
+            emit Harvest(profit, fee);
+        }
     }
 }
