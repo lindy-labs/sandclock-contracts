@@ -15,6 +15,8 @@ contract scLiquity is sc4626 {
     error StrategyETHSwapFailed();
     error StrategyLQTYSwapFailed();
 
+    event DepositedIntoStrategy(uint256 amount);
+
     uint256 public totalInvested;
     uint256 public totalProfit;
 
@@ -91,11 +93,13 @@ contract scLiquity is sc4626 {
         totalInvested += depositAmount;
 
         stabilityPool.provideToSP(depositAmount, address(0));
+
+        emit DepositedIntoStrategy(depositAmount);
     }
 
     function harvest(uint256 _lqtyAmount, bytes calldata _lqtySwapData, uint256 _ethAmount, bytes calldata _ethSwapData)
         external
-        onlyRole(KEEPER_ROLE)
+        onlyKeeper
     {
         // store the old total
         uint256 oldTotalInvested = totalInvested;
