@@ -99,8 +99,9 @@ contract scLiquity is sc4626 {
 
     function harvest(uint256 _lqtyAmount, bytes calldata _lqtySwapData, uint256 _ethAmount, bytes calldata _ethSwapData)
         external
-        onlyKeeper
     {
+        _onlyKeeper();
+
         // store the old total
         uint256 oldTotalInvested = totalInvested;
 
