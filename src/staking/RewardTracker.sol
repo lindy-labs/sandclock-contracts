@@ -20,6 +20,8 @@ contract RewardTracker is BonusTracker, AccessControl {
 
     error Error_AmountTooLarge();
     error CallerNotDistirbutor();
+    error VaultNotWhitelisted();
+    error VaultAssetNotSupported();
 
     /// @notice The last Unix timestamp (in seconds) when rewardPerTokenStored was updated
     uint64 public lastUpdateTime;
@@ -153,7 +155,7 @@ contract RewardTracker is BonusTracker, AccessControl {
     /// @notice Lets a reward distributor fetch performance fees from
     /// a vault and start a new reward period.
     function fetchRewards(ERC4626 _vault) external onlyDistributor {
-        require(isVault[address(_vault)], "vault not whitelisted");
+        if (!isVault[address(_vault)]) revert VaultNotWhitelisted();
 
         uint256 beforeBalance = rewardToken.balanceOf(address(this));
         _vault.redeem(_vault.balanceOf(address(this)), address(this), address(this));
@@ -164,7 +166,7 @@ contract RewardTracker is BonusTracker, AccessControl {
 
     /// @notice Lets an admin add a vault for collecting fees from.
     function addVault(address _vault) external onlyAdmin {
-        require(ERC4626(_vault).asset() == rewardToken, "only WETH assets");
+        if (ERC4626(_vault).asset() != rewardToken) revert VaultAssetNotSupported();
 
         isVault[_vault] = true;
 
@@ -267,15 +269,14 @@ contract RewardTracker is BonusTracker, AccessControl {
     function _burnMultiplierPoints(uint256 _amount, address _sender) internal {
         uint256 bonus_ = multiplierPointsOf[_sender];
 
-        // if the sender has bonus points
-        if (bonus_ > 0) {
-            uint256 balance = balanceOf[_sender];
+        // return if no bonus points
+        if (bonus_ == 0) return;
 
-            // burn an equivalent percentage
-            bonus_ = bonus_.mulDivDown(_amount, balance);
-            multiplierPointsOf[_sender] -= bonus_;
-            totalBonus -= bonus_;
-            emit BonusBurned(_sender, bonus_);
-        }
+        // otherwise burn an equivalent percentage
+        uint256 balance = balanceOf[_sender];
+        bonus_ = bonus_.mulDivDown(_amount, balance);
+        multiplierPointsOf[_sender] -= bonus_;
+        totalBonus -= bonus_;
+        emit BonusBurned(_sender, bonus_);
     }
 }
