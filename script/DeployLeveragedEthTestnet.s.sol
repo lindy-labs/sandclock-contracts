@@ -16,56 +16,56 @@ import {scUSDC} from "../src/steth/scUSDC.sol";
 
 contract DeployScript is DeployLeveragedEth, Test {
     function run() external {
-        deploy();
-        fixtures();
+        _deploy();
+        _fixtures();
     }
 
-    function fixtures() internal {
+    function _fixtures() internal {
         console2.log("\nexecuting steth fixtures");
 
-        fund();
+        _fund();
 
-        depositForUsers(weth, wethContract);
-        depositForUsers(usdc, usdcContract);
+        _depositForUsers(_weth, _wethContract);
+        _depositForUsers(_usdc, _usdcContract);
 
-        rebalance(wethContract);
-        rebalance(usdcContract);
+        _rebalance(_wethContract);
+        _rebalance(_usdcContract);
 
-        profit();
+        _profit();
 
-        // redeem(alice);
+        // _redeem(_alice);
 
         // depositForUsers(weth, wethContract);
         // depositForUsers(usdc, usdcContract);
     }
 
-    function depositForUsers(ERC20 asset, sc4626 vaultToken) internal {
+    function _depositForUsers(ERC20 asset, sc4626 vaultToken) internal {
         console2.log("depositing for users", 100 * 10 ** asset.decimals());
-        deposit(asset, vaultToken, alice, address(vaultToken), 10 * 10 ** asset.decimals());
-        deposit(asset, vaultToken, bob, address(vaultToken), 10 * 10 ** asset.decimals());
+        _deposit(asset, vaultToken, _alice, address(vaultToken), 10 * 10 ** asset.decimals());
+        _deposit(asset, vaultToken, _bob, address(vaultToken), 10 * 10 ** asset.decimals());
     }
 
-    function fund() internal {
+    function _fund() internal {
         console2.log("funding");
 
         // Dole out ETH
-        deal(alice, 10e18);
-        deal(bob, 10e18);
-        deal(keeper, 10e18);
+        deal(_alice, 10e18);
+        deal(_bob, 10e18);
+        deal(_keeper, 10e18);
         // deal(address(curveEthStEthPool), 100e18);
 
         // Dole out WETH
-        deal(address(weth), 200e18);
-        deal(address(weth), alice, 100e18);
-        deal(address(weth), bob, 100e18);
+        deal(address(_weth), 200e18);
+        deal(address(_weth), _alice, 100e18);
+        deal(address(_weth), _bob, 100e18);
         // deal(address(weth), keeper, 100e18);
 
         // Dole out USDC
-        deal(address(usdc), alice, 100e6);
-        deal(address(usdc), bob, 100e6);
+        deal(address(_usdc), _alice, 100e6);
+        deal(address(_usdc), _bob, 100e6);
     }
 
-    function deposit(ERC20 asset, sc4626 vault, address from, address to, uint256 amount) internal {
+    function _deposit(ERC20 asset, sc4626 vault, address from, address to, uint256 amount) internal {
         console2.log("depositing", from);
 
         vm.startPrank(from);
@@ -74,39 +74,39 @@ contract DeployScript is DeployLeveragedEth, Test {
         vm.stopPrank();
     }
 
-    function rebalance(scWETH vaultToken) internal {
+    function _rebalance(scWETH vaultToken) internal {
         console2.log("rebalancing scWETH");
 
-        vm.startPrank(keeper);
+        vm.startPrank(_keeper);
         vaultToken.harvest();
         vm.stopPrank();
     }
 
-    function rebalance(scUSDC vaultToken) internal {
+    function _rebalance(scUSDC vaultToken) internal {
         console2.log("rebalancing scUSDC");
 
-        vm.startPrank(keeper);
+        vm.startPrank(_keeper);
         vaultToken.rebalance();
         vm.stopPrank();
     }
 
-    function profit() internal {
+    function _profit() internal {
         console2.log("generate profit for scUSDC vault");
 
-        console2.log("scUSDC profit before", usdcContract.getProfit());
-        vm.etch(C.AAVAAVE_VAR_DEBT_WETH_TOKEN, address(weth).code);
-        console2.log("scUSDC profit after", usdcContract.getProfit());
+        console2.log("scUSDC profit before", _usdcContract.getProfit());
+        vm.etch(C.AAVAAVE_VAR_DEBT_WETH_TOKEN, address(_weth).code);
+        console2.log("scUSDC profit after", _usdcContract.getProfit());
     }
 
-    // function redeem(address redeemer) internal {
+    // function _redeem(address redeemer) internal {
     //     console2.log("redeeming", redeemer);
 
     //     uint256 stEthToEthSlippage = 0.99e18;
-    //     curveEthStEthPool.setSlippage(stEthToEthSlippage);
+    //     _curveEthStEthPool.setSlippage(stEthToEthSlippage);
 
     //     uint256 withdrawAmount = 1e18;
-    //     uint256 sharesToReddem = wethContract.convertToShares(withdrawAmount);
+    //     uint256 sharesToReddem = _wethContract.convertToShares(withdrawAmount);
     //     vm.prank(redeemer);
-    //     wethContract.redeem(sharesToReddem, redeemer, redeemer);
+    //     _wethContract.redeem(sharesToReddem, redeemer, redeemer);
     // }
 }

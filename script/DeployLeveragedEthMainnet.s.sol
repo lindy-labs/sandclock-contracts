@@ -12,53 +12,53 @@ import {ISwapRouter} from "../src/interfaces/uniswap/ISwapRouter.sol";
 
 contract DeployScript is DeployLeveragedEth {
     function run() external {
-        deploy();
+        _deploy();
 
-        postDeployment();
+        _postDeployment();
     }
 
-    function postDeployment() internal {
-        vm.startBroadcast(deployerPrivateKey);
+    function _postDeployment() internal {
+        vm.startBroadcast(_deployerPrivateKey);
 
         // scWETH
-        weth.deposit{value: 0.01 ether}(); // wrap 0.01 ETH into WETH
+        _weth.deposit{value: 0.01 ether}(); // wrap 0.01 ETH into WETH
         console2.log("eth deposited for weth");
-        deposit(wethContract, 0.01 ether); // 0.01 WETH
+        _deposit(_wethContract, 0.01 ether); // 0.01 WETH
         console2.log("weth deposited into wethContract");
 
         // scUSDC
-        swapETHForUSDC(0.01 ether);
+        _swapETHForUSDC(0.01 ether);
         console2.log("eth swapped for USDC");
-        deposit(usdcContract, usdc.balanceOf(address(deployerAddress))); // 0.01 ether worth of USDC
+        _deposit(_usdcContract, _usdc.balanceOf(address(_deployerAddress))); // 0.01 ether worth of USDC
         console2.log("usdc deposited into usdcContract");
 
         vm.stopBroadcast();
     }
 
-    function deposit(sc4626 vault, uint256 amount) internal {
+    function _deposit(sc4626 vault, uint256 amount) internal {
         vault.asset().approve(address(vault), amount);
-        vault.deposit(amount, deployerAddress);
+        vault.deposit(amount, _deployerAddress);
     }
 
-    function swapETHForUSDC(uint256 amount) internal {
-        weth.deposit{value: amount}();
+    function _swapETHForUSDC(uint256 amount) internal {
+        _weth.deposit{value: amount}();
         console2.log("eth deposited for weth to swap for usdc");
 
-        weth.approve(address(uniswapRouter), amount);
+        _weth.approve(address(_uniswapRouter), amount);
         console2.log("weth approved for swap to usdc");
 
         ISwapRouter.ExactInputSingleParams memory params = ISwapRouter.ExactInputSingleParams({
-            tokenIn: address(weth),
-            tokenOut: address(usdc),
+            tokenIn: address(_weth),
+            tokenOut: address(_usdc),
             fee: 500, // 0.05%
-            recipient: deployerAddress,
+            recipient: _deployerAddress,
             deadline: block.timestamp + 1000,
             amountIn: amount,
             amountOutMinimum: 0,
             sqrtPriceLimitX96: 0
         });
 
-        uniswapRouter.exactInputSingle(params);
+        _uniswapRouter.exactInputSingle(params);
         console2.log("weth swapped for usdc");
     }
 }
