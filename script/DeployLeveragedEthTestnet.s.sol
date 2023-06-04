@@ -29,14 +29,22 @@ contract DeployScript is DeployLeveragedEth, Test {
         _depositForUsers(_usdc, _scUSDC);
 
         _rebalance(_scWETH);
+
+        // double rebalance passes
+        _rebalance(_scUSDC);
         _rebalance(_scUSDC);
 
-        _profit();
+        _redeem(_scWETH, _alice);
+        _redeem(_scWETH, _bob);
 
-        // _redeem(_alice);
+        _redeem(_scUSDC, _alice);
+        _redeem(_scUSDC, _bob);
 
-        // depositForUsers(weth, wethContract);
-        // depositForUsers(usdc, usdcContract);
+        _depositForUsers(_usdc, _scUSDC);
+        _depositForUsers(_weth, _scWETH);
+
+        _rebalance(_scUSDC);
+        _rebalance(_scWETH);
     }
 
     function _depositForUsers(ERC20 asset, sc4626 vaultToken) internal {
@@ -52,13 +60,11 @@ contract DeployScript is DeployLeveragedEth, Test {
         deal(_alice, 10e18);
         deal(_bob, 10e18);
         deal(_keeper, 10e18);
-        // deal(address(curveEthStEthPool), 100e18);
 
         // Dole out WETH
         deal(address(_weth), 200e18);
         deal(address(_weth), _alice, 100e18);
         deal(address(_weth), _bob, 100e18);
-        // deal(address(weth), keeper, 100e18);
 
         // Dole out USDC
         deal(address(_usdc), _alice, 100e6);
@@ -98,15 +104,21 @@ contract DeployScript is DeployLeveragedEth, Test {
         console2.log("scUSDC profit after", _scUSDC.getProfit());
     }
 
-    // function _redeem(address redeemer) internal {
-    //     console2.log("redeeming", redeemer);
+    function _redeem(scWETH vaultToken, address redeemer) internal {
+        console2.log("redeeming scWETh", redeemer);
 
-    //     uint256 stEthToEthSlippage = 0.99e18;
-    //     _curveEthStEthPool.setSlippage(stEthToEthSlippage);
+        uint256 withdrawAmount = 1e18;
+        uint256 sharesToRedeem = vaultToken.convertToShares(withdrawAmount);
+        vm.prank(redeemer);
+        vaultToken.redeem(sharesToRedeem, redeemer, redeemer);
+    }   
 
-    //     uint256 withdrawAmount = 1e18;
-    //     uint256 sharesToReddem = _wethContract.convertToShares(withdrawAmount);
-    //     vm.prank(redeemer);
-    //     _wethContract.redeem(sharesToReddem, redeemer, redeemer);
-    // }
+    function _redeem(scUSDC vaultToken, address redeemer) internal {
+        console2.log("redeeming scUSDC", redeemer);
+
+        uint256 withdrawAmount = 1e6;
+        // uint256 sharesToRedeem = vaultToken.convertToShares(withdrawAmount);
+        vm.prank(redeemer);
+        vaultToken.withdraw(withdrawAmount, redeemer, redeemer);
+    }
 }
