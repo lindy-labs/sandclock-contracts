@@ -4,7 +4,7 @@ pragma solidity ^0.8.13;
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 
 import {scWETHv2} from "./scWETHv2.sol";
-import {OracleLib} from "./OracleLib.sol";
+import {PriceConverter} from "../steth/PriceConverter.sol";
 import {IAdapter} from "../scWeth-adapters/IAdapter.sol";
 
 // TODO: as of my understanding, this contract came to life because of one primary reason, to reduce the scWETHv2 contract size. With the new design, i think this can also be removed since the scWETHv2 will become fairly small and simple
@@ -13,11 +13,11 @@ contract scWETHv2Helper {
     using FixedPointMathLib for uint256;
 
     scWETHv2 vault;
-    OracleLib oracleLib;
+    PriceConverter priceConverter;
 
-    constructor(scWETHv2 _vault, OracleLib _oracleLib) {
+    constructor(scWETHv2 _vault, PriceConverter _priceConverter) {
         vault = _vault;
-        oracleLib = _oracleLib;
+        priceConverter = _priceConverter;
     }
 
     /// @notice returns the weth debt of the vault in a particularly protocol (in terms of weth)
@@ -29,7 +29,7 @@ contract scWETHv2Helper {
     /// @notice returns the wstEth deposited of the vault in a particularly protocol (in terms of weth)
     /// @param adapter the address of the adapter contract of the protocol
     function getCollateral(IAdapter adapter) public view returns (uint256) {
-        return oracleLib.wstEthToEth(adapter.getCollateral(address(vault)));
+        return priceConverter.wstEthToEth(adapter.getCollateral(address(vault)));
     }
 
     // TODO: would prefer to use this function instead of the one above because collateral is in wstEth and not weth

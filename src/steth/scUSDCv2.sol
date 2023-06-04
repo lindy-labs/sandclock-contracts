@@ -7,7 +7,6 @@ import {
     VaultNotUnderwater,
     NoProfitsToSell,
     FlashLoanAmountZero,
-    PriceFeedZeroAddress,
     EndUsdcBalanceTooLow,
     AmountReceivedBelowMin,
     ProtocolNotSupported,
@@ -525,7 +524,7 @@ contract scUSDCv2 is scUSDCBase {
         // first try to sell profits to cover withdrawal amount
         if (profit != 0) {
             uint256 withdrawn = _disinvest(profit);
-            uint256 usdcAmountOutMin = priceConverter.getUsdcFromWeth(withdrawn).mulWadDown(slippageTolerance);
+            uint256 usdcAmountOutMin = priceConverter.ethToUsdc(withdrawn).mulWadDown(slippageTolerance);
             uint256 usdcReceived = _swapWethForUsdc(withdrawn, usdcAmountOutMin);
 
             if (initialBalance + usdcReceived >= _assets) return;
@@ -592,9 +591,9 @@ contract scUSDCv2 is scUSDCBase {
 
         if (profit != 0) {
             // account for slippage when selling weth profits
-            total += priceConverter.getUsdcFromWeth(profit).mulWadDown(slippageTolerance);
+            total += priceConverter.ethToUsdc(profit).mulWadDown(slippageTolerance);
         } else {
-            total -= priceConverter.getUsdcFromWeth(_debt - _invested);
+            total -= priceConverter.ethToUsdc(_debt - _invested);
         }
     }
 

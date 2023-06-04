@@ -23,7 +23,6 @@ error AmountReceivedBelowMin();
 error ProtocolAlreadySupported();
 error ProtocolContainsFunds();
 error FlashLoanAmountZero();
-error PriceFeedZeroAddress();
 error ProtocolNotSupported(uint256 protocolId);
 error ProtocolInUse(uint256 protocolId);
 error FloatBalanceTooLow(uint256 actual, uint256 required);

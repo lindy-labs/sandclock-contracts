@@ -34,9 +34,8 @@ import {ILido} from "../interfaces/lido/ILido.sol";
 import {IwstETH} from "../interfaces/lido/IwstETH.sol";
 import {IVault} from "../interfaces/balancer/IVault.sol";
 import {IFlashLoanRecipient} from "../interfaces/balancer/IFlashLoanRecipient.sol";
-import {OracleLib} from "./OracleLib.sol";
+import {PriceConverter} from "../steth/PriceConverter.sol";
 import {IAdapter} from "../scWeth-adapters/IAdapter.sol";
-import {ISwapRouter} from "../swap-routers/ISwapRouter.sol";
 import {Swapper} from "../steth/Swapper.sol";
 
 contract scWETHv2 is sc4626, IFlashLoanRecipient {
@@ -56,8 +55,8 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
         uint256 slippageTolerance;
         address weth;
         IVault balancerVault;
-        OracleLib oracleLib;
         Swapper swapper;
+        PriceConverter priceConverter;
     }
 
     // total invested during last harvest/rebalance
@@ -73,10 +72,9 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
     // Balancer vault for flashloans
     IVault public immutable balancerVault;
 
-    // external contracts
-    OracleLib immutable oracleLib;
-
     EnumerableMap.UintToAddressMap private protocolAdapters;
+
+    PriceConverter public immutable priceConverter;
 
     Swapper public swapper;
 
@@ -89,13 +87,14 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
 
         slippageTolerance = _params.slippageTolerance;
         balancerVault = _params.balancerVault;
-        oracleLib = _params.oracleLib;
 
         swapper = _params.swapper;
+        priceConverter = _params.priceConverter;
     }
 
     /////////////////// ADMIN/KEEPER METHODS //////////////////////////////////
 
+    // TODO: do we need this?
     function setSwapper(address _swapper) external {
         _onlyAdmin();
         swapper = Swapper(_swapper);
@@ -110,6 +109,7 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
         if (_newSlippageTolerance > C.ONE) revert InvalidSlippageTolerance();
 
         slippageTolerance = _newSlippageTolerance;
+
         emit SlippageToleranceUpdated(msg.sender, _newSlippageTolerance);
     }
 
@@ -117,10 +117,13 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
     /// @param _newFloatAmount the new minimum float amount
     function setMinimumFloatAmount(uint256 _newFloatAmount) external {
         _onlyAdmin();
+
         minimumFloatAmount = _newFloatAmount;
+
         emit FloatAmountUpdated(msg.sender, _newFloatAmount);
     }
 
+    // TODO: addAdapter and removeAdapter as shared functions for both scWETH and scETH?
     /// @notice adds an adapter to the supported adapters
     /// @param _adapter the address of the adapter to add (must inherit IAdapter.sol)
     function addAdapter(address _adapter) external {
@@ -157,6 +160,7 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
         // TODO: add event
     }
 
+    // TODO: this is also common for both scWETH and scETH
     /// @dev to be used to ideally swap euler rewards to weth using 0x api
     /// @dev can also be used to swap between other tokens
     /// @param _inToken address of the token to swap from
@@ -175,8 +179,10 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
         emit TokensSwapped(_inToken, address(asset));
     }
 
+    // TODO: this is also common for both scWETH and scETH
     function claimRewards(uint256 _adapterId, bytes calldata _data) external {
         _onlyKeeper();
+
         protocolAdapters.get(_adapterId).functionDelegateCall(
             abi.encodeWithSelector(IAdapter.claimRewards.selector, _data)
         );
@@ -218,7 +224,7 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
 
         uint256 stEthAmount = wstETH.unwrap(_wstEthAmount);
 
-        uint256 wethAmountOutMin = oracleLib.stEthToEth(stEthAmount).mulWadDown(_slippageTolerance);
+        uint256 wethAmountOutMin = priceConverter.stEthToEth(stEthAmount).mulWadDown(_slippageTolerance);
 
         address(swapper).functionDelegateCall(
             abi.encodeWithSelector(Swapper.curveSwapStEthToWeth.selector, stEthAmount, wethAmountOutMin)
@@ -280,7 +286,7 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
         }
 
         // TODO: I wouldn't use this coversion here since it's confusing to have collateral returned in weth and repaying debt in wstEth
-        collateral = oracleLib.wstEthToEth(collateral);
+        collateral = priceConverter.wstEthToEth(collateral);
     }
 
     // TODO: would prefer to use this instead of the above because we are supplying and withdrawing wstEth and not eth
@@ -323,6 +329,7 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
         afterDeposit(assets, shares);
     }
 
+    // TODO: add comment why this is disabled
     function withdraw(uint256, address, address) public virtual override returns (uint256) {
         revert PleaseUseRedeemMethod();
     }
@@ -374,6 +381,24 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
         _enforceFloat();
     }
 
+    function supplyAndBorrow(uint256 _adapterId, uint256 _supplyAmount, uint256 _borrowAmount) external {
+        _onlyKeeperOrFlashLoan();
+
+        address adapter = protocolAdapters.get(_adapterId);
+
+        _adapterDelegateCall(adapter, IAdapter.supply.selector, _supplyAmount);
+        _adapterDelegateCall(adapter, IAdapter.borrow.selector, _borrowAmount);
+    }
+
+    function repayAndWithdraw(uint256 _adapterId, uint256 _repayAmount, uint256 _withdrawAmount) external {
+        _onlyKeeperOrFlashLoan();
+
+        address adapter = protocolAdapters.get(_adapterId);
+
+        _adapterDelegateCall(adapter, IAdapter.repay.selector, _repayAmount);
+        _adapterDelegateCall(adapter, IAdapter.withdraw.selector, _withdrawAmount);
+    }
+
     // need to be able to receive eth
     receive() external payable {}
 
@@ -399,7 +424,7 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
                 this.repayAndWithdraw.selector,
                 adapterId,
                 flashLoanAmount_,
-                oracleLib.ethToWstEth(flashLoanAmount_ + amount_)
+                priceConverter.ethToWstEth(flashLoanAmount_ + amount_)
             );
         }
 
@@ -436,24 +461,6 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
         _withdrawToVault(missing);
     }
 
-    function supplyAndBorrow(uint256 _adapterId, uint256 _supplyAmount, uint256 _borrowAmount) external {
-        _onlyKeeperOrFlashLoan();
-
-        address adapter = protocolAdapters.get(_adapterId);
-
-        _adapterDelegateCall(adapter, IAdapter.supply.selector, _supplyAmount);
-        _adapterDelegateCall(adapter, IAdapter.borrow.selector, _borrowAmount);
-    }
-
-    function repayAndWithdraw(uint256 _adapterId, uint256 _repayAmount, uint256 _withdrawAmount) external {
-        _onlyKeeperOrFlashLoan();
-
-        address adapter = protocolAdapters.get(_adapterId);
-
-        _adapterDelegateCall(adapter, IAdapter.repay.selector, _repayAmount);
-        _adapterDelegateCall(adapter, IAdapter.withdraw.selector, _withdrawAmount);
-    }
-
     function _adapterDelegateCall(address _adapter, bytes4 _selector, uint256 _amount) internal {
         _adapter.functionDelegateCall(abi.encodeWithSelector(_selector, _amount));
     }
@@ -475,7 +482,7 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
         returns (uint256 flashLoanAmount, uint256 amount)
     {
         uint256 debt = IAdapter(_adapter).getDebt(address(this));
-        uint256 assets = oracleLib.wstEthToEth(IAdapter(_adapter).getCollateral(address(this))) - debt;
+        uint256 assets = priceConverter.wstEthToEth(IAdapter(_adapter).getCollateral(address(this))) - debt;
 
         // withdraw from each protocol based on the allocation percent
         amount = _totalAmount.mulDivDown(assets, _totalInvested);

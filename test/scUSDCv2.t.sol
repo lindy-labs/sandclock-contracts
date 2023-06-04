@@ -908,7 +908,7 @@ contract scUSDCv2Test is Test {
 
         uint256 targetLtv = 0.7e18;
         uint256 initialBalance = 1_000_000e6;
-        uint256 initialDebt = priceConverter.getWethFromUsdc(initialBalance.mulWadDown(targetLtv));
+        uint256 initialDebt = priceConverter.usdcToEth(initialBalance.mulWadDown(targetLtv));
         deal(address(usdc), address(vault), initialBalance);
 
         bytes[] memory callData = new bytes[](2);
@@ -920,13 +920,13 @@ contract scUSDCv2Test is Test {
         // add 10% profit to the weth vault
         uint256 totalBefore = vault.totalAssets();
         uint256 wethProfit = vault.wethInvested().mulWadUp(0.1e18);
-        uint256 usdcProfit = priceConverter.getUsdcFromWeth(wethProfit);
+        uint256 usdcProfit = priceConverter.ethToUsdc(wethProfit);
         deal(address(weth), address(wethVault), vault.wethInvested() + wethProfit);
 
         assertApproxEqRel(vault.totalAssets(), totalBefore + usdcProfit, 0.01e18, "total assets before reinvest");
 
         uint256 minUsdcAmountOut = usdcProfit.mulWadDown(vault.slippageTolerance());
-        uint256 wethToReinvest = priceConverter.getWethFromUsdc(minUsdcAmountOut);
+        uint256 wethToReinvest = priceConverter.usdcToEth(minUsdcAmountOut);
         callData = new bytes[](3);
         callData[0] = abi.encodeWithSelector(scUSDCv2.sellProfit.selector, minUsdcAmountOut);
         callData[1] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV2.id(), minUsdcAmountOut);
@@ -960,11 +960,10 @@ contract scUSDCv2Test is Test {
         borrowOnAaveV3 = bound(
             borrowOnAaveV3,
             1,
-            priceConverter.getWethFromUsdc(supplyOnAaveV3).mulWadDown(aaveV3.getMaxLtv() - 0.005e18) // -0.5% to avoid borrowing at max ltv
+            priceConverter.usdcToEth(supplyOnAaveV3).mulWadDown(aaveV3.getMaxLtv() - 0.005e18) // -0.5% to avoid borrowing at max ltv
         );
-        borrowOnAaveV2 = bound(
-            borrowOnAaveV2, 1, priceConverter.getWethFromUsdc(supplyOnAaveV2).mulWadDown(aaveV2.getMaxLtv() - 0.005e18)
-        );
+        borrowOnAaveV2 =
+            bound(borrowOnAaveV2, 1, priceConverter.usdcToEth(supplyOnAaveV2).mulWadDown(aaveV2.getMaxLtv() - 0.005e18));
 
         deal(address(usdc), address(vault), initialBalance);
 
@@ -1296,7 +1295,7 @@ contract scUSDCv2Test is Test {
         vm.prank(keeper);
         vault.sellProfit(0);
 
-        uint256 expectedUsdcBalance = usdcBalanceBefore + priceConverter.getUsdcFromWeth(profit);
+        uint256 expectedUsdcBalance = usdcBalanceBefore + priceConverter.ethToUsdc(profit);
         _assertCollateralAndDebt(aaveV3.id(), initialBalance / 2, 50 ether);
         _assertCollateralAndDebt(euler.id(), initialBalance / 2, 50 ether);
         assertApproxEqRel(vault.usdcBalance(), expectedUsdcBalance, 0.01e18, "usdc balance");
@@ -1350,7 +1349,7 @@ contract scUSDCv2Test is Test {
         uint256 wethInvested = weth.balanceOf(address(wethVault));
         deal(address(weth), address(wethVault), wethInvested * 2);
 
-        uint256 tooLargeUsdcAmountOutMin = priceConverter.getUsdcFromWeth(vault.getProfit()).mulWadDown(1.05e18); // add 5% more than expected
+        uint256 tooLargeUsdcAmountOutMin = priceConverter.ethToUsdc(vault.getProfit()).mulWadDown(1.05e18); // add 5% more than expected
 
         vm.prank(keeper);
         vm.expectRevert("Too little received");
@@ -1442,7 +1441,7 @@ contract scUSDCv2Test is Test {
         uint256 debtBefore = vault.totalDebt();
 
         uint256 profit = vault.getProfit();
-        uint256 expectedUsdcFromProfitSelling = priceConverter.getUsdcFromWeth(profit);
+        uint256 expectedUsdcFromProfitSelling = priceConverter.ethToUsdc(profit);
         uint256 initialFloat = vault.usdcBalance();
         // withdraw double the float amount
         uint256 withdrawAmount = initialFloat * 2;
@@ -1571,7 +1570,7 @@ contract scUSDCv2Test is Test {
         vault.deposit(_amount, alice);
         vm.stopPrank();
 
-        uint256 borrowAmount = priceConverter.getWethFromUsdc(_amount.mulWadDown(0.7e18));
+        uint256 borrowAmount = priceConverter.usdcToEth(_amount.mulWadDown(0.7e18));
 
         bytes[] memory callData = new bytes[](2);
         callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV3.id(), _amount);
@@ -1601,7 +1600,7 @@ contract scUSDCv2Test is Test {
         vault.deposit(_amount, alice);
         vm.stopPrank();
 
-        uint256 borrowAmount = priceConverter.getWethFromUsdc(_amount.mulWadDown(0.7e18));
+        uint256 borrowAmount = priceConverter.usdcToEth(_amount.mulWadDown(0.7e18));
 
         bytes[] memory callData = new bytes[](4);
         callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV3.id(), _amount.mulWadDown(0.3e18));

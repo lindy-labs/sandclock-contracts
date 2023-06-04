@@ -15,6 +15,7 @@ contract PriceConverterTest is Test {
     using FixedPointMathLib for uint256;
 
     event UsdcToEthPriceFeedUpdated(address indexed admin, address newPriceFeed);
+    event StEthToEthPriceFeedUpdated(address indexed admin, address newPriceFeed);
 
     uint256 mainnetFork;
 
@@ -32,26 +33,38 @@ contract PriceConverterTest is Test {
     }
 
     function test_constructor() public {
-        assertEq(address(priceConverter.usdcToEthPriceFeed()), C.CHAINLINK_USDC_ETH_PRICE_FEED, "wrong price feed");
+        assertEq(
+            address(priceConverter.usdcToEthPriceFeed()), C.CHAINLINK_USDC_ETH_PRICE_FEED, "wrong usdc->eth price feed"
+        );
+        assertEq(
+            address(priceConverter.stEThToEthPriceFeed()),
+            C.CHAINLINK_STETH_ETH_PRICE_FEED,
+            "wrong steth->eth price feed"
+        );
 
         assertTrue(priceConverter.hasRole(priceConverter.DEFAULT_ADMIN_ROLE(), address(this)), "admin role not set");
+    }
+
+    function test_constructor_FailsIfAdminIsZeroAddress() public {
+        vm.expectRevert(ZeroAddress.selector);
+        new PriceConverter(address(0));
     }
 
     function test_setUsdcToEthPriceFeed_FailsIfCallerIsNotAdmin() public {
         vm.prank(alice);
         vm.expectRevert(CallerNotAdmin.selector);
-        priceConverter.setUsdcToEthPriceFeed(AggregatorV3Interface(address(0)));
+        priceConverter.setUsdcToEthPriceFeed(address(0));
     }
 
     function test_setUsdcToEthPriceFeed_FailsIfNewPriceFeedIsZeroAddress() public {
-        vm.expectRevert(PriceFeedZeroAddress.selector);
-        priceConverter.setUsdcToEthPriceFeed(AggregatorV3Interface(address(0)));
+        vm.expectRevert(ZeroAddress.selector);
+        priceConverter.setUsdcToEthPriceFeed(address(0));
     }
 
     function test_setUsdcToEthPriceFeed_ChangesThePriceFeed() public {
         AggregatorV3Interface _newPriceFeed = AggregatorV3Interface(address(0x1));
 
-        priceConverter.setUsdcToEthPriceFeed(_newPriceFeed);
+        priceConverter.setUsdcToEthPriceFeed(address(_newPriceFeed));
 
         assertEq(address(priceConverter.usdcToEthPriceFeed()), address(_newPriceFeed), "price feed has not changed");
     }
@@ -62,6 +75,34 @@ contract PriceConverterTest is Test {
         vm.expectEmit(true, true, true, true);
         emit UsdcToEthPriceFeedUpdated(address(this), address(_newPriceFeed));
 
-        priceConverter.setUsdcToEthPriceFeed(_newPriceFeed);
+        priceConverter.setUsdcToEthPriceFeed(address(_newPriceFeed));
+    }
+
+    function test_setStEThToEthPriceFeed_FailsIfCallerIsNotAdmin() public {
+        vm.prank(alice);
+        vm.expectRevert(CallerNotAdmin.selector);
+        priceConverter.setStEThToEthPriceFeed(address(0));
+    }
+
+    function test_setStEThToEthPriceFeed_FailsIfNewPriceFeedIsZeroAddress() public {
+        vm.expectRevert(ZeroAddress.selector);
+        priceConverter.setStEThToEthPriceFeed(address(0));
+    }
+
+    function test_setStEThToEthPriceFeed_ChangesThePriceFeed() public {
+        AggregatorV3Interface _newPriceFeed = AggregatorV3Interface(address(0x1));
+
+        priceConverter.setStEThToEthPriceFeed(address(_newPriceFeed));
+
+        assertEq(address(priceConverter.stEThToEthPriceFeed()), address(_newPriceFeed), "price feed has not changed");
+    }
+
+    function test_setStEThToEthPriceFeed_EmitsEvent() public {
+        AggregatorV3Interface _newPriceFeed = AggregatorV3Interface(address(0x1));
+
+        vm.expectEmit(true, true, true, true);
+        emit StEthToEthPriceFeedUpdated(address(this), address(_newPriceFeed));
+
+        priceConverter.setStEThToEthPriceFeed(address(_newPriceFeed));
     }
 }

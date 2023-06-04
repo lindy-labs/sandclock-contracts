@@ -23,17 +23,14 @@ import {IVault} from "../../src/interfaces/balancer/IVault.sol";
 import {AggregatorV3Interface} from "../../src/interfaces/chainlink/AggregatorV3Interface.sol";
 import {sc4626} from "../../src/sc4626.sol";
 import {scWETHv2Helper} from "../../src/phase-2/scWETHv2Helper.sol";
-import {OracleLib} from "../../src/phase-2/OracleLib.sol";
 import "../../src/errors/scErrors.sol";
 
 import {IAdapter} from "../../src/scWeth-adapters/IAdapter.sol";
 import {AaveV3Adapter} from "../../src/scWeth-adapters/AaveV3Adapter.sol";
 import {CompoundV3Adapter} from "../../src/scWeth-adapters/CompoundV3Adapter.sol";
 import {EulerAdapter} from "../../src/scWeth-adapters/EulerAdapter.sol";
-import {ISwapRouter} from "../../src/swap-routers/ISwapRouter.sol";
 import {Swapper} from "../../src/steth/Swapper.sol";
-import {WethToWstEthSwapRouter} from "../../src/swap-routers/WethToWstEthSwapRouter.sol";
-import {WstEthToWethSwapRouter} from "../../src/swap-routers/WstEthToWethSwapRouter.sol";
+import {PriceConverter} from "../../src/steth/PriceConverter.sol";
 import {MockAdapter} from "../mocks/adapters/MockAdapter.sol";
 
 contract scWETHv2Test is Test {
@@ -54,7 +51,7 @@ contract scWETHv2Test is Test {
     address admin = address(this);
     scWETHv2 vault;
     scWETHv2Helper vaultHelper;
-    OracleLib oracleLib;
+    PriceConverter priceConverter;
     uint256 initAmount = 100e18;
 
     uint256 aaveV3AllocationPercent = 0.5e18;
@@ -84,10 +81,10 @@ contract scWETHv2Test is Test {
         vm.selectFork(mainnetFork);
         vm.rollFork(_blockNumber);
 
-        oracleLib = _deployOracleLib();
-        scWETHv2.ConstructorParams memory params = _createDefaultWethv2VaultConstructorParams(oracleLib);
+        priceConverter = new PriceConverter(address(this));
+        scWETHv2.ConstructorParams memory params = _createDefaultWethv2VaultConstructorParams();
         vault = new scWETHv2(params);
-        vaultHelper = new scWETHv2Helper(vault, oracleLib);
+        vaultHelper = new scWETHv2Helper(vault, priceConverter);
 
         weth = WETH(payable(address(vault.asset())));
         stEth = ILido(C.STETH);
@@ -244,22 +241,6 @@ contract scWETHv2Test is Test {
 
         vm.expectRevert(InvalidSlippageTolerance.selector);
         vault.setSlippageTolerance(1.1e18);
-    }
-
-    function test_setStEThToEthPriceFeed() public {
-        _setUp(BLOCK_AFTER_EULER_EXPLOIT);
-
-        address newStEthPriceFeed = alice;
-        oracleLib.setStEThToEthPriceFeed(newStEthPriceFeed);
-        assertEq(address(oracleLib.stEThToEthPriceFeed()), newStEthPriceFeed);
-
-        // revert if called by another user
-        vm.expectRevert(CallerNotAdmin.selector);
-        vm.prank(alice);
-        oracleLib.setStEThToEthPriceFeed(newStEthPriceFeed);
-
-        vm.expectRevert(ZeroAddress.selector);
-        oracleLib.setStEThToEthPriceFeed(address(0x00));
     }
 
     function test_setMinimumFloatAmount() public {
@@ -497,7 +478,7 @@ contract scWETHv2Test is Test {
         vault.rebalance(investAmount, totalFlashLoanAmount, callData);
         _floatCheck();
 
-        _investChecks(investAmount, oracleLib.wstEthToEth(totalSupplyAmount), totalFlashLoanAmount);
+        _investChecks(investAmount, priceConverter.wstEthToEth(totalSupplyAmount), totalFlashLoanAmount);
     }
 
     function test_disinvest_usingMulticallsAndZeroExSwap() public {
@@ -510,7 +491,7 @@ contract scWETHv2Test is Test {
         uint256 stEthRateTolerance = 0.998e18;
         uint256 compoundV3FlashLoanAmount = _calcSupplyBorrowFlashLoanAmount(compoundV3Adapter, investAmount);
         uint256 compoundV3SupplyAmount =
-            oracleLib.ethToWstEth(investAmount + compoundV3FlashLoanAmount).mulWadDown(stEthRateTolerance);
+            priceConverter.ethToWstEth(investAmount + compoundV3FlashLoanAmount).mulWadDown(stEthRateTolerance);
 
         uint256 minimumDust = amount.mulWadDown(0.01e18) + (amount - investAmount);
 
@@ -766,7 +747,7 @@ contract scWETHv2Test is Test {
         );
     }
 
-    // // reallocate from euler to aaveV3
+    // reallocate from euler to aaveV3
     function test_reallocate_fromLowerLtvMarket_toHigherLtvMarket(uint256 amount) public {
         _setUp(BLOCK_BEFORE_EULER_EXPLOIT);
 
@@ -852,7 +833,7 @@ contract scWETHv2Test is Test {
         uint256 stEthRateTolerance = 0.999e18;
         uint256 aaveV3FlashLoanAmount = _calcSupplyBorrowFlashLoanAmount(aaveV3Adapter, investAmount);
         uint256 aaveV3SupplyAmount =
-            oracleLib.ethToWstEth(investAmount + aaveV3FlashLoanAmount).mulWadDown(stEthRateTolerance);
+            priceConverter.ethToWstEth(investAmount + aaveV3FlashLoanAmount).mulWadDown(stEthRateTolerance);
 
         bytes[] memory callData = new bytes[](2);
         callData[0] = abi.encodeWithSelector(scWETHv2.swapWethToWstEth.selector, investAmount + aaveV3FlashLoanAmount);
@@ -959,8 +940,9 @@ contract scWETHv2Test is Test {
         uint256 compoundFlashLoanAmount = _calcSupplyBorrowFlashLoanAmount(compoundV3Adapter, 0);
 
         uint256 stEthRateTolerance = 0.999e18;
-        uint256 aaveV3SupplyAmount = oracleLib.ethToWstEth(aaveV3FlashLoanAmount).mulWadDown(stEthRateTolerance);
-        uint256 compoundSupplyAmount = oracleLib.ethToWstEth(compoundFlashLoanAmount).mulWadDown(stEthRateTolerance);
+        uint256 aaveV3SupplyAmount = priceConverter.ethToWstEth(aaveV3FlashLoanAmount).mulWadDown(stEthRateTolerance);
+        uint256 compoundSupplyAmount =
+            priceConverter.ethToWstEth(compoundFlashLoanAmount).mulWadDown(stEthRateTolerance);
 
         bytes[] memory callDataAfterProfits = new bytes[](3);
 
@@ -1036,7 +1018,7 @@ contract scWETHv2Test is Test {
         bytes[] memory callData = new bytes[](3);
 
         callData[0] = abi.encodeWithSelector(
-            scWETHv2.repayAndWithdraw.selector, aaveV3AdapterId, repayAmount, oracleLib.ethToWstEth(withdrawAmount)
+            scWETHv2.repayAndWithdraw.selector, aaveV3AdapterId, repayAmount, priceConverter.ethToWstEth(withdrawAmount)
         );
 
         // since the ltv of the second protocol euler is less than the first protocol aaveV3
@@ -1045,13 +1027,14 @@ contract scWETHv2Test is Test {
         uint256 market2SupplyAmount = withdrawAmount - delta;
         uint256 market2BorrowAmount = repayAmount - delta;
 
-        callData[1] =
-            abi.encodeWithSelector(scWETHv2.swapWstEthToWeth.selector, oracleLib.ethToWstEth(delta), slippageTolerance);
+        callData[1] = abi.encodeWithSelector(
+            scWETHv2.swapWstEthToWeth.selector, priceConverter.ethToWstEth(delta), slippageTolerance
+        );
 
         callData[2] = abi.encodeWithSelector(
             scWETHv2.supplyAndBorrow.selector,
             eulerAdapterId,
-            oracleLib.ethToWstEth(market2SupplyAmount),
+            priceConverter.ethToWstEth(market2SupplyAmount),
             market2BorrowAmount
         );
 
@@ -1069,7 +1052,7 @@ contract scWETHv2Test is Test {
         uint256 withdrawAmount = reallocationAmount + repayAmount;
 
         callData[0] = abi.encodeWithSelector(
-            scWETHv2.repayAndWithdraw.selector, eulerAdapterId, repayAmount, oracleLib.ethToWstEth(withdrawAmount)
+            scWETHv2.repayAndWithdraw.selector, eulerAdapterId, repayAmount, priceConverter.ethToWstEth(withdrawAmount)
         );
 
         uint256 market2SupplyAmount = repayAmount.divWadDown(market2Ltv);
@@ -1077,13 +1060,14 @@ contract scWETHv2Test is Test {
 
         uint256 delta = withdrawAmount - market2SupplyAmount;
 
-        callData[1] =
-            abi.encodeWithSelector(scWETHv2.swapWstEthToWeth.selector, oracleLib.ethToWstEth(delta), slippageTolerance);
+        callData[1] = abi.encodeWithSelector(
+            scWETHv2.swapWstEthToWeth.selector, priceConverter.ethToWstEth(delta), slippageTolerance
+        );
 
         callData[2] = abi.encodeWithSelector(
             scWETHv2.supplyAndBorrow.selector,
             aaveV3AdapterId,
-            oracleLib.ethToWstEth(market2SupplyAmount),
+            priceConverter.ethToWstEth(market2SupplyAmount),
             market2BorrowAmount
         );
 
@@ -1102,7 +1086,7 @@ contract scWETHv2Test is Test {
         uint256 withdrawAmount = reallocationAmount + repayAmount;
 
         callData[0] = abi.encodeWithSelector(
-            scWETHv2.repayAndWithdraw.selector, eulerAdapterId, repayAmount, oracleLib.ethToWstEth(withdrawAmount)
+            scWETHv2.repayAndWithdraw.selector, eulerAdapterId, repayAmount, priceConverter.ethToWstEth(withdrawAmount)
         );
 
         // supply 50% of the reallocationAmount to aaveV3 and 50% to compoundV3
@@ -1115,20 +1099,21 @@ contract scWETHv2Test is Test {
 
         uint256 delta = withdrawAmount - (aaveV3SupplyAmount + compoundSupplyAmount);
 
-        callData[1] =
-            abi.encodeWithSelector(scWETHv2.swapWstEthToWeth.selector, oracleLib.ethToWstEth(delta), slippageTolerance);
+        callData[1] = abi.encodeWithSelector(
+            scWETHv2.swapWstEthToWeth.selector, priceConverter.ethToWstEth(delta), slippageTolerance
+        );
 
         callData[2] = abi.encodeWithSelector(
             scWETHv2.supplyAndBorrow.selector,
             aaveV3AdapterId,
-            oracleLib.ethToWstEth(aaveV3SupplyAmount),
+            priceConverter.ethToWstEth(aaveV3SupplyAmount),
             aaveV3BorrowAmount
         );
 
         callData[3] = abi.encodeWithSelector(
             scWETHv2.supplyAndBorrow.selector,
             compoundV3AdapterId,
-            oracleLib.ethToWstEth(compoundSupplyAmount),
+            priceConverter.ethToWstEth(compoundSupplyAmount),
             compoundBorrowAmount
         );
 
@@ -1159,14 +1144,14 @@ contract scWETHv2Test is Test {
             scWETHv2.repayAndWithdraw.selector,
             aaveV3AdapterId,
             repayAmountAaveV3,
-            oracleLib.ethToWstEth(withdrawAmountAaveV3)
+            priceConverter.ethToWstEth(withdrawAmountAaveV3)
         );
 
         callData[1] = abi.encodeWithSelector(
             scWETHv2.repayAndWithdraw.selector,
             compoundV3AdapterId,
             repayAmountCompoundV3,
-            oracleLib.ethToWstEth(withdrawAmountCompoundV3)
+            priceConverter.ethToWstEth(withdrawAmountCompoundV3)
         );
 
         uint256 repayAmount = repayAmountAaveV3 + repayAmountCompoundV3;
@@ -1177,13 +1162,14 @@ contract scWETHv2Test is Test {
         uint256 eulerSupplyAmount = withdrawAmount - delta;
         uint256 eulerBorrowAmount = repayAmount - delta;
 
-        callData[2] =
-            abi.encodeWithSelector(scWETHv2.swapWstEthToWeth.selector, oracleLib.ethToWstEth(delta), slippageTolerance);
+        callData[2] = abi.encodeWithSelector(
+            scWETHv2.swapWstEthToWeth.selector, priceConverter.ethToWstEth(delta), slippageTolerance
+        );
 
         callData[3] = abi.encodeWithSelector(
             scWETHv2.supplyAndBorrow.selector,
             eulerAdapterId,
-            oracleLib.ethToWstEth(eulerSupplyAmount),
+            priceConverter.ethToWstEth(eulerSupplyAmount),
             eulerBorrowAmount
         );
 
@@ -1209,11 +1195,11 @@ contract scWETHv2Test is Test {
         uint256 compoundFlashLoanAmount = _calcSupplyBorrowFlashLoanAmount(compoundV3Adapter, compoundAmount);
 
         uint256 aaveV3SupplyAmount =
-            oracleLib.ethToWstEth(aaveV3Amount + aaveV3FlashLoanAmount).mulWadDown(stEthRateTolerance);
+            priceConverter.ethToWstEth(aaveV3Amount + aaveV3FlashLoanAmount).mulWadDown(stEthRateTolerance);
         uint256 eulerSupplyAmount =
-            oracleLib.ethToWstEth(eulerAmount + eulerFlashLoanAmount).mulWadDown(stEthRateTolerance);
+            priceConverter.ethToWstEth(eulerAmount + eulerFlashLoanAmount).mulWadDown(stEthRateTolerance);
         uint256 compoundSupplyAmount =
-            oracleLib.ethToWstEth(compoundAmount + compoundFlashLoanAmount).mulWadDown(stEthRateTolerance);
+            priceConverter.ethToWstEth(compoundAmount + compoundFlashLoanAmount).mulWadDown(stEthRateTolerance);
 
         uint256 totalFlashLoanAmount = aaveV3FlashLoanAmount + eulerFlashLoanAmount + compoundFlashLoanAmount;
 
@@ -1250,21 +1236,21 @@ contract scWETHv2Test is Test {
             scWETHv2.repayAndWithdraw.selector,
             aaveV3AdapterId,
             aaveV3FlashLoanAmount,
-            oracleLib.ethToWstEth(aaveV3FlashLoanAmount)
+            priceConverter.ethToWstEth(aaveV3FlashLoanAmount)
         );
 
         callData[1] = abi.encodeWithSelector(
             scWETHv2.repayAndWithdraw.selector,
             eulerAdapterId,
             eulerFlashLoanAmount,
-            oracleLib.ethToWstEth(eulerFlashLoanAmount)
+            priceConverter.ethToWstEth(eulerFlashLoanAmount)
         );
 
         callData[2] = abi.encodeWithSelector(
             scWETHv2.repayAndWithdraw.selector,
             compoundV3AdapterId,
             compoundFlashLoanAmount,
-            oracleLib.ethToWstEth(compoundFlashLoanAmount)
+            priceConverter.ethToWstEth(compoundFlashLoanAmount)
         );
 
         callData[3] = abi.encodeWithSelector(scWETHv2.swapWstEthToWeth.selector, type(uint256).max, slippageTolerance);
@@ -1537,22 +1523,15 @@ contract scWETHv2Test is Test {
         vm.stopPrank();
     }
 
-    function _deployOracleLib() internal returns (OracleLib) {
-        return new OracleLib(AggregatorV3Interface(C.CHAINLINK_STETH_ETH_PRICE_FEED), C.WSTETH, C.WETH, admin);
-    }
-
-    function _createDefaultWethv2VaultConstructorParams(OracleLib _oracleLib)
-        internal
-        returns (scWETHv2.ConstructorParams memory)
-    {
+    function _createDefaultWethv2VaultConstructorParams() internal returns (scWETHv2.ConstructorParams memory) {
         return scWETHv2.ConstructorParams({
             admin: admin,
             keeper: keeper,
             slippageTolerance: slippageTolerance,
             weth: C.WETH,
             balancerVault: IVault(C.BALANCER_VAULT),
-            oracleLib: _oracleLib,
-            swapper: new Swapper()
+            swapper: new Swapper(),
+            priceConverter: priceConverter
         });
     }
 
@@ -1569,10 +1548,6 @@ contract scWETHv2Test is Test {
 
     function read_storage_uint(address addr, bytes32 key) internal view returns (uint256) {
         return abi.decode(abi.encode(vm.load(addr, key)), (uint256));
-    }
-
-    function _getSwapDefaultData(uint256 _amount, uint256 _slippageTolerance) internal pure returns (bytes memory) {
-        return abi.encodeWithSelector(ISwapRouter.swapDefault.selector, _amount, _slippageTolerance);
     }
 
     receive() external payable {}
