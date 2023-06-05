@@ -110,15 +110,15 @@ contract scWETHv2Test is Test {
         aaveV3Adapter = new AaveV3Adapter();
         compoundV3Adapter = new CompoundV3Adapter();
 
-        vault.addAdapter(address(aaveV3Adapter));
-        vault.addAdapter(address(compoundV3Adapter));
+        vault.addAdapter(aaveV3Adapter);
+        vault.addAdapter(compoundV3Adapter);
 
         aaveV3AdapterId = aaveV3Adapter.id();
         compoundV3AdapterId = compoundV3Adapter.id();
 
         if (_blockNumber == BLOCK_BEFORE_EULER_EXPLOIT) {
             eulerAdapter = new EulerAdapter();
-            vault.addAdapter(address(eulerAdapter));
+            vault.addAdapter(eulerAdapter);
             eulerAdapterId = eulerAdapter.id();
         }
     }
@@ -135,20 +135,20 @@ contract scWETHv2Test is Test {
     function test_addAdapter() public {
         _setUp(BLOCK_AFTER_EULER_EXPLOIT);
 
-        address dummyAdapter = address(new AaveV3Adapter());
+        IAdapter dummyAdapter = new AaveV3Adapter();
         // must fail if not called by admin
         vm.expectRevert(CallerNotAdmin.selector);
         vm.prank(alice);
         vault.addAdapter(dummyAdapter);
 
         // must fail if same adapter is added again (if adapter id is not unique)
-        vm.expectRevert(ProtocolAlreadySupported.selector);
+        vm.expectRevert(abi.encodeWithSelector(ProtocolInUse.selector, dummyAdapter.id()));
         vault.addAdapter(dummyAdapter);
 
         uint256 id = IAdapter(dummyAdapter).id();
         vault.removeAdapter(id, false);
         vault.addAdapter(dummyAdapter);
-        assertEq(vault.getAdapter(IAdapter(dummyAdapter).id()), dummyAdapter, "adapter not added to protocolAdapters");
+        assertEq(vault.getAdapter(dummyAdapter.id()), address(dummyAdapter), "adapter not added to protocolAdapters");
         assertEq(vault.isSupported(id), true, "adapter not added to supportedProtocols");
         // Approvals
         assertEq(ERC20(C.WSTETH).allowance(address(vault), C.AAVE_POOL), type(uint256).max, "allowance not set");
@@ -177,7 +177,7 @@ contract scWETHv2Test is Test {
         vault.rebalance(investAmount, totalFlashLoanAmount, callData);
         vm.stopPrank();
 
-        vm.expectRevert(ProtocolContainsFunds.selector);
+        vm.expectRevert(abi.encodeWithSelector(ProtocolInUse.selector, id));
         vault.removeAdapter(id, false);
 
         // must not revert if force is true
@@ -207,7 +207,7 @@ contract scWETHv2Test is Test {
         uint256 rewardAmount = 100e18;
         MockAdapter mockAdapter = new MockAdapter(ERC20(EULER_TOKEN));
         deal(EULER_TOKEN, mockAdapter.rewardsHolder(), rewardAmount);
-        vault.addAdapter(address(mockAdapter));
+        vault.addAdapter(mockAdapter);
 
         uint256 id = mockAdapter.id();
 

@@ -31,6 +31,7 @@ import {scUSDCBase} from "./scUSDCBase.sol";
 import {IAdapter} from "./IAdapter.sol";
 import {PriceConverter} from "./PriceConverter.sol";
 import {Swapper} from "./Swapper.sol";
+import {AdapterVault} from "./AdapterVault.sol";
 
 /**
  * @title Sandclock USDC Vault version 2
@@ -38,7 +39,7 @@ import {Swapper} from "./Swapper.sol";
  * @notice The v2 vault uses multiple lending markets to earn yield on USDC deposits and borrow WETH to stake.
  * @dev This vault uses Sandclock's leveraged WETH staking vault - scWETH.
  */
-contract scUSDCv2 is scUSDCBase {
+contract scUSDCv2 is AdapterVault, scUSDCBase {
     using SafeTransferLib for ERC20;
     using SafeTransferLib for WETH;
     using FixedPointMathLib for uint256;
@@ -53,8 +54,6 @@ contract scUSDCv2 is scUSDCBase {
         ExitAllPositions
     }
 
-    event ProtocolAdapterAdded(address indexed admin, uint256 adapterId, address adapter);
-    event ProtocolAdapterRemoved(address indexed admin, uint256 adapterId);
     event EmergencyExitExecuted(
         address indexed admin, uint256 wethWithdrawn, uint256 debtRepaid, uint256 collateralReleased
     );
@@ -68,13 +67,9 @@ contract scUSDCv2 is scUSDCBase {
     event Withdrawn(uint256 adapterId, uint256 amount);
     event Invested(uint256 wethAmount);
     event Disinvested(uint256 wethAmount);
-    event RewardsClaimed(uint256 adapterId);
 
     // Balancer vault for flashloans
     IVault public constant balancerVault = IVault(C.BALANCER_VAULT);
-
-    // mapping of IDs to lending protocol adapter contracts
-    EnumerableMap.UintToAddressMap private protocolAdapters;
 
     // price converter contract
     PriceConverter public immutable priceConverter;
@@ -94,45 +89,6 @@ contract scUSDCv2 is scUSDCBase {
     /*//////////////////////////////////////////////////////////////
                             PUBLIC API
     //////////////////////////////////////////////////////////////*/
-
-    /**
-     * @notice Add a new protocol adapter to the vault.
-     * @param _adapter The adapter to add.
-     */
-    function addAdapter(IAdapter _adapter) external {
-        _onlyAdmin();
-
-        uint256 id = _adapter.id();
-
-        if (isSupported(id)) revert ProtocolInUse(id);
-
-        protocolAdapters.set(id, address(_adapter));
-
-        address(_adapter).functionDelegateCall(abi.encodeWithSelector(IAdapter.setApprovals.selector));
-
-        emit ProtocolAdapterAdded(msg.sender, id, address(_adapter));
-    }
-
-    /**
-     * @notice Remove a protocol adapter from the vault. Reverts if the adapter is in use unless _force is true.
-     * @param _adapterId The ID of the adapter to remove.
-     * @param _force Whether or not to force the removal of the adapter.
-     */
-    function removeAdapter(uint256 _adapterId, bool _force) external {
-        _onlyAdmin();
-        _isSupportedCheck(_adapterId);
-
-        // check if protocol is being used
-        if (!_force && IAdapter(protocolAdapters.get(_adapterId)).getCollateral(address(this)) > 0) {
-            revert ProtocolInUse(_adapterId);
-        }
-
-        _adapterDelegateCall(_adapterId, abi.encodeWithSelector(IAdapter.revokeApprovals.selector));
-
-        protocolAdapters.remove(_adapterId);
-
-        emit ProtocolAdapterRemoved(msg.sender, _adapterId);
-    }
 
     /**
      * @notice Rebalance the vault's positions/loans in multiple lending markets.
@@ -323,19 +279,6 @@ contract scUSDCv2 is scUSDCBase {
     }
 
     /**
-     * @notice Claim rewards from a lending market.
-     * @param _adapterId The ID of the lending market adapter.
-     * @param _callData The encoded data for the claimRewards function.
-     */
-    function claimRewards(uint256 _adapterId, bytes calldata _callData) external {
-        _onlyKeeper();
-        _isSupportedCheck(_adapterId);
-        _adapterDelegateCall(_adapterId, abi.encodeWithSelector(IAdapter.claimRewards.selector, _callData));
-
-        emit RewardsClaimed(_adapterId);
-    }
-
-    /**
      * @notice Withdraw WETH from the staking vault (scWETH).
      * @param _amount The amount of WETH to withdraw.
      */
@@ -343,14 +286,6 @@ contract scUSDCv2 is scUSDCBase {
         _onlyKeeper();
 
         _disinvest(_amount);
-    }
-
-    /**
-     * @notice Check if a lending market adapter is supported/used.
-     * @param _adapterId The ID of the lending market adapter.
-     */
-    function isSupported(uint256 _adapterId) public view returns (bool) {
-        return protocolAdapters.contains(_adapterId);
     }
 
     /**
@@ -429,20 +364,6 @@ contract scUSDCv2 is scUSDCBase {
     /*//////////////////////////////////////////////////////////////
                             INTERNAL API
     //////////////////////////////////////////////////////////////*/
-
-    function _multiCall(bytes[] memory _callData) internal {
-        for (uint256 i = 0; i < _callData.length; i++) {
-            address(this).functionDelegateCall(_callData[i]);
-        }
-    }
-
-    function _adapterDelegateCall(uint256 _adapterId, bytes memory _data) internal {
-        protocolAdapters.get(_adapterId).functionDelegateCall(_data);
-    }
-
-    function _isSupportedCheck(uint256 _adapterId) internal view {
-        if (!isSupported(_adapterId)) revert ProtocolNotSupported(_adapterId);
-    }
 
     function _supply(uint256 _adapterId, uint256 _amount) internal {
         _adapterDelegateCall(_adapterId, abi.encodeWithSelector(IAdapter.supply.selector, _amount));

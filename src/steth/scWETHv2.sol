@@ -37,8 +37,9 @@ import {IFlashLoanRecipient} from "../interfaces/balancer/IFlashLoanRecipient.so
 import {PriceConverter} from "./PriceConverter.sol";
 import {IAdapter} from "./IAdapter.sol";
 import {Swapper} from "./Swapper.sol";
+import {AdapterVault} from "./AdapterVault.sol";
 
-contract scWETHv2 is sc4626, IFlashLoanRecipient {
+contract scWETHv2 is AdapterVault, IFlashLoanRecipient {
     using SafeTransferLib for ERC20;
     using FixedPointMathLib for uint256;
     using Address for address;
@@ -71,8 +72,6 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
 
     // Balancer vault for flashloans
     IVault public immutable balancerVault;
-
-    EnumerableMap.UintToAddressMap private protocolAdapters;
 
     PriceConverter public immutable priceConverter;
 
@@ -123,43 +122,6 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
         emit FloatAmountUpdated(msg.sender, _newFloatAmount);
     }
 
-    // TODO: addAdapter and removeAdapter as shared functions for both scWETH and scETH?
-    /// @notice adds an adapter to the supported adapters
-    /// @param _adapter the address of the adapter to add (must inherit IAdapter.sol)
-    function addAdapter(address _adapter) external {
-        _onlyAdmin();
-
-        uint256 id = IAdapter(_adapter).id();
-
-        if (isSupported(id)) revert ProtocolAlreadySupported();
-
-        protocolAdapters.set(id, _adapter);
-
-        _adapter.functionDelegateCall(abi.encodeWithSelector(IAdapter.setApprovals.selector));
-        // TODO: add event
-    }
-
-    /// @notice removes an adapter from the supported adapters
-    /// @param _adapterId the id of the adapter to remove
-    /// @param _force if true, it will not check if there are funds deposited in the respective protocol
-    function removeAdapter(uint256 _adapterId, bool _force) external {
-        _onlyAdmin();
-
-        if (!isSupported(_adapterId)) revert ProtocolNotSupported(_adapterId);
-
-        address _adapter = protocolAdapters.get(_adapterId);
-
-        if (!_force) {
-            if (IAdapter(_adapter).getCollateral(address(this)) != 0) {
-                revert ProtocolContainsFunds();
-            }
-        }
-
-        _adapter.functionDelegateCall(abi.encodeWithSelector(IAdapter.revokeApprovals.selector));
-        protocolAdapters.remove(_adapterId);
-        // TODO: add event
-    }
-
     // TODO: this is also common for both scWETH and scETH
     /// @dev to be used to ideally swap euler rewards to weth using 0x api
     /// @dev can also be used to swap between other tokens
@@ -177,16 +139,6 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
 
         // TODO: fix event
         emit TokensSwapped(_inToken, address(asset));
-    }
-
-    // TODO: this is also common for both scWETH and scETH
-    function claimRewards(uint256 _adapterId, bytes calldata _data) external {
-        _onlyKeeper();
-
-        protocolAdapters.get(_adapterId).functionDelegateCall(
-            abi.encodeWithSelector(IAdapter.claimRewards.selector, _data)
-        );
-        // TODO: add event
     }
 
     /// @dev _totalInvestAmount must be zero in case of disinvest or reallocation
@@ -251,12 +203,6 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
     }
 
     //////////////////// VIEW METHODS //////////////////////////
-
-    /// @notice check if an adapter is supported by this vault
-    /// @param _adapterId the id of the adapter to check
-    function isSupported(uint256 _adapterId) public view returns (bool) {
-        return protocolAdapters.contains(_adapterId);
-    }
 
     /// @notice returns the adapter address given the adapterId (only if the adaapterId is supported else returns zero address)
     /// @param _adapterId the id of the adapter to check
@@ -371,9 +317,7 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
         // decode user data
         bytes[] memory callData = abi.decode(userData, (bytes[]));
 
-        for (uint256 i = 0; i < callData.length; i++) {
-            address(this).functionDelegateCall(callData[i]);
-        }
+        _multiCall(callData);
 
         // payback flashloan
         asset.safeTransfer(address(balancerVault), flashLoanAmount);
@@ -386,8 +330,8 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
 
         address adapter = protocolAdapters.get(_adapterId);
 
-        _adapterDelegateCall(adapter, IAdapter.supply.selector, _supplyAmount);
-        _adapterDelegateCall(adapter, IAdapter.borrow.selector, _borrowAmount);
+        _adapterDelegateCall(adapter, abi.encodeWithSelector(IAdapter.supply.selector, _supplyAmount));
+        _adapterDelegateCall(adapter, abi.encodeWithSelector(IAdapter.borrow.selector, _borrowAmount));
     }
 
     function repayAndWithdraw(uint256 _adapterId, uint256 _repayAmount, uint256 _withdrawAmount) external {
@@ -395,8 +339,8 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
 
         address adapter = protocolAdapters.get(_adapterId);
 
-        _adapterDelegateCall(adapter, IAdapter.repay.selector, _repayAmount);
-        _adapterDelegateCall(adapter, IAdapter.withdraw.selector, _withdrawAmount);
+        _adapterDelegateCall(adapter, abi.encodeWithSelector(IAdapter.repay.selector, _repayAmount));
+        _adapterDelegateCall(adapter, abi.encodeWithSelector(IAdapter.withdraw.selector, _withdrawAmount));
     }
 
     // need to be able to receive eth
@@ -459,10 +403,6 @@ contract scWETHv2 is sc4626, IFlashLoanRecipient {
         uint256 missing = assets + floatRequired - float;
 
         _withdrawToVault(missing);
-    }
-
-    function _adapterDelegateCall(address _adapter, bytes4 _selector, uint256 _amount) internal {
-        _adapter.functionDelegateCall(abi.encodeWithSelector(_selector, _amount));
     }
 
     function _flashLoan(uint256 _totalFlashLoanAmount, bytes[] memory callData) internal {
