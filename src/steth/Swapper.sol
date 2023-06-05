@@ -40,16 +40,19 @@ contract Swapper {
      * @param _amountIn Amount of the token to swap.
      * @param _amountOutMin Minimum amount of the token to receive.
      */
-    function uniswapSwapExactInput(ERC20 _tokenIn, ERC20 _tokenOut, uint256 _amountIn, uint256 _amountOutMin)
-        external
-        returns (uint256)
-    {
+    function uniswapSwapExactInput(
+        ERC20 _tokenIn,
+        ERC20 _tokenOut,
+        uint256 _amountIn,
+        uint256 _amountOutMin,
+        uint24 _poolFee
+    ) external returns (uint256) {
         ERC20(_tokenIn).safeApprove(address(swapRouter), _amountIn);
 
         ISwapRouter.ExactInputSingleParams memory params = ISwapRouter.ExactInputSingleParams({
             tokenIn: address(_tokenIn),
             tokenOut: address(_tokenOut),
-            fee: 500,
+            fee: _poolFee,
             recipient: address(this),
             deadline: block.timestamp,
             amountIn: _amountIn,
@@ -67,14 +70,17 @@ contract Swapper {
      * @param _amountOut Amount of the token to receive.
      * @param _amountInMaximum Maximum amount of the token to swap.
      */
-    function uniswapSwapExactOutput(ERC20 _tokenIn, ERC20 _tokenOut, uint256 _amountOut, uint256 _amountInMaximum)
-        external
-        returns (uint256)
-    {
+    function uniswapSwapExactOutput(
+        ERC20 _tokenIn,
+        ERC20 _tokenOut,
+        uint256 _amountOut,
+        uint256 _amountInMaximum,
+        uint24 _poolFee
+    ) external returns (uint256) {
         ISwapRouter.ExactOutputSingleParams memory params = ISwapRouter.ExactOutputSingleParams({
             tokenIn: address(_tokenIn),
             tokenOut: address(_tokenOut),
-            fee: 500,
+            fee: _poolFee,
             recipient: address(this),
             deadline: block.timestamp,
             amountOut: _amountOut,
