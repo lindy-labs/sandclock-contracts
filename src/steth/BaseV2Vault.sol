@@ -21,6 +21,7 @@ abstract contract BaseV2Vault is sc4626, IFlashLoanRecipient {
     event ProtocolAdapterAdded(address indexed admin, uint256 adapterId, address adapter);
     event ProtocolAdapterRemoved(address indexed admin, uint256 adapterId);
     event RewardsClaimed(uint256 adapterId);
+    event TokenSwapped(address token, uint256 amount, uint256 amountReceived);
 
     // Balancer vault for flashloans
     IVault public constant balancerVault = IVault(C.BALANCER_VAULT);
@@ -102,11 +103,29 @@ abstract contract BaseV2Vault is sc4626, IFlashLoanRecipient {
      * @param _callData The encoded data for the claimRewards function.
      */
     function claimRewards(uint256 _adapterId, bytes calldata _callData) external {
-        _onlyKeeper();
+        _onlyKeeperOrFlashLoan();
         _isSupportedCheck(_adapterId);
+
         _adapterDelegateCall(_adapterId, abi.encodeWithSelector(IAdapter.claimRewards.selector, _callData));
 
         emit RewardsClaimed(_adapterId);
+    }
+
+    /**
+     * @notice Sell any token for the "asset" token on 0x exchange.
+     * @param _token The token to sell.
+     * @param _amount The amount of tokens to sell.
+     * @param _swapData The swap data for 0xrouter.
+     * @param _assetAmountOutMin The minimum amount of "asset" token to receive for the swap.
+     */
+    function zeroExSwap(ERC20 _token, uint256 _amount, bytes calldata _swapData, uint256 _assetAmountOutMin) external {
+        _onlyKeeperOrFlashLoan();
+
+        bytes memory result = address(swapper).functionDelegateCall(
+            abi.encodeWithSelector(Swapper.zeroExSwap.selector, _token, asset, _amount, _assetAmountOutMin, _swapData)
+        );
+
+        emit TokenSwapped(address(_token), _amount, abi.decode(result, (uint256)));
     }
 
     function _multiCall(bytes[] memory _callData) internal {

@@ -64,7 +64,6 @@ contract scUSDCv2 is BaseV2Vault {
     event Reallocated();
     event Rebalanced(uint256 totalCollateral, uint256 totalDebt, uint256 floatBalance);
     event ProfitSold(uint256 wethSold, uint256 usdcReceived);
-    event TokensSold(address token, uint256 amountSold, uint256 usdcReceived);
     event Supplied(uint256 adapterId, uint256 amount);
     event Borrowed(uint256 adapterId, uint256 amount);
     event Repaid(uint256 adapterId, uint256 amount);
@@ -206,23 +205,6 @@ contract scUSDCv2 is BaseV2Vault {
         }
 
         weth.safeTransfer(address(balancerVault), flashLoanAmount);
-    }
-
-    /**
-     * @notice Sell tokens awarded for using some lending market for USDC on 0x exchange.
-     * @param _token The token to sell.
-     * @param _amount The amount of tokens to sell.
-     * @param _swapData The swap data for 0xrouter.
-     * @param _usdcAmountOutMin The minimum amount of USDC to receive for the swap.
-     */
-    function sellTokens(ERC20 _token, uint256 _amount, bytes calldata _swapData, uint256 _usdcAmountOutMin) external {
-        _onlyKeeper();
-
-        bytes memory result = address(swapper).functionDelegateCall(
-            abi.encodeWithSelector(Swapper.zeroExSwap.selector, _token, asset, _amount, _usdcAmountOutMin, _swapData)
-        );
-
-        emit TokensSold(address(_token), _amount, abi.decode(result, (uint256)));
     }
 
     /**

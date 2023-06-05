@@ -22,6 +22,7 @@ import {ICurvePool} from "../src/interfaces/curve/ICurvePool.sol";
 import {IVault} from "../src/interfaces/balancer/IVault.sol";
 import {AggregatorV3Interface} from "../src/interfaces/chainlink/AggregatorV3Interface.sol";
 import {sc4626} from "../src/sc4626.sol";
+import {BaseV2Vault} from "../src/steth/BaseV2Vault.sol";
 import {scWETHv2Helper} from "./helpers/scWETHv2Helper.sol";
 import "../src/errors/scErrors.sol";
 
@@ -299,10 +300,10 @@ contract scWETHv2Test is Test {
         deal(EULER_TOKEN, address(vault), eulerAmount);
 
         vm.expectRevert(CallerNotKeeper.selector);
-        vault.swapTokensWith0x(swapData, EULER_TOKEN, eulerAmount, 0);
+        vault.zeroExSwap(ERC20(EULER_TOKEN), eulerAmount, swapData, 0);
 
         hoax(keeper);
-        vault.swapTokensWith0x(swapData, EULER_TOKEN, eulerAmount, 0);
+        vault.zeroExSwap(ERC20(EULER_TOKEN), eulerAmount, swapData, 0);
 
         assertGe(weth.balanceOf(address(vault)), expectedWethAmount, "weth not received");
         assertEq(ERC20(EULER_TOKEN).balanceOf(address(vault)), 0, "euler token not transferred out");
@@ -524,9 +525,8 @@ contract scWETHv2Test is Test {
         );
 
         // swap wstEth to weth using zeroEx swap
-        callData[1] = abi.encodeWithSelector(
-            scWETHv2.swapTokensWith0x.selector, swapData, address(wstEth), wstEthAmountToWithdraw, 0
-        );
+        callData[1] =
+            abi.encodeWithSelector(BaseV2Vault.zeroExSwap.selector, wstEth, wstEthAmountToWithdraw, swapData, 0);
 
         hoax(keeper);
         vault.rebalance(0, expectedWethAmountAfterSwap, callData);

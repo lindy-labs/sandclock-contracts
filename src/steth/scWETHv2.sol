@@ -44,7 +44,6 @@ contract scWETHv2 is BaseV2Vault {
     using EnumerableMap for EnumerableMap.UintToAddressMap;
 
     event Harvest(uint256 profitSinceLastHarvest, uint256 performanceFee);
-    event TokensSwapped(address inToken, address outToken);
     event FloatAmountUpdated(address indexed user, uint256 newFloatAmount);
 
     // total invested during last harvest/rebalance
@@ -53,6 +52,7 @@ contract scWETHv2 is BaseV2Vault {
     // total profit generated for this vault
     uint256 public totalProfit;
 
+    // TODO: add comment why this is fixed amount
     uint256 public minimumFloatAmount = 1 ether;
 
     IwstETH constant wstETH = IwstETH(C.WSTETH);
@@ -85,23 +85,6 @@ contract scWETHv2 is BaseV2Vault {
         minimumFloatAmount = _newFloatAmount;
 
         emit FloatAmountUpdated(msg.sender, _newFloatAmount);
-    }
-
-    // TODO: this is also common for both scWETH and scETH
-    /// @dev to be used to ideally swap wstEth to weth, weth to wstEth during rebalancing using 0x api
-    /// @dev can also be used to swap between other tokens
-    /// @param _inToken address of the token to swap from
-    function swapTokensWith0x(bytes calldata _swapData, address _inToken, uint256 _amountIn, uint256 _amountOutMin)
-        external
-    {
-        _onlyKeeperOrFlashLoan();
-
-        address(swapper).functionDelegateCall(
-            abi.encodeWithSelector(Swapper.zeroExSwap.selector, _inToken, asset, _amountIn, _amountOutMin, _swapData)
-        );
-
-        // TODO: fix event
-        emit TokensSwapped(_inToken, address(asset));
     }
 
     /// @dev _totalInvestAmount must be zero in case of disinvest or reallocation
