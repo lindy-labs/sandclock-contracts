@@ -287,7 +287,7 @@ contract scWETHv2Test is Test {
         vault.withdraw(1e18, address(this), address(this));
     }
 
-    // TODO: the following 3 tests can be moved to Swapper.t.sol after scUSDCv2 is merged
+    // TODO: the following 3 tests can be added to Swapper.t.sol
     function test_swapWith0x_EulerToWeth() public {
         _setUp(17322802);
 
@@ -348,7 +348,7 @@ contract scWETHv2Test is Test {
     //     assertEq(wstEth.balanceOf(address(this)), 0, "wstEth not transferred out");
     // }
 
-    function test_invest_FloatBalanceTooSmall(uint256 amount) public {
+    function test_invest_FloatBalanceTooLow(uint256 amount) public {
         _setUp(BLOCK_BEFORE_EULER_EXPLOIT);
 
         amount = bound(amount, boundMinimum, 15000 ether);
@@ -361,9 +361,7 @@ contract scWETHv2Test is Test {
 
         // deposit into strategy
         vm.startPrank(keeper);
-        vm.expectRevert(
-            abi.encodeWithSelector(FloatBalanceTooSmall.selector, minimumFloatAmount - 1, minimumFloatAmount)
-        );
+        vm.expectRevert(abi.encodeWithSelector(FloatBalanceTooLow.selector, minimumFloatAmount - 1, minimumFloatAmount));
         vault.rebalance(investAmount, totalFlashLoanAmount, callData);
     }
 

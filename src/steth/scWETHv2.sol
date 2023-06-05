@@ -1,41 +1,27 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.13;
 
-import "forge-std/console2.sol";
 import {
-    InvalidTargetLtv,
     ZeroAddress,
     InvalidSlippageTolerance,
     PleaseUseRedeemMethod,
-    InvalidFlashLoanCaller,
-    InvalidAllocationPercents,
     InsufficientDepositBalance,
-    FloatBalanceTooSmall,
-    TokenSwapFailed,
-    AmountReceivedBelowMin,
-    ProtocolNotSupported,
-    ProtocolContainsFunds
+    FloatBalanceTooLow
 } from "../errors/scErrors.sol";
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
+import {WETH} from "solmate/tokens/WETH.sol";
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
-import {WETH} from "solmate/tokens/WETH.sol";
-import {IEulerMarkets} from "lib/euler-interfaces/contracts/IEuler.sol";
-import {IPool} from "aave-v3/interfaces/IPool.sol";
 import {Address} from "openzeppelin-contracts/utils/Address.sol";
 import {EnumerableMap} from "openzeppelin-contracts/utils/structs/EnumerableMap.sol";
 
 import {Constants as C} from "../lib/Constants.sol";
-import {sc4626} from "../sc4626.sol";
-import {ICurvePool} from "../interfaces/curve/ICurvePool.sol";
-import {ILido} from "../interfaces/lido/ILido.sol";
-import {IwstETH} from "../interfaces/lido/IwstETH.sol";
-import {IVault} from "../interfaces/balancer/IVault.sol";
-import {PriceConverter} from "./PriceConverter.sol";
-import {IAdapter} from "./IAdapter.sol";
-import {Swapper} from "./Swapper.sol";
 import {BaseV2Vault} from "./BaseV2Vault.sol";
+import {IAdapter} from "./IAdapter.sol";
+import {IwstETH} from "../interfaces/lido/IwstETH.sol";
+import {PriceConverter} from "./PriceConverter.sol";
+import {Swapper} from "./Swapper.sol";
 
 contract scWETHv2 is BaseV2Vault {
     using SafeTransferLib for ERC20;
@@ -52,7 +38,7 @@ contract scWETHv2 is BaseV2Vault {
     // total profit generated for this vault
     uint256 public totalProfit;
 
-    // TODO: add comment why this is fixed amount
+    // TODO: add comment why this is fixed amount and not a percent (not using sc4626 functionality)
     uint256 public minimumFloatAmount = 1 ether;
 
     IwstETH constant wstETH = IwstETH(C.WSTETH);
@@ -84,6 +70,7 @@ contract scWETHv2 is BaseV2Vault {
 
         minimumFloatAmount = _newFloatAmount;
 
+        // TODO: change name to MinFloatAmountUpdated
         emit FloatAmountUpdated(msg.sender, _newFloatAmount);
     }
 
@@ -101,6 +88,8 @@ contract scWETHv2 is BaseV2Vault {
         _flashLoan(_flashLoanAmount, _multicallData);
 
         _harvest();
+
+        // TODO: add event
     }
 
     function swapWethToWstEth(uint256 _wethAmount) external {
@@ -133,7 +122,10 @@ contract scWETHv2 is BaseV2Vault {
     /// @param _amount : amount of assets to withdraw into the vault
     function withdrawToVault(uint256 _amount) external {
         _onlyKeeper();
+
         _withdrawToVault(_amount);
+
+        // TODO: add event
     }
 
     //////////////////// VIEW METHODS //////////////////////////
@@ -160,6 +152,7 @@ contract scWETHv2 is BaseV2Vault {
     function totalCollateral() public view returns (uint256 collateral) {
         uint256 n = protocolAdapters.length();
         address adapter;
+
         for (uint256 i; i < n; i++) {
             (, adapter) = protocolAdapters.at(i);
             collateral += IAdapter(adapter).getCollateral(address(this));
@@ -170,6 +163,7 @@ contract scWETHv2 is BaseV2Vault {
     function totalDebt() public view returns (uint256 debt) {
         uint256 n = protocolAdapters.length();
         address adapter;
+
         for (uint256 i; i < n; i++) {
             (, adapter) = protocolAdapters.at(i);
             debt += IAdapter(adapter).getDebt(address(this));
@@ -253,6 +247,8 @@ contract scWETHv2 is BaseV2Vault {
 
         _adapterDelegateCall(adapter, abi.encodeWithSelector(IAdapter.supply.selector, _supplyAmount));
         _adapterDelegateCall(adapter, abi.encodeWithSelector(IAdapter.borrow.selector, _borrowAmount));
+
+        // TODO: add event
     }
 
     function repayAndWithdraw(uint256 _adapterId, uint256 _repayAmount, uint256 _withdrawAmount) external {
@@ -262,6 +258,8 @@ contract scWETHv2 is BaseV2Vault {
 
         _adapterDelegateCall(adapter, abi.encodeWithSelector(IAdapter.repay.selector, _repayAmount));
         _adapterDelegateCall(adapter, abi.encodeWithSelector(IAdapter.withdraw.selector, _withdrawAmount));
+
+        // TODO: add event
     }
 
     // need to be able to receive eth
@@ -307,17 +305,13 @@ contract scWETHv2 is BaseV2Vault {
         uint256 float = asset.balanceOf(address(this));
         uint256 floatRequired = minimumFloatAmount;
 
-        if (float < floatRequired) {
-            revert FloatBalanceTooSmall(float, floatRequired);
-        }
+        if (float < floatRequired) revert FloatBalanceTooLow(float, floatRequired);
     }
 
     function beforeWithdraw(uint256 assets, uint256) internal override {
         uint256 float = asset.balanceOf(address(this));
 
-        if (assets <= float) {
-            return;
-        }
+        if (assets <= float) return;
 
         uint256 minimumFloat = minimumFloatAmount;
         uint256 floatRequired = float < minimumFloat ? minimumFloat - float : 0;
