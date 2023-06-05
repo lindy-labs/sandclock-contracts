@@ -6,9 +6,9 @@ import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {WETH} from "solmate/tokens/WETH.sol";
 
-import {Constants as C} from "../lib/Constants.sol";
-import {IComet} from "../interfaces/compound-v3/IComet.sol";
-import {IAdapter} from "../steth/IAdapter.sol";
+import {Constants as C} from "../../lib/Constants.sol";
+import {IComet} from "../../interfaces/compound-v3/IComet.sol";
+import {IAdapter} from "../IAdapter.sol";
 
 contract CompoundV3Adapter is IAdapter {
     using SafeTransferLib for ERC20;

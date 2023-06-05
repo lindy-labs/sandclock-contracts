@@ -5,10 +5,10 @@ import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {WETH} from "solmate/tokens/WETH.sol";
-
-import {Constants as C} from "../lib/Constants.sol";
 import {IEulerDToken, IEulerEToken, IEulerMarkets} from "lib/euler-interfaces/contracts/IEuler.sol";
-import {IAdapter} from "../steth/IAdapter.sol";
+
+import {Constants as C} from "../../lib/Constants.sol";
+import {IAdapter} from "../IAdapter.sol";
 
 contract EulerAdapter is IAdapter {
     using SafeTransferLib for ERC20;

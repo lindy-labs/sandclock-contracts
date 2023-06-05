@@ -7,8 +7,8 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 import {WETH} from "solmate/tokens/WETH.sol";
 import {IPool} from "aave-v3/interfaces/IPool.sol";
 
-import {Constants as C} from "../lib/Constants.sol";
-import {IAdapter} from "../steth/IAdapter.sol";
+import {Constants as C} from "../../lib/Constants.sol";
+import {IAdapter} from "../IAdapter.sol";
 
 contract AaveV3Adapter is IAdapter {
     using SafeTransferLib for ERC20;

@@ -13,25 +13,25 @@ import {Errors} from "aave-v3/protocol/libraries/helpers/Errors.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {Address} from "openzeppelin-contracts/utils/Address.sol";
 
-import {Constants as C} from "../../src/lib/Constants.sol";
-import {scWETHv2} from "../../src/phase-2/scWETHv2.sol";
+import {Constants as C} from "../src/lib/Constants.sol";
+import {scWETHv2} from "../src/steth/scWETHv2.sol";
 import {WETH} from "solmate/tokens/WETH.sol";
-import {ILido} from "../../src/interfaces/lido/ILido.sol";
-import {IwstETH} from "../../src/interfaces/lido/IwstETH.sol";
-import {ICurvePool} from "../../src/interfaces/curve/ICurvePool.sol";
-import {IVault} from "../../src/interfaces/balancer/IVault.sol";
-import {AggregatorV3Interface} from "../../src/interfaces/chainlink/AggregatorV3Interface.sol";
-import {sc4626} from "../../src/sc4626.sol";
-import {scWETHv2Helper} from "../../src/phase-2/scWETHv2Helper.sol";
-import "../../src/errors/scErrors.sol";
+import {ILido} from "../src/interfaces/lido/ILido.sol";
+import {IwstETH} from "../src/interfaces/lido/IwstETH.sol";
+import {ICurvePool} from "../src/interfaces/curve/ICurvePool.sol";
+import {IVault} from "../src/interfaces/balancer/IVault.sol";
+import {AggregatorV3Interface} from "../src/interfaces/chainlink/AggregatorV3Interface.sol";
+import {sc4626} from "../src/sc4626.sol";
+import {scWETHv2Helper} from "../src/phase-2/scWETHv2Helper.sol";
+import "../src/errors/scErrors.sol";
 
-import {IAdapter} from "../../src/steth/IAdapter.sol";
-import {AaveV3Adapter} from "../../src/scWeth-adapters/AaveV3Adapter.sol";
-import {CompoundV3Adapter} from "../../src/scWeth-adapters/CompoundV3Adapter.sol";
-import {EulerAdapter} from "../../src/scWeth-adapters/EulerAdapter.sol";
-import {Swapper} from "../../src/steth/Swapper.sol";
-import {PriceConverter} from "../../src/steth/PriceConverter.sol";
-import {MockAdapter} from "../mocks/adapters/MockAdapter.sol";
+import {IAdapter} from "../src/steth/IAdapter.sol";
+import {AaveV3Adapter} from "../src/steth/scWethV2-adapters/AaveV3Adapter.sol";
+import {CompoundV3Adapter} from "../src/steth/scWethV2-adapters/CompoundV3Adapter.sol";
+import {EulerAdapter} from "../src/steth/scWethV2-adapters/EulerAdapter.sol";
+import {Swapper} from "../src/steth/Swapper.sol";
+import {PriceConverter} from "../src/steth/PriceConverter.sol";
+import {MockAdapter} from "./mocks/adapters/MockAdapter.sol";
 
 contract scWETHv2Test is Test {
     using FixedPointMathLib for uint256;

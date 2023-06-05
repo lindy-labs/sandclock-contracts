@@ -17,9 +17,9 @@ import {ILendingPool} from "../src/interfaces/aave-v2/ILendingPool.sol";
 import {IProtocolDataProvider} from "../src/interfaces/aave-v2/IProtocolDataProvider.sol";
 import {IAdapter} from "../src/steth/IAdapter.sol";
 import {scUSDCv2} from "../src/steth/scUSDCv2.sol";
-import {AaveV2Adapter} from "../src/steth/usdc-adapters/AaveV2Adapter.sol";
-import {AaveV3Adapter} from "../src/steth/usdc-adapters/AaveV3Adapter.sol";
-import {EulerAdapter} from "../src/steth/usdc-adapters/EulerAdapter.sol";
+import {AaveV2Adapter} from "../src/steth/scUsdcV2-adapters/AaveV2Adapter.sol";
+import {AaveV3Adapter} from "../src/steth/scUsdcV2-adapters/AaveV3Adapter.sol";
+import {EulerAdapter} from "../src/steth/scUsdcV2-adapters/EulerAdapter.sol";
 
 import {scWETH} from "../src/steth/scWETH.sol";
 import {ISwapRouter} from "../src/interfaces/uniswap/ISwapRouter.sol";

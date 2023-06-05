@@ -3,7 +3,7 @@ pragma solidity ^0.8.13;
 
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 
-import {scWETHv2} from "./scWETHv2.sol";
+import {scWETHv2} from "../steth/scWETHv2.sol";
 import {PriceConverter} from "../steth/PriceConverter.sol";
 import {IAdapter} from "../steth/IAdapter.sol";
 
