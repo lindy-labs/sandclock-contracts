@@ -93,7 +93,6 @@ contract scWETHv2 is AdapterVault, IFlashLoanRecipient {
 
     /////////////////// ADMIN/KEEPER METHODS //////////////////////////////////
 
-    // TODO: do we need this?
     function setSwapper(address _swapper) external {
         _onlyAdmin();
         swapper = Swapper(_swapper);
@@ -123,13 +122,13 @@ contract scWETHv2 is AdapterVault, IFlashLoanRecipient {
     }
 
     // TODO: this is also common for both scWETH and scETH
-    /// @dev to be used to ideally swap euler rewards to weth using 0x api
+    /// @dev to be used to ideally swap wstEth to weth, weth to wstEth during rebalancing using 0x api
     /// @dev can also be used to swap between other tokens
     /// @param _inToken address of the token to swap from
     function swapTokensWith0x(bytes calldata _swapData, address _inToken, uint256 _amountIn, uint256 _wethAmountOutMin)
         external
     {
-        _onlyKeeper();
+        _onlyKeeperOrFlashLoan();
 
         address(swapper).functionDelegateCall(
             abi.encodeWithSelector(
@@ -183,18 +182,6 @@ contract scWETHv2 is AdapterVault, IFlashLoanRecipient {
         );
     }
 
-    function swapWstEthToWethOnZeroEx(uint256 _wstEthAmount, uint256 _wethAmountOutMin, bytes calldata _swapData)
-        external
-    {
-        _onlyKeeperOrFlashLoan();
-
-        address(swapper).functionDelegateCall(
-            abi.encodeWithSelector(
-                Swapper.zeroExSwap.selector, wstETH, asset, _wstEthAmount, _wethAmountOutMin, _swapData
-            )
-        );
-    }
-
     /// @notice withdraw funds from the strategy into the vault
     /// @param _amount : amount of assets to withdraw into the vault
     function withdrawToVault(uint256 _amount) external {
@@ -213,7 +200,7 @@ contract scWETHv2 is AdapterVault, IFlashLoanRecipient {
     /// @notice returns the total assets (in WETH) held by the strategy
     function totalAssets() public view override returns (uint256 assets) {
         // value of the supplied collateral in eth terms using chainlink oracle
-        assets = totalCollateral();
+        assets = _totalCollateralInWeth();
 
         // subtract the debt
         assets -= totalDebt();
@@ -222,21 +209,8 @@ contract scWETHv2 is AdapterVault, IFlashLoanRecipient {
         assets += asset.balanceOf(address(this));
     }
 
-    /// @notice returns the total assets supplied as collateral (in WETH terms)
+    /// @notice returns the total wstEth supplied as collateral
     function totalCollateral() public view returns (uint256 collateral) {
-        uint256 n = protocolAdapters.length();
-        address adapter;
-        for (uint256 i; i < n; i++) {
-            (, adapter) = protocolAdapters.at(i);
-            collateral += IAdapter(adapter).getCollateral(address(this));
-        }
-
-        // TODO: I wouldn't use this coversion here since it's confusing to have collateral returned in weth and repaying debt in wstEth
-        collateral = priceConverter.wstEthToEth(collateral);
-    }
-
-    // TODO: would prefer to use this instead of the above because we are supplying and withdrawing wstEth and not eth
-    function totalCollateral2() public view returns (uint256 collateral) {
         uint256 n = protocolAdapters.length();
         address adapter;
         for (uint256 i; i < n; i++) {
@@ -351,7 +325,7 @@ contract scWETHv2 is AdapterVault, IFlashLoanRecipient {
     function _withdrawToVault(uint256 _amount) internal {
         uint256 n = protocolAdapters.length();
         uint256 flashLoanAmount;
-        uint256 totalInvested_ = totalCollateral() - totalDebt();
+        uint256 totalInvested_ = _totalCollateralInWeth() - totalDebt();
         bytes[] memory callData = new bytes[](n + 1);
 
         uint256 flashLoanAmount_;
@@ -434,7 +408,7 @@ contract scWETHv2 is AdapterVault, IFlashLoanRecipient {
     function _harvest() internal {
         // store the old total
         uint256 oldTotalInvested = totalInvested;
-        uint256 assets = totalCollateral() - totalDebt();
+        uint256 assets = _totalCollateralInWeth() - totalDebt();
 
         if (assets > oldTotalInvested) {
             totalInvested = assets;
@@ -451,5 +425,9 @@ contract scWETHv2 is AdapterVault, IFlashLoanRecipient {
             // TODO: change name to Harvested
             emit Harvest(profit, fee);
         }
+    }
+
+    function _totalCollateralInWeth() internal view returns (uint256) {
+        return priceConverter.wstEthToEth(totalCollateral());
     }
 }

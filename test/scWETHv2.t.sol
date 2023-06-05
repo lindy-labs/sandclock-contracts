@@ -22,7 +22,7 @@ import {ICurvePool} from "../src/interfaces/curve/ICurvePool.sol";
 import {IVault} from "../src/interfaces/balancer/IVault.sol";
 import {AggregatorV3Interface} from "../src/interfaces/chainlink/AggregatorV3Interface.sol";
 import {sc4626} from "../src/sc4626.sol";
-import {scWETHv2Helper} from "../src/phase-2/scWETHv2Helper.sol";
+import {scWETHv2Helper} from "./helpers/scWETHv2Helper.sol";
 import "../src/errors/scErrors.sol";
 
 import {IAdapter} from "../src/steth/IAdapter.sol";
@@ -523,8 +523,11 @@ contract scWETHv2Test is Test {
         callData[0] = abi.encodeWithSelector(
             scWETHv2.repayAndWithdraw.selector, compoundV3AdapterId, expectedWethAmountAfterSwap, wstEthAmountToWithdraw
         );
-        callData[1] =
-            abi.encodeWithSelector(scWETHv2.swapWstEthToWethOnZeroEx.selector, wstEthAmountToWithdraw, 0, swapData);
+
+        // swap wstEth to weth using zeroEx swap
+        callData[1] = abi.encodeWithSelector(
+            scWETHv2.swapTokensWith0x.selector, swapData, address(wstEth), wstEthAmountToWithdraw, 0
+        );
 
         hoax(keeper);
         vault.rebalance(0, expectedWethAmountAfterSwap, callData);
@@ -582,7 +585,7 @@ contract scWETHv2Test is Test {
         hoax(keeper);
         vault.rebalance(investAmount, totalFlashLoanAmount, callData);
 
-        uint256 assets = vault.totalCollateral() - vault.totalDebt();
+        uint256 assets = priceConverter.wstEthToEth(vault.totalCollateral()) - vault.totalDebt();
         uint256 floatBalance = amount - investAmount;
 
         assertEq(weth.balanceOf(address(vault)), floatBalance, "float amount error");
@@ -611,7 +614,7 @@ contract scWETHv2Test is Test {
 
         uint256 dust = 100;
         assertLt(vault.totalDebt(), dust, "test_withdrawToVault getDebt error");
-        assertLt(vault.totalCollateral(), dust, "test_withdrawToVault getCollateral error");
+        assertLt(priceConverter.wstEthToEth(vault.totalCollateral()), dust, "test_withdrawToVault getCollateral error");
         assertApproxEqRel(
             weth.balanceOf(address(vault)) - floatBalance, assets, maxAssetsDelta, "test_withdrawToVault asset balance"
         );
@@ -846,9 +849,9 @@ contract scWETHv2Test is Test {
         vault.rebalance(investAmount, aaveV3FlashLoanAmount, callData);
 
         // move half position from aave v3 to compound v3
-        uint256 totalCollateral = vault.totalCollateral2();
+        uint256 totalCollateral = vault.totalCollateral();
         uint256 totalDebt = vault.totalDebt();
-        uint256 collateralToMove = vaultHelper.getCollateral2(aaveV3Adapter) / 2;
+        uint256 collateralToMove = vaultHelper.getCollateral(aaveV3Adapter) / 2;
         uint256 debtToMove = vaultHelper.getDebt(aaveV3Adapter) / 2;
 
         callData = new bytes[](2);
@@ -861,12 +864,12 @@ contract scWETHv2Test is Test {
         hoax(keeper);
         vault.rebalance(0, flashLoanAmount, callData);
 
-        assertApproxEqAbs(vault.totalCollateral2(), totalCollateral, 2, "total collateral changed");
+        assertApproxEqAbs(vault.totalCollateral(), totalCollateral, 2, "total collateral changed");
         assertApproxEqAbs(
-            vaultHelper.getCollateral2(aaveV3Adapter), totalCollateral - collateralToMove, 2, "collateral on aave v3"
+            vaultHelper.getCollateral(aaveV3Adapter), totalCollateral - collateralToMove, 2, "collateral on aave v3"
         );
         assertApproxEqAbs(
-            vaultHelper.getCollateral2(compoundV3Adapter), collateralToMove, 2, "collateral on compound v3"
+            vaultHelper.getCollateral(compoundV3Adapter), collateralToMove, 2, "collateral on compound v3"
         );
         assertApproxEqAbs(vault.totalDebt(), totalDebt, 2, "total debt changed");
         assertApproxEqAbs(vaultHelper.getDebt(aaveV3Adapter), totalDebt - debtToMove, 2, "debt on aave v3");
@@ -983,7 +986,7 @@ contract scWETHv2Test is Test {
         returns (uint256 flashLoanAmount)
     {
         uint256 debt = vaultHelper.getDebt(adapter);
-        uint256 collateral = vaultHelper.getCollateral(adapter);
+        uint256 collateral = vaultHelper.getCollateralInWeth(adapter);
 
         uint256 target = targetLtv[adapter].mulWadDown(amount + collateral);
 
@@ -997,7 +1000,7 @@ contract scWETHv2Test is Test {
         returns (uint256 flashLoanAmount)
     {
         uint256 debt = vaultHelper.getDebt(adapter);
-        uint256 collateral = vaultHelper.getCollateral(adapter);
+        uint256 collateral = vaultHelper.getCollateralInWeth(adapter);
 
         uint256 target = ltv.mulWadDown(amount + collateral);
 
@@ -1275,17 +1278,17 @@ contract scWETHv2Test is Test {
     }
 
     function _investChecks(uint256 amount, uint256 totalSupplyAmount, uint256 totalDebtTaken) internal {
-        uint256 totalCollateral = vault.totalCollateral();
+        uint256 totalCollateral = priceConverter.wstEthToEth(vault.totalCollateral());
         uint256 totalDebt = vault.totalDebt();
         assertApproxEqRel(totalCollateral - totalDebt, amount, 0.01e18, "totalAssets not equal amount");
         assertEq(vault.totalInvested(), amount, "totalInvested not updated");
         assertApproxEqRel(totalCollateral, totalSupplyAmount, 0.0001e18, "totalCollateral not equal totalSupplyAmount");
         assertApproxEqRel(totalDebt, totalDebtTaken, 100, "totalDebt not equal totalDebtTaken");
 
-        uint256 aaveV3Deposited = vaultHelper.getCollateral(aaveV3Adapter) - vaultHelper.getDebt(aaveV3Adapter);
-        uint256 eulerDeposited = vaultHelper.getCollateral(eulerAdapter) - vaultHelper.getDebt(eulerAdapter);
+        uint256 aaveV3Deposited = vaultHelper.getCollateralInWeth(aaveV3Adapter) - vaultHelper.getDebt(aaveV3Adapter);
+        uint256 eulerDeposited = vaultHelper.getCollateralInWeth(eulerAdapter) - vaultHelper.getDebt(eulerAdapter);
         uint256 compoundDeposited =
-            vaultHelper.getCollateral(compoundV3Adapter) - vaultHelper.getDebt(compoundV3Adapter);
+            vaultHelper.getCollateralInWeth(compoundV3Adapter) - vaultHelper.getDebt(compoundV3Adapter);
 
         assertApproxEqRel(
             aaveV3Deposited, amount.mulWadDown(aaveV3AllocationPercent), 0.005e18, "aaveV3 allocation not correct"
