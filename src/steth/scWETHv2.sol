@@ -125,15 +125,13 @@ contract scWETHv2 is AdapterVault, IFlashLoanRecipient {
     /// @dev to be used to ideally swap wstEth to weth, weth to wstEth during rebalancing using 0x api
     /// @dev can also be used to swap between other tokens
     /// @param _inToken address of the token to swap from
-    function swapTokensWith0x(bytes calldata _swapData, address _inToken, uint256 _amountIn, uint256 _wethAmountOutMin)
+    function swapTokensWith0x(bytes calldata _swapData, address _inToken, uint256 _amountIn, uint256 _amountOutMin)
         external
     {
         _onlyKeeperOrFlashLoan();
 
         address(swapper).functionDelegateCall(
-            abi.encodeWithSelector(
-                Swapper.zeroExSwap.selector, _inToken, asset, _amountIn, _wethAmountOutMin, _swapData
-            )
+            abi.encodeWithSelector(Swapper.zeroExSwap.selector, _inToken, asset, _amountIn, _amountOutMin, _swapData)
         );
 
         // TODO: fix event

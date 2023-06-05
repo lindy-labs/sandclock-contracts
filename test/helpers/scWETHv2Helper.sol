@@ -7,8 +7,7 @@ import {scWETHv2} from "../../src/steth/scWETHv2.sol";
 import {PriceConverter} from "../../src/steth/PriceConverter.sol";
 import {IAdapter} from "../../src/steth/IAdapter.sol";
 
-// TODO: as of my understanding, this contract came to life because of one primary reason, to reduce the scWETHv2 contract size. With the new design, i think this can also be removed since the scWETHv2 will become fairly small and simple
-// @title helper contract for just the external view methods to be used by the backend
+/// @title helper contract for just the external view methods to be used by the backend
 contract scWETHv2Helper {
     using FixedPointMathLib for uint256;
 
