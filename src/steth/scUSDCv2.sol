@@ -11,7 +11,8 @@ import {
     AmountReceivedBelowMin,
     ProtocolNotSupported,
     ProtocolInUse,
-    FloatBalanceTooLow
+    FloatBalanceTooLow,
+    InvalidSlippageTolerance
 } from "../errors/scErrors.sol";
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
@@ -23,15 +24,13 @@ import {Address} from "openzeppelin-contracts/utils/Address.sol";
 import {EnumerableMap} from "openzeppelin-contracts/utils/structs/EnumerableMap.sol";
 
 import {Constants as C} from "../lib/Constants.sol";
-import {IVault} from "../interfaces/balancer/IVault.sol";
 import {ISwapRouter} from "../interfaces/uniswap/ISwapRouter.sol";
 import {AggregatorV3Interface} from "../interfaces/chainlink/AggregatorV3Interface.sol";
 import {IFlashLoanRecipient} from "../interfaces/balancer/IFlashLoanRecipient.sol";
-import {scUSDCBase} from "./scUSDCBase.sol";
 import {IAdapter} from "./IAdapter.sol";
 import {PriceConverter} from "./PriceConverter.sol";
 import {Swapper} from "./Swapper.sol";
-import {AdapterVault} from "./AdapterVault.sol";
+import {BaseV2Vault} from "./BaseV2Vault.sol";
 
 /**
  * @title Sandclock USDC Vault version 2
@@ -39,12 +38,17 @@ import {AdapterVault} from "./AdapterVault.sol";
  * @notice The v2 vault uses multiple lending markets to earn yield on USDC deposits and borrow WETH to stake.
  * @dev This vault uses Sandclock's leveraged WETH staking vault - scWETH.
  */
-contract scUSDCv2 is AdapterVault, scUSDCBase {
+contract scUSDCv2 is BaseV2Vault {
     using SafeTransferLib for ERC20;
     using SafeTransferLib for WETH;
     using FixedPointMathLib for uint256;
     using Address for address;
     using EnumerableMap for EnumerableMap.UintToAddressMap;
+
+    WETH public immutable weth;
+
+    // leveraged (w)eth vault
+    ERC4626 public immutable scWETH;
 
     /**
      * @notice Enum indicating the purpose of a flashloan.
@@ -68,20 +72,11 @@ contract scUSDCv2 is AdapterVault, scUSDCBase {
     event Invested(uint256 wethAmount);
     event Disinvested(uint256 wethAmount);
 
-    // Balancer vault for flashloans
-    IVault public constant balancerVault = IVault(C.BALANCER_VAULT);
-
-    // price converter contract
-    PriceConverter public immutable priceConverter;
-
-    // swapper contract for facilitating token swaps
-    Swapper public immutable swapper;
-
     constructor(address _admin, address _keeper, ERC4626 _scWETH, PriceConverter _priceConverter, Swapper _swapper)
-        scUSDCBase(_admin, _keeper, ERC20(C.USDC), WETH(payable(C.WETH)), _scWETH, "Sandclock USDC Vault v2", "scUSDCv2")
+        BaseV2Vault(_admin, _keeper, ERC20(C.USDC), _priceConverter, _swapper, "Sandclock USDC Vault v2", "scUSDCv2")
     {
-        priceConverter = _priceConverter;
-        swapper = _swapper;
+        weth = WETH(payable(C.WETH));
+        scWETH = _scWETH;
 
         weth.safeApprove(address(scWETH), type(uint256).max);
     }
@@ -524,7 +519,9 @@ contract scUSDCv2 is AdapterVault, scUSDCBase {
 
     function _swapWethForUsdc(uint256 _wethAmount, uint256 _usdcAmountOutMin) internal returns (uint256) {
         bytes memory result = address(swapper).functionDelegateCall(
-            abi.encodeWithSelector(Swapper.uniswapSwapExactInput.selector, weth, asset, _wethAmount, _usdcAmountOutMin, 500 /* pool fee*/) 
+            abi.encodeWithSelector(
+                Swapper.uniswapSwapExactInput.selector, weth, asset, _wethAmount, _usdcAmountOutMin, 500 /* pool fee*/
+            )
         );
 
         return abi.decode(result, (uint256));

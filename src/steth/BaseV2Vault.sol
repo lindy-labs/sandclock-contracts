@@ -1,17 +1,20 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.19;
 
-import {ProtocolNotSupported, ProtocolInUse} from "../errors/scErrors.sol";
-
+import {ERC20} from "solmate/tokens/ERC20.sol";
 import {Address} from "openzeppelin-contracts/utils/Address.sol";
 import {EnumerableMap} from "openzeppelin-contracts/utils/structs/EnumerableMap.sol";
 
+import {ProtocolNotSupported, ProtocolInUse} from "../errors/scErrors.sol";
+import {Constants as C} from "../lib/Constants.sol";
+import {IVault} from "../interfaces/balancer/IVault.sol";
+import {IFlashLoanRecipient} from "../interfaces/balancer/IFlashLoanRecipient.sol";
 import {IAdapter} from "./IAdapter.sol";
 import {PriceConverter} from "./PriceConverter.sol";
 import {Swapper} from "./Swapper.sol";
 import {sc4626} from "../sc4626.sol";
 
-abstract contract AdapterVault is sc4626 {
+abstract contract BaseV2Vault is sc4626, IFlashLoanRecipient {
     using Address for address;
     using EnumerableMap for EnumerableMap.UintToAddressMap;
 
@@ -19,8 +22,32 @@ abstract contract AdapterVault is sc4626 {
     event ProtocolAdapterRemoved(address indexed admin, uint256 adapterId);
     event RewardsClaimed(uint256 adapterId);
 
+    // Balancer vault for flashloans
+    IVault public constant balancerVault = IVault(C.BALANCER_VAULT);
+
+    // price converter contract
+    PriceConverter public immutable priceConverter;
+
+    // swapper contract for facilitating token swaps
+    Swapper public swapper;
+
     // mapping of IDs to lending protocol adapter contracts
     EnumerableMap.UintToAddressMap internal protocolAdapters;
+
+    constructor(
+        address _admin,
+        address _keeper,
+        ERC20 _asset,
+        PriceConverter _priceConverter,
+        Swapper _swapper,
+        string memory _name,
+        string memory _symbol
+    ) sc4626(_admin, _keeper, _asset, _name, _symbol) {
+        // TODO: add checks for zero address
+
+        priceConverter = _priceConverter;
+        swapper = _swapper;
+    }
 
     /**
      * @notice Add a new protocol adapter to the vault.

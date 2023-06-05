@@ -1532,7 +1532,6 @@ contract scWETHv2Test is Test {
             keeper: keeper,
             slippageTolerance: slippageTolerance,
             weth: C.WETH,
-            balancerVault: IVault(C.BALANCER_VAULT),
             swapper: new Swapper(),
             priceConverter: priceConverter
         });

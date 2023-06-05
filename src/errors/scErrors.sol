@@ -20,7 +20,6 @@ error InsufficientDepositBalance();
 error FloatBalanceTooSmall(uint256 actual, uint256 required);
 error TokenSwapFailed(address from, address to);
 error AmountReceivedBelowMin();
-error ProtocolAlreadySupported();
 error ProtocolContainsFunds();
 error FlashLoanAmountZero();
 error ProtocolNotSupported(uint256 protocolId);

@@ -13,7 +13,6 @@ import {
     FloatBalanceTooSmall,
     TokenSwapFailed,
     AmountReceivedBelowMin,
-    ProtocolAlreadySupported,
     ProtocolNotSupported,
     ProtocolContainsFunds
 } from "../errors/scErrors.sol";
@@ -33,19 +32,17 @@ import {ICurvePool} from "../interfaces/curve/ICurvePool.sol";
 import {ILido} from "../interfaces/lido/ILido.sol";
 import {IwstETH} from "../interfaces/lido/IwstETH.sol";
 import {IVault} from "../interfaces/balancer/IVault.sol";
-import {IFlashLoanRecipient} from "../interfaces/balancer/IFlashLoanRecipient.sol";
 import {PriceConverter} from "./PriceConverter.sol";
 import {IAdapter} from "./IAdapter.sol";
 import {Swapper} from "./Swapper.sol";
-import {AdapterVault} from "./AdapterVault.sol";
+import {BaseV2Vault} from "./BaseV2Vault.sol";
 
-contract scWETHv2 is AdapterVault, IFlashLoanRecipient {
+contract scWETHv2 is BaseV2Vault {
     using SafeTransferLib for ERC20;
     using FixedPointMathLib for uint256;
     using Address for address;
     using EnumerableMap for EnumerableMap.UintToAddressMap;
 
-    event SlippageToleranceUpdated(address indexed admin, uint256 newSlippageTolerance);
     event Harvest(uint256 profitSinceLastHarvest, uint256 performanceFee);
     event TokensSwapped(address inToken, address outToken);
     event FloatAmountUpdated(address indexed user, uint256 newFloatAmount);
@@ -55,7 +52,6 @@ contract scWETHv2 is AdapterVault, IFlashLoanRecipient {
         address keeper;
         uint256 slippageTolerance;
         address weth;
-        IVault balancerVault;
         Swapper swapper;
         PriceConverter priceConverter;
     }
@@ -66,29 +62,24 @@ contract scWETHv2 is AdapterVault, IFlashLoanRecipient {
     // total profit generated for this vault
     uint256 public totalProfit;
 
-    // slippage for curve swaps
-    uint256 public slippageTolerance;
     uint256 public minimumFloatAmount = 1 ether;
-
-    // Balancer vault for flashloans
-    IVault public immutable balancerVault;
-
-    PriceConverter public immutable priceConverter;
-
-    Swapper public swapper;
 
     IwstETH constant wstETH = IwstETH(C.WSTETH);
 
     constructor(ConstructorParams memory _params)
-        sc4626(_params.admin, _params.keeper, ERC20(_params.weth), "Sandclock WETH Vault v2", "scWETHv2")
+        BaseV2Vault(
+            _params.admin,
+            _params.keeper,
+            ERC20(_params.weth),
+            _params.priceConverter,
+            _params.swapper,
+            "Sandclock WETH Vault v2",
+            "scWETHv2"
+        )
     {
         if (_params.slippageTolerance > C.ONE) revert InvalidSlippageTolerance();
 
         slippageTolerance = _params.slippageTolerance;
-        balancerVault = _params.balancerVault;
-
-        swapper = _params.swapper;
-        priceConverter = _params.priceConverter;
     }
 
     /////////////////// ADMIN/KEEPER METHODS //////////////////////////////////
@@ -96,19 +87,6 @@ contract scWETHv2 is AdapterVault, IFlashLoanRecipient {
     function setSwapper(address _swapper) external {
         _onlyAdmin();
         swapper = Swapper(_swapper);
-    }
-
-    /// @notice set the slippage tolerance for curve swaps
-    /// @param _newSlippageTolerance the new slippage tolerance
-    /// @dev slippage tolerance is a number between 0 and 1e18
-    function setSlippageTolerance(uint256 _newSlippageTolerance) external {
-        _onlyAdmin();
-
-        if (_newSlippageTolerance > C.ONE) revert InvalidSlippageTolerance();
-
-        slippageTolerance = _newSlippageTolerance;
-
-        emit SlippageToleranceUpdated(msg.sender, _newSlippageTolerance);
     }
 
     /// @notice set the minimum amount of weth that must be present in the vault
