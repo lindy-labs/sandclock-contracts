@@ -47,15 +47,6 @@ contract scWETHv2 is BaseV2Vault {
     event TokensSwapped(address inToken, address outToken);
     event FloatAmountUpdated(address indexed user, uint256 newFloatAmount);
 
-    struct ConstructorParams {
-        address admin;
-        address keeper;
-        uint256 slippageTolerance;
-        address weth;
-        Swapper swapper;
-        PriceConverter priceConverter;
-    }
-
     // total invested during last harvest/rebalance
     uint256 public totalInvested;
 
@@ -66,20 +57,17 @@ contract scWETHv2 is BaseV2Vault {
 
     IwstETH constant wstETH = IwstETH(C.WSTETH);
 
-    constructor(ConstructorParams memory _params)
-        BaseV2Vault(
-            _params.admin,
-            _params.keeper,
-            ERC20(_params.weth),
-            _params.priceConverter,
-            _params.swapper,
-            "Sandclock WETH Vault v2",
-            "scWETHv2"
-        )
-    {
-        if (_params.slippageTolerance > C.ONE) revert InvalidSlippageTolerance();
+    constructor(
+        address _admin,
+        address _keeper,
+        uint256 _slippageTolerance, // TODO: do we really need this param?
+        WETH _weth,
+        Swapper _swapper,
+        PriceConverter _priceConverter
+    ) BaseV2Vault(_admin, _keeper, _weth, _priceConverter, _swapper, "Sandclock WETH Vault v2", "scWETHv2") {
+        if (_slippageTolerance > C.ONE) revert InvalidSlippageTolerance();
 
-        slippageTolerance = _params.slippageTolerance;
+        slippageTolerance = _slippageTolerance;
     }
 
     /////////////////// ADMIN/KEEPER METHODS //////////////////////////////////

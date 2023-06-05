@@ -82,8 +82,7 @@ contract scWETHv2Test is Test {
         vm.rollFork(_blockNumber);
 
         priceConverter = new PriceConverter(address(this));
-        scWETHv2.ConstructorParams memory params = _createDefaultWethv2VaultConstructorParams();
-        vault = new scWETHv2(params);
+        vault = _deployVaultWithDefaultParams();
         vaultHelper = new scWETHv2Helper(vault, priceConverter);
 
         weth = WETH(payable(address(vault.asset())));
@@ -1526,15 +1525,8 @@ contract scWETHv2Test is Test {
         vm.stopPrank();
     }
 
-    function _createDefaultWethv2VaultConstructorParams() internal returns (scWETHv2.ConstructorParams memory) {
-        return scWETHv2.ConstructorParams({
-            admin: admin,
-            keeper: keeper,
-            slippageTolerance: slippageTolerance,
-            weth: C.WETH,
-            swapper: new Swapper(),
-            priceConverter: priceConverter
-        });
+    function _deployVaultWithDefaultParams() internal returns (scWETHv2) {
+        return new scWETHv2(admin, keeper, slippageTolerance, WETH(payable(C.WETH)), new Swapper(), priceConverter);
     }
 
     function _simulate_stEthStakingInterest(uint256 timePeriod, uint256 stEthStakingInterest) internal {
