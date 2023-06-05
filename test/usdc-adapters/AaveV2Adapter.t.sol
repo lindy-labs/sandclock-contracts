@@ -7,7 +7,7 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 import {WETH} from "solmate/tokens/WETH.sol";
 
 import {Constants as C} from "../../src/lib/Constants.sol";
-import {IAdapter} from "../../src/steth/usdc-adapters/IAdapter.sol";
+import {IAdapter} from "../../src/steth/IAdapter.sol";
 import {AaveV2Adapter} from "../../src/steth/usdc-adapters/AaveV2Adapter.sol";
 
 contract AaveV2AdapterTest is Test {

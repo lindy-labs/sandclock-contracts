@@ -28,7 +28,7 @@ import {ISwapRouter} from "../interfaces/uniswap/ISwapRouter.sol";
 import {AggregatorV3Interface} from "../interfaces/chainlink/AggregatorV3Interface.sol";
 import {IFlashLoanRecipient} from "../interfaces/balancer/IFlashLoanRecipient.sol";
 import {scUSDCBase} from "./scUSDCBase.sol";
-import {IAdapter} from "./usdc-adapters/IAdapter.sol";
+import {IAdapter} from "./IAdapter.sol";
 import {PriceConverter} from "./PriceConverter.sol";
 import {Swapper} from "./Swapper.sol";
 

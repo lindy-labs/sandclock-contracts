@@ -25,7 +25,7 @@ import {sc4626} from "../../src/sc4626.sol";
 import {scWETHv2Helper} from "../../src/phase-2/scWETHv2Helper.sol";
 import "../../src/errors/scErrors.sol";
 
-import {IAdapter} from "../../src/scWeth-adapters/IAdapter.sol";
+import {IAdapter} from "../../src/steth/IAdapter.sol";
 import {AaveV3Adapter} from "../../src/scWeth-adapters/AaveV3Adapter.sol";
 import {CompoundV3Adapter} from "../../src/scWeth-adapters/CompoundV3Adapter.sol";
 import {EulerAdapter} from "../../src/scWeth-adapters/EulerAdapter.sol";

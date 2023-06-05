@@ -35,7 +35,7 @@ import {IwstETH} from "../interfaces/lido/IwstETH.sol";
 import {IVault} from "../interfaces/balancer/IVault.sol";
 import {IFlashLoanRecipient} from "../interfaces/balancer/IFlashLoanRecipient.sol";
 import {PriceConverter} from "../steth/PriceConverter.sol";
-import {IAdapter} from "../scWeth-adapters/IAdapter.sol";
+import {IAdapter} from "../steth/IAdapter.sol";
 import {Swapper} from "../steth/Swapper.sol";
 
 contract scWETHv2 is sc4626, IFlashLoanRecipient {

@@ -15,7 +15,7 @@ import {IEulerMarkets, IEulerEToken, IEulerDToken} from "lib/euler-interfaces/co
 import {Constants as C} from "../src/lib/Constants.sol";
 import {ILendingPool} from "../src/interfaces/aave-v2/ILendingPool.sol";
 import {IProtocolDataProvider} from "../src/interfaces/aave-v2/IProtocolDataProvider.sol";
-import {IAdapter} from "../src/steth/usdc-adapters/IAdapter.sol";
+import {IAdapter} from "../src/steth/IAdapter.sol";
 import {scUSDCv2} from "../src/steth/scUSDCv2.sol";
 import {AaveV2Adapter} from "../src/steth/usdc-adapters/AaveV2Adapter.sol";
 import {AaveV3Adapter} from "../src/steth/usdc-adapters/AaveV3Adapter.sol";

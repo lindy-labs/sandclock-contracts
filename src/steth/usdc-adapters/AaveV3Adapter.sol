@@ -2,17 +2,21 @@
 pragma solidity ^0.8.19;
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
+import {WETH} from "solmate/tokens/WETH.sol";
 import {IPool} from "aave-v3/interfaces/IPool.sol";
 import {IPoolDataProvider} from "aave-v3/interfaces/IPoolDataProvider.sol";
 
 import {Constants as C} from "../../lib/Constants.sol";
-import {IAdapter} from "./IAdapter.sol";
+import {IAdapter} from "../IAdapter.sol";
 
 /**
  * @title Aave v3 Lending Protocol Adapter
  * @notice Facilitates lending and borrowing for the Aave v3 lending protocol
  */
 contract AaveV3Adapter is IAdapter {
+    ERC20 constant usdc = ERC20(C.USDC);
+    WETH constant weth = WETH(payable(C.WETH));
+
     // Aave v3 pool contract
     IPool public constant pool = IPool(C.AAVE_POOL);
     // Aave v3 pool data provider contract
