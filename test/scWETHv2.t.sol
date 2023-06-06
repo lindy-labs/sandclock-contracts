@@ -287,8 +287,7 @@ contract scWETHv2Test is Test {
         vault.withdraw(1e18, address(this), address(this));
     }
 
-    // TODO: the following 3 tests can be added to Swapper.t.sol
-    function test_swapWith0x_EulerToWeth() public {
+    function test_zeroExSwap_EulerToWeth() public {
         _setUp(17322802);
 
         uint256 expectedWethAmount = 988320853404199400;
@@ -309,44 +308,21 @@ contract scWETHv2Test is Test {
         assertEq(ERC20(EULER_TOKEN).balanceOf(address(vault)), 0, "euler token not transferred out");
     }
 
-    // function test_swap0x_wethToWstEthSwapRouter() public {
-    //     _setUp(17323024);
-    //     address wethToWstEthSwapRouter = vault.wethToWstEthSwapRouter();
+    function test_zeroExSwap_WstEthToWeth() public {
+        _setUp(17323024);
 
-    //     assertEq(ISwapRouter(wethToWstEthSwapRouter).from(), address(weth));
-    //     assertEq(ISwapRouter(wethToWstEthSwapRouter).to(), address(wstEth));
+        uint256 wstEthAmount = 10 ether;
+        uint256 expectedWethAmount = 11115533999999999999;
+        bytes memory swapData =
+            hex"6af479b200000000000000000000000000000000000000000000000000000000000000800000000000000000000000000000000000000000000000008ac7230489e800000000000000000000000000000000000000000000000000009a774c31cfce1ae70000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002b7f39c581f595b53c5cb19bd0b3f8da6c935e2ca00001f4c02aaa39b223fe8d0a0e5c4f27ead9083c756cc2000000000000000000000000000000000000000000869584cd00000000000000000000000010000000000000000000000000000000000000110000000000000000000000000000000000000000000000513368369c646ce7f5";
 
-    //     uint256 wethAmount = 10 ether;
-    //     uint256 expectedWstEthAmount = 8885460263580892781;
-    //     bytes memory swapData =
-    //         hex"6af479b200000000000000000000000000000000000000000000000000000000000000800000000000000000000000000000000000000000000000008ac7230489e800000000000000000000000000000000000000000000000000007a13d23e01d26dcd0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002bc02aaa39b223fe8d0a0e5c4f27ead9083c756cc20001f47f39c581f595b53c5cb19bd0b3f8da6c935e2ca0000000000000000000000000000000000000000000869584cd0000000000000000000000001000000000000000000000000000000000000011000000000000000000000000000000000000000000000037e6411f4d646ce741";
+        deal(address(wstEth), address(vault), wstEthAmount);
+        vm.prank(keeper);
+        vault.zeroExSwap(ERC20(address(wstEth)), wstEthAmount, swapData, 0);
 
-    //     deal(address(weth), address(this), wethAmount);
-    //     wethToWstEthSwapRouter.functionDelegateCall(
-    //         abi.encodeWithSelector(ISwapRouter.swap0x.selector, swapData, wethAmount)
-    //     );
-    //     assertGe(wstEth.balanceOf(address(this)), expectedWstEthAmount, "wstEth not received");
-    //     assertEq(weth.balanceOf(address(this)), 0, "weth not transferred out");
-    // }
-
-    // function test_swap0x_wstEthToWethSwapRouter() public {
-    //     _setUp(17323024);
-    //     address wstEthToWethSwapRouter = vault.wstEthToWethSwapRouter();
-    //     assertEq(ISwapRouter(wstEthToWethSwapRouter).from(), address(wstEth));
-    //     assertEq(ISwapRouter(wstEthToWethSwapRouter).to(), address(weth));
-
-    //     uint256 wstEthAmount = 10 ether;
-    //     uint256 expectedWethAmount = 11115533999999999999;
-    //     bytes memory swapData =
-    //         hex"6af479b200000000000000000000000000000000000000000000000000000000000000800000000000000000000000000000000000000000000000008ac7230489e800000000000000000000000000000000000000000000000000009a774c31cfce1ae70000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002b7f39c581f595b53c5cb19bd0b3f8da6c935e2ca00001f4c02aaa39b223fe8d0a0e5c4f27ead9083c756cc2000000000000000000000000000000000000000000869584cd00000000000000000000000010000000000000000000000000000000000000110000000000000000000000000000000000000000000000513368369c646ce7f5";
-
-    //     deal(address(wstEth), address(this), wstEthAmount);
-    //     wstEthToWethSwapRouter.functionDelegateCall(
-    //         abi.encodeWithSelector(ISwapRouter.swap0x.selector, swapData, wstEthAmount)
-    //     );
-    //     assertGe(weth.balanceOf(address(this)), expectedWethAmount, "weth not received");
-    //     assertEq(wstEth.balanceOf(address(this)), 0, "wstEth not transferred out");
-    // }
+        assertGe(weth.balanceOf(address(vault)), expectedWethAmount, "weth not received");
+        assertEq(wstEth.balanceOf(address(vault)), 0, "wstEth not transferred out");
+    }
 
     function test_invest_FloatBalanceTooLow(uint256 amount) public {
         _setUp(BLOCK_BEFORE_EULER_EXPLOIT);
