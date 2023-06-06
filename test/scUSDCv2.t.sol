@@ -112,6 +112,30 @@ contract scUSDCv2Test is Test {
         assertEq(weth.allowance(address(vault), address(vault.scWETH())), type(uint256).max, "scWETH allowance");
     }
 
+    function test_constructor_FailsIfScWethIsZeroAddress() public {
+        _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
+        wethVault = scWETH(payable(0x0));
+
+        vm.expectRevert(ZeroAddress.selector);
+        new scUSDCv2(alice, keeper, wethVault, priceConverter, swapper);
+    }
+
+    function test_constructor_FailsIfPriceConverterIsZeroAddress() public {
+        _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
+        priceConverter = PriceConverter(address(0x0));
+
+        vm.expectRevert(ZeroAddress.selector);
+        new scUSDCv2(address(this), keeper, wethVault, priceConverter, swapper);
+    }
+
+    function test_constructor_FailsIfSwapperIsZeroAddress() public {
+        _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
+        swapper = Swapper(address(0x0));
+
+        vm.expectRevert(ZeroAddress.selector);
+        new scUSDCv2(address(this), keeper, wethVault, priceConverter, swapper);
+    }
+
     /// #setSwapper ///
 
     function test_setSwapper_FailsIfCallerIsNotAdmin() public {

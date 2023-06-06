@@ -45,7 +45,8 @@ abstract contract BaseV2Vault is sc4626, IFlashLoanRecipient {
         string memory _name,
         string memory _symbol
     ) sc4626(_admin, _keeper, _asset, _name, _symbol) {
-        // TODO: add checks for zero address
+        _zeroAddressCheck(address(_priceConverter));
+        _zeroAddressCheck(address(_swapper));
 
         priceConverter = _priceConverter;
         swapper = _swapper;
@@ -155,5 +156,9 @@ abstract contract BaseV2Vault is sc4626, IFlashLoanRecipient {
 
     function _isSupportedCheck(uint256 _adapterId) internal view {
         if (!isSupported(_adapterId)) revert ProtocolNotSupported(_adapterId);
+    }
+
+    function _zeroAddressCheck(address _address) internal pure {
+        if (_address == address(0)) revert ZeroAddress();
     }
 }

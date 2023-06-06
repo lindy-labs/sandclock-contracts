@@ -66,6 +66,8 @@ contract scUSDCv2 is BaseV2Vault {
     constructor(address _admin, address _keeper, ERC4626 _scWETH, PriceConverter _priceConverter, Swapper _swapper)
         BaseV2Vault(_admin, _keeper, ERC20(C.USDC), _priceConverter, _swapper, "Sandclock USDC Vault v2", "scUSDCv2")
     {
+        _zeroAddressCheck(address(_scWETH));
+
         scWETH = _scWETH;
 
         weth.safeApprove(address(scWETH), type(uint256).max);
