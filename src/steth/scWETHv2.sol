@@ -4,7 +4,6 @@ pragma solidity ^0.8.13;
 import {
     ZeroAddress,
     InvalidSlippageTolerance,
-    PleaseUseRedeemMethod,
     InsufficientDepositBalance,
     FloatBalanceTooLow
 } from "../errors/scErrors.sol";
@@ -130,8 +129,6 @@ contract scWETHv2 is BaseV2Vault {
         _onlyKeeper();
 
         _withdrawToVault(_amount);
-
-        emit WithdrawnToVault(_amount);
     }
 
     /// @notice returns the adapter address given the adapterId (only if the adaapterId is supported else returns zero address)
@@ -208,9 +205,31 @@ contract scWETHv2 is BaseV2Vault {
         afterDeposit(assets, shares);
     }
 
-    /// @dev : TODO
-    function withdraw(uint256, address, address) public virtual override returns (uint256) {
-        revert PleaseUseRedeemMethod();
+    function withdraw(uint256 assets, address receiver, address owner) public override returns (uint256 shares) {
+        shares = previewWithdraw(assets); // No need to check for rounding error, previewWithdraw rounds up.
+
+        if (msg.sender != owner) {
+            uint256 allowed = allowance[owner][msg.sender]; // Saves gas for limited approvals.
+
+            if (allowed != type(uint256).max) allowance[owner][msg.sender] = allowed - shares;
+        }
+
+        beforeWithdraw(assets, shares);
+
+        _burn(owner, shares);
+
+        uint256 balance = asset.balanceOf(address(this));
+
+        // since during withdrawing everything,
+        // actual withdrawn amount might be less than totalAsssets
+        // (due to slippage incurred during wstEth to weth swap)
+        if (assets > balance) {
+            assets = balance;
+        }
+
+        emit Withdraw(msg.sender, receiver, owner, assets, shares);
+
+        asset.safeTransfer(receiver, assets);
     }
 
     function redeem(uint256 shares, address receiver, address owner) public override returns (uint256 assets) {
@@ -229,6 +248,9 @@ contract scWETHv2 is BaseV2Vault {
 
         uint256 balance = asset.balanceOf(address(this));
 
+        // since during withdrawing everything,
+        // actual withdrawn amount might be less than totalAsssets
+        // (due to slippage incurred during wstEth to weth swap)
         if (assets > balance) {
             assets = balance;
         }
@@ -313,8 +335,11 @@ contract scWETHv2 is BaseV2Vault {
 
         callData[n] = abi.encodeWithSelector(scWETHv2.swapWstEthToWeth.selector, type(uint256).max, slippageTolerance);
 
-        // take flashloan
+        uint256 float = asset.balanceOf(address(this));
+
         _flashLoan(flashLoanAmount, callData);
+
+        emit WithdrawnToVault(asset.balanceOf(address(this)) - float);
     }
 
     /// @notice enforce float to be above the minimum required

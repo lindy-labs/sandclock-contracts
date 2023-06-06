@@ -280,13 +280,6 @@ contract scWETHv2Test is Test {
         balancer.flashLoan(address(vault), tokens, amounts, abi.encode(0, 0));
     }
 
-    function test_withdraw_revert() public {
-        _setUp(BLOCK_AFTER_EULER_EXPLOIT);
-
-        vm.expectRevert(PleaseUseRedeemMethod.selector);
-        vault.withdraw(1e18, address(this), address(this));
-    }
-
     function test_zeroExSwap_EulerToWeth() public {
         _setUp(17322802);
 
@@ -383,6 +376,26 @@ contract scWETHv2Test is Test {
         assertEq(aaveV3Adapter.getMaxLtv(), 0.9e18, "aaveV3 Max Ltv Error");
         assertEq(eulerAdapter.getMaxLtv(), 0.7565e18, "euler Max Ltv Error");
         assertEq(compoundV3Adapter.getMaxLtv(), 0.9e18, "compoundV3 Max Ltv Error");
+    }
+
+    function test_deposit_withdraw(uint256 amount) public {
+        _setUp(BLOCK_AFTER_EULER_EXPLOIT);
+
+        amount = bound(amount, boundMinimum, 1e27);
+        vm.deal(address(this), amount);
+        weth.deposit{value: amount}();
+        weth.approve(address(vault), amount);
+
+        uint256 preDepositBal = weth.balanceOf(address(this));
+
+        vault.deposit(amount, address(this));
+
+        _floatCheck();
+        _depositChecks(amount, preDepositBal);
+
+        vault.withdraw(amount, address(this), address(this));
+
+        _redeemChecks(preDepositBal);
     }
 
     function test_deposit_redeem(uint256 amount) public {
@@ -511,6 +524,32 @@ contract scWETHv2Test is Test {
         assertLt(wstEth.balanceOf(address(vault)), minimumDust, "wstEth dust after disinvest");
         assertApproxEqRel(vault.totalAssets(), assets, 0.001e18, "disinvest must not change total assets");
         assertGe(leverage, vaultHelper.getLeverage(), "leverage not decreased after disinvest");
+    }
+
+    function test_deposit_invest_withdraw(uint256 amount) public {
+        _setUp(BLOCK_BEFORE_EULER_EXPLOIT);
+
+        amount = bound(amount, boundMinimum, 10000 ether);
+
+        uint256 shares = _depositToVault(address(this), amount);
+
+        uint256 investAmount = amount - minimumFloatAmount;
+
+        (bytes[] memory callData,, uint256 totalFlashLoanAmount) =
+            _getInvestParams(investAmount, aaveV3AllocationPercent, eulerAllocationPercent, compoundAllocationPercent);
+
+        // deposit into strategy
+        hoax(keeper);
+        vault.rebalance(investAmount, totalFlashLoanAmount, callData);
+
+        uint256 userBalance = vault.convertToAssets(shares);
+
+        vault.withdraw(userBalance, address(this), address(this));
+
+        assertEq(vault.convertToAssets(10 ** vault.decimals()), 1e18);
+        assertEq(vault.balanceOf(address(this)), 0, "shares after withdraw error");
+        assertEq(vault.convertToAssets(vault.balanceOf(address(this))), 0, "convertToAssets after withdraw error");
+        assertApproxEqRel(weth.balanceOf(address(this)), userBalance, 0.005e18, "weth balance after withdraw error");
     }
 
     function test_deposit_invest_redeem(uint256 amount) public {
@@ -671,11 +710,6 @@ contract scWETHv2Test is Test {
         );
     }
 
-    // reallocate from aaveV3 to euler
-    // TODO: these tests that are testing higer to lower ltv markets and stuff are not really testing anything with the new design using multicalls,
-    // they actually represent different scenarios in which can happen and they all rely on doing some swaps between supply&borrow and repay&withdraw.
-    // With new multicall design they will become more of a backend fixture than a real vault test since having swaps happen is a matter of adding another call in the multicall calldata.
-    // I'm not saying to remove them but modifying them with the correct order of the calls in the multical calldata will achieve the same
     function test_reallocate_fromHigherLtvMarket_toLowerLtvMarket(uint256 amount) public {
         _setUp(BLOCK_BEFORE_EULER_EXPLOIT);
 
