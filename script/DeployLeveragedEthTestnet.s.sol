@@ -50,6 +50,7 @@ contract DeployScript is DeployLeveragedEth, Test {
         _profit(); // create scUSDC profit scenario
 
         _divergeLTV(_scWETH);
+        _divergeLTV(_scUSDC);
     }
 
     function _depositForUsers(ERC20 asset, sc4626 vaultToken) internal {
@@ -127,20 +128,33 @@ contract DeployScript is DeployLeveragedEth, Test {
     }
 
     function _divergeLTV(scWETH vaultToken) internal {
-        console2.log("forcing LTV diverge", "scWETH");
+        console2.log("forcing LTV diverge scWETH");
         ERC20 dWeth = ERC20(address(C.AAVAAVE_VAR_DEBT_WETH_TOKEN));
 
-        console2.log("LTV before", _scWETH.getLtv());
-        console2.log("token balance before", dWeth.balanceOf(address(_scUSDC)));
+        console2.log("LTV before", vaultToken.getLtv());
+        console2.log("dWeth token balance before", dWeth.balanceOf(address(vaultToken)));
 
-        _setTokenBalance(ERC20(C.AAVAAVE_VAR_DEBT_IMPLEMENTATION_CONTRACT), 420e18);
+        _setTokenBalance(ERC20(C.AAVAAVE_VAR_DEBT_IMPLEMENTATION_CONTRACT), vaultToken, 42e19);
 
-        console2.log("token balance after", dWeth.balanceOf(address(_scUSDC)));
-        console2.log("LTV after", _scWETH.getLtv());
+        console2.log("dWeth token balance after", dWeth.balanceOf(address(vaultToken)));
+        console2.log("LTV after", vaultToken.getLtv());
     }
 
-    function _setTokenBalance(ERC20 token, uint256 amount) internal {
+    function _divergeLTV(scUSDC vaultToken) internal {
+        console2.log("forcing LTV diverge scUSDC");
+        ERC20 dWeth = ERC20(address(C.AAVAAVE_VAR_DEBT_WETH_TOKEN));
+
+        console2.log("LTV before", vaultToken.getLtv());
+        console2.log("dWeth token balance before", dWeth.balanceOf(address(vaultToken)));
+
+        _setTokenBalance(ERC20(C.AAVAAVE_VAR_DEBT_IMPLEMENTATION_CONTRACT), vaultToken, 42e19);
+
+        console2.log("dWeth token balance after", dWeth.balanceOf(address(vaultToken)));
+        console2.log("LTV after", vaultToken.getLtv());
+    }
+
+    function _setTokenBalance(ERC20 token, sc4626 vault, uint256 amount) internal {
         console2.log("setting token balance with stdStore");
-        stdstore.target(address(token)).sig(token.balanceOf.selector).with_key(address(this)).checked_write(amount);
+        stdstore.target(address(token)).sig(token.balanceOf.selector).with_key(address(vault)).checked_write(amount);
     }
 }
