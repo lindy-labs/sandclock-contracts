@@ -44,12 +44,7 @@ contract DeployScript is DeployLeveragedEth, Test {
         _depositForUsers(_usdc, _scUSDC);
         _depositForUsers(_weth, _scWETH);
 
-        _rebalance(_scUSDC);
-        _rebalance(_scWETH);
-
-        _profit();
-
-        _rebalance(_scUSDC);
+        _profit(); // create scUSDC profit scenario
     }
 
     function _depositForUsers(ERC20 asset, sc4626 vaultToken) internal {
