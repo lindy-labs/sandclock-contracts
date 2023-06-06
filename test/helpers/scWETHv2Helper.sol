@@ -19,18 +19,6 @@ contract scWETHv2Helper {
         priceConverter = _priceConverter;
     }
 
-    /// @notice returns the weth debt of the vault in a particularly protocol (in terms of weth)
-    /// @param adapter the address of the adapter contract of the protocol
-    function getDebt(IAdapter adapter) public view returns (uint256) {
-        return adapter.getDebt(address(vault));
-    }
-
-    /// @notice returns the wstEth deposited of the vault in a particularly protocol (in terms of weth)
-    /// @param adapter the address of the adapter contract of the protocol
-    function getCollateral(IAdapter adapter) public view returns (uint256) {
-        return adapter.getCollateral(address(vault));
-    }
-
     function getCollateralInWeth(IAdapter adapter) public view returns (uint256) {
         return priceConverter.wstEthToEth(adapter.getCollateral(address(vault)));
     }
@@ -47,13 +35,12 @@ contract scWETHv2Helper {
         uint256 collateral = getCollateralInWeth(adapter);
 
         if (collateral == 0) return 0;
-
-        return getDebt(adapter).divWadDown(collateral);
+        return vault.getDebt(adapter.id()).divWadDown(collateral);
     }
 
     /// @notice method to get the assets deposited in a particular lending market (in terms of weth)
     function getAssets(IAdapter adapter) external view returns (uint256) {
-        return getCollateralInWeth(adapter) - getDebt(adapter);
+        return getCollateralInWeth(adapter) - vault.getDebt(adapter.id());
     }
 
     /// @notice returns the net LTV (Loan to Value) at which the vault has borrowed till now (1e18 = 100%)
@@ -68,7 +55,7 @@ contract scWETHv2Helper {
     /// @notice returns the asset allocation (in percent) in a particular protocol (1e18 = 100%)
     /// @param adapter the address of the adapter contract of the protocol
     function allocationPercent(IAdapter adapter) external view returns (uint256) {
-        return (getCollateralInWeth(adapter) - getDebt(adapter)).divWadDown(
+        return (getCollateralInWeth(adapter) - vault.getDebt(adapter.id())).divWadDown(
             priceConverter.wstEthToEth(vault.totalCollateral()) - vault.totalDebt()
         );
     }

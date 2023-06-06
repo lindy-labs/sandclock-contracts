@@ -146,6 +146,14 @@ contract scWETHv2 is BaseV2Vault {
         assets += asset.balanceOf(address(this));
     }
 
+    /// @notice returns the wstEth deposited of the vault in a particularly protocol (in terms of weth)
+    /// @param _adapterId The id the protocol adapter
+    function getCollateral(uint256 _adapterId) public view returns (uint256) {
+        if (!isSupported(_adapterId)) return 0;
+
+        return IAdapter(protocolAdapters.get(_adapterId)).getCollateral(address(this));
+    }
+
     /// @notice returns the total wstEth supplied as collateral
     function totalCollateral() public view returns (uint256 collateral) {
         uint256 n = protocolAdapters.length();
@@ -155,6 +163,14 @@ contract scWETHv2 is BaseV2Vault {
             (, adapter) = protocolAdapters.at(i);
             collateral += IAdapter(adapter).getCollateral(address(this));
         }
+    }
+
+    /// @notice returns the weth debt of the vault in a particularly protocol (in terms of weth)
+    /// @param _adapterId The id the protocol adapter
+    function getDebt(uint256 _adapterId) public view returns (uint256) {
+        if (!isSupported(_adapterId)) return 0;
+
+        return IAdapter(protocolAdapters.get(_adapterId)).getDebt(address(this));
     }
 
     /// @notice returns the total WETH borrowed

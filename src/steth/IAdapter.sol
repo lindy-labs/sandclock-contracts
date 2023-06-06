@@ -8,7 +8,7 @@ interface IAdapter {
     /**
      * @notice Returns the adapter's ID
      */
-    function id() external returns (uint256);
+    function id() external view returns (uint256);
 
     /**
      * @notice Sets the necessary approvals (allowances) for interacting with the lending protocol

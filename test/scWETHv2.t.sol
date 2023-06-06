@@ -824,8 +824,8 @@ contract scWETHv2Test is Test {
         // move half position from aave v3 to compound v3
         uint256 totalCollateral = vault.totalCollateral();
         uint256 totalDebt = vault.totalDebt();
-        uint256 collateralToMove = vaultHelper.getCollateral(aaveV3Adapter) / 2;
-        uint256 debtToMove = vaultHelper.getDebt(aaveV3Adapter) / 2;
+        uint256 collateralToMove = vault.getCollateral(aaveV3Adapter.id()) / 2;
+        uint256 debtToMove = vault.getDebt(aaveV3Adapter.id()) / 2;
 
         callData = new bytes[](2);
         callData[0] =
@@ -839,14 +839,12 @@ contract scWETHv2Test is Test {
 
         assertApproxEqAbs(vault.totalCollateral(), totalCollateral, 2, "total collateral changed");
         assertApproxEqAbs(
-            vaultHelper.getCollateral(aaveV3Adapter), totalCollateral - collateralToMove, 2, "collateral on aave v3"
+            vault.getCollateral(aaveV3Adapter.id()), totalCollateral - collateralToMove, 2, "collateral on aave v3"
         );
-        assertApproxEqAbs(
-            vaultHelper.getCollateral(compoundV3Adapter), collateralToMove, 2, "collateral on compound v3"
-        );
+        assertApproxEqAbs(vault.getCollateral(compoundV3Adapter.id()), collateralToMove, 2, "collateral on compound v3");
         assertApproxEqAbs(vault.totalDebt(), totalDebt, 2, "total debt changed");
-        assertApproxEqAbs(vaultHelper.getDebt(aaveV3Adapter), totalDebt - debtToMove, 2, "debt on aave v3");
-        assertApproxEqAbs(vaultHelper.getDebt(compoundV3Adapter), debtToMove, 2, "debt on compound v3");
+        assertApproxEqAbs(vault.getDebt(aaveV3Adapter.id()), totalDebt - debtToMove, 2, "debt on aave v3");
+        assertApproxEqAbs(vault.getDebt(compoundV3Adapter.id()), debtToMove, 2, "debt on compound v3");
     }
 
     // reallocating funds from aveV3 and compoundV3 to euler
@@ -958,7 +956,7 @@ contract scWETHv2Test is Test {
         view
         returns (uint256 flashLoanAmount)
     {
-        uint256 debt = vaultHelper.getDebt(adapter);
+        uint256 debt = vault.getDebt(adapter.id());
         uint256 collateral = vaultHelper.getCollateralInWeth(adapter);
 
         uint256 target = targetLtv[adapter].mulWadDown(amount + collateral);
@@ -972,7 +970,7 @@ contract scWETHv2Test is Test {
         view
         returns (uint256 flashLoanAmount)
     {
-        uint256 debt = vaultHelper.getDebt(adapter);
+        uint256 debt = vault.getDebt(adapter.id());
         uint256 collateral = vaultHelper.getCollateralInWeth(adapter);
 
         uint256 target = ltv.mulWadDown(amount + collateral);
@@ -988,7 +986,7 @@ contract scWETHv2Test is Test {
         uint256 market1Assets,
         uint256 market2Ltv
     ) internal view returns (bytes[] memory, uint256) {
-        uint256 repayAmount = reallocationAmount.mulDivDown(vaultHelper.getDebt(aaveV3Adapter), market1Assets);
+        uint256 repayAmount = reallocationAmount.mulDivDown(vault.getDebt(aaveV3Adapter.id()), market1Assets);
         uint256 withdrawAmount = reallocationAmount + repayAmount;
 
         bytes[] memory callData = new bytes[](3);
@@ -1024,7 +1022,7 @@ contract scWETHv2Test is Test {
     ) internal view returns (bytes[] memory, uint256) {
         bytes[] memory callData = new bytes[](3);
 
-        uint256 repayAmount = reallocationAmount.mulDivDown(vaultHelper.getDebt(eulerAdapter), market1Assets);
+        uint256 repayAmount = reallocationAmount.mulDivDown(vault.getDebt(eulerAdapter.id()), market1Assets);
         uint256 withdrawAmount = reallocationAmount + repayAmount;
 
         callData[0] = abi.encodeWithSelector(
@@ -1058,7 +1056,7 @@ contract scWETHv2Test is Test {
         bytes[] memory callData = new bytes[](4);
 
         uint256 repayAmount =
-            reallocationAmount.mulDivDown(vaultHelper.getDebt(eulerAdapter), vaultHelper.getAssets(eulerAdapter));
+            reallocationAmount.mulDivDown(vault.getDebt(eulerAdapter.id()), vaultHelper.getAssets(eulerAdapter));
         uint256 withdrawAmount = reallocationAmount + repayAmount;
 
         callData[0] = abi.encodeWithSelector(
@@ -1107,12 +1105,12 @@ contract scWETHv2Test is Test {
         uint256 reallocationAmountPerMarket = reallocationAmount / 2;
 
         uint256 repayAmountAaveV3 = reallocationAmountPerMarket.mulDivDown(
-            vaultHelper.getDebt(aaveV3Adapter), vaultHelper.getAssets(aaveV3Adapter)
+            vault.getDebt(aaveV3Adapter.id()), vaultHelper.getAssets(aaveV3Adapter)
         );
         uint256 withdrawAmountAaveV3 = reallocationAmountPerMarket + repayAmountAaveV3;
 
         uint256 repayAmountCompoundV3 = reallocationAmountPerMarket.mulDivDown(
-            vaultHelper.getDebt(compoundV3Adapter), vaultHelper.getAssets(compoundV3Adapter)
+            vault.getDebt(compoundV3Adapter.id()), vaultHelper.getAssets(compoundV3Adapter)
         );
         uint256 withdrawAmountCompoundV3 = reallocationAmountPerMarket + repayAmountCompoundV3;
 
@@ -1258,10 +1256,10 @@ contract scWETHv2Test is Test {
         assertApproxEqRel(totalCollateral, totalSupplyAmount, 0.0001e18, "totalCollateral not equal totalSupplyAmount");
         assertApproxEqRel(totalDebt, totalDebtTaken, 100, "totalDebt not equal totalDebtTaken");
 
-        uint256 aaveV3Deposited = vaultHelper.getCollateralInWeth(aaveV3Adapter) - vaultHelper.getDebt(aaveV3Adapter);
-        uint256 eulerDeposited = vaultHelper.getCollateralInWeth(eulerAdapter) - vaultHelper.getDebt(eulerAdapter);
+        uint256 aaveV3Deposited = vaultHelper.getCollateralInWeth(aaveV3Adapter) - vault.getDebt(aaveV3Adapter.id());
+        uint256 eulerDeposited = vaultHelper.getCollateralInWeth(eulerAdapter) - vault.getDebt(eulerAdapter.id());
         uint256 compoundDeposited =
-            vaultHelper.getCollateralInWeth(compoundV3Adapter) - vaultHelper.getDebt(compoundV3Adapter);
+            vaultHelper.getCollateralInWeth(compoundV3Adapter) - vault.getDebt(compoundV3Adapter.id());
 
         assertApproxEqRel(
             aaveV3Deposited, amount.mulWadDown(aaveV3AllocationPercent), 0.005e18, "aaveV3 allocation not correct"
