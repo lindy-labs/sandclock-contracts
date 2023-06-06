@@ -116,7 +116,7 @@ contract DeployScript is DeployLeveragedEth, Test {
         uint256 sharesToRedeem = vaultToken.convertToShares(withdrawAmount);
         vm.prank(redeemer);
         vaultToken.redeem(sharesToRedeem, redeemer, redeemer);
-    }   
+    }
 
     function _redeem(scUSDC vaultToken, address redeemer) internal {
         console2.log("redeeming scUSDC", redeemer);
