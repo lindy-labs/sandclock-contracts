@@ -38,6 +38,13 @@ contract scWETHv2Test is Test {
     using FixedPointMathLib for uint256;
     using Address for address;
 
+    event Harvested(uint256 profitSinceLastHarvest, uint256 performanceFee);
+    event MinFloatAmountUpdated(address indexed user, uint256 newMinFloatAmount);
+    event Rebalanced(uint256 totalCollateral, uint256 totalDebt, uint256 floatBalance);
+    event SuppliedAndBorrowed(uint256 adapterId, uint256 supplyAmount, uint256 borrowAmount);
+    event RepaidAndWithdrawn(uint256 adapterId, uint256 repayAmount, uint256 withdrawAmount);
+    event WithdrawnToVault(uint256 amount);
+
     uint256 constant BLOCK_BEFORE_EULER_EXPLOIT = 16784444;
     uint256 constant BLOCK_AFTER_EULER_EXPLOIT = 17243956;
 
@@ -247,6 +254,10 @@ contract scWETHv2Test is Test {
         _setUp(BLOCK_AFTER_EULER_EXPLOIT);
 
         uint256 newMinimumFloatAmount = 69e18;
+
+        vm.expectEmit(true, true, true, true);
+        emit MinFloatAmountUpdated(address(this), newMinimumFloatAmount);
+
         vault.setMinimumFloatAmount(newMinimumFloatAmount);
         assertEq(vault.minimumFloatAmount(), newMinimumFloatAmount);
 
@@ -315,6 +326,50 @@ contract scWETHv2Test is Test {
 
         assertGe(weth.balanceOf(address(vault)), expectedWethAmount, "weth not received");
         assertEq(wstEth.balanceOf(address(vault)), 0, "wstEth not transferred out");
+    }
+
+    function test_supplyAndBorrow() public {
+        _setUp(BLOCK_BEFORE_EULER_EXPLOIT);
+
+        uint256 supplyAmount = 100 ether;
+        uint256 borrowAmount = supplyAmount / 2;
+        deal(address(wstEth), address(vault), supplyAmount);
+
+        // revert if called by another user
+        vm.expectRevert(CallerNotKeeper.selector);
+        vault.supplyAndBorrow(aaveV3AdapterId, supplyAmount, borrowAmount);
+
+        vm.startPrank(keeper);
+        vm.expectEmit(true, true, true, true);
+        emit SuppliedAndBorrowed(aaveV3AdapterId, supplyAmount, borrowAmount);
+        vault.supplyAndBorrow(aaveV3AdapterId, supplyAmount, borrowAmount);
+
+        assertEq(ERC20(C.WSTETH).balanceOf(address(vault)), 0, "wstEth not supplied");
+        assertEq(ERC20(C.WETH).balanceOf(address(vault)), borrowAmount, "weth not borrowed");
+    }
+
+    function test_repayAndWithdraw() public {
+        _setUp(BLOCK_BEFORE_EULER_EXPLOIT);
+
+        uint256 supplyAmount = 100 ether;
+        uint256 borrowAmount = supplyAmount / 2;
+        deal(address(wstEth), address(vault), supplyAmount);
+
+        hoax(keeper);
+        vault.supplyAndBorrow(aaveV3AdapterId, supplyAmount, borrowAmount);
+
+        // revert if called by another user
+        hoax(alice);
+        vm.expectRevert(CallerNotKeeper.selector);
+        vault.repayAndWithdraw(aaveV3AdapterId, supplyAmount, borrowAmount);
+
+        vm.startPrank(keeper);
+        vm.expectEmit(true, true, true, true);
+        emit RepaidAndWithdrawn(aaveV3AdapterId, borrowAmount, supplyAmount);
+        vault.repayAndWithdraw(aaveV3AdapterId, borrowAmount, supplyAmount);
+
+        assertEq(ERC20(C.WSTETH).balanceOf(address(vault)), supplyAmount, "wstEth not withdrawn");
+        assertEq(ERC20(C.WETH).balanceOf(address(vault)), 0, "weth not repaid");
     }
 
     function test_invest_FloatBalanceTooLow(uint256 amount) public {
@@ -418,14 +473,31 @@ contract scWETHv2Test is Test {
         _redeemChecks(preDepositBal);
     }
 
+    function test_withdraw_by_others(uint256 amount) public {
+        _setUp(BLOCK_AFTER_EULER_EXPLOIT);
+
+        amount = bound(amount, boundMinimum, 1e27);
+        _depositToVault(address(this), amount);
+
+        uint256 giftAmount;
+        giftAmount = bound(giftAmount, 1, amount - 1);
+        vault.approve(alice, giftAmount);
+
+        vm.startPrank(alice);
+        vault.withdraw(giftAmount, alice, address(this));
+        assertEq(vault.totalAssets(), amount - giftAmount);
+        assertEq(vault.balanceOf(alice), 0);
+        assertEq(weth.balanceOf(address(alice)), giftAmount);
+
+        vm.expectRevert();
+        vault.withdraw(giftAmount, alice, address(this)); // no shares anymore
+    }
+
     function test_redeem_by_others(uint256 amount) public {
         _setUp(BLOCK_AFTER_EULER_EXPLOIT);
 
         amount = bound(amount, boundMinimum, 1e27);
-        vm.deal(address(this), amount);
-        weth.deposit{value: amount}();
-        weth.approve(address(vault), amount);
-        vault.deposit(amount, address(this));
+        _depositToVault(address(this), amount);
 
         uint256 giftAmount;
         giftAmount = bound(giftAmount, 1, amount - 1);
@@ -448,6 +520,26 @@ contract scWETHv2Test is Test {
         vault.redeem(0, address(this), address(this));
     }
 
+    function test_rebalance_emitsEvent(uint256 amount) public {
+        _setUp(BLOCK_BEFORE_EULER_EXPLOIT);
+
+        amount = bound(amount, boundMinimum, 15000 ether);
+        _depositToVault(address(this), amount);
+
+        uint256 investAmount = amount - minimumFloatAmount;
+
+        (bytes[] memory callData, uint256 totalSupplyAmount, uint256 totalFlashLoanAmount) =
+            _getInvestParams(investAmount, aaveV3AllocationPercent, eulerAllocationPercent, compoundAllocationPercent);
+
+        // deposit into strategy
+        vm.startPrank(keeper);
+
+        vm.expectEmit(true, true, true, false);
+        emit Rebalanced(totalSupplyAmount, totalFlashLoanAmount, minimumFloatAmount);
+
+        vault.rebalance(investAmount, totalFlashLoanAmount, callData);
+    }
+
     function test_invest_basic(uint256 amount) public {
         _setUp(BLOCK_BEFORE_EULER_EXPLOIT);
 
@@ -463,6 +555,7 @@ contract scWETHv2Test is Test {
         // deposit into strategy
         hoax(keeper);
         vault.rebalance(investAmount, totalFlashLoanAmount, callData);
+
         _floatCheck();
 
         _investChecks(investAmount, priceConverter.wstEthToEth(totalSupplyAmount), totalFlashLoanAmount);
@@ -604,6 +697,10 @@ contract scWETHv2Test is Test {
 
         uint256 ltv = vaultHelper.getLtv();
         uint256 lev = vaultHelper.getLeverage();
+
+        // test event
+        vm.expectEmit(true, true, false, false);
+        emit WithdrawnToVault(assets / 2);
 
         hoax(keeper);
         vault.withdrawToVault(assets / 2);
@@ -964,6 +1061,9 @@ contract scWETHv2Test is Test {
         callDataAfterProfits[2] = abi.encodeWithSelector(
             scWETHv2.supplyAndBorrow.selector, compoundV3AdapterId, compoundSupplyAmount, compoundFlashLoanAmount
         );
+
+        vm.expectEmit(true, true, false, false);
+        emit Harvested(0, 0); // just testing for the event emission and not the actual numbers since the actual profit is a  little tedious to simulate
 
         hoax(keeper);
         vault.rebalance(0, aaveV3FlashLoanAmount + compoundFlashLoanAmount, callDataAfterProfits);
