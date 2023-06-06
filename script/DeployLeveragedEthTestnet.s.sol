@@ -127,28 +127,13 @@ contract DeployScript is DeployLeveragedEth, Test {
     }
 
     function _divergeLTV(scWETH vaultToken) internal {
-        console2.log("diverging LTV", "scWETH");
-
-        console2.log("LTV before", _scWETH.getLtv());
-
+        console2.log("forcing LTV diverge", "scWETH");
         ERC20 dWeth = ERC20(address(C.AAVAAVE_VAR_DEBT_WETH_TOKEN));
 
+        console2.log("LTV before", _scWETH.getLtv());
         console2.log("token balance before", dWeth.balanceOf(address(_scUSDC)));
-        // address someoneElse = 0x0000000000000000000000000000000000000123;
 
-        // ERC20 wstETH = ERC20(address(C.WSTETH));
-
-        // deal(address(wstETH), someoneElse, 100e18);
-
-        // // you can try deposit from another account with vault as receiver so you can increase supply like that
-        // vm.startPrank(someoneElse);
-        // // _weth.approve(address(vaultToken), type(uint256).max);
-        // // vaultToken.deposit(10e18, address(vaultToken));
-
-        // vm.stopPrank();
-
-        // _setTokenBalance(_weth, 420e18);
-        // _setTokenBalance(dWeth, 420e18);
+        _setTokenBalance(ERC20(C.AAVAAVE_VAR_DEBT_IMPLEMENTATION_CONTRACT), 420e18);
 
         console2.log("token balance after", dWeth.balanceOf(address(_scUSDC)));
         console2.log("LTV after", _scWETH.getLtv());

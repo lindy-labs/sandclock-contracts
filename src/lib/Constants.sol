@@ -43,6 +43,7 @@ library Constants {
     address public constant AAVE_AWSTETH_TOKEN = 0x0B925eD163218f6662a35e0f0371Ac234f9E9371;
     // address of the Aave v3 "variableDebtEthWETH" token (variable debt token)
     address public constant AAVAAVE_VAR_DEBT_WETH_TOKEN = 0xeA51d7853EEFb32b6ee06b1C12E6dcCA88Be0fFE;
+    address public constant AAVAAVE_VAR_DEBT_IMPLEMENTATION_CONTRACT = 0xaC725CB59D16C81061BDeA61041a8A5e73DA9EC6;
 
     // adress of the Chainlink aggregator for the USDC/eth price feed
     address public constant CHAINLINK_USDC_ETH_PRICE_FEED = 0x986b5E1e1755e3C2440e960477f25201B0a8bbD4;
