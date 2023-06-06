@@ -29,8 +29,12 @@ contract scWETHv2 is BaseV2Vault {
     using Address for address;
     using EnumerableMap for EnumerableMap.UintToAddressMap;
 
-    event Harvest(uint256 profitSinceLastHarvest, uint256 performanceFee);
-    event FloatAmountUpdated(address indexed user, uint256 newFloatAmount);
+    event Harvested(uint256 profitSinceLastHarvest, uint256 performanceFee);
+    event MinFloatAmountUpdated(address indexed user, uint256 newMinFloatAmount);
+    event Rebalanced(uint256 totalCollateral, uint256 totalDebt, uint256 floatBalance);
+    event SuppliedAndBorrowed(uint256 adapterId, uint256 supplyAmount, uint256 borrowAmount);
+    event RepaidAndWithdrawn(uint256 adapterId, uint256 repayAmount, uint256 withdrawAmount);
+    event WithdrawnToVault(uint256 amount);
 
     // total invested during last harvest/rebalance
     uint256 public totalInvested;
@@ -38,7 +42,10 @@ contract scWETHv2 is BaseV2Vault {
     // total profit generated for this vault
     uint256 public totalProfit;
 
-    // TODO: add comment why this is fixed amount and not a percent (not using sc4626 functionality)
+    // since the totalAssets increases after profit, the floatRequired also increases proportionally in case of using a percentage float
+    // this will cause the receiveFlashloan method to fail on a reinvesting profits (using rebalance) after the multicall, since the actual float in the contract remain unchanged after the multicall
+    // this can be fixed by also withdrawing float into the contract in the reinvesting profits multicall but that makes the calculations very complex on the backend
+    // a simple solution to that is just using minimumFloatAmount instead of a percentage float
     uint256 public minimumFloatAmount = 1 ether;
 
     IwstETH constant wstETH = IwstETH(C.WSTETH);
@@ -46,7 +53,7 @@ contract scWETHv2 is BaseV2Vault {
     constructor(
         address _admin,
         address _keeper,
-        uint256 _slippageTolerance, // TODO: do we really need this param?
+        uint256 _slippageTolerance,
         WETH _weth,
         Swapper _swapper,
         PriceConverter _priceConverter
@@ -64,14 +71,13 @@ contract scWETHv2 is BaseV2Vault {
     receive() external payable {}
 
     /// @notice set the minimum amount of weth that must be present in the vault
-    /// @param _newFloatAmount the new minimum float amount
-    function setMinimumFloatAmount(uint256 _newFloatAmount) external {
+    /// @param _newMinFloatAmount the new minimum float amount
+    function setMinimumFloatAmount(uint256 _newMinFloatAmount) external {
         _onlyAdmin();
 
-        minimumFloatAmount = _newFloatAmount;
+        minimumFloatAmount = _newMinFloatAmount;
 
-        // TODO: change name to MinFloatAmountUpdated
-        emit FloatAmountUpdated(msg.sender, _newFloatAmount);
+        emit MinFloatAmountUpdated(msg.sender, _newMinFloatAmount);
     }
 
     /// @dev _totalInvestAmount must be zero in case of disinvest or reallocation
@@ -89,7 +95,7 @@ contract scWETHv2 is BaseV2Vault {
 
         _harvest();
 
-        // TODO: add event
+        emit Rebalanced(totalCollateral(), totalDebt(), asset.balanceOf(address(this)));
     }
 
     function swapWethToWstEth(uint256 _wethAmount) external {
@@ -125,7 +131,7 @@ contract scWETHv2 is BaseV2Vault {
 
         _withdrawToVault(_amount);
 
-        // TODO: add event
+        emit WithdrawnToVault(_amount);
     }
 
     /// @notice returns the adapter address given the adapterId (only if the adaapterId is supported else returns zero address)
@@ -202,7 +208,7 @@ contract scWETHv2 is BaseV2Vault {
         afterDeposit(assets, shares);
     }
 
-    // TODO: add comment why this is disabled
+    /// @dev : TODO
     function withdraw(uint256, address, address) public virtual override returns (uint256) {
         revert PleaseUseRedeemMethod();
     }
@@ -260,7 +266,7 @@ contract scWETHv2 is BaseV2Vault {
         _adapterDelegateCall(adapter, abi.encodeWithSelector(IAdapter.supply.selector, _supplyAmount));
         _adapterDelegateCall(adapter, abi.encodeWithSelector(IAdapter.borrow.selector, _borrowAmount));
 
-        // TODO: add event
+        emit SuppliedAndBorrowed(_adapterId, _supplyAmount, _borrowAmount);
     }
 
     function repayAndWithdraw(uint256 _adapterId, uint256 _repayAmount, uint256 _withdrawAmount) external {
@@ -271,7 +277,7 @@ contract scWETHv2 is BaseV2Vault {
         _adapterDelegateCall(adapter, abi.encodeWithSelector(IAdapter.repay.selector, _repayAmount));
         _adapterDelegateCall(adapter, abi.encodeWithSelector(IAdapter.withdraw.selector, _withdrawAmount));
 
-        // TODO: add event
+        emit RepaidAndWithdrawn(_adapterId, _repayAmount, _withdrawAmount);
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -374,8 +380,7 @@ contract scWETHv2 is BaseV2Vault {
             // mint equivalent amount of tokens to the performance fee beneficiary ie the treasury
             _mint(treasury, convertToShares(fee));
 
-            // TODO: change name to Harvested
-            emit Harvest(profit, fee);
+            emit Harvested(profit, fee);
         }
     }
 
