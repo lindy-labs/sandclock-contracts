@@ -3,6 +3,7 @@ pragma solidity ^0.8.13;
 
 import "forge-std/console2.sol";
 import "forge-std/Test.sol";
+// import "forge-std/StdStorage.sol";
 
 import {DeployLeveragedEth} from "./base/DeployLeveragedEth.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
@@ -16,6 +17,8 @@ import {scUSDC} from "../src/steth/scUSDC.sol";
 import {IVariableDebtToken} from "aave-v3-core/contracts/interfaces/IVariableDebtToken.sol";
 
 contract DeployScript is DeployLeveragedEth, Test {
+    using stdStorage for StdStorage;
+
     function run() external {
         _deploy();
         _fixtures();
@@ -45,6 +48,8 @@ contract DeployScript is DeployLeveragedEth, Test {
         _depositForUsers(_weth, _scWETH);
 
         _profit(); // create scUSDC profit scenario
+
+        _divergeLTV(_scWETH);
     }
 
     function _depositForUsers(ERC20 asset, sc4626 vaultToken) internal {
@@ -119,5 +124,38 @@ contract DeployScript is DeployLeveragedEth, Test {
         uint256 withdrawAmount = 1e6;
         vm.prank(redeemer);
         vaultToken.withdraw(withdrawAmount, redeemer, redeemer);
+    }
+
+    function _divergeLTV(scWETH vaultToken) internal {
+        console2.log("diverging LTV", "scWETH");
+
+        console2.log("LTV before", _scWETH.getLtv());
+
+        ERC20 dWeth = ERC20(address(C.AAVAAVE_VAR_DEBT_WETH_TOKEN));
+
+        console2.log("token balance before", dWeth.balanceOf(address(_scUSDC)));
+        // address someoneElse = 0x0000000000000000000000000000000000000123;
+
+        // ERC20 wstETH = ERC20(address(C.WSTETH));
+
+        // deal(address(wstETH), someoneElse, 100e18);
+
+        // // you can try deposit from another account with vault as receiver so you can increase supply like that
+        // vm.startPrank(someoneElse);
+        // // _weth.approve(address(vaultToken), type(uint256).max);
+        // // vaultToken.deposit(10e18, address(vaultToken));
+
+        // vm.stopPrank();
+
+        // _setTokenBalance(_weth, 420e18);
+        // _setTokenBalance(dWeth, 420e18);
+
+        console2.log("token balance after", dWeth.balanceOf(address(_scUSDC)));
+        console2.log("LTV after", _scWETH.getLtv());
+    }
+
+    function _setTokenBalance(ERC20 token, uint256 amount) internal {
+        console2.log("setting token balance with stdStore");
+        stdstore.target(address(token)).sig(token.balanceOf.selector).with_key(address(this)).checked_write(amount);
     }
 }
