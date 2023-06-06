@@ -1379,10 +1379,8 @@ contract scWETHv2Test is Test {
         // totalAssets must not change
         assertApproxEqRel(vault.totalAssets(), totalAssets, 0.001e18, "total assets must not change");
 
-        // TODO: i wouldn't say this is correct, total ltv must not change that's true, but ltv-s on different protocols are allowed to change in the reallocate process
-        // ltvs must not change
+        // ltvs should not change
         assertApproxEqRel(vaultHelper.getLtv(aaveV3Adapter), initialAaveV3Ltv, 0.001e18, "aavev3 ltv must not change");
-
         assertApproxEqRel(vaultHelper.getLtv(eulerAdapter), initialEulerLtv, 0.001e18, "euler ltv must not change");
     }
 
