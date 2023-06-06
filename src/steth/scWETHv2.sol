@@ -79,6 +79,7 @@ contract scWETHv2 is BaseV2Vault {
         emit MinFloatAmountUpdated(msg.sender, _newMinFloatAmount);
     }
 
+    /// @dev the primary method to be used by backend to invest, disinvest or reallocate funds among supported adapters
     /// @dev _totalInvestAmount must be zero in case of disinvest or reallocation
     function rebalance(uint256 _totalInvestAmount, uint256 _flashLoanAmount, bytes[] calldata _multicallData)
         external
