@@ -13,6 +13,7 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 import {sc4626} from "../src/sc4626.sol";
 import {scWETH} from "../src/steth/scWETH.sol";
 import {scUSDC} from "../src/steth/scUSDC.sol";
+import {IVariableDebtToken} from "aave-v3-core/contracts/interfaces/IVariableDebtToken.sol";
 
 contract DeployScript is DeployLeveragedEth, Test {
     function run() external {
@@ -45,6 +46,10 @@ contract DeployScript is DeployLeveragedEth, Test {
 
         _rebalance(_scUSDC);
         _rebalance(_scWETH);
+
+        _profit();
+
+        _rebalance(_scUSDC);
     }
 
     function _depositForUsers(ERC20 asset, sc4626 vaultToken) internal {
@@ -100,7 +105,7 @@ contract DeployScript is DeployLeveragedEth, Test {
         console2.log("generate profit for scUSDC vault");
 
         console2.log("scUSDC profit before", _scUSDC.getProfit());
-        vm.etch(C.AAVAAVE_VAR_DEBT_WETH_TOKEN, address(_weth).code);
+        deal(address(_weth), address(_scWETH), 100e18);
         console2.log("scUSDC profit after", _scUSDC.getProfit());
     }
 
