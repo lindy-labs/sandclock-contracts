@@ -54,6 +54,7 @@ contract scUSDCv2Test is Test {
     event Withdrawn(uint256 adapterId, uint256 amount);
     event Disinvested(uint256 wethAmount);
     event RewardsClaimed(uint256 adapterId);
+    event SwapperUpdated(address indexed admin, Swapper newSwapper);
 
     // after the exploit, the euler protocol was disabled. At one point it should work again, so having the
     // tests run in both cases (when protocol is working and not) requires two blocks to fork from
@@ -109,6 +110,42 @@ contract scUSDCv2Test is Test {
         assertEq(address(vault.swapper()), address(swapper), "swapper");
 
         assertEq(weth.allowance(address(vault), address(vault.scWETH())), type(uint256).max, "scWETH allowance");
+    }
+
+    /// #setSwapper ///
+
+    function test_setSwapper_FailsIfCallerIsNotAdmin() public {
+        _setUpForkAtBlock(BLOCK_BEFORE_EULER_EXPLOIT);
+
+        vm.prank(alice);
+        vm.expectRevert(CallerNotAdmin.selector);
+        vault.setSwapper(Swapper(address(0x1)));
+    }
+
+    function test_setSwapper_FailsIfAddressIs0() public {
+        _setUpForkAtBlock(BLOCK_BEFORE_EULER_EXPLOIT);
+
+        vm.expectRevert(ZeroAddress.selector);
+        vault.setSwapper(Swapper(address(0x0)));
+    }
+
+    function test_setSwapper_UpdatesTheSwapperToNewAddress() public {
+        _setUpForkAtBlock(BLOCK_BEFORE_EULER_EXPLOIT);
+        Swapper newSwapper = Swapper(address(0x09));
+
+        vault.setSwapper(newSwapper);
+
+        assertEq(address(vault.swapper()), address(newSwapper), "swapper not updated");
+    }
+
+    function test_setSwapper_EmitsEvent() public {
+        _setUpForkAtBlock(BLOCK_BEFORE_EULER_EXPLOIT);
+        Swapper newSwapper = Swapper(address(0x09));
+
+        vm.expectEmit(true, true, true, true);
+        emit SwapperUpdated(address(this), newSwapper);
+
+        vault.setSwapper(newSwapper);
     }
 
     /// #addAdapter ///

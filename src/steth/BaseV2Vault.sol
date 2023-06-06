@@ -5,7 +5,7 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 import {Address} from "openzeppelin-contracts/utils/Address.sol";
 import {EnumerableMap} from "openzeppelin-contracts/utils/structs/EnumerableMap.sol";
 
-import {ProtocolNotSupported, ProtocolInUse} from "../errors/scErrors.sol";
+import {ProtocolNotSupported, ProtocolInUse, ZeroAddress} from "../errors/scErrors.sol";
 import {Constants as C} from "../lib/Constants.sol";
 import {IVault} from "../interfaces/balancer/IVault.sol";
 import {IFlashLoanRecipient} from "../interfaces/balancer/IFlashLoanRecipient.sol";
@@ -18,6 +18,7 @@ abstract contract BaseV2Vault is sc4626, IFlashLoanRecipient {
     using Address for address;
     using EnumerableMap for EnumerableMap.UintToAddressMap;
 
+    event SwapperUpdated(address indexed admin, address newSwapper);
     event ProtocolAdapterAdded(address indexed admin, uint256 adapterId, address adapter);
     event ProtocolAdapterRemoved(address indexed admin, uint256 adapterId);
     event RewardsClaimed(uint256 adapterId);
@@ -48,6 +49,16 @@ abstract contract BaseV2Vault is sc4626, IFlashLoanRecipient {
 
         priceConverter = _priceConverter;
         swapper = _swapper;
+    }
+
+    function setSwapper(Swapper _newSwapper) external {
+        _onlyAdmin();
+
+        if (address(_newSwapper) == address(0)) revert ZeroAddress();
+
+        swapper = _newSwapper;
+
+        emit SwapperUpdated(msg.sender, address(_newSwapper));
     }
 
     /**

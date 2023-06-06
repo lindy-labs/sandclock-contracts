@@ -56,12 +56,12 @@ contract scWETHv2 is BaseV2Vault {
         slippageTolerance = _slippageTolerance;
     }
 
-    /////////////////// ADMIN/KEEPER METHODS //////////////////////////////////
+    /*//////////////////////////////////////////////////////////////
+                            PUBLIC API
+    //////////////////////////////////////////////////////////////*/
 
-    function setSwapper(address _swapper) external {
-        _onlyAdmin();
-        swapper = Swapper(_swapper);
-    }
+    // need to be able to receive eth
+    receive() external payable {}
 
     /// @notice set the minimum amount of weth that must be present in the vault
     /// @param _newFloatAmount the new minimum float amount
@@ -128,8 +128,6 @@ contract scWETHv2 is BaseV2Vault {
         // TODO: add event
     }
 
-    //////////////////// VIEW METHODS //////////////////////////
-
     /// @notice returns the adapter address given the adapterId (only if the adaapterId is supported else returns zero address)
     /// @param _adapterId the id of the adapter to check
     function getAdapter(uint256 _adapterId) external view returns (address adapter) {
@@ -169,8 +167,6 @@ contract scWETHv2 is BaseV2Vault {
             debt += IAdapter(adapter).getDebt(address(this));
         }
     }
-
-    //////////////////// EXTERNAL METHODS //////////////////////////
 
     /// @notice helper method to directly deposit ETH instead of weth
     /// @param receiver the address to mint the shares to
@@ -262,10 +258,9 @@ contract scWETHv2 is BaseV2Vault {
         // TODO: add event
     }
 
-    // need to be able to receive eth
-    receive() external payable {}
-
-    //////////////////// INTERNAL METHODS //////////////////////////
+    /*//////////////////////////////////////////////////////////////
+                            INTERNAL API
+    //////////////////////////////////////////////////////////////*/
 
     function _withdrawToVault(uint256 _amount) internal {
         uint256 n = protocolAdapters.length();
