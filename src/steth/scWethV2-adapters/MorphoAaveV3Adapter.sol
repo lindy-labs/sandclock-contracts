@@ -58,6 +58,7 @@ contract MorphoAaveV3Adapter is IAdapter {
     }
 
     function getMaxLtv() external view override returns (uint256) {
-        // same as the maxLtv for aave v3
+        // same as the maxLtv for aave v3 on eMode
+        return 0.9e18;
     }
 }

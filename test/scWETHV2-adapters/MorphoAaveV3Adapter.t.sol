@@ -10,6 +10,7 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 
 import {IAdapter} from "../../src/steth/IAdapter.sol";
 import {MorphoAaveV3Adapter} from "../../src/steth/scWethV2-adapters/MorphoAaveV3Adapter.sol";
+import {AaveV3Adapter} from "../../src/steth/scWethV2-adapters/AaveV3Adapter.sol";
 import {Constants as C} from "../../src/lib/Constants.sol";
 import {IMorpho} from "../../src/interfaces/morpho/IMorpho.sol";
 
@@ -135,6 +136,11 @@ contract MorphoAaveV3AdapterTest is Test {
         } else {
             address(adapter).functionDelegateCall(abi.encodeWithSelector(IAdapter.claimRewards.selector, data));
         }
+    }
+
+    function test_maxLtv() public {
+        AaveV3Adapter aaveV3Adapter = new AaveV3Adapter();
+        assertEq(adapter.getMaxLtv(), aaveV3Adapter.getMaxLtv());
     }
 
     function _delegateCall(bytes4 selector, uint256 amount) internal {
