@@ -14,6 +14,10 @@ import {PriceConverter} from "./PriceConverter.sol";
 import {Swapper} from "./Swapper.sol";
 import {sc4626} from "../sc4626.sol";
 
+/**
+ * @title BaseV2Vault
+ * @notice Base vault contract for v2 vaults to that use multiple lending markets thru adapters.
+ */
 abstract contract BaseV2Vault is sc4626, IFlashLoanRecipient {
     using Address for address;
     using EnumerableMap for EnumerableMap.UintToAddressMap;
@@ -52,6 +56,10 @@ abstract contract BaseV2Vault is sc4626, IFlashLoanRecipient {
         swapper = _swapper;
     }
 
+    /**
+     * @notice Set the swapper contract used for executing token swaps.
+     * @param _newSwapper The new swapper contract.
+     */
     function setSwapper(Swapper _newSwapper) external {
         _onlyAdmin();
 
