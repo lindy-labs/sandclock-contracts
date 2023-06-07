@@ -25,7 +25,11 @@ import {Swapper} from "./Swapper.sol";
 /**
  * @title Sandclock WETH Vault version 2
  * @notice Deposit Asset : Weth or Eth
- * @notice
+ * This vault leverages the supplied weth using flashloans, stakes the leveraged eth, supplies the wstEth as collateral
+ * and subesequently borrows weth on that collateral to payback the flashloan
+ * The bulk of the interest is earned from staking eth
+ * In contrast to scWETHv1 which used only one pre coded lending market
+ * scWETHv2 can use multiple lending markets, which can be controlled by adding or removing adapter contracts into the vault
  */
 contract scWETHv2 is BaseV2Vault {
     using SafeTransferLib for ERC20;
