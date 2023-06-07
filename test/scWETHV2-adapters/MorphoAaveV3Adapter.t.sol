@@ -106,6 +106,22 @@ contract MorphoAaveV3AdapterTest is Test {
         _delegateCall(IAdapter.supply.selector, 1 ether);
     }
 
+    function test_claimRewards() public {
+        IMorpho morpho = adapter.morpho();
+        address[] memory assets = new address[](1);
+        assets[0] = C.WSTETH;
+
+        bytes memory data = abi.encode(assets);
+
+        if (morpho.isClaimRewardsPaused()) {
+            // if rewards are paused currently on morpho aave v3 this should revert
+            vm.expectRevert();
+            address(adapter).functionDelegateCall(abi.encodeWithSelector(IAdapter.claimRewards.selector, data));
+        } else {
+            address(adapter).functionDelegateCall(abi.encodeWithSelector(IAdapter.claimRewards.selector, data));
+        }
+    }
+
     function _delegateCall(bytes4 selector, uint256 amount) internal {
         address(adapter).functionDelegateCall(abi.encodeWithSelector(selector, amount));
     }
