@@ -3,7 +3,7 @@ pragma solidity ^0.8.13;
 
 import "forge-std/console2.sol";
 import "forge-std/Test.sol";
-// import "forge-std/StdStorage.sol";
+import "forge-std/StdStorage.sol";
 
 import {DeployLeveragedEth} from "./base/DeployLeveragedEth.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
@@ -14,7 +14,6 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 import {sc4626} from "../src/sc4626.sol";
 import {scWETH} from "../src/steth/scWETH.sol";
 import {scUSDC} from "../src/steth/scUSDC.sol";
-import {IVariableDebtToken} from "aave-v3-core/contracts/interfaces/IVariableDebtToken.sol";
 
 contract DeployScript is DeployLeveragedEth, Test {
     using stdStorage for StdStorage;
@@ -134,7 +133,10 @@ contract DeployScript is DeployLeveragedEth, Test {
         console2.log("LTV before", vaultToken.getLtv());
         console2.log("dWeth token balance before", dWeth.balanceOf(address(vaultToken)));
 
-        _setTokenBalance(ERC20(C.AAVAAVE_VAR_DEBT_IMPLEMENTATION_CONTRACT), vaultToken, 42e19);
+        // deal(C.AAVAAVE_VAR_DEBT_WETH_TOKEN, address(vaultToken), 42e19);
+        deal(C.AAVAAVE_VAR_DEBT_IMPLEMENTATION_CONTRACT, address(vaultToken), 42e19);
+        // _setTokenBalance(C.AAVAAVE_VAR_DEBT_WETH_TOKEN, address(vaultToken), 42e19);
+        // _setTokenBalance(C.AAVAAVE_VAR_DEBT_IMPLEMENTATION_CONTRACT, address(vaultToken), 42e19);
 
         console2.log("dWeth token balance after", dWeth.balanceOf(address(vaultToken)));
         console2.log("LTV after", vaultToken.getLtv());
@@ -147,14 +149,16 @@ contract DeployScript is DeployLeveragedEth, Test {
         console2.log("LTV before", vaultToken.getLtv());
         console2.log("dWeth token balance before", dWeth.balanceOf(address(vaultToken)));
 
-        _setTokenBalance(ERC20(C.AAVAAVE_VAR_DEBT_IMPLEMENTATION_CONTRACT), vaultToken, 42e19);
+        // _setTokenBalance(C.AAVAAVE_VAR_DEBT_WETH_TOKEN, address(vaultToken), 42e19);
+        _setTokenBalance(C.AAVAAVE_VAR_DEBT_IMPLEMENTATION_CONTRACT, address(vaultToken), 42e19);
+        // deal(C.AAVAAVE_VAR_DEBT_WETH_TOKEN, address(vaultToken), 42e19);
 
         console2.log("dWeth token balance after", dWeth.balanceOf(address(vaultToken)));
         console2.log("LTV after", vaultToken.getLtv());
     }
 
-    function _setTokenBalance(ERC20 token, sc4626 vault, uint256 amount) internal {
+    function _setTokenBalance(address token, address vault, uint256 amount) internal {
         console2.log("setting token balance with stdStore");
-        stdstore.target(address(token)).sig(token.balanceOf.selector).with_key(address(vault)).checked_write(amount);
+        stdstore.target(address(token)).sig(ERC20(token).balanceOf.selector).with_key(vault).checked_write(amount);
     }
 }
