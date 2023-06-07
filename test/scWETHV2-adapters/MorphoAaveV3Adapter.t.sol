@@ -92,6 +92,21 @@ contract MorphoAaveV3AdapterTest is Test {
         assertApproxEqRel(ERC20(C.WETH).balanceOf(address(this)), 1, 10, "weth balance error");
     }
 
+    function test_setApprovals() public {
+        address morpho = address(adapter.morpho());
+
+        address(adapter).functionDelegateCall(abi.encodeWithSelector(IAdapter.revokeApprovals.selector));
+
+        assertEq(ERC20(C.WSTETH).allowance(address(this), morpho), 0);
+        assertEq(ERC20(C.WETH).allowance(address(this), morpho), 0);
+
+        address(adapter).functionDelegateCall(abi.encodeWithSelector(IAdapter.setApprovals.selector));
+
+        // allowances to morpho must be max
+        assertEq(ERC20(C.WSTETH).allowance(address(this), morpho), type(uint256).max);
+        assertEq(ERC20(C.WETH).allowance(address(this), morpho), type(uint256).max);
+    }
+
     function test_revokeApprovals() public {
         address morpho = address(adapter.morpho());
 
