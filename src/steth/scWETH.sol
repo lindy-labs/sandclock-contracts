@@ -30,7 +30,6 @@ contract scWETH is sc4626, IFlashLoanRecipient {
     using SafeTransferLib for ERC20;
     using FixedPointMathLib for uint256;
 
-    event SlippageToleranceUpdated(address indexed admin, uint256 newSlippageTolerance);
     event ExchangeProxyAddressUpdated(address indexed user, address newAddress);
     event NewTargetLtvApplied(address indexed admin, uint256 newTargetLtv);
     event Harvest(uint256 profitSinceLastHarvest, uint256 performanceFee);
@@ -63,9 +62,6 @@ contract scWETH is sc4626, IFlashLoanRecipient {
 
     // the target ltv ratio at which we actually borrow (<= maxLtv)
     uint256 public targetLtv;
-
-    // slippage for curve swaps
-    uint256 public slippageTolerance;
 
     struct ConstructorParams {
         address admin;
@@ -111,17 +107,6 @@ contract scWETH is sc4626, IFlashLoanRecipient {
 
         targetLtv = _params.targetLtv;
         slippageTolerance = _params.slippageTolerance;
-    }
-
-    /// @notice set the slippage tolerance for curve swaps
-    /// @param newSlippageTolerance the new slippage tolerance
-    /// @dev slippage tolerance is a number between 0 and 1e18
-    function setSlippageTolerance(uint256 newSlippageTolerance) external {
-        _onlyAdmin();
-
-        if (newSlippageTolerance > C.ONE) revert InvalidSlippageTolerance();
-        slippageTolerance = newSlippageTolerance;
-        emit SlippageToleranceUpdated(msg.sender, newSlippageTolerance);
     }
 
     /// @notice set stEThToEthPriceFeed address

@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.13;
 
-import {IAdapter} from "./IAdapter.sol";
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {WETH} from "solmate/tokens/WETH.sol";
 import {IPool} from "aave-v3/interfaces/IPool.sol";
-import {Constants as C} from "../lib/Constants.sol";
+
+import {Constants as C} from "../../lib/Constants.sol";
+import {IAdapter} from "../IAdapter.sol";
 
 contract AaveV3Adapter is IAdapter {
     using SafeTransferLib for ERC20;

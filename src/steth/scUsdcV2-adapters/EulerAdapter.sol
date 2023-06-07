@@ -3,10 +3,11 @@ pragma solidity ^0.8.19;
 
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
+import {WETH} from "solmate/tokens/WETH.sol";
 import {IEulerMarkets, IEulerEToken, IEulerDToken} from "lib/euler-interfaces/contracts/IEuler.sol";
 
 import {Constants as C} from "../../lib/Constants.sol";
-import {IAdapter} from "./IAdapter.sol";
+import {IAdapter} from "../IAdapter.sol";
 
 /**
  * @title Euler Lending Protocol Adapter
@@ -14,6 +15,9 @@ import {IAdapter} from "./IAdapter.sol";
  */
 contract EulerAdapter is IAdapter {
     using FixedPointMathLib for uint256;
+
+    ERC20 constant usdc = ERC20(C.USDC);
+    WETH constant weth = WETH(payable(C.WETH));
 
     // address of the EULER protocol contract
     address public constant protocol = 0x27182842E098f60e3D576794A5bFFb0777E025d3;

@@ -15,11 +15,11 @@ import {IEulerMarkets, IEulerEToken, IEulerDToken} from "lib/euler-interfaces/co
 import {Constants as C} from "../src/lib/Constants.sol";
 import {ILendingPool} from "../src/interfaces/aave-v2/ILendingPool.sol";
 import {IProtocolDataProvider} from "../src/interfaces/aave-v2/IProtocolDataProvider.sol";
-import {IAdapter} from "../src/steth/usdc-adapters/IAdapter.sol";
+import {IAdapter} from "../src/steth/IAdapter.sol";
 import {scUSDCv2} from "../src/steth/scUSDCv2.sol";
-import {AaveV2Adapter} from "../src/steth/usdc-adapters/AaveV2Adapter.sol";
-import {AaveV3Adapter} from "../src/steth/usdc-adapters/AaveV3Adapter.sol";
-import {EulerAdapter} from "../src/steth/usdc-adapters/EulerAdapter.sol";
+import {AaveV2Adapter} from "../src/steth/scUsdcV2-adapters/AaveV2Adapter.sol";
+import {AaveV3Adapter} from "../src/steth/scUsdcV2-adapters/AaveV3Adapter.sol";
+import {EulerAdapter} from "../src/steth/scUsdcV2-adapters/EulerAdapter.sol";
 
 import {scWETH} from "../src/steth/scWETH.sol";
 import {ISwapRouter} from "../src/interfaces/uniswap/ISwapRouter.sol";
@@ -47,13 +47,14 @@ contract scUSDCv2Test is Test {
     event Reallocated();
     event Rebalanced(uint256 totalCollateral, uint256 totalDebt, uint256 floatBalance);
     event ProfitSold(uint256 wethSold, uint256 usdcReceived);
-    event TokensSold(address token, uint256 amountSold, uint256 usdcReceived);
+    event TokenSwapped(address token, uint256 amountSold, uint256 usdcReceived);
     event Supplied(uint256 adapterId, uint256 amount);
     event Borrowed(uint256 adapterId, uint256 amount);
     event Repaid(uint256 adapterId, uint256 amount);
     event Withdrawn(uint256 adapterId, uint256 amount);
     event Disinvested(uint256 wethAmount);
     event RewardsClaimed(uint256 adapterId);
+    event SwapperUpdated(address indexed admin, Swapper newSwapper);
 
     // after the exploit, the euler protocol was disabled. At one point it should work again, so having the
     // tests run in both cases (when protocol is working and not) requires two blocks to fork from
@@ -109,6 +110,66 @@ contract scUSDCv2Test is Test {
         assertEq(address(vault.swapper()), address(swapper), "swapper");
 
         assertEq(weth.allowance(address(vault), address(vault.scWETH())), type(uint256).max, "scWETH allowance");
+    }
+
+    function test_constructor_FailsIfScWethIsZeroAddress() public {
+        _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
+        wethVault = scWETH(payable(0x0));
+
+        vm.expectRevert(ZeroAddress.selector);
+        new scUSDCv2(alice, keeper, wethVault, priceConverter, swapper);
+    }
+
+    function test_constructor_FailsIfPriceConverterIsZeroAddress() public {
+        _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
+        priceConverter = PriceConverter(address(0x0));
+
+        vm.expectRevert(ZeroAddress.selector);
+        new scUSDCv2(address(this), keeper, wethVault, priceConverter, swapper);
+    }
+
+    function test_constructor_FailsIfSwapperIsZeroAddress() public {
+        _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
+        swapper = Swapper(address(0x0));
+
+        vm.expectRevert(ZeroAddress.selector);
+        new scUSDCv2(address(this), keeper, wethVault, priceConverter, swapper);
+    }
+
+    /// #setSwapper ///
+
+    function test_setSwapper_FailsIfCallerIsNotAdmin() public {
+        _setUpForkAtBlock(BLOCK_BEFORE_EULER_EXPLOIT);
+
+        vm.prank(alice);
+        vm.expectRevert(CallerNotAdmin.selector);
+        vault.setSwapper(Swapper(address(0x1)));
+    }
+
+    function test_setSwapper_FailsIfAddressIs0() public {
+        _setUpForkAtBlock(BLOCK_BEFORE_EULER_EXPLOIT);
+
+        vm.expectRevert(ZeroAddress.selector);
+        vault.setSwapper(Swapper(address(0x0)));
+    }
+
+    function test_setSwapper_UpdatesTheSwapperToNewAddress() public {
+        _setUpForkAtBlock(BLOCK_BEFORE_EULER_EXPLOIT);
+        Swapper newSwapper = Swapper(address(0x09));
+
+        vault.setSwapper(newSwapper);
+
+        assertEq(address(vault.swapper()), address(newSwapper), "swapper not updated");
+    }
+
+    function test_setSwapper_EmitsEvent() public {
+        _setUpForkAtBlock(BLOCK_BEFORE_EULER_EXPLOIT);
+        Swapper newSwapper = Swapper(address(0x09));
+
+        vm.expectEmit(true, true, true, true);
+        emit SwapperUpdated(address(this), newSwapper);
+
+        vault.setSwapper(newSwapper);
     }
 
     /// #addAdapter ///
@@ -908,7 +969,7 @@ contract scUSDCv2Test is Test {
 
         uint256 targetLtv = 0.7e18;
         uint256 initialBalance = 1_000_000e6;
-        uint256 initialDebt = priceConverter.getWethFromUsdc(initialBalance.mulWadDown(targetLtv));
+        uint256 initialDebt = priceConverter.usdcToEth(initialBalance.mulWadDown(targetLtv));
         deal(address(usdc), address(vault), initialBalance);
 
         bytes[] memory callData = new bytes[](2);
@@ -920,13 +981,13 @@ contract scUSDCv2Test is Test {
         // add 10% profit to the weth vault
         uint256 totalBefore = vault.totalAssets();
         uint256 wethProfit = vault.wethInvested().mulWadUp(0.1e18);
-        uint256 usdcProfit = priceConverter.getUsdcFromWeth(wethProfit);
+        uint256 usdcProfit = priceConverter.ethToUsdc(wethProfit);
         deal(address(weth), address(wethVault), vault.wethInvested() + wethProfit);
 
         assertApproxEqRel(vault.totalAssets(), totalBefore + usdcProfit, 0.01e18, "total assets before reinvest");
 
         uint256 minUsdcAmountOut = usdcProfit.mulWadDown(vault.slippageTolerance());
-        uint256 wethToReinvest = priceConverter.getWethFromUsdc(minUsdcAmountOut);
+        uint256 wethToReinvest = priceConverter.usdcToEth(minUsdcAmountOut);
         callData = new bytes[](3);
         callData[0] = abi.encodeWithSelector(scUSDCv2.sellProfit.selector, minUsdcAmountOut);
         callData[1] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV2.id(), minUsdcAmountOut);
@@ -960,11 +1021,10 @@ contract scUSDCv2Test is Test {
         borrowOnAaveV3 = bound(
             borrowOnAaveV3,
             1,
-            priceConverter.getWethFromUsdc(supplyOnAaveV3).mulWadDown(aaveV3.getMaxLtv() - 0.005e18) // -0.5% to avoid borrowing at max ltv
+            priceConverter.usdcToEth(supplyOnAaveV3).mulWadDown(aaveV3.getMaxLtv() - 0.005e18) // -0.5% to avoid borrowing at max ltv
         );
-        borrowOnAaveV2 = bound(
-            borrowOnAaveV2, 1, priceConverter.getWethFromUsdc(supplyOnAaveV2).mulWadDown(aaveV2.getMaxLtv() - 0.005e18)
-        );
+        borrowOnAaveV2 =
+            bound(borrowOnAaveV2, 1, priceConverter.usdcToEth(supplyOnAaveV2).mulWadDown(aaveV2.getMaxLtv() - 0.005e18));
 
         deal(address(usdc), address(vault), initialBalance);
 
@@ -1296,7 +1356,7 @@ contract scUSDCv2Test is Test {
         vm.prank(keeper);
         vault.sellProfit(0);
 
-        uint256 expectedUsdcBalance = usdcBalanceBefore + priceConverter.getUsdcFromWeth(profit);
+        uint256 expectedUsdcBalance = usdcBalanceBefore + priceConverter.ethToUsdc(profit);
         _assertCollateralAndDebt(aaveV3.id(), initialBalance / 2, 50 ether);
         _assertCollateralAndDebt(euler.id(), initialBalance / 2, 50 ether);
         assertApproxEqRel(vault.usdcBalance(), expectedUsdcBalance, 0.01e18, "usdc balance");
@@ -1350,7 +1410,7 @@ contract scUSDCv2Test is Test {
         uint256 wethInvested = weth.balanceOf(address(wethVault));
         deal(address(weth), address(wethVault), wethInvested * 2);
 
-        uint256 tooLargeUsdcAmountOutMin = priceConverter.getUsdcFromWeth(vault.getProfit()).mulWadDown(1.05e18); // add 5% more than expected
+        uint256 tooLargeUsdcAmountOutMin = priceConverter.ethToUsdc(vault.getProfit()).mulWadDown(1.05e18); // add 5% more than expected
 
         vm.prank(keeper);
         vm.expectRevert("Too little received");
@@ -1442,7 +1502,7 @@ contract scUSDCv2Test is Test {
         uint256 debtBefore = vault.totalDebt();
 
         uint256 profit = vault.getProfit();
-        uint256 expectedUsdcFromProfitSelling = priceConverter.getUsdcFromWeth(profit);
+        uint256 expectedUsdcFromProfitSelling = priceConverter.ethToUsdc(profit);
         uint256 initialFloat = vault.usdcBalance();
         // withdraw double the float amount
         uint256 withdrawAmount = initialFloat * 2;
@@ -1571,7 +1631,7 @@ contract scUSDCv2Test is Test {
         vault.deposit(_amount, alice);
         vm.stopPrank();
 
-        uint256 borrowAmount = priceConverter.getWethFromUsdc(_amount.mulWadDown(0.7e18));
+        uint256 borrowAmount = priceConverter.usdcToEth(_amount.mulWadDown(0.7e18));
 
         bytes[] memory callData = new bytes[](2);
         callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV3.id(), _amount);
@@ -1601,7 +1661,7 @@ contract scUSDCv2Test is Test {
         vault.deposit(_amount, alice);
         vm.stopPrank();
 
-        uint256 borrowAmount = priceConverter.getWethFromUsdc(_amount.mulWadDown(0.7e18));
+        uint256 borrowAmount = priceConverter.usdcToEth(_amount.mulWadDown(0.7e18));
 
         bytes[] memory callData = new bytes[](4);
         callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV3.id(), _amount.mulWadDown(0.3e18));
@@ -1759,16 +1819,16 @@ contract scUSDCv2Test is Test {
         vault.exitAllPositions(invalidEndUsdcBalanceMin);
     }
 
-    /// #sellTokens ///
+    /// #zeroExSwap ///
 
-    function test_sellTokens_FailsIfCallerIsNotKeeper() public {
+    function test_zeroExSwap_FailsIfCallerIsNotKeeper() public {
         _setUpForkAtBlock(EUL_SWAP_BLOCK);
         vm.startPrank(alice);
         vm.expectRevert(CallerNotKeeper.selector);
-        vault.sellTokens(ERC20(C.EULER_REWARDS_TOKEN), 0, bytes("0"), 0);
+        vault.zeroExSwap(ERC20(C.EULER_REWARDS_TOKEN), 0, bytes("0"), 0);
     }
 
-    function test_sellTokens_SwapsEulerForUsdc() public {
+    function test_zeroExSwap_SwapsEulerForUsdc() public {
         _setUpForkAtBlock(EUL_SWAP_BLOCK);
 
         uint256 initialUsdcBalance = 2_000e6;
@@ -1779,7 +1839,7 @@ contract scUSDCv2Test is Test {
         assertEq(vault.usdcBalance(), initialUsdcBalance, "usdc balance");
         assertEq(vault.totalAssets(), initialUsdcBalance, "total assets");
 
-        vault.sellTokens(ERC20(C.EULER_REWARDS_TOKEN), EUL_AMOUNT, EUL_SWAP_DATA, EUL_SWAP_USDC_RECEIVED);
+        vault.zeroExSwap(ERC20(C.EULER_REWARDS_TOKEN), EUL_AMOUNT, EUL_SWAP_DATA, EUL_SWAP_USDC_RECEIVED);
 
         assertEq(ERC20(C.EULER_REWARDS_TOKEN).balanceOf(address(vault)), EUL_AMOUNT, "euler end balance");
         assertEq(vault.totalAssets(), initialUsdcBalance + EUL_SWAP_USDC_RECEIVED, "vault total assets");
@@ -1787,27 +1847,27 @@ contract scUSDCv2Test is Test {
         assertEq(ERC20(C.EULER_REWARDS_TOKEN).allowance(address(vault), C.ZERO_EX_ROUTER), 0, "0x token allowance");
     }
 
-    function test_sellTokens_EmitsEventOnSuccessfulSwap() public {
+    function test_zeroExSwap_EmitsEventOnSuccessfulSwap() public {
         _setUpForkAtBlock(EUL_SWAP_BLOCK);
 
         deal(C.EULER_REWARDS_TOKEN, address(vault), EUL_AMOUNT);
 
         vm.expectEmit(true, true, true, true);
-        emit TokensSold(C.EULER_REWARDS_TOKEN, EUL_AMOUNT, EUL_SWAP_USDC_RECEIVED);
+        emit TokenSwapped(C.EULER_REWARDS_TOKEN, EUL_AMOUNT, EUL_SWAP_USDC_RECEIVED);
 
-        vault.sellTokens(ERC20(C.EULER_REWARDS_TOKEN), EUL_AMOUNT, EUL_SWAP_DATA, 0);
+        vault.zeroExSwap(ERC20(C.EULER_REWARDS_TOKEN), EUL_AMOUNT, EUL_SWAP_DATA, 0);
     }
 
-    function test_sellTokens_FailsIfUsdcAmountReceivedIsLessThanMin() public {
+    function test_zeroExSwap_FailsIfUsdcAmountReceivedIsLessThanMin() public {
         _setUpForkAtBlock(EUL_SWAP_BLOCK);
 
         deal(C.EULER_REWARDS_TOKEN, address(vault), EUL_AMOUNT);
 
         vm.expectRevert(AmountReceivedBelowMin.selector);
-        vault.sellTokens(ERC20(C.EULER_REWARDS_TOKEN), EUL_AMOUNT, EUL_SWAP_DATA, EUL_SWAP_USDC_RECEIVED + 1);
+        vault.zeroExSwap(ERC20(C.EULER_REWARDS_TOKEN), EUL_AMOUNT, EUL_SWAP_DATA, EUL_SWAP_USDC_RECEIVED + 1);
     }
 
-    function test_sellTokens_FailsIfSwapIsNotSucessful() public {
+    function test_zeroExSwap_FailsIfSwapIsNotSucessful() public {
         _setUpForkAtBlock(EUL_SWAP_BLOCK);
 
         deal(C.EULER_REWARDS_TOKEN, address(vault), EUL_AMOUNT);
@@ -1815,7 +1875,7 @@ contract scUSDCv2Test is Test {
         bytes memory invalidSwapData = hex"6af479b20000";
 
         vm.expectRevert("Address: low-level call failed");
-        vault.sellTokens(ERC20(C.EULER_REWARDS_TOKEN), EUL_AMOUNT, invalidSwapData, 0);
+        vault.zeroExSwap(ERC20(C.EULER_REWARDS_TOKEN), EUL_AMOUNT, invalidSwapData, 0);
     }
 
     /// #claimRewards ///

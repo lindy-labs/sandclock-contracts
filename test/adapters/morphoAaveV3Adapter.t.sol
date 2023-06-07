@@ -8,10 +8,9 @@ import {DSTestPlus} from "solmate/test/utils/DSTestPlus.sol";
 import {Address} from "openzeppelin-contracts/utils/Address.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
-import {IAdapter} from "../../src/scWeth-adapters/IAdapter.sol";
-import {MorphoAaveV3Adapter} from "../../src/scWeth-adapters/MorphoAaveV3Adapter.sol";
+import {IAdapter} from "../../src/steth/IAdapter.sol";
+import {MorphoAaveV3Adapter} from "../../src/steth/scWethV2-adapters/MorphoAaveV3Adapter.sol";
 import {Constants as C} from "../../src/lib/Constants.sol";
-
 import {IMorpho} from "../../src/interfaces/morpho/IMorpho.sol";
 
 contract MorphoAaveV3AdapterTest is Test {
