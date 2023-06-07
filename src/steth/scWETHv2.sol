@@ -22,6 +22,11 @@ import {IwstETH} from "../interfaces/lido/IwstETH.sol";
 import {PriceConverter} from "./PriceConverter.sol";
 import {Swapper} from "./Swapper.sol";
 
+/**
+ * @title Sandclock WETH Vault version 2
+ * @notice Deposit Asset : Weth or Eth
+ * @notice
+ */
 contract scWETHv2 is BaseV2Vault {
     using SafeTransferLib for ERC20;
     using FixedPointMathLib for uint256;
@@ -42,7 +47,7 @@ contract scWETHv2 is BaseV2Vault {
     uint256 public totalProfit;
 
     // since the totalAssets increases after profit, the floatRequired also increases proportionally in case of using a percentage float
-    // this will cause the receiveFlashloan method to fail on a reinvesting profits (using rebalance) after the multicall, since the actual float in the contract remain unchanged after the multicall
+    // this will cause the receiveFlashloan method to fail on reinvesting profits (using rebalance) after the multicall, since the actual float in the contract remain unchanged after the multicall
     // this can be fixed by also withdrawing float into the contract in the reinvesting profits multicall but that makes the calculations very complex on the backend
     // a simple solution to that is just using minimumFloatAmount instead of a percentage float
     uint256 public minimumFloatAmount = 1 ether;
@@ -79,8 +84,12 @@ contract scWETHv2 is BaseV2Vault {
         emit MinFloatAmountUpdated(msg.sender, _newMinFloatAmount);
     }
 
-    /// @dev the primary method to be used by backend to invest, disinvest or reallocate funds among supported adapters
-    /// @dev _totalInvestAmount must be zero in case of disinvest or reallocation
+    /// @notice the primary method to be used by backend to invest, disinvest or reallocate funds among supported adapters
+    /// @dev _totalInvestAmount must be zero in case of disinvest, reallocation or reinvesting profits
+    /// @dev also mints performance fee tokens to the treasury based on the profits (if any) made by the vault
+    /// @param _totalInvestAmount total amount of float in the strategy to invest in the lending markets in case of a invest
+    /// @param _flashLoanAmount the amount to be flashloaned from balancer
+    /// @param _multicallData array of bytes containing the series of encoded functions to be called (the functions being one of supplyAndBorrow, repayAndWithdraw, swapWstEthToWeth, swapWethToWstEth, zeroExSwap)
     function rebalance(uint256 _totalInvestAmount, uint256 _flashLoanAmount, bytes[] calldata _multicallData)
         external
     {
@@ -98,6 +107,9 @@ contract scWETHv2 is BaseV2Vault {
         emit Rebalanced(totalCollateral(), totalDebt(), asset.balanceOf(address(this)));
     }
 
+    /// @notice swap weth to wstEth
+    /// @dev mainly to be used in the multicall to swap borrowed weth to wstEth for supplying to the lending markets
+    /// @param _wethAmount amount of weth to be swapped to wstEth
     function swapWethToWstEth(uint256 _wethAmount) external {
         _onlyKeeperOrFlashLoan();
 
@@ -106,8 +118,14 @@ contract scWETHv2 is BaseV2Vault {
         );
     }
 
+    /// @notice swap wstEth to weth
+    /// @dev mainly to be used in the multicall to swap withdrawn wstEth to weth to payback the flashloan
+    /// @param _wstEthAmount amount of wstEth to be swapped to weth
+    /// @param _slippageTolerance the max slippage during steth to eth swap (1e18 meaning 0 slippage tolerance)
     function swapWstEthToWeth(uint256 _wstEthAmount, uint256 _slippageTolerance) external {
         _onlyKeeperOrFlashLoan();
+
+        if (_slippageTolerance > C.ONE) revert InvalidSlippageTolerance();
 
         uint256 wstEthBalance = wstETH.balanceOf(address(this));
 
@@ -124,8 +142,8 @@ contract scWETHv2 is BaseV2Vault {
         );
     }
 
-    /// @notice withdraw funds from the strategy into the vault
-    /// @param _amount : amount of assets to withdraw into the vault
+    /// @notice withdraw deposited funds from the lending markets to the vault
+    /// @param _amount : amount of assets to withdraw to the vault
     function withdrawToVault(uint256 _amount) external {
         _onlyKeeper();
 
@@ -150,7 +168,7 @@ contract scWETHv2 is BaseV2Vault {
         assets += asset.balanceOf(address(this));
     }
 
-    /// @notice returns the wstEth deposited of the vault in a particularly protocol (in terms of weth)
+    /// @notice returns the wstEth deposited of the vault in a particular protocol
     /// @param _adapterId The id the protocol adapter
     function getCollateral(uint256 _adapterId) public view returns (uint256) {
         if (!isSupported(_adapterId)) return 0;
@@ -169,7 +187,7 @@ contract scWETHv2 is BaseV2Vault {
         }
     }
 
-    /// @notice returns the weth debt of the vault in a particularly protocol (in terms of weth)
+    /// @notice returns the weth debt of the vault in a particularly protocol
     /// @param _adapterId The id the protocol adapter
     function getDebt(uint256 _adapterId) public view returns (uint256) {
         if (!isSupported(_adapterId)) return 0;
@@ -188,7 +206,7 @@ contract scWETHv2 is BaseV2Vault {
         }
     }
 
-    /// @notice helper method to directly deposit ETH instead of weth
+    /// @notice helper method for the user to directly deposit ETH to this vault instead of weth
     /// @param receiver the address to mint the shares to
     function deposit(address receiver) external payable returns (uint256 shares) {
         uint256 assets = msg.value;
@@ -204,6 +222,58 @@ contract scWETHv2 is BaseV2Vault {
         emit Deposit(msg.sender, receiver, assets, shares);
 
         afterDeposit(assets, shares);
+    }
+
+    /// @dev called after the flashLoan on rebalance
+    function receiveFlashLoan(address[] memory, uint256[] memory amounts, uint256[] memory, bytes memory userData)
+        external
+    {
+        _isFlashLoanInitiated();
+
+        // the amount flashloaned
+        uint256 flashLoanAmount = amounts[0];
+
+        // decode user data
+        bytes[] memory callData = abi.decode(userData, (bytes[]));
+
+        _multiCall(callData);
+
+        // payback flashloan
+        asset.safeTransfer(address(balancerVault), flashLoanAmount);
+
+        _enforceFloat();
+    }
+
+    /// @notice supplies wstEth as collateral and borrows weth from the respective protocol as specified by adapterId
+    /// @dev mainly to be used inside the multicall to supply and borrow assets from the respective lending market
+    /// @param _adapterId the id of the adapter for the required protocol
+    /// @param _supplyAmount the amount of wstEth to be supplied as collateral
+    /// @param _borrowAmount the amount of weth to be borrowed
+    function supplyAndBorrow(uint256 _adapterId, uint256 _supplyAmount, uint256 _borrowAmount) external {
+        _onlyKeeperOrFlashLoan();
+
+        address adapter = protocolAdapters.get(_adapterId);
+
+        _adapterDelegateCall(adapter, abi.encodeWithSelector(IAdapter.supply.selector, _supplyAmount));
+        _adapterDelegateCall(adapter, abi.encodeWithSelector(IAdapter.borrow.selector, _borrowAmount));
+
+        emit SuppliedAndBorrowed(_adapterId, _supplyAmount, _borrowAmount);
+    }
+
+    /// @notice repays weth debt and withdraws wstEth collateral from the respective protocol as specified by adapterId
+    /// @dev mainly to be used inside the multicall to repay and withdraw assets from the respective lending market
+    /// @param _adapterId the id of the adapter for the required protocol
+    /// @param _repayAmount the amount of weth to be repaid
+    /// @param _withdrawAmount the amount of wstEth to be withdrawn
+    function repayAndWithdraw(uint256 _adapterId, uint256 _repayAmount, uint256 _withdrawAmount) external {
+        _onlyKeeperOrFlashLoan();
+
+        address adapter = protocolAdapters.get(_adapterId);
+
+        _adapterDelegateCall(adapter, abi.encodeWithSelector(IAdapter.repay.selector, _repayAmount));
+        _adapterDelegateCall(adapter, abi.encodeWithSelector(IAdapter.withdraw.selector, _withdrawAmount));
+
+        emit RepaidAndWithdrawn(_adapterId, _repayAmount, _withdrawAmount);
     }
 
     function withdraw(uint256 assets, address receiver, address owner) public override returns (uint256 shares) {
@@ -261,48 +331,6 @@ contract scWETHv2 is BaseV2Vault {
         asset.safeTransfer(receiver, assets);
     }
 
-    /// @dev called after the flashLoan on rebalance
-    function receiveFlashLoan(address[] memory, uint256[] memory amounts, uint256[] memory, bytes memory userData)
-        external
-    {
-        _isFlashLoanInitiated();
-
-        // the amount flashloaned
-        uint256 flashLoanAmount = amounts[0];
-
-        // decode user data
-        bytes[] memory callData = abi.decode(userData, (bytes[]));
-
-        _multiCall(callData);
-
-        // payback flashloan
-        asset.safeTransfer(address(balancerVault), flashLoanAmount);
-
-        _enforceFloat();
-    }
-
-    function supplyAndBorrow(uint256 _adapterId, uint256 _supplyAmount, uint256 _borrowAmount) external {
-        _onlyKeeperOrFlashLoan();
-
-        address adapter = protocolAdapters.get(_adapterId);
-
-        _adapterDelegateCall(adapter, abi.encodeWithSelector(IAdapter.supply.selector, _supplyAmount));
-        _adapterDelegateCall(adapter, abi.encodeWithSelector(IAdapter.borrow.selector, _borrowAmount));
-
-        emit SuppliedAndBorrowed(_adapterId, _supplyAmount, _borrowAmount);
-    }
-
-    function repayAndWithdraw(uint256 _adapterId, uint256 _repayAmount, uint256 _withdrawAmount) external {
-        _onlyKeeperOrFlashLoan();
-
-        address adapter = protocolAdapters.get(_adapterId);
-
-        _adapterDelegateCall(adapter, abi.encodeWithSelector(IAdapter.repay.selector, _repayAmount));
-        _adapterDelegateCall(adapter, abi.encodeWithSelector(IAdapter.withdraw.selector, _withdrawAmount));
-
-        emit RepaidAndWithdrawn(_adapterId, _repayAmount, _withdrawAmount);
-    }
-
     /*//////////////////////////////////////////////////////////////
                             INTERNAL API
     //////////////////////////////////////////////////////////////*/
@@ -343,7 +371,7 @@ contract scWETHv2 is BaseV2Vault {
         emit WithdrawnToVault(asset.balanceOf(address(this)) - float);
     }
 
-    /// @notice enforce float to be above the minimum required
+    /// @notice reverts if float in the vault is not above the minimum required
     function _enforceFloat() internal view {
         uint256 float = asset.balanceOf(address(this));
         uint256 floatRequired = minimumFloatAmount;
