@@ -12,7 +12,8 @@ import {
     InvalidFlashLoanCaller,
     TreasuryCannotBeZero,
     FeesTooHigh,
-    InvalidFloatPercentage
+    InvalidFloatPercentage,
+    InvalidSlippageTolerance
 } from "./errors/scErrors.sol";
 
 abstract contract sc4626 is ERC4626, AccessControl {
@@ -29,6 +30,7 @@ abstract contract sc4626 is ERC4626, AccessControl {
     event TreasuryUpdated(address indexed user, address newTreasury);
     event PerformanceFeeUpdated(address indexed user, uint256 newPerformanceFee);
     event FloatPercentageUpdated(address indexed user, uint256 newFloatPercentage);
+    event SlippageToleranceUpdated(address indexed admin, uint256 newSlippageTolerance);
 
     /// Role allowed to harvest/reinvest
     bytes32 public constant KEEPER_ROLE = keccak256("KEEPER_ROLE");
@@ -44,6 +46,9 @@ abstract contract sc4626 is ERC4626, AccessControl {
 
     // percentage of the total assets to be kept in the vault as a withdrawal buffer
     uint256 public floatPercentage = 0.01e18;
+
+    // max slippage tolerance for swaps
+    uint256 public slippageTolerance = 0.99e18; // 1% default
 
     /// @notice set the treasury address
     /// @param _newTreasury the new treasury address
@@ -77,6 +82,20 @@ abstract contract sc4626 is ERC4626, AccessControl {
 
         floatPercentage = _newFloatPercentage;
         emit FloatPercentageUpdated(msg.sender, _newFloatPercentage);
+    }
+
+    /**
+     * @notice Set the default slippage tolerance for swapping tokens.
+     * @param _newSlippageTolerance The new slippage tolerance value.
+     */
+    function setSlippageTolerance(uint256 _newSlippageTolerance) external {
+        _onlyAdmin();
+
+        if (_newSlippageTolerance > C.ONE) revert InvalidSlippageTolerance();
+
+        slippageTolerance = _newSlippageTolerance;
+
+        emit SlippageToleranceUpdated(msg.sender, _newSlippageTolerance);
     }
 
     function _onlyAdmin() internal view {

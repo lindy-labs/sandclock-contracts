@@ -5,9 +5,12 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 import {WETH} from "solmate/tokens/WETH.sol";
 
 import {Constants as C} from "../../../src/lib/Constants.sol";
-import {IAdapter} from "../../../src/steth/usdc-adapters/IAdapter.sol";
+import {IAdapter} from "../../../src/steth/IAdapter.sol";
 
 contract FaultyAdapter is IAdapter {
+    ERC20 constant usdc = ERC20(C.USDC);
+    WETH constant weth = WETH(payable(C.WETH));
+
     uint256 public constant override id = 0;
 
     // dummy address for token approvals

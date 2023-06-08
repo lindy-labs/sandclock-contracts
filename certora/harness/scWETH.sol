@@ -115,7 +115,8 @@ contract scWETH is sc4626, IFlashLoanRecipient {
     /// @notice set the slippage tolerance for curve swaps
     /// @param newSlippageTolerance the new slippage tolerance
     /// @dev slippage tolerance is a number between 0 and 1e18
-    function setSlippageTolerance(uint256 newSlippageTolerance) external onlyAdmin {
+    function setSlippageTolerance(uint256 newSlippageTolerance) external {
+        _onlyAdmin();
         if (newSlippageTolerance > C.ONE) revert InvalidSlippageTolerance();
         slippageTolerance = newSlippageTolerance;
         emit SlippageToleranceUpdated(msg.sender, newSlippageTolerance);
@@ -123,7 +124,8 @@ contract scWETH is sc4626, IFlashLoanRecipient {
 
     /// @notice set stEThToEthPriceFeed address
     /// @param newAddress the new address of the stEThToEthPriceFeed
-    function setStEThToEthPriceFeed(address newAddress) external onlyAdmin {
+    function setStEThToEthPriceFeed(address newAddress) external {
+        _onlyAdmin();
         if (newAddress == address(0)) revert ZeroAddress();
         stEThToEthPriceFeed = AggregatorV3Interface(newAddress);
     }
@@ -134,7 +136,8 @@ contract scWETH is sc4626, IFlashLoanRecipient {
     /// @dev for the first deposit, deposits everything into the strategy.
     /// @dev reduces the getLtv() back to the target ltv
     /// @dev also mints performance fee tokens to the treasury
-    function harvest() external onlyKeeper {
+    function harvest() external {
+        onlyKeeper();
         // reinvest
         _rebalancePosition();
 
@@ -161,7 +164,9 @@ contract scWETH is sc4626, IFlashLoanRecipient {
     /// @notice increase/decrease the target ltv used on borrows
     /// @param newTargetLtv the new target ltv
     /// @dev the new target ltv must be less than the max ltv allowed on aave
-    function applyNewTargetLtv(uint256 newTargetLtv) public onlyKeeper {
+    function applyNewTargetLtv(uint256 newTargetLtv) public {
+        onlyKeeper();
+
         if (newTargetLtv >= getMaxLtv()) revert InvalidTargetLtv();
 
         targetLtv = newTargetLtv;
@@ -173,7 +178,8 @@ contract scWETH is sc4626, IFlashLoanRecipient {
 
     /// @notice withdraw funds from the strategy into the vault
     /// @param amount : amount of assets to withdraw into the vault
-    function withdrawToVault(uint256 amount) external onlyKeeper {
+    function withdrawToVault(uint256 amount) external {
+        onlyKeeper();
         _withdrawToVault(amount);
     }
 
