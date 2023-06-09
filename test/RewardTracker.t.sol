@@ -21,6 +21,7 @@ contract RewardTrackerTest is DSTestPlus {
     uint256 internal constant PRECISION = 1e30;
     address constant tester = address(0x69);
     address constant alice = address(0x70);
+    address constant treasury = address(0x71);
     bytes32 public constant DISTRIBUTOR = keccak256("DISTRIBUTOR");
     RewardTracker stakingPool;
 
@@ -32,6 +33,7 @@ contract RewardTrackerTest is DSTestPlus {
         rewardToken = new MockERC20("Mock WETH", "WETH", 18);
         vault = new MockERC4626(ERC20(rewardToken), "Vault", "scWETH");
         stakingPool = new RewardTracker(
+            treasury,
             address(stakeToken),
             "Staked Quartz",
             "sQuartz",
@@ -51,12 +53,12 @@ contract RewardTrackerTest is DSTestPlus {
     }
 
     function testGas_deposit() public {
-        hevm.warp(7 days);
+        hevm.warp(31 days);
         stakingPool.deposit(1 ether, address(this));
     }
 
     function testGas_withdraw() public {
-        hevm.warp(7 days);
+        hevm.warp(31 days);
         stakingPool.withdraw(0.5 ether, address(this), address(this));
     }
 
@@ -113,6 +115,7 @@ contract RewardTrackerTest is DSTestPlus {
     function testCorrectness_withdraw(uint128 amount_, uint56 warpTime, uint56 stakeTime) public {
         hevm.assume(amount_ > 0);
         hevm.assume(warpTime > 0);
+        hevm.assume(stakeTime > 30 days);
         uint256 amount = amount_;
         amount = bound(amount, 1e5, 1e27);
 
@@ -161,6 +164,7 @@ contract RewardTrackerTest is DSTestPlus {
 
         // start from a clean slate
         stakingPool.claimRewards(address(this));
+        stakingPool.payDebt();
         stakingPool.withdraw(stakingPool.balanceOf(address(this)), address(this), address(this));
 
         // mint stake tokens
@@ -224,6 +228,7 @@ contract RewardTrackerTest is DSTestPlus {
 
         // start from a clean slate
         stakingPool.claimRewards(address(this));
+        stakingPool.payDebt();
         stakingPool.withdraw(stakingPool.balanceOf(address(this)), address(this), address(this));
 
         // mint stake tokens
@@ -342,7 +347,7 @@ contract RewardTrackerTest is DSTestPlus {
     function testCorrectness_transfer(uint256 amount, uint256 transferAmount, uint56 warpTime) public {
         amount = bound(amount, 1e5, 1e27);
         transferAmount = bound(transferAmount, 1e5, amount);
-        hevm.assume(warpTime > 1 days);
+        hevm.assume(warpTime > 30 days);
 
         hevm.startPrank(tester);
 
@@ -371,7 +376,7 @@ contract RewardTrackerTest is DSTestPlus {
     function testCorrectness_transferFrom(uint256 amount, uint256 transferAmount, uint56 warpTime) public {
         amount = bound(amount, 1e5, 1e27);
         transferAmount = bound(transferAmount, 1e5, amount);
-        hevm.assume(warpTime > 1 days);
+        hevm.assume(warpTime > 30 days);
 
         hevm.startPrank(tester);
 

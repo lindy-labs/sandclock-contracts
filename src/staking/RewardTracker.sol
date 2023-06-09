@@ -8,9 +8,10 @@ import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 import {AccessControl} from "openzeppelin-contracts/access/AccessControl.sol";
 import {ReentrancyGuard} from "openzeppelin-contracts/security/ReentrancyGuard.sol";
 import {BonusTracker} from "./BonusTracker.sol";
+import {DebtTracker} from "./DebtTracker.sol";
 import {CallerNotAdmin} from "../errors/scErrors.sol";
 
-contract RewardTracker is BonusTracker, AccessControl {
+contract RewardTracker is BonusTracker, DebtTracker, AccessControl {
     using SafeTransferLib for ERC20;
     using FixedPointMathLib for uint256;
 
@@ -22,6 +23,7 @@ contract RewardTracker is BonusTracker, AccessControl {
     error CallerNotDistirbutor();
     error VaultNotWhitelisted();
     error VaultAssetNotSupported();
+    error SenderHasToBeReceiver();
 
     /// @notice The last Unix timestamp (in seconds) when rewardPerTokenStored was updated
     uint64 public lastUpdateTime;
@@ -53,10 +55,16 @@ contract RewardTracker is BonusTracker, AccessControl {
     /// @notice The length of each reward period, in seconds
     uint64 immutable duration;
 
-    constructor(address _stakeToken, string memory _name, string memory _symbol, address _rewardToken, uint64 _duration)
-        BonusTracker(ERC20(_stakeToken), _name, _symbol)
-    {
+    constructor(
+        address _treasury,
+        address _stakeToken,
+        string memory _name,
+        string memory _symbol,
+        address _rewardToken,
+        uint64 _duration
+    ) BonusTracker(ERC20(_stakeToken), _name, _symbol) {
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
+        treasury = _treasury;
         rewardToken = ERC20(_rewardToken);
         duration = _duration;
     }
@@ -76,18 +84,45 @@ contract RewardTracker is BonusTracker, AccessControl {
     }
 
     function deposit(uint256 _assets, address _receiver) public override returns (uint256 shares) {
+        // sender needs to be the receiver
+        if (_receiver != msg.sender) revert SenderHasToBeReceiver();
+
+        // if user has debt no new deposits are allowed
+        _updateDebt(_receiver);
+        if (debtOf[_receiver] > 0) revert UserHasDebt();
+
         _updateReward(_receiver);
         _updateBonus(_receiver);
         shares = super.deposit(_assets, _receiver);
     }
 
     function mint(uint256 _shares, address _receiver) public override returns (uint256 assets) {
+        // sender needs to be the receiver
+        if (_receiver != msg.sender) revert SenderHasToBeReceiver();
+
+        // if user has debt no new deposits are allowed
+        _updateDebt(_receiver);
+        if (debtOf[_receiver] > 0) revert UserHasDebt();
+
         _updateReward(_receiver);
         _updateBonus(_receiver);
         assets = super.mint(_shares, _receiver);
     }
 
+    function afterDeposit(uint256 _assets, uint256) internal override {
+        // debt starts at 10% the deposited amount, decreases linearly over 30 days
+        uint256 debt = _assets.mulWadDown(0.1e18);
+        uint64 now_ = uint64(block.timestamp);
+        debtOf[msg.sender] = debt;
+        debtStartTimeFor[msg.sender] = now_;
+        emit DebtAdded(msg.sender, debt, now_);
+    }
+
     function transfer(address _to, uint256 _amount) public override returns (bool) {
+        // if user has debt transfers are not allowed
+        _updateDebt(msg.sender);
+        if (debtOf[msg.sender] > 0) revert UserHasDebt();
+
         _updateReward(msg.sender);
         _updateReward(_to);
         _updateBonus(msg.sender);
@@ -98,6 +133,10 @@ contract RewardTracker is BonusTracker, AccessControl {
     }
 
     function transferFrom(address _from, address _to, uint256 _amount) public override returns (bool) {
+        // if user has debt transfers are not allowed
+        _updateDebt(_from);
+        if (debtOf[_from] > 0) revert UserHasDebt();
+
         _updateReward(_from);
         _updateReward(_to);
         _updateBonus(_from);
@@ -223,10 +262,63 @@ contract RewardTracker is BonusTracker, AccessControl {
         emit RewardAdded(_reward);
     }
 
-    function beforeWithdraw(uint256 _assets, uint256) internal override {
-        _updateReward(msg.sender);
-        _updateBonus(msg.sender);
-        _burnMultiplierPoints(_assets, msg.sender);
+    function withdraw(uint256 assets, address receiver, address owner) public override returns (uint256 shares) {
+        shares = previewWithdraw(assets); // No need to check for rounding error, previewWithdraw rounds up.
+
+        if (msg.sender != owner) {
+            uint256 allowed = allowance[owner][msg.sender]; // Saves gas for limited approvals.
+
+            if (allowed != type(uint256).max) allowance[owner][msg.sender] = allowed - shares;
+        }
+
+        // if user has debt normal withdrawals are not allowed, instead use payDebt() first
+        _updateDebt(owner);
+        if (debtOf[owner] > 0) revert UserHasDebt();
+
+        _updateReward(owner);
+        _updateBonus(owner);
+        _burnMultiplierPoints(assets, owner);
+
+        _burn(owner, shares);
+
+        emit Withdraw(msg.sender, receiver, owner, assets, shares);
+
+        asset.safeTransfer(receiver, assets);
+    }
+
+    function redeem(uint256 shares, address receiver, address owner) public override returns (uint256 assets) {
+        if (msg.sender != owner) {
+            uint256 allowed = allowance[owner][msg.sender]; // Saves gas for limited approvals.
+
+            if (allowed != type(uint256).max) allowance[owner][msg.sender] = allowed - shares;
+        }
+
+        // Check for rounding error since we round down in previewRedeem.
+        require((assets = previewRedeem(shares)) != 0, "ZERO_ASSETS");
+
+        // if user has debt normal withdrawals are not allowed, instead use payDebt() first
+        _updateDebt(owner);
+        if (debtOf[owner] > 0) revert UserHasDebt();
+
+        _updateReward(owner);
+        _updateBonus(owner);
+        _burnMultiplierPoints(assets, owner);
+
+        _burn(owner, shares);
+
+        emit Withdraw(msg.sender, receiver, owner, assets, shares);
+
+        asset.safeTransfer(receiver, assets);
+    }
+
+    /// @notice Function for paying all debt for an account at once
+    function payDebt() external nonReentrant {
+        uint256 debt = _debtFor(msg.sender);
+        debtOf[msg.sender] = 0;
+
+        // pay debt by withdrawing sQuartz with treasury as receiver
+        withdraw(debt, treasury, msg.sender);
+        emit DebtPaid(msg.sender, debt);
     }
 
     function _earned(address _account, uint256 _accountBalance, uint256 rewardPerToken_, uint256 _accountRewards)

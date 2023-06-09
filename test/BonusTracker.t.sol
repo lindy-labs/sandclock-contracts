@@ -16,6 +16,7 @@ contract BonusTrackerTest is DSTestPlus {
     MockERC20 rewardToken;
     uint256 internal constant PRECISION = 1e30;
     address constant tester = address(0x69);
+    address constant treasury = address(0x71);
     RewardTracker stakingPool;
 
     uint64 constant DURATION = 30 days;
@@ -23,7 +24,8 @@ contract BonusTrackerTest is DSTestPlus {
     function setUp() public {
         stakeToken = new MockERC20("Mock Quartz", "QUARTZ", 18);
         rewardToken = new MockERC20("Mock WETH", "WETH", 18);
-        stakingPool = new RewardTracker(address(stakeToken), "Staked Quartz", "sQuartz", address(rewardToken), DURATION);
+        stakingPool =
+            new RewardTracker(treasury, address(stakeToken), "Staked Quartz", "sQuartz", address(rewardToken), DURATION);
 
         rewardToken.mint(address(this), 1000 ether);
         stakeToken.mint(address(this), 1000 ether);
@@ -49,6 +51,7 @@ contract BonusTrackerTest is DSTestPlus {
 
         // start from a clean slate
         stakingPool.claimRewards(address(this));
+        stakingPool.payDebt();
         stakingPool.withdraw(stakingPool.balanceOf(address(this)), address(this), address(this));
 
         // mint stake tokens
@@ -112,7 +115,7 @@ contract BonusTrackerTest is DSTestPlus {
     {
         amount0 = bound(amount0, 1, 1e37);
         amount1 = bound(amount1, 1, 1e37);
-        stakeTime = bound(stakeTime, 1, 36500 days);
+        stakeTime = bound(stakeTime, 31 days, 36500 days);
         withdrawAmount_ = bound(withdrawAmount_, 1, amount0);
 
         /// -----------------------------------------------------------------------
@@ -121,6 +124,7 @@ contract BonusTrackerTest is DSTestPlus {
 
         // start from a clean slate
         stakingPool.claimRewards(address(this));
+        stakingPool.payDebt();
         stakingPool.withdraw(stakingPool.balanceOf(address(this)), address(this), address(this));
 
         // mint stake tokens

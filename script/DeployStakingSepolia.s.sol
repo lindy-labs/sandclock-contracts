@@ -20,7 +20,7 @@ contract DeployScript is CREATE3Script {
         vm.startBroadcast(deployerPrivateKey);
 
         quartz = new MockERC20("Mock Quartz", "QUARTZ", 18);
-        sQuartz = new RewardTracker(address(quartz), "Staked Quartz", "sQuartz", WETH, 30 days);
+        sQuartz = new RewardTracker(address(msg.sender), address(quartz), "Staked Quartz", "sQuartz", WETH, 30 days);
 
         vm.stopBroadcast();
     }
