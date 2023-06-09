@@ -25,6 +25,8 @@ contract RewardTrackerTest is DSTestPlus {
     bytes32 public constant DISTRIBUTOR = keccak256("DISTRIBUTOR");
     RewardTracker stakingPool;
 
+    error TreasuryCannotBeZero();
+
     uint256 constant REWARD_AMOUNT = 10 ether;
     uint64 constant DURATION = 30 days;
 
@@ -568,6 +570,20 @@ contract RewardTrackerTest is DSTestPlus {
         stakingPool.grantRole(DISTRIBUTOR, address(this));
         stakingPool.addVault(address(vault));
         stakingPool.fetchRewards(ERC4626(vault));
+    }
+
+    function test_setTreasury() public {
+        address newTreasury = alice;
+        stakingPool.setTreasury(newTreasury);
+        assertEq(stakingPool.treasury(), newTreasury);
+
+        // revert if called by another user
+        hevm.expectRevert(0x06d919f2);
+        hevm.prank(alice);
+        stakingPool.setTreasury(address(this));
+
+        hevm.expectRevert(TreasuryCannotBeZero.selector);
+        stakingPool.setTreasury(address(0x00));
     }
 
     function assertEqDecimalEpsilonBelow(uint256 a, uint256 b, uint256 decimals, uint256 epsilonInv) internal {

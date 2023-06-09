@@ -18,12 +18,14 @@ contract RewardTracker is BonusTracker, DebtTracker, AccessControl {
     event RewardAdded(uint256 reward);
     event RewardPaid(address indexed user, uint256 reward);
     event VaultAdded(address vault);
+    event TreasuryUpdated(address indexed user, address newTreasury);
 
     error OverflowAmountTooLarge();
     error CallerNotDistirbutor();
     error VaultNotWhitelisted();
     error VaultAssetNotSupported();
     error SenderHasToBeReceiver();
+    error TreasuryCannotBeZero();
 
     /// @notice The last Unix timestamp (in seconds) when rewardPerTokenStored was updated
     uint64 public lastUpdateTime;
@@ -64,6 +66,7 @@ contract RewardTracker is BonusTracker, DebtTracker, AccessControl {
         uint64 _duration
     ) BonusTracker(ERC20(_stakeToken), _name, _symbol) {
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
+        if (_treasury == address(0)) revert TreasuryCannotBeZero();
         treasury = _treasury;
         rewardToken = ERC20(_rewardToken);
         duration = _duration;
@@ -210,6 +213,14 @@ contract RewardTracker is BonusTracker, DebtTracker, AccessControl {
         isVault[_vault] = true;
 
         emit VaultAdded(_vault);
+    }
+
+    /// @notice set the treasury address
+    /// @param _newTreasury the new treasury address
+    function setTreasury(address _newTreasury) external onlyAdmin {
+        if (_newTreasury == address(0)) revert TreasuryCannotBeZero();
+        treasury = _newTreasury;
+        emit TreasuryUpdated(msg.sender, _newTreasury);
     }
 
     function _notifyRewardAmount(uint256 _reward) internal {
