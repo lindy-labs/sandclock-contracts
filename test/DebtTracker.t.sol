@@ -86,4 +86,76 @@ contract BonusTrackerTest is DSTestPlus {
         assertEq(stakingPool.debtOf(address(this)), 0);
         assertEq(stakingPool.debtFor(address(this)), 0);
     }
+
+    function testFail_deposit(uint256 amount0, uint256 stakeTime) public {
+        amount0 = bound(amount0, 1, 1e27);
+        stakeTime = bound(stakeTime, 1, 30 days - 1);
+
+        // mint stake tokens
+        stakeToken.mint(address(this), amount0);
+
+        // warp to simulate staking
+        hevm.warp(stakeTime);
+
+        // stake
+        stakingPool.deposit(amount0, address(this));
+    }
+
+    function testFail_mint(uint256 amount0, uint256 stakeTime) public {
+        amount0 = bound(amount0, 1, 1e27);
+        stakeTime = bound(stakeTime, 1, 30 days - 1);
+
+        // mint stake tokens
+        stakeToken.mint(address(this), amount0);
+
+        // warp to simulate staking
+        hevm.warp(stakeTime);
+
+        // stake
+        stakingPool.mint(amount0, address(this));
+    }
+
+    function testFail_withdraw(uint256 amount0, uint256 stakeTime) public {
+        amount0 = bound(amount0, 1, stakingPool.balanceOf(address(this)));
+        stakeTime = bound(stakeTime, 1, 30 days - 1);
+
+        // warp to simulate staking
+        hevm.warp(stakeTime);
+
+        // stake
+        stakingPool.withdraw(amount0, address(this), address(this));
+    }
+
+    function testFail_redeem(uint256 amount0, uint256 stakeTime) public {
+        amount0 = bound(amount0, 1, stakingPool.balanceOf(address(this)));
+        stakeTime = bound(stakeTime, 1, 30 days - 1);
+
+        // warp to simulate staking
+        hevm.warp(stakeTime);
+
+        // stake
+        stakingPool.redeem(amount0, address(this), address(this));
+    }
+
+    function testFail_transfer(uint256 amount0, uint256 stakeTime) public {
+        amount0 = bound(amount0, 1, stakingPool.balanceOf(address(this)));
+        stakeTime = bound(stakeTime, 1, 30 days - 1);
+
+        // warp to simulate staking
+        hevm.warp(stakeTime);
+
+        // stake
+        stakingPool.transfer(address(0x70), amount0);
+    }
+
+    function testFail_transferFrom(uint256 amount0, uint256 stakeTime) public {
+        amount0 = bound(amount0, 1, stakingPool.balanceOf(address(this)));
+        stakeTime = bound(stakeTime, 1, 30 days - 1);
+
+        // warp to simulate staking
+        hevm.warp(stakeTime);
+
+        // stake
+        stakingPool.transferFrom(address(this), address(0x70), amount0);
+    }
 }
