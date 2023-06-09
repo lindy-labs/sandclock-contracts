@@ -144,6 +144,106 @@ contract RewardTrackerTest is DSTestPlus {
         assertEqDecimal(stakingPool.balanceOf(tester), 0, 18);
     }
 
+    function testCorrectness_withdrawDifferentOwner(uint128 amount_, uint56 warpTime, uint56 stakeTime) public {
+        hevm.assume(amount_ > 0);
+        hevm.assume(warpTime > 0);
+        hevm.assume(stakeTime > 30 days);
+        uint256 amount = amount_;
+        amount = bound(amount, 1e5, 1e27);
+
+        hevm.startPrank(tester);
+
+        // warp to future
+        hevm.warp(warpTime);
+
+        // mint stake tokens
+        stakeToken.mint(tester, amount);
+
+        // stake
+        uint256 beforeStakingPoolStakeTokenBalance = stakeToken.balanceOf(address(stakingPool));
+        stakeToken.approve(address(stakingPool), amount);
+        stakingPool.deposit(amount, tester);
+
+        // warp to simulate staking
+        hevm.warp(uint256(warpTime) + uint256(stakeTime));
+
+        // withdraw
+        stakingPool.approve(address(this), amount);
+        hevm.stopPrank();
+        stakingPool.withdraw(amount, tester, tester);
+
+        // check balance
+        assertEqDecimal(stakeToken.balanceOf(tester), amount, 18);
+        assertEqDecimal(stakeToken.balanceOf(address(stakingPool)) - beforeStakingPoolStakeTokenBalance, 0, 18);
+        assertEqDecimal(stakingPool.balanceOf(tester), 0, 18);
+    }
+
+    function testCorrectness_redeem(uint128 amount_, uint56 warpTime, uint56 stakeTime) public {
+        hevm.assume(amount_ > 0);
+        hevm.assume(warpTime > 0);
+        hevm.assume(stakeTime > 30 days);
+        uint256 amount = amount_;
+        amount = bound(amount, 1e5, 1e27);
+
+        hevm.startPrank(tester);
+
+        // warp to future
+        hevm.warp(warpTime);
+
+        // mint stake tokens
+        stakeToken.mint(tester, amount);
+
+        // stake
+        uint256 beforeStakingPoolStakeTokenBalance = stakeToken.balanceOf(address(stakingPool));
+        stakeToken.approve(address(stakingPool), amount);
+        stakingPool.deposit(amount, tester);
+
+        // warp to simulate staking
+        hevm.warp(uint256(warpTime) + uint256(stakeTime));
+
+        // withdraw
+        stakingPool.redeem(amount, tester, tester);
+
+        // check balance
+        assertEqDecimal(stakeToken.balanceOf(tester), amount, 18);
+        assertEqDecimal(stakeToken.balanceOf(address(stakingPool)) - beforeStakingPoolStakeTokenBalance, 0, 18);
+        assertEqDecimal(stakingPool.balanceOf(tester), 0, 18);
+    }
+
+    function testCorrectness_redeemDifferentOwner(uint128 amount_, uint56 warpTime, uint56 stakeTime) public {
+        hevm.assume(amount_ > 0);
+        hevm.assume(warpTime > 0);
+        hevm.assume(stakeTime > 30 days);
+        uint256 amount = amount_;
+        amount = bound(amount, 1e5, 1e27);
+
+        hevm.startPrank(tester);
+
+        // warp to future
+        hevm.warp(warpTime);
+
+        // mint stake tokens
+        stakeToken.mint(tester, amount);
+
+        // stake
+        uint256 beforeStakingPoolStakeTokenBalance = stakeToken.balanceOf(address(stakingPool));
+        stakeToken.approve(address(stakingPool), amount);
+        stakingPool.deposit(amount, tester);
+
+        // warp to simulate staking
+        hevm.warp(uint256(warpTime) + uint256(stakeTime));
+
+        // withdraw
+        stakingPool.approve(address(this), amount);
+        hevm.stopPrank();
+        stakingPool.redeem(amount, tester, tester);
+
+        // check balance
+        assertEqDecimal(stakeToken.balanceOf(tester), amount, 18);
+        assertEqDecimal(stakeToken.balanceOf(address(stakingPool)) - beforeStakingPoolStakeTokenBalance, 0, 18);
+        assertEqDecimal(stakingPool.balanceOf(tester), 0, 18);
+    }
+
     function testCorrectness_claimReward(uint128 amount0_, uint128 amount1_, uint8 stakeTimeAsDurationPercentage)
         public
     {
