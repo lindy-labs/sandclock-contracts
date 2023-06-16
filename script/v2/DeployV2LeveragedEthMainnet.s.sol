@@ -18,17 +18,9 @@ import {AaveV3Adapter as scWethAaveV3Adapter} from "../../src/steth/scWethV2-ada
 import {CompoundV3Adapter as scWethCompoundV3Adapter} from "../../src/steth/scWethV2-adapters/CompoundV3Adapter.sol";
 import {AaveV3Adapter as scUsdcAaveV3Adapter} from "../../src/steth/scUsdcV2-adapters/AaveV3Adapter.sol";
 import {AaveV2Adapter as scUsdcAaveV2Adapter} from "../../src/steth/scUsdcV2-adapters/AaveV2Adapter.sol";
+import {MainnetDepolyBase} from "../base/MainnetDepolyBase.sol";
 
-contract DeployScript is CREATE3Script {
-    uint256 deployerPrivateKey = uint256(vm.envBytes32("PRIVATE_KEY"));
-    address deployerAddress = vm.addr(deployerPrivateKey);
-    address keeper = vm.envAddress("KEEPER");
-
-    WETH weth = WETH(payable(C.WETH));
-    ERC20 usdc = ERC20(C.USDC);
-
-    constructor() CREATE3Script(vm.envString("VERSION")) {}
-
+contract DeployScript is MainnetDepolyBase {
     function run() external returns (scWETHv2 scWethV2, scUSDCv2 scUsdcV2) {
         vm.startBroadcast(deployerPrivateKey);
 
@@ -37,7 +29,7 @@ contract DeployScript is CREATE3Script {
         PriceConverter priceConverter = new PriceConverter(deployerAddress);
         console2.log("PriceConverter:", address(priceConverter));
 
-        transferAdminRoleToMultisig(priceConverter, deployerAddress);
+        _transferAdminRoleToMultisig(priceConverter, deployerAddress);
 
         scWethV2 = _deployScWethV2(priceConverter, swapper);
 
@@ -59,7 +51,7 @@ contract DeployScript is CREATE3Script {
         weth.deposit{value: 0.01 ether}(); // wrap 0.01 ETH into WETH
         _deposit(vault, 0.01 ether); // 0.01 WETH
 
-        transferAdminRoleToMultisig(vault, deployerAddress);
+        _transferAdminRoleToMultisig(vault, deployerAddress);
 
         console2.log("scWethV2 vault:", address(vault));
         console2.log("scWethV2 AaveV3Adapter:", address(aaveV3Adapter));
@@ -82,39 +74,10 @@ contract DeployScript is CREATE3Script {
         _swapWethForUsdc(0.01 ether);
         _deposit(vault, usdc.balanceOf(deployerAddress)); // 0.01 ether worth of USDC
 
-        transferAdminRoleToMultisig(vault, deployerAddress);
+        _transferAdminRoleToMultisig(vault, deployerAddress);
 
         console2.log("scUSDCv2 vault:", address(vault));
         console2.log("scUSDCv2 AaveV3Adapter:", address(aaveV3Adapter));
         console2.log("scUSDCv2 CompoundV3Adapter:", address(aaveV2Adapter));
-    }
-
-    function transferAdminRoleToMultisig(AccessControl _contract, address _currentAdmin) internal {
-        _contract.grantRole(_contract.DEFAULT_ADMIN_ROLE(), C.MULTISIG);
-        _contract.revokeRole(_contract.DEFAULT_ADMIN_ROLE(), _currentAdmin);
-    }
-
-    function _deposit(sc4626 _vault, uint256 _amount) internal {
-        _vault.asset().approve(address(_vault), _amount);
-        _vault.deposit(_amount, deployerAddress);
-    }
-
-    function _swapWethForUsdc(uint256 _amount) internal {
-        weth.deposit{value: _amount}();
-
-        weth.approve(C.UNISWAP_V3_SWAP_ROUTER, _amount);
-
-        ISwapRouter.ExactInputSingleParams memory params = ISwapRouter.ExactInputSingleParams({
-            tokenIn: address(weth),
-            tokenOut: address(usdc),
-            fee: 500, // 0.05%
-            recipient: deployerAddress,
-            deadline: block.timestamp + 1000,
-            amountIn: _amount,
-            amountOutMinimum: 0,
-            sqrtPriceLimitX96: 0
-        });
-
-        ISwapRouter(C.UNISWAP_V3_SWAP_ROUTER).exactInputSingle(params);
     }
 }

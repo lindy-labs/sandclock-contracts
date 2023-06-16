@@ -18,21 +18,10 @@ import {ISwapRouter} from "../src/interfaces/uniswap/ISwapRouter.sol";
 import {scWETH} from "../src/steth/scWETH.sol";
 import {scUSDC} from "../src/steth/scUSDC.sol";
 import {sc4626} from "../src/sc4626.sol";
+import {MainnetDepolyBase} from "./base/MainnetDepolyBase.sol";
 
-contract DeployScript is CREATE3Script {
-    bytes32 constant DEFAULT_ADMIN_ROLE = 0x00;
-
-    WETH weth = WETH(payable(C.WETH));
-    ERC20 usdc = ERC20(C.USDC);
-    ISwapRouter uniswapRouter = ISwapRouter(C.UNISWAP_V3_SWAP_ROUTER);
-    uint256 deployerPrivateKey = uint256(vm.envBytes32("PRIVATE_KEY"));
-    address deployerAddress = vm.addr(deployerPrivateKey);
-
-    constructor() CREATE3Script(vm.envString("VERSION")) {}
-
+contract DeployScript is MainnetDepolyBase {
     function run() external returns (scWETH scWeth, scUSDC scUsdc) {
-        address keeper = vm.envAddress("KEEPER");
-
         vm.startBroadcast(deployerPrivateKey);
 
         scWETH.ConstructorParams memory scWethParams = scWETH.ConstructorParams({
@@ -54,11 +43,9 @@ contract DeployScript is CREATE3Script {
         scWeth = new scWETH(scWethParams);
 
         weth.deposit{value: 0.01 ether}(); // wrap 0.01 ETH into WETH
-        deposit(scWeth, 0.01 ether); // 0.01 WETH
+        _deposit(scWeth, 0.01 ether); // 0.01 WETH
 
-        // transfer DEFAULT_ADMIN_ROLE to multisig
-        scWeth.grantRole(DEFAULT_ADMIN_ROLE, C.MULTISIG);
-        scWeth.revokeRole(DEFAULT_ADMIN_ROLE, deployerAddress);
+        _transferAdminRoleToMultisig(scWeth, deployerAddress);
 
         scUSDC.ConstructorParams memory scUsdcParams = scUSDC.ConstructorParams({
             admin: deployerAddress,
@@ -70,44 +57,18 @@ contract DeployScript is CREATE3Script {
             aavePoolDataProvider: IPoolDataProvider(C.AAVE_POOL_DATA_PROVIDER),
             aaveAUsdc: IAToken(C.AAVE_AUSDC_TOKEN),
             aaveVarDWeth: ERC20(C.AAVAAVE_VAR_DEBT_WETH_TOKEN),
-            uniswapSwapRouter: uniswapRouter,
+            uniswapSwapRouter: ISwapRouter(C.UNISWAP_V3_SWAP_ROUTER),
             chainlinkUsdcToEthPriceFeed: AggregatorV3Interface(C.CHAINLINK_USDC_ETH_PRICE_FEED),
             balancerVault: IVault(C.BALANCER_VAULT)
         });
 
         scUsdc = new scUSDC(scUsdcParams);
 
-        swapETHForUSDC(0.01 ether);
-        deposit(scUsdc, usdc.balanceOf(address(deployerAddress))); // 0.01 ether worth of USDC
+        _swapWethForUsdc(0.01 ether);
+        _deposit(scUsdc, usdc.balanceOf(address(deployerAddress))); // 0.01 ether worth of USDC
 
-        // transfer DEFAULT_ADMIN_ROLE to multisig
-        scUsdc.grantRole(DEFAULT_ADMIN_ROLE, C.MULTISIG);
-        scUsdc.revokeRole(DEFAULT_ADMIN_ROLE, deployerAddress);
+        _transferAdminRoleToMultisig(scUsdc, deployerAddress);
 
         vm.stopBroadcast();
-    }
-
-    function deposit(sc4626 vault, uint256 amount) internal {
-        vault.asset().approve(address(vault), amount);
-        vault.deposit(amount, deployerAddress);
-    }
-
-    function swapETHForUSDC(uint256 amount) internal {
-        weth.deposit{value: amount}();
-
-        weth.approve(address(uniswapRouter), amount);
-
-        ISwapRouter.ExactInputSingleParams memory params = ISwapRouter.ExactInputSingleParams({
-            tokenIn: address(weth),
-            tokenOut: address(usdc),
-            fee: 500, // 0.05%
-            recipient: deployerAddress,
-            deadline: block.timestamp + 1000,
-            amountIn: amount,
-            amountOutMinimum: 0,
-            sqrtPriceLimitX96: 0
-        });
-
-        uniswapRouter.exactInputSingle(params);
     }
 }
