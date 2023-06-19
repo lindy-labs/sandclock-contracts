@@ -172,18 +172,13 @@ contract RewardTracker is BonusTracker, DebtTracker, AccessControl {
 
     /// @notice The amount of reward tokens each staked token has earned so far
     function rewardPerToken() external view returns (uint256) {
-        return _calcRewardPerToken(totalSupply + totalBonus, lastTimeRewardApplicable(), rewardRate);
+        return _calcRewardPerToken(lastTimeRewardApplicable(), rewardRate);
     }
 
     /// @notice The amount of reward tokens an account has accrued so far. Does not
     /// include already withdrawn rewards.
     function earned(address _account) external view returns (uint256) {
-        return _earned(
-            _account,
-            balanceOf[_account] + multiplierPointsOf[_account],
-            _calcRewardPerToken(totalSupply + totalBonus, lastTimeRewardApplicable(), rewardRate),
-            rewards[_account]
-        );
+        return _earned(_account, _calcRewardPerToken(lastTimeRewardApplicable(), rewardRate));
     }
 
     /// @notice Starts a new reward distribution period. The reward tokens must have already
@@ -240,17 +235,15 @@ contract RewardTracker is BonusTracker, DebtTracker, AccessControl {
 
         uint256 rewardRate_ = rewardRate;
         uint64 periodFinish_ = periodFinish;
-        uint64 lastTimeRewardApplicable_ = block.timestamp < periodFinish_ ? uint64(block.timestamp) : periodFinish_;
+        uint64 lastTimeRewardApplicable_ = lastTimeRewardApplicable();
         uint64 duration_ = duration;
-        uint256 totalSupply_ = totalSupply + totalBonus;
 
         /// -----------------------------------------------------------------------
         /// State updates
         /// -----------------------------------------------------------------------
 
         // accrue rewards
-        rewardPerTokenStored = _calcRewardPerToken(totalSupply_, lastTimeRewardApplicable_, rewardRate_);
-        lastUpdateTime = lastTimeRewardApplicable_;
+        rewardPerTokenStored = _calcRewardPerToken(lastTimeRewardApplicable_, rewardRate_);
 
         // record new reward
         uint256 reward = rewardBalanceCurrent - rewardBalanceStored_;
@@ -331,39 +324,36 @@ contract RewardTracker is BonusTracker, DebtTracker, AccessControl {
         emit DebtPaid(msg.sender, debt);
     }
 
-    function _earned(address _account, uint256 _accountBalance, uint256 rewardPerToken_, uint256 _accountRewards)
-        internal
-        view
-        returns (uint256)
-    {
+    function _earned(address _account, uint256 rewardPerToken_) internal view returns (uint256) {
+        uint256 accountBalance = balanceOf[_account] + multiplierPointsOf[_account];
+
         return
-            _accountBalance.mulDivDown(rewardPerToken_ - userRewardPerTokenPaid[_account], PRECISION) + _accountRewards;
+            accountBalance.mulDivDown(rewardPerToken_ - userRewardPerTokenPaid[_account], PRECISION) + rewards[_account];
     }
 
-    function _calcRewardPerToken(uint256 _totalSupply, uint256 _lastTimeRewardApplicable, uint256 _rewardRate)
+    function _calcRewardPerToken(uint256 _lastTimeRewardApplicable, uint256 _rewardRate)
         internal
         view
         returns (uint256)
     {
-        if (_totalSupply == 0) {
+        uint256 totalSupply_ = totalSupply + totalBonus;
+        if (totalSupply_ == 0) {
             return rewardPerTokenStored;
         }
 
         return rewardPerTokenStored
-            + _rewardRate.mulDivDown((_lastTimeRewardApplicable - lastUpdateTime) * PRECISION, _totalSupply);
+            + _rewardRate.mulDivDown((_lastTimeRewardApplicable - lastUpdateTime) * PRECISION, totalSupply_);
     }
 
     function _updateReward(address _account) internal override {
         // storage loads
-        uint256 accountBalance = balanceOf[_account] + multiplierPointsOf[_account];
         uint64 lastTimeRewardApplicable_ = lastTimeRewardApplicable();
-        uint256 totalSupply_ = totalSupply + totalBonus;
-        uint256 rewardPerToken_ = _calcRewardPerToken(totalSupply_, lastTimeRewardApplicable_, rewardRate);
+        uint256 rewardPerToken_ = _calcRewardPerToken(lastTimeRewardApplicable_, rewardRate);
 
         // accrue rewards
         rewardPerTokenStored = rewardPerToken_;
         lastUpdateTime = lastTimeRewardApplicable_;
-        rewards[_account] = _earned(_account, accountBalance, rewardPerToken_, rewards[_account]);
+        rewards[_account] = _earned(_account, rewardPerToken_);
         userRewardPerTokenPaid[_account] = rewardPerToken_;
     }
 

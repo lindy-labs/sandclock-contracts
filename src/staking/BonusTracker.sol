@@ -62,31 +62,27 @@ abstract contract BonusTracker is ERC4626, ReentrancyGuard {
 
     /// @notice The amount of bonus tokens an account has accrued so far.
     function bonusOf(address _account) external view returns (uint256) {
-        return _earnedBonus(_account, balanceOf[_account], _bonusPerToken(lastTimeBonusApplicable()), bonus[_account]);
+        return _earnedBonus(_account, _bonusPerToken(lastTimeBonusApplicable()));
     }
 
-    function _earnedBonus(address account, uint256 accountBalance, uint256 bonusPerToken_, uint256 accountBonus)
-        internal
-        view
-        returns (uint256)
-    {
-        return accountBalance.mulDivDown(bonusPerToken_ - userBonusPerTokenPaid[account], PRECISION) + accountBonus;
+    function _earnedBonus(address _account, uint256 _bonusPerToken_) internal view returns (uint256) {
+        return balanceOf[_account].mulDivDown(_bonusPerToken_ - userBonusPerTokenPaid[_account], PRECISION)
+            + bonus[_account];
     }
 
-    function _bonusPerToken(uint256 lastTimeBonusApplicable_) internal view returns (uint256) {
-        return bonusPerTokenStored + (lastTimeBonusApplicable_ - lastBonusUpdateTime).mulDivDown(PRECISION, 365 days);
+    function _bonusPerToken(uint256 _lastTimeBonusApplicable_) internal view returns (uint256) {
+        return bonusPerTokenStored + (_lastTimeBonusApplicable_ - lastBonusUpdateTime).mulDivDown(PRECISION, 365 days);
     }
 
     function _updateBonus(address _account) internal {
         // storage loads
-        uint256 accountBalance = balanceOf[_account];
         uint64 lastTimeBonusApplicable_ = lastTimeBonusApplicable();
         uint256 bonusPerToken_ = _bonusPerToken(lastTimeBonusApplicable_);
 
         // accrue bonus
         bonusPerTokenStored = bonusPerToken_;
         lastBonusUpdateTime = lastTimeBonusApplicable_;
-        bonus[_account] = _earnedBonus(_account, accountBalance, bonusPerToken_, bonus[_account]);
+        bonus[_account] = _earnedBonus(_account, bonusPerToken_);
         userBonusPerTokenPaid[_account] = bonusPerToken_;
     }
 
