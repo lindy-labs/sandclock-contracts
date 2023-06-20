@@ -22,45 +22,114 @@ import {AaveV3Adapter as scUsdcAaveV3Adapter} from "../../../src/steth/scUsdcV2-
 import {AaveV2Adapter as scUsdcAaveV2Adapter} from "../../../src/steth/scUsdcV2-adapters/AaveV2Adapter.sol";
 import {MainnetDepolyBase} from "../../base/MainnetDepolyBase.sol";
 
+/**
+ * deploys scWETHv2 vault
+ * deposits 100 ether to the vault
+ * invests that 100 ether to aaveV3 and compoundV3 with allocation percents of 30% and 70% resp.
+ * then simulates supply and borrow interest (by moving forward in time) and Lido staking interest at 7% (by changing Lido storage variables)
+ * forge script script/v2/fork-scenarios/scWETHv2Profitable.s.sol --skip-simulation -vv
+ */
 contract scWETHv2SimulateProfits is MainnetDepolyBase, Test {
     uint256 mainnetFork;
+    scWETHv2 vault;
+    PriceConverter priceConverter;
 
-    function run() external returns (scWETHv2 scWethV2) {
-        mainnetFork = vm.createFork(vm.envString("RPC_URL_MAINNET"));
-        vm.selectFork(mainnetFork);
-        vm.rollFork(17243956);
+    function run() external {
+        fork(17243956);
+        vm.startBroadcast(deployerAddress);
 
-        vm.startBroadcast(deployerPrivateKey);
-
-        Swapper swapper = new Swapper();
-        console2.log("Swapper:", address(swapper));
-        PriceConverter priceConverter = new PriceConverter(deployerAddress);
-        console2.log("PriceConverter:", address(priceConverter));
-
-        scWethV2 = _deployScWethV2(priceConverter, swapper);
+        deploy();
+        depositToVault(100 ether);
 
         vm.stopBroadcast();
     }
 
-    function _deployScWethV2(PriceConverter _priceConverter, Swapper _swapper) internal returns (scWETHv2 vault) {
-        vault = new scWETHv2(deployerAddress, keeper, 0.99e18, weth, _swapper, _priceConverter);
+    function fork(uint256 _blockNumber) internal {
+        mainnetFork = vm.createFork(vm.envString("RPC_URL_MAINNET"));
+        vm.selectFork(mainnetFork);
+        vm.rollFork(_blockNumber);
+    }
 
-        // deploy & add adapters
+    function deploy() internal {
+        Swapper swapper = new Swapper();
+        priceConverter = new PriceConverter(deployerAddress);
+
+        vault = new scWETHv2(deployerAddress, keeper, 0.99e18, weth, swapper, priceConverter);
+
+        addAdapters();
+    }
+
+    function addAdapters() internal {
         scWethAaveV3Adapter aaveV3Adapter = new scWethAaveV3Adapter();
         vault.addAdapter(aaveV3Adapter);
 
         scWethCompoundV3Adapter compoundV3Adapter = new scWethCompoundV3Adapter();
         vault.addAdapter(compoundV3Adapter);
+    }
 
-        uint256 amount = 0.01 ether;
+    function depositToVault(uint256 amount) internal {
         deal(address(weth), deployerAddress, amount);
-        console.log("weth balance", weth.balanceOf(deployerAddress));
-        weth.approve(address(vault), amount);
-        console.log("weth allowance", weth.allowance(deployerAddress, address(vault)));
-        vault.deposit(amount, deployerAddress);
+        _deposit(vault, amount);
+    }
 
-        console2.log("scWethV2 vault:", address(vault));
-        console2.log("scWethV2 AaveV3Adapter:", address(aaveV3Adapter));
-        console2.log("scWETHV2 CompoundV3Adapter:", address(compoundV3Adapter));
+    /// @dev invest the float lying in the vault to aaveV3 and compoundV3
+    function invest(uint256 amount, uint256 aaveV3AllocationPercent, uint256 compoundAllocationPercent) internal {
+        uint256 investAmount = amount - vault.minimumFloatAmount();
+
+        (bytes[] memory callData,, uint256 totalFlashLoanAmount) =
+            getInvestParams(investAmount, aaveV3AllocationPercent, compoundAllocationPercent);
+
+        vault.rebalance(investAmount, totalFlashLoanAmount, callData);
+    }
+
+    /// @return : supplyBorrowParams, totalSupplyAmount, totalDebtTaken
+    /// @dev : NOTE: ASSUMING ZERO BALANCER FLASH LOAN FEES
+    function getInvestParams(uint256 amount, uint256 aaveV3Allocation, uint256 compoundAllocation)
+        internal
+        view
+        returns (bytes[] memory, uint256, uint256)
+    {
+        uint256 investAmount = amount;
+        uint256 stEthRateTolerance = 0.999e18;
+
+        uint256 aaveV3Amount = investAmount.mulWadDown(aaveV3Allocation);
+        uint256 compoundAmount = investAmount.mulWadDown(compoundAllocation);
+
+        uint256 aaveV3FlashLoanAmount = _calcSupplyBorrowFlashLoanAmount(aaveV3Adapter, aaveV3Amount);
+        uint256 compoundFlashLoanAmount = _calcSupplyBorrowFlashLoanAmount(compoundV3Adapter, compoundAmount);
+
+        uint256 aaveV3SupplyAmount =
+            priceConverter.ethToWstEth(aaveV3Amount + aaveV3FlashLoanAmount).mulWadDown(stEthRateTolerance);
+        uint256 compoundSupplyAmount =
+            priceConverter.ethToWstEth(compoundAmount + compoundFlashLoanAmount).mulWadDown(stEthRateTolerance);
+
+        uint256 totalFlashLoanAmount = aaveV3FlashLoanAmount + compoundFlashLoanAmount;
+
+        bytes[] memory callData = new bytes[](3);
+
+        callData[0] = abi.encodeWithSelector(scWETHv2.swapWethToWstEth.selector, investAmount + totalFlashLoanAmount);
+
+        callData[1] = abi.encodeWithSelector(
+            scWETHv2.supplyAndBorrow.selector, aaveV3AdapterId, aaveV3SupplyAmount, aaveV3FlashLoanAmount
+        );
+        callData[2] = abi.encodeWithSelector(
+            scWETHv2.supplyAndBorrow.selector, compoundV3AdapterId, compoundSupplyAmount, compoundFlashLoanAmount
+        );
+
+        return (callData, aaveV3SupplyAmount + compoundSupplyAmount, totalFlashLoanAmount);
+    }
+
+    function _calcSupplyBorrowFlashLoanAmount(IAdapter adapter, uint256 amount)
+        internal
+        view
+        returns (uint256 flashLoanAmount)
+    {
+        uint256 debt = vault.getDebt(adapter.id());
+        uint256 collateral = vaultHelper.getCollateralInWeth(adapter);
+
+        uint256 target = targetLtv[adapter].mulWadDown(amount + collateral);
+
+        // calculate the flashloan amount needed
+        flashLoanAmount = (target - debt).divWadDown(C.ONE - targetLtv[adapter]);
     }
 }
