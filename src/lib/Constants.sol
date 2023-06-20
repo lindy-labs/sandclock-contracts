@@ -63,7 +63,6 @@ library Constants {
     // address of the Balancer vault contract
     address public constant BALANCER_VAULT = 0xBA12222222228d8Ba445958a75a0704d566BF2C8;
 
-<<<<<<< HEAD
     /*//////////////////////////////////////////////////////////////
                           TESTING ADDRESSES
     //////////////////////////////////////////////////////////////*/
@@ -73,14 +72,12 @@ library Constants {
 
     // address used for forked node testing
     address public constant BOB = 0xFCC7e03C00FC57d964AEb22029Df7AD6eA795d49;
-=======
     // address of the 0x swap router contract
     address public constant ZEROX_ROUTER = 0xDef1C0ded9bec7F1a1670819833240f027b25EfF;
 
     // Compound v3
     address public constant COMPOUND_V3_COMET_WETH = 0xA17581A9E3356d9A858b789D68B4d866e593aE94;
 
->>>>>>> a100f21a30dd332b69351d1e05d98dbc748c6ddc
     address public constant ZERO_EX_ROUTER = 0xDef1C0ded9bec7F1a1670819833240f027b25EfF;
 
     // address of the EULER rewards token contract
