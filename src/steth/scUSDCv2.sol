@@ -2,16 +2,10 @@
 pragma solidity ^0.8.19;
 
 import {
-    InvalidTargetLtv,
-    InvalidFlashLoanCaller,
     VaultNotUnderwater,
     NoProfitsToSell,
     FlashLoanAmountZero,
-    PriceFeedZeroAddress,
     EndUsdcBalanceTooLow,
-    AmountReceivedBelowMin,
-    ProtocolNotSupported,
-    ProtocolInUse,
     FloatBalanceTooLow
 } from "../errors/scErrors.sol";
 
@@ -24,12 +18,9 @@ import {Address} from "openzeppelin-contracts/utils/Address.sol";
 import {EnumerableMap} from "openzeppelin-contracts/utils/structs/EnumerableMap.sol";
 
 import {Constants as C} from "../lib/Constants.sol";
-import {IVault} from "../interfaces/balancer/IVault.sol";
-import {ISwapRouter} from "../interfaces/uniswap/ISwapRouter.sol";
+import {BaseV2Vault} from "./BaseV2Vault.sol";
 import {AggregatorV3Interface} from "../interfaces/chainlink/AggregatorV3Interface.sol";
-import {IFlashLoanRecipient} from "../interfaces/balancer/IFlashLoanRecipient.sol";
-import {scUSDCBase} from "./scUSDCBase.sol";
-import {IAdapter} from "./usdc-adapters/IAdapter.sol";
+import {IAdapter} from "./IAdapter.sol";
 import {PriceConverter} from "./PriceConverter.sol";
 import {Swapper} from "./Swapper.sol";
 
@@ -39,12 +30,17 @@ import {Swapper} from "./Swapper.sol";
  * @notice The v2 vault uses multiple lending markets to earn yield on USDC deposits and borrow WETH to stake.
  * @dev This vault uses Sandclock's leveraged WETH staking vault - scWETH.
  */
-contract scUSDCv2 is scUSDCBase {
+contract scUSDCv2 is BaseV2Vault {
     using SafeTransferLib for ERC20;
     using SafeTransferLib for WETH;
     using FixedPointMathLib for uint256;
     using Address for address;
     using EnumerableMap for EnumerableMap.UintToAddressMap;
+
+    WETH public constant weth = WETH(payable(C.WETH));
+
+    // leveraged (w)eth vault
+    ERC4626 public immutable scWETH;
 
     /**
      * @notice Enum indicating the purpose of a flashloan.
@@ -54,40 +50,25 @@ contract scUSDCv2 is scUSDCBase {
         ExitAllPositions
     }
 
-    event ProtocolAdapterAdded(address indexed admin, uint256 adapterId, address adapter);
-    event ProtocolAdapterRemoved(address indexed admin, uint256 adapterId);
     event EmergencyExitExecuted(
         address indexed admin, uint256 wethWithdrawn, uint256 debtRepaid, uint256 collateralReleased
     );
     event Reallocated();
     event Rebalanced(uint256 totalCollateral, uint256 totalDebt, uint256 floatBalance);
     event ProfitSold(uint256 wethSold, uint256 usdcReceived);
-    event TokensSold(address token, uint256 amountSold, uint256 usdcReceived);
     event Supplied(uint256 adapterId, uint256 amount);
     event Borrowed(uint256 adapterId, uint256 amount);
     event Repaid(uint256 adapterId, uint256 amount);
     event Withdrawn(uint256 adapterId, uint256 amount);
     event Invested(uint256 wethAmount);
     event Disinvested(uint256 wethAmount);
-    event RewardsClaimed(uint256 adapterId);
-
-    // Balancer vault for flashloans
-    IVault public constant balancerVault = IVault(C.BALANCER_VAULT);
-
-    // mapping of IDs to lending protocol adapter contracts
-    EnumerableMap.UintToAddressMap private protocolAdapters;
-
-    // price converter contract
-    PriceConverter public immutable priceConverter;
-
-    // swapper contract for facilitating token swaps
-    Swapper public immutable swapper;
 
     constructor(address _admin, address _keeper, ERC4626 _scWETH, PriceConverter _priceConverter, Swapper _swapper)
-        scUSDCBase(_admin, _keeper, ERC20(C.USDC), WETH(payable(C.WETH)), _scWETH, "Sandclock USDC Vault v2", "scUSDCv2")
+        BaseV2Vault(_admin, _keeper, ERC20(C.USDC), _priceConverter, _swapper, "Sandclock USDC Vault v2", "scUSDCv2")
     {
-        priceConverter = _priceConverter;
-        swapper = _swapper;
+        _zeroAddressCheck(address(_scWETH));
+
+        scWETH = _scWETH;
 
         weth.safeApprove(address(scWETH), type(uint256).max);
     }
@@ -95,45 +76,6 @@ contract scUSDCv2 is scUSDCBase {
     /*//////////////////////////////////////////////////////////////
                             PUBLIC API
     //////////////////////////////////////////////////////////////*/
-
-    /**
-     * @notice Add a new protocol adapter to the vault.
-     * @param _adapter The adapter to add.
-     */
-    function addAdapter(IAdapter _adapter) external {
-        _onlyAdmin();
-
-        uint256 id = _adapter.id();
-
-        if (isSupported(id)) revert ProtocolInUse(id);
-
-        protocolAdapters.set(id, address(_adapter));
-
-        address(_adapter).functionDelegateCall(abi.encodeWithSelector(IAdapter.setApprovals.selector));
-
-        emit ProtocolAdapterAdded(msg.sender, id, address(_adapter));
-    }
-
-    /**
-     * @notice Remove a protocol adapter from the vault. Reverts if the adapter is in use unless _force is true.
-     * @param _adapterId The ID of the adapter to remove.
-     * @param _force Whether or not to force the removal of the adapter.
-     */
-    function removeAdapter(uint256 _adapterId, bool _force) external {
-        _onlyAdmin();
-        _isSupportedCheck(_adapterId);
-
-        // check if protocol is being used
-        if (!_force && IAdapter(protocolAdapters.get(_adapterId)).getCollateral(address(this)) > 0) {
-            revert ProtocolInUse(_adapterId);
-        }
-
-        _adapterDelegateCall(_adapterId, abi.encodeWithSelector(IAdapter.revokeApprovals.selector));
-
-        protocolAdapters.remove(_adapterId);
-
-        emit ProtocolAdapterRemoved(msg.sender, _adapterId);
-    }
 
     /**
      * @notice Rebalance the vault's positions/loans in multiple lending markets.
@@ -259,23 +201,6 @@ contract scUSDCv2 is scUSDCBase {
     }
 
     /**
-     * @notice Sell tokens awarded for using some lending market for USDC on 0x exchange.
-     * @param _token The token to sell.
-     * @param _amount The amount of tokens to sell.
-     * @param _swapData The swap data for 0xrouter.
-     * @param _usdcAmountOutMin The minimum amount of USDC to receive for the swap.
-     */
-    function sellTokens(ERC20 _token, uint256 _amount, bytes calldata _swapData, uint256 _usdcAmountOutMin) external {
-        _onlyKeeper();
-
-        bytes memory result = address(swapper).functionDelegateCall(
-            abi.encodeWithSelector(Swapper.zeroExSwap.selector, _token, asset, _amount, _usdcAmountOutMin, _swapData)
-        );
-
-        emit TokensSold(address(_token), _amount, abi.decode(result, (uint256)));
-    }
-
-    /**
      * @notice Supply USDC assets to a lending market.
      * @param _adapterId The ID of the lending market adapter.
      * @param _amount The amount of USDC to supply.
@@ -324,19 +249,6 @@ contract scUSDCv2 is scUSDCBase {
     }
 
     /**
-     * @notice Claim rewards from a lending market.
-     * @param _adapterId The ID of the lending market adapter.
-     * @param _callData The encoded data for the claimRewards function.
-     */
-    function claimRewards(uint256 _adapterId, bytes calldata _callData) external {
-        _onlyKeeper();
-        _isSupportedCheck(_adapterId);
-        _adapterDelegateCall(_adapterId, abi.encodeWithSelector(IAdapter.claimRewards.selector, _callData));
-
-        emit RewardsClaimed(_adapterId);
-    }
-
-    /**
      * @notice Withdraw WETH from the staking vault (scWETH).
      * @param _amount The amount of WETH to withdraw.
      */
@@ -344,14 +256,6 @@ contract scUSDCv2 is scUSDCBase {
         _onlyKeeper();
 
         _disinvest(_amount);
-    }
-
-    /**
-     * @notice Check if a lending market adapter is supported/used.
-     * @param _adapterId The ID of the lending market adapter.
-     */
-    function isSupported(uint256 _adapterId) public view returns (bool) {
-        return protocolAdapters.contains(_adapterId);
     }
 
     /**
@@ -430,20 +334,6 @@ contract scUSDCv2 is scUSDCBase {
     /*//////////////////////////////////////////////////////////////
                             INTERNAL API
     //////////////////////////////////////////////////////////////*/
-
-    function _multiCall(bytes[] memory _callData) internal {
-        for (uint256 i = 0; i < _callData.length; i++) {
-            address(this).functionDelegateCall(_callData[i]);
-        }
-    }
-
-    function _adapterDelegateCall(uint256 _adapterId, bytes memory _data) internal {
-        protocolAdapters.get(_adapterId).functionDelegateCall(_data);
-    }
-
-    function _isSupportedCheck(uint256 _adapterId) internal view {
-        if (!isSupported(_adapterId)) revert ProtocolNotSupported(_adapterId);
-    }
 
     function _supply(uint256 _adapterId, uint256 _amount) internal {
         _adapterDelegateCall(_adapterId, abi.encodeWithSelector(IAdapter.supply.selector, _amount));
@@ -525,7 +415,7 @@ contract scUSDCv2 is scUSDCBase {
         // first try to sell profits to cover withdrawal amount
         if (profit != 0) {
             uint256 withdrawn = _disinvest(profit);
-            uint256 usdcAmountOutMin = priceConverter.getUsdcFromWeth(withdrawn).mulWadDown(slippageTolerance);
+            uint256 usdcAmountOutMin = priceConverter.ethToUsdc(withdrawn).mulWadDown(slippageTolerance);
             uint256 usdcReceived = _swapWethForUsdc(withdrawn, usdcAmountOutMin);
 
             if (initialBalance + usdcReceived >= _assets) return;
@@ -592,9 +482,9 @@ contract scUSDCv2 is scUSDCBase {
 
         if (profit != 0) {
             // account for slippage when selling weth profits
-            total += priceConverter.getUsdcFromWeth(profit).mulWadDown(slippageTolerance);
+            total += priceConverter.ethToUsdc(profit).mulWadDown(slippageTolerance);
         } else {
-            total -= priceConverter.getUsdcFromWeth(_debt - _invested);
+            total -= priceConverter.ethToUsdc(_debt - _invested);
         }
     }
 
@@ -604,7 +494,9 @@ contract scUSDCv2 is scUSDCBase {
 
     function _swapWethForUsdc(uint256 _wethAmount, uint256 _usdcAmountOutMin) internal returns (uint256) {
         bytes memory result = address(swapper).functionDelegateCall(
-            abi.encodeWithSelector(Swapper.uniswapSwapExactInput.selector, weth, asset, _wethAmount, _usdcAmountOutMin)
+            abi.encodeWithSelector(
+                Swapper.uniswapSwapExactInput.selector, weth, asset, _wethAmount, _usdcAmountOutMin, 500 /* pool fee*/
+            )
         );
 
         return abi.decode(result, (uint256));
@@ -617,7 +509,8 @@ contract scUSDCv2 is scUSDCBase {
                 asset,
                 weth,
                 _wethAmountOut,
-                type(uint256).max // ignore slippage
+                type(uint256).max, // ignore slippage
+                500 // pool fee
             )
         );
     }

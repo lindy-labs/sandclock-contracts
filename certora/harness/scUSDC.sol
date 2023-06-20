@@ -137,7 +137,9 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
      * @notice Apply a new target LTV and trigger a rebalance.
      * @param _newTargetLtv The new target LTV value.
      */
-    function applyNewTargetLtv(uint256 _newTargetLtv) external onlyKeeper {
+    function applyNewTargetLtv(uint256 _newTargetLtv) external {
+        onlyKeeper();
+
         if (_newTargetLtv > getMaxLtv()) revert InvalidTargetLtv();
 
         targetLtv = _newTargetLtv;
@@ -151,7 +153,9 @@ contract scUSDC is sc4626, IFlashLoanRecipient {
      * @notice Rebalance the vault's positions.
      * @dev Called to increase or decrease the WETH debt to match the target LTV.
      */
-    function rebalance() public onlyKeeper {
+    function rebalance() public {
+        onlyKeeper();
+
         uint256 initialBalance = getUsdcBalance();
         uint256 currentBalance = initialBalance;
         uint256 collateral = getCollateral();

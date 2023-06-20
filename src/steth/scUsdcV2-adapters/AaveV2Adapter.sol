@@ -2,32 +2,37 @@
 pragma solidity ^0.8.19;
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
-import {IPool} from "aave-v3/interfaces/IPool.sol";
-import {IPoolDataProvider} from "aave-v3/interfaces/IPoolDataProvider.sol";
+import {WETH} from "solmate/tokens/WETH.sol";
 
 import {Constants as C} from "../../lib/Constants.sol";
-import {IAdapter} from "./IAdapter.sol";
+import {ILendingPool} from "../../interfaces/aave-v2/ILendingPool.sol";
+import {IProtocolDataProvider} from "../../interfaces/aave-v2/IProtocolDataProvider.sol";
+import {IAdapter} from "../IAdapter.sol";
 
 /**
- * @title Aave v3 Lending Protocol Adapter
- * @notice Facilitates lending and borrowing for the Aave v3 lending protocol
+ * @title Aave v2 Lending Protocol Adapter
+ * @notice Facilitates lending and borrowing for the Aave v2 lending protocol
  */
-contract AaveV3Adapter is IAdapter {
-    // Aave v3 pool contract
-    IPool public constant pool = IPool(C.AAVE_POOL);
-    // Aave v3 pool data provider contract
-    IPoolDataProvider public constant aaveV3PoolDataProvider = IPoolDataProvider(C.AAVE_POOL_DATA_PROVIDER);
-    // Aave v3 "aEthUSDC" token (supply token)
-    ERC20 public constant aUsdc = ERC20(C.AAVE_AUSDC_TOKEN);
-    // Aave v3 "variableDebtEthWETH" token (variable debt token)
-    ERC20 public constant dWeth = ERC20(C.AAVAAVE_VAR_DEBT_WETH_TOKEN);
+contract AaveV2Adapter is IAdapter {
+    ERC20 constant usdc = ERC20(C.USDC);
+    WETH constant weth = WETH(payable(C.WETH));
+
+    // Aave v2 lending pool
+    ILendingPool public constant pool = ILendingPool(0x7d2768dE32b0b80b7a3454c06BdAc94A69DDc7A9);
+    // Aave v2 protocol data provider
+    IProtocolDataProvider public constant aaveV2ProtocolDataProvider =
+        IProtocolDataProvider(0x057835Ad21a177dbdd3090bB1CAE03EaCF78Fc6d);
+    // Aave v2 interest bearing USDC (aUSDC) token
+    ERC20 public constant aUsdc = ERC20(0xBcca60bB61934080951369a648Fb03DF4F96263C);
+    // Aave v2 variable debt bearing WETH (variableDebtWETH) token
+    ERC20 public constant dWeth = ERC20(0xF63B34710400CAd3e044cFfDcAb00a0f32E33eCf);
 
     /// @inheritdoc IAdapter
-    uint256 public constant override id = 1;
+    uint256 public constant override id = 2;
 
     /// @inheritdoc IAdapter
     function setApprovals() external override {
-        usdc.approve(address(pool), type(uint256).max + 0);
+        usdc.approve(address(pool), type(uint256).max);
         weth.approve(address(pool), type(uint256).max);
     }
 
@@ -39,7 +44,7 @@ contract AaveV3Adapter is IAdapter {
 
     /// @inheritdoc IAdapter
     function supply(uint256 _amount) external override {
-        pool.supply(address(usdc), _amount, address(this), 0);
+        pool.deposit(address(usdc), _amount, address(this), 0);
     }
 
     /// @inheritdoc IAdapter
@@ -73,8 +78,8 @@ contract AaveV3Adapter is IAdapter {
     }
 
     /// @inheritdoc IAdapter
-    function getMaxLtv() external view override returns (uint256) {
-        (, uint256 ltv,,,,,,,,) = aaveV3PoolDataProvider.getReserveConfigurationData(address(usdc));
+    function getMaxLtv() external view virtual override returns (uint256) {
+        (, uint256 ltv,,,,,,,,) = aaveV2ProtocolDataProvider.getReserveConfigurationData(address(usdc));
 
         // ltv is returned as a percentage with 2 decimals (e.g. 80% = 8000) so we need to multiply by 1e14
         return ltv * 1e14;

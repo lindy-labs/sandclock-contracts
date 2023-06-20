@@ -7,8 +7,8 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 import {WETH} from "solmate/tokens/WETH.sol";
 
 import {Constants as C} from "../../src/lib/Constants.sol";
-import {IAdapter} from "../../src/steth/usdc-adapters/IAdapter.sol";
-import {EulerAdapter} from "../../src/steth/usdc-adapters/EulerAdapter.sol";
+import {IAdapter} from "../../src/steth/IAdapter.sol";
+import {EulerAdapter} from "../../src/steth/scUsdcV2-adapters/EulerAdapter.sol";
 
 contract EulerAdapterTest is Test {
     EulerAdapter adapter;

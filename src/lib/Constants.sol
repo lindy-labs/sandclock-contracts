@@ -45,6 +45,16 @@ library Constants {
     address public constant AAVAAVE_VAR_DEBT_WETH_TOKEN = 0xeA51d7853EEFb32b6ee06b1C12E6dcCA88Be0fFE;
     address public constant AAVAAVE_VAR_DEBT_IMPLEMENTATION_CONTRACT = 0xaC725CB59D16C81061BDeA61041a8A5e73DA9EC6;
 
+    // EULER Contracts
+    address public constant EULER = 0x27182842E098f60e3D576794A5bFFb0777E025d3;
+    address public constant EULER_MARKETS = 0x3520d5a913427E6F0D6A83E07ccD4A4da316e4d3;
+    // Euler supply token for wstETH (ewstETH)
+    address public constant EULER_ETOKEN_WSTETH = 0xbd1bd5C956684f7EB79DA40f582cbE1373A1D593;
+    // Euler debt token weth
+    address public constant EULER_DTOKEN_WETH = 0x62e28f054efc24b26A794F5C1249B6349454352C;
+    // vaule used to scale the token's collateral/borrow factors from the euler market
+    uint32 constant EULER_CONFIG_FACTOR_SCALE = 4_000_000_000;
+
     // adress of the Chainlink aggregator for the USDC/eth price feed
     address public constant CHAINLINK_USDC_ETH_PRICE_FEED = 0x986b5E1e1755e3C2440e960477f25201B0a8bbD4;
     // Chainlink pricefeed (stETH -> ETH)
@@ -53,6 +63,7 @@ library Constants {
     // address of the Balancer vault contract
     address public constant BALANCER_VAULT = 0xBA12222222228d8Ba445958a75a0704d566BF2C8;
 
+<<<<<<< HEAD
     /*//////////////////////////////////////////////////////////////
                           TESTING ADDRESSES
     //////////////////////////////////////////////////////////////*/
@@ -62,6 +73,14 @@ library Constants {
 
     // address used for forked node testing
     address public constant BOB = 0xFCC7e03C00FC57d964AEb22029Df7AD6eA795d49;
+=======
+    // address of the 0x swap router contract
+    address public constant ZEROX_ROUTER = 0xDef1C0ded9bec7F1a1670819833240f027b25EfF;
+
+    // Compound v3
+    address public constant COMPOUND_V3_COMET_WETH = 0xA17581A9E3356d9A858b789D68B4d866e593aE94;
+
+>>>>>>> a100f21a30dd332b69351d1e05d98dbc748c6ddc
     address public constant ZERO_EX_ROUTER = 0xDef1C0ded9bec7F1a1670819833240f027b25EfF;
 
     // address of the EULER rewards token contract
