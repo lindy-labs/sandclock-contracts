@@ -57,7 +57,7 @@ contract MorphoAaveV3Adapter is IAdapter {
         return morpho.borrowBalance(C.WETH, _account);
     }
 
-    function getMaxLtv() external view override returns (uint256) {
+    function getMaxLtv() external pure override returns (uint256) {
         // same as the maxLtv for aave v3 on eMode
         return 0.9e18;
     }
