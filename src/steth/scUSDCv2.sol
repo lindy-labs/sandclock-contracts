@@ -182,12 +182,16 @@ contract scUSDCv2 is BaseV2Vault {
      * @param _amounts single elment array containing the amount of WETH being flashloaned.
      * @param _data The encoded data that was passed to the flashloan.
      */
-    function receiveFlashLoan(address[] calldata, uint256[] calldata _amounts, uint256[] calldata, bytes calldata _data)
-        external
-    {
+    function receiveFlashLoan(
+        address[] calldata,
+        uint256[] calldata _amounts,
+        uint256[] calldata _feeAmounts,
+        bytes calldata _data
+    ) external {
         _isFlashLoanInitiated();
 
         uint256 flashLoanAmount = _amounts[0];
+        uint256 feeAmount = _feeAmounts[0];
         FlashLoanType flashLoanType = abi.decode(_data, (FlashLoanType));
 
         if (flashLoanType == FlashLoanType.ExitAllPositions) {
@@ -197,7 +201,7 @@ contract scUSDCv2 is BaseV2Vault {
             _multiCall(callData);
         }
 
-        weth.safeTransfer(address(balancerVault), flashLoanAmount);
+        weth.safeTransfer(address(balancerVault), flashLoanAmount + feeAmount);
     }
 
     /**
