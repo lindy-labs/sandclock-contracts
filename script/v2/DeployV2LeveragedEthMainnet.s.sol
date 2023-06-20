@@ -18,9 +18,9 @@ import {AaveV3Adapter as scWethAaveV3Adapter} from "../../src/steth/scWethV2-ada
 import {CompoundV3Adapter as scWethCompoundV3Adapter} from "../../src/steth/scWethV2-adapters/CompoundV3Adapter.sol";
 import {AaveV3Adapter as scUsdcAaveV3Adapter} from "../../src/steth/scUsdcV2-adapters/AaveV3Adapter.sol";
 import {AaveV2Adapter as scUsdcAaveV2Adapter} from "../../src/steth/scUsdcV2-adapters/AaveV2Adapter.sol";
-import {MainnetDepolyBase} from "../base/MainnetDepolyBase.sol";
+import {MainnetDeployBase} from "../base/MainnetDeployBase.sol";
 
-contract DeployScript is MainnetDepolyBase {
+contract DeployScript is MainnetDeployBase {
     function run() external returns (scWETHv2 scWethV2, scUSDCv2 scUsdcV2) {
         vm.startBroadcast(deployerPrivateKey);
 

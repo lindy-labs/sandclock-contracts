@@ -18,9 +18,9 @@ import {ISwapRouter} from "../src/interfaces/uniswap/ISwapRouter.sol";
 import {scWETH} from "../src/steth/scWETH.sol";
 import {scUSDC} from "../src/steth/scUSDC.sol";
 import {sc4626} from "../src/sc4626.sol";
-import {MainnetDepolyBase} from "./base/MainnetDepolyBase.sol";
+import {MainnetDeployBase} from "./base/MainnetDeployBase.sol";
 
-contract DeployScript is MainnetDepolyBase {
+contract DeployScript is MainnetDeployBase {
     function run() external returns (scWETH scWeth, scUSDC scUsdc) {
         vm.startBroadcast(deployerPrivateKey);
 

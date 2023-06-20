@@ -19,7 +19,7 @@ import {CompoundV3Adapter as scWethCompoundV3Adapter} from "../../src/steth/scWe
 import {AaveV3Adapter as scUsdcAaveV3Adapter} from "../../src/steth/scUsdcV2-adapters/AaveV3Adapter.sol";
 import {AaveV2Adapter as scUsdcAaveV2Adapter} from "../../src/steth/scUsdcV2-adapters/AaveV2Adapter.sol";
 
-abstract contract MainnetDepolyBase is CREATE3Script {
+abstract contract MainnetDeployBase is CREATE3Script {
     uint256 deployerPrivateKey = uint256(vm.envBytes32("PRIVATE_KEY"));
     address deployerAddress = vm.addr(deployerPrivateKey);
     address keeper = vm.envAddress("KEEPER");
