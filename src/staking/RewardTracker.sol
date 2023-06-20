@@ -20,7 +20,6 @@ contract RewardTracker is BonusTracker, DebtTracker, AccessControl {
     event VaultAdded(address vault);
     event TreasuryUpdated(address indexed user, address newTreasury);
 
-    error OverflowAmountTooLarge();
     error CallerNotDistirbutor();
     error VaultNotWhitelisted();
     error VaultAssetNotSupported();
