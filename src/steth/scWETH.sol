@@ -265,9 +265,12 @@ contract scWETH is sc4626, IFlashLoanRecipient {
     }
 
     /// @dev called after the flashLoan on _rebalancePosition
-    function receiveFlashLoan(address[] memory, uint256[] memory amounts, uint256[] memory, bytes memory userData)
-        external
-    {
+    function receiveFlashLoan(
+        address[] memory,
+        uint256[] memory amounts,
+        uint256[] memory feeAmounts,
+        bytes memory userData
+    ) external {
         if (msg.sender != address(balancerVault)) {
             revert InvalidFlashLoanCaller();
         }
@@ -275,6 +278,9 @@ contract scWETH is sc4626, IFlashLoanRecipient {
 
         // the amount flashloaned
         uint256 flashLoanAmount = amounts[0];
+
+        // the flashloan fees
+        uint256 flashLoanFeeAmount = feeAmounts[0];
 
         // decode user data
         (bool isDeposit, uint256 amount) = abi.decode(userData, (bool, uint256));
@@ -295,8 +301,10 @@ contract scWETH is sc4626, IFlashLoanRecipient {
             //add wstETH liquidity on aave-v3
             aavePool.supply(address(wstETH), wstETH.balanceOf(address(this)), address(this), 0);
 
-            //borrow enough weth from aave-v3 to payback flashloan
-            aavePool.borrow(address(weth), flashLoanAmount, C.AAVE_VAR_INTEREST_RATE_MODE, 0, address(this));
+            //borrow enough weth from aave-v3 to payback flashloan (plus flashloan fees if any)
+            aavePool.borrow(
+                address(weth), flashLoanAmount + flashLoanFeeAmount, C.AAVE_VAR_INTEREST_RATE_MODE, 0, address(this)
+            );
         }
         // if flashloan received as part of a withdrawal
         else {
@@ -320,7 +328,7 @@ contract scWETH is sc4626, IFlashLoanRecipient {
         }
 
         // payback flashloan
-        asset.safeTransfer(address(balancerVault), flashLoanAmount);
+        asset.safeTransfer(address(balancerVault), flashLoanAmount + flashLoanFeeAmount);
     }
 
     // need to be able to receive eth

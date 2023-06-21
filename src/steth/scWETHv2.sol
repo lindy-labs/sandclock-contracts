@@ -237,16 +237,13 @@ contract scWETHv2 is BaseV2Vault {
     ) external {
         _isFlashLoanInitiated();
 
-        // the amount flashloaned
-        uint256 flashLoanAmount = amounts[0];
-
         // decode user data
         bytes[] memory callData = abi.decode(userData, (bytes[]));
 
         _multiCall(callData);
 
         // payback flashloan
-        asset.safeTransfer(address(balancerVault), flashLoanAmount + feeAmounts[0]);
+        asset.safeTransfer(address(balancerVault), amounts[0] + feeAmounts[0]);
 
         _enforceFloat();
     }

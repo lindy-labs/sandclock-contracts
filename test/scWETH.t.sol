@@ -20,6 +20,7 @@ import {IwstETH} from "../src/interfaces/lido/IwstETH.sol";
 import {ICurvePool} from "../src/interfaces/curve/ICurvePool.sol";
 import {IVault} from "../src/interfaces/balancer/IVault.sol";
 import {AggregatorV3Interface} from "../src/interfaces/chainlink/AggregatorV3Interface.sol";
+import {IProtocolFeesCollector} from "../src/interfaces/balancer/IProtocolFeesCollector.sol";
 import {sc4626} from "../src/sc4626.sol";
 import "../src/errors/scErrors.sol";
 
@@ -496,6 +497,39 @@ contract scWETHTest is Test {
         vault.redeem(vault.balanceOf(address(this)), address(this), address(this));
 
         _redeemChecks(preDepositBal);
+    }
+
+    function test_invest_withdraw_withFlashLoanFees(uint256 amount) public {
+        uint256 flashLoanFeePercent = 1e15; // 0.1%
+
+        address BALANCER_ADMIN = 0x97207B095e4D5C9a6e4cfbfcd2C3358E03B90c4A;
+        IProtocolFeesCollector balancerFeeContract = IProtocolFeesCollector(0xce88686553686DA562CE7Cea497CE749DA109f9F);
+        // change balancer flashloan fees percentage
+        hoax(BALANCER_ADMIN);
+        balancerFeeContract.setFlashLoanFeePercentage(flashLoanFeePercent);
+        assertEq(balancerFeeContract.getFlashLoanFeePercentage(), flashLoanFeePercent);
+
+        amount = bound(amount, boundMinimum, 1e22); //max ~$280m flashloan
+        vm.deal(address(this), amount);
+        weth.deposit{value: amount}();
+        weth.approve(address(vault), amount);
+
+        uint256 shares = vault.previewMint(amount);
+        vault.mint(shares, address(this));
+
+        uint256 initialBalance = weth.balanceOf(address(balancerFeeContract));
+
+        vm.startPrank(keeper);
+        vault.harvest();
+
+        // assert fees has been paid
+        assertGt(
+            weth.balanceOf(address(balancerFeeContract)) - initialBalance,
+            amount.mulWadDown(flashLoanFeePercent),
+            "Balancer Fees not paid"
+        );
+
+        _withdrawToVaultChecks(0.02e18);
     }
 
     function test_mint_invest_redeem(uint256 amount) public {
