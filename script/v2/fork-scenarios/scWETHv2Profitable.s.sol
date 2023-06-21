@@ -4,10 +4,10 @@ pragma solidity ^0.8.13;
 import "forge-std/console2.sol";
 import "forge-std/Test.sol";
 
-import {CREATE3Script} from "../../base/CREATE3Script.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {WETH} from "solmate/tokens/WETH.sol";
 import {AccessControl} from "openzeppelin-contracts/access/AccessControl.sol";
+import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 
 import {Constants as C} from "../../../src/lib/Constants.sol";
 import {ISwapRouter} from "../../../src/interfaces/uniswap/ISwapRouter.sol";
@@ -21,6 +21,8 @@ import {CompoundV3Adapter as scWethCompoundV3Adapter} from "../../../src/steth/s
 import {AaveV3Adapter as scUsdcAaveV3Adapter} from "../../../src/steth/scUsdcV2-adapters/AaveV3Adapter.sol";
 import {AaveV2Adapter as scUsdcAaveV2Adapter} from "../../../src/steth/scUsdcV2-adapters/AaveV2Adapter.sol";
 import {MainnetDepolyBase} from "../../base/MainnetDepolyBase.sol";
+import {IAdapter} from "../../../src/steth/IAdapter.sol";
+import {scWETHv2Helper} from "../../../test/helpers/scWETHv2Helper.sol";
 
 /**
  * deploys scWETHv2 vault
@@ -30,17 +32,36 @@ import {MainnetDepolyBase} from "../../base/MainnetDepolyBase.sol";
  * forge script script/v2/fork-scenarios/scWETHv2Profitable.s.sol --skip-simulation -vv
  */
 contract scWETHv2SimulateProfits is MainnetDepolyBase, Test {
+    using FixedPointMathLib for uint256;
+
     uint256 mainnetFork;
     scWETHv2 vault;
     PriceConverter priceConverter;
+    scWETHv2Helper vaultHelper;
+
+    uint256 aaveV3AdapterId;
+    uint256 compoundV3AdapterId;
+
+    IAdapter aaveV3Adapter;
+    IAdapter compoundV3Adapter;
+
+    mapping(IAdapter => uint256) targetLtv;
 
     function run() external {
-        fork(17243956);
+        fork(17529069);
         vm.startBroadcast(deployerAddress);
 
         deploy();
-        depositToVault(100 ether);
+        depositToVault(10 ether);
 
+        uint256 aaveV3AllocationPercent = 0.3e18;
+        uint256 compoundV3AllocationPercent = 0.7e18;
+
+        vm.stopBroadcast();
+
+        vm.startBroadcast(keeper);
+        uint256 float = weth.balanceOf(address(vault));
+        invest(float, aaveV3AllocationPercent, compoundV3AllocationPercent);
         vm.stopBroadcast();
     }
 
@@ -60,11 +81,15 @@ contract scWETHv2SimulateProfits is MainnetDepolyBase, Test {
     }
 
     function addAdapters() internal {
-        scWethAaveV3Adapter aaveV3Adapter = new scWethAaveV3Adapter();
+        aaveV3Adapter = new scWethAaveV3Adapter();
+        aaveV3AdapterId = aaveV3Adapter.id();
         vault.addAdapter(aaveV3Adapter);
+        targetLtv[aaveV3Adapter] = 0.8e18; // the target Ltv at which all subsequent aave deposits must be done
 
-        scWethCompoundV3Adapter compoundV3Adapter = new scWethCompoundV3Adapter();
+        compoundV3Adapter = new scWethCompoundV3Adapter();
+        compoundV3AdapterId = compoundV3Adapter.id();
         vault.addAdapter(compoundV3Adapter);
+        targetLtv[compoundV3Adapter] = 0.8e18; // the target Ltv at which all subsequent compound deposits must be done
     }
 
     function depositToVault(uint256 amount) internal {
@@ -79,6 +104,8 @@ contract scWETHv2SimulateProfits is MainnetDepolyBase, Test {
         (bytes[] memory callData,, uint256 totalFlashLoanAmount) =
             getInvestParams(investAmount, aaveV3AllocationPercent, compoundAllocationPercent);
 
+        console.log("totalFlashLoanAmount", totalFlashLoanAmount);
+
         vault.rebalance(investAmount, totalFlashLoanAmount, callData);
     }
 
@@ -89,6 +116,8 @@ contract scWETHv2SimulateProfits is MainnetDepolyBase, Test {
         view
         returns (bytes[] memory, uint256, uint256)
     {
+        require(aaveV3Allocation + compoundAllocation == 1e18, "allocationPercents dont add up to 100%");
+
         uint256 investAmount = amount;
         uint256 stEthRateTolerance = 0.999e18;
 
