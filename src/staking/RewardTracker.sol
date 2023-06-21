@@ -20,7 +20,6 @@ contract RewardTracker is BonusTracker, DebtTracker, AccessControl {
     event VaultAdded(address vault);
     event TreasuryUpdated(address indexed user, address newTreasury);
 
-    error OverflowAmountTooLarge();
     error CallerNotDistirbutor();
     error VaultNotWhitelisted();
     error VaultAssetNotSupported();
@@ -38,6 +37,9 @@ contract RewardTracker is BonusTracker, DebtTracker, AccessControl {
 
     /// @notice The last stored rewardPerToken value
     uint256 public rewardPerTokenStored;
+
+    /// @notice The last stored balance of reward tokens
+    uint256 public rewardBalanceStored;
 
     /// @notice Role allowed to call notifyReward()
     bytes32 public constant DISTRIBUTOR = keccak256("DISTRIBUTOR");
@@ -156,6 +158,7 @@ contract RewardTracker is BonusTracker, DebtTracker, AccessControl {
 
         if (reward > 0) {
             rewards[_receiver] = 0;
+            rewardBalanceStored -= reward;
             rewardToken.safeTransfer(_receiver, reward);
             emit RewardPaid(_receiver, reward);
         }
@@ -182,16 +185,13 @@ contract RewardTracker is BonusTracker, DebtTracker, AccessControl {
         );
     }
 
-    /// @notice Lets a reward distributor start a new reward period. The reward tokens must have already
+    /// @notice Starts a new reward distribution period. The reward tokens must have already
     /// been transferred to this contract before calling this function. If it is called
     /// when a reward period is still active, a new reward period will begin from the time
     /// of calling this function, using the leftover rewards from the old reward period plus
     /// the newly sent rewards as the reward.
-    /// @dev If the reward amount will cause an overflow when computing rewardPerToken, then
-    /// this function will revert.
-    /// @param _reward The amount of reward tokens to use in the new reward period.
-    function notifyRewardAmount(uint256 _reward) external onlyDistributor {
-        _notifyRewardAmount(_reward);
+    function startRewardsDistribution() external {
+        _startRewardsDistribution();
     }
 
     /// @notice Lets a reward distributor fetch performance fees from
@@ -199,11 +199,9 @@ contract RewardTracker is BonusTracker, DebtTracker, AccessControl {
     function fetchRewards(ERC4626 _vault) external onlyDistributor {
         if (!isVault[address(_vault)]) revert VaultNotWhitelisted();
 
-        uint256 beforeBalance = rewardToken.balanceOf(address(this));
         _vault.redeem(_vault.balanceOf(address(this)), address(this), address(this));
 
-        uint256 afterBalance = rewardToken.balanceOf(address(this));
-        _notifyRewardAmount(afterBalance - beforeBalance);
+        _startRewardsDistribution();
     }
 
     /// @notice Lets an admin add a vault for collecting fees from.
@@ -223,12 +221,15 @@ contract RewardTracker is BonusTracker, DebtTracker, AccessControl {
         emit TreasuryUpdated(msg.sender, _newTreasury);
     }
 
-    function _notifyRewardAmount(uint256 _reward) internal {
+    function _startRewardsDistribution() internal {
         /// -----------------------------------------------------------------------
         /// Validation
         /// -----------------------------------------------------------------------
 
-        if (_reward == 0) {
+        uint256 rewardBalanceCurrent = rewardToken.balanceOf(address(this));
+        uint256 rewardBalanceStored_ = rewardBalanceStored;
+
+        if (rewardBalanceCurrent == rewardBalanceStored_) {
             return;
         }
 
@@ -251,26 +252,23 @@ contract RewardTracker is BonusTracker, DebtTracker, AccessControl {
         lastUpdateTime = lastTimeRewardApplicable_;
 
         // record new reward
+        uint256 reward = rewardBalanceCurrent - rewardBalanceStored_;
+        rewardBalanceStored = rewardBalanceCurrent;
         uint256 newRewardRate;
 
         if (block.timestamp >= periodFinish_) {
-            newRewardRate = _reward / duration_;
+            newRewardRate = reward / duration_;
         } else {
             uint256 remaining = periodFinish_ - block.timestamp;
             uint256 leftover = remaining * rewardRate_;
-            newRewardRate = (_reward + leftover) / duration_;
-        }
-
-        // prevent overflow when computing rewardPerToken
-        if (newRewardRate >= ((type(uint256).max / PRECISION) / duration_)) {
-            revert OverflowAmountTooLarge();
+            newRewardRate = (reward + leftover) / duration_;
         }
 
         rewardRate = newRewardRate;
         lastUpdateTime = uint64(block.timestamp);
         periodFinish = uint64(block.timestamp + duration_);
 
-        emit RewardAdded(_reward);
+        emit RewardAdded(reward);
     }
 
     function withdraw(uint256 assets, address receiver, address owner) public override returns (uint256 shares) {
