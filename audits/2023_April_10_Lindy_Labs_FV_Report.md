@@ -1,4 +1,4 @@
-![Lindy Labs](assets/ll-white.svg)
+![Lindy Labs](assets/ll-white.png)
 
 This audit was prepared by Lindy Labs and represents a snapshot of the repository taken on April 10 2023.
 
