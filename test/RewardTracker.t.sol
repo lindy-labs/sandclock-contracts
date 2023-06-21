@@ -258,7 +258,7 @@ contract RewardTrackerTest is DSTestPlus {
         // distribute rewards
         rewardToken.transfer(address(stakingPool), REWARD_AMOUNT);
         stakingPool.grantRole(DISTRIBUTOR, address(this));
-        stakingPool.notifyRewardAmount(REWARD_AMOUNT);
+        stakingPool.startRewardsDistribution();
 
         /// -----------------------------------------------------------------------
         /// Stake using address(this)
@@ -360,7 +360,7 @@ contract RewardTrackerTest is DSTestPlus {
         // distribute rewards
         hevm.stopPrank();
         rewardToken.transfer(address(stakingPool), REWARD_AMOUNT);
-        stakingPool.notifyRewardAmount(REWARD_AMOUNT);
+        stakingPool.startRewardsDistribution();
 
         // warp to simulate staking
         hevm.startPrank(tester);
@@ -386,16 +386,18 @@ contract RewardTrackerTest is DSTestPlus {
         assertEqDecimalEpsilonBelow(rewardAmount, expectedRewardAmount, 18, 1e3);
     }
 
-    function testCorrectness_notifyRewardAmount(uint128 amount_, uint56 warpTime, uint8 stakeTimeAsDurationPercentage)
-        public
-    {
+    function testCorrectness_startRewardsDistribution(
+        uint128 amount_,
+        uint56 warpTime,
+        uint8 stakeTimeAsDurationPercentage
+    ) public {
         hevm.assume(amount_ > 0);
         hevm.assume(warpTime > 0);
         hevm.assume(stakeTimeAsDurationPercentage > 0);
         uint256 amount = amount_;
 
         rewardToken.transfer(address(stakingPool), REWARD_AMOUNT);
-        stakingPool.notifyRewardAmount(REWARD_AMOUNT);
+        stakingPool.startRewardsDistribution();
 
         // warp to some time in the future
         hevm.warp(warpTime);
@@ -420,7 +422,7 @@ contract RewardTrackerTest is DSTestPlus {
         rewardToken.mint(address(stakingPool), amount);
 
         // notify new rewards
-        stakingPool.notifyRewardAmount(amount);
+        stakingPool.startRewardsDistribution();
 
         // warp to simulate staking
         uint256 stakeTime = (DURATION * uint256(stakeTimeAsDurationPercentage)) / 100;
@@ -440,10 +442,6 @@ contract RewardTrackerTest is DSTestPlus {
             expectedRewardAmount += ((leftoverRewardAmount + amount) * stakeTimeAsDurationPercentage) / 100;
         }
         assertEqDecimalEpsilonBelow(rewardAmount, expectedRewardAmount, 18, 1e4);
-
-        amount = type(uint256).max / PRECISION; // a too large amount
-        hevm.expectRevert(RewardTracker.OverflowAmountTooLarge.selector);
-        stakingPool.notifyRewardAmount(amount);
     }
 
     function testCorrectness_transfer(uint256 amount, uint256 transferAmount, uint56 warpTime) public {
@@ -512,7 +510,7 @@ contract RewardTrackerTest is DSTestPlus {
     function testCorrectness_rewardPerToken(uint256 timeLapsed) public {
         timeLapsed = bound(timeLapsed, 1, 36500 days);
         hevm.warp(timeLapsed);
-        stakingPool.notifyRewardAmount(REWARD_AMOUNT); // update rewardRate so that it's not zero
+        stakingPool.startRewardsDistribution(); // update rewardRate so that it's not zero
         hevm.warp(timeLapsed * 2);
         uint256 rewardPerTokenStored = stakingPool.rewardPerTokenStored();
         uint256 totalSupply = stakingPool.totalSupply();
@@ -530,7 +528,7 @@ contract RewardTrackerTest is DSTestPlus {
     function testCorrectness_earned(uint256 timeLapsed) public {
         timeLapsed = bound(timeLapsed, 1, 36500 days);
         hevm.warp(timeLapsed);
-        stakingPool.notifyRewardAmount(REWARD_AMOUNT); // update rewardRate so that it's not zero
+        stakingPool.startRewardsDistribution(); // update rewardRate so that it's not zero
         hevm.warp(timeLapsed * 2);
         uint256 rewardPerToken = stakingPool.rewardPerToken();
         uint256 accountBalance = stakingPool.balanceOf(address(this)) + stakingPool.multiplierPointsOf(address(this));
