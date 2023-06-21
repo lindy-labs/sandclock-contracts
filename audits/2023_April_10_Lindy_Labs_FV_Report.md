@@ -1,4 +1,4 @@
-![Lindy Labs](../assets/ll-white.png =407.25x102)
+<img src="../assets/ll-white.png" width="407.25" height="102">
 
 This audit was prepared by Lindy Labs and represents a snapshot of the repository taken on April 10 2023.
 
@@ -6,9 +6,7 @@ This audit was prepared by Lindy Labs and represents a snapshot of the repositor
  
 ## Summary
 
-The Certora Prover has partially proven the implementation of the scUSDC contract is correct with respect to formal specifications written by the security team of Lindy Labs, but Certora timed out on several rules. The common characteristics of the rules are that they verify functions that call the `receiveFlashLoan` function. The `receiveFlashLoan` is the most complicated function in the contract because it interacts 7 external contracts.
-
-A manual audit of these contracts was also conducted.
+The Certora Prover has **partially** proven the implementation of the scUSDC and scWETH contracts is correct with respect to formal specifications written by the security team of Lindy Labs, but Certora timed out on several rules. The common characteristics of the rules are that they verify functions that call the `receiveFlashLoan` function. The `receiveFlashLoan` is the most complicated function in the contract because it interacts with 7 external contracts.
 
 ## List of Issues Discovered
 
