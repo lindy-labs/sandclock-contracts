@@ -191,7 +191,6 @@ contract scUSDCv2 is BaseV2Vault {
         _isFlashLoanInitiated();
 
         uint256 flashLoanAmount = _amounts[0];
-        uint256 feeAmount = _feeAmounts[0];
         FlashLoanType flashLoanType = abi.decode(_data, (FlashLoanType));
 
         if (flashLoanType == FlashLoanType.ExitAllPositions) {
@@ -201,7 +200,7 @@ contract scUSDCv2 is BaseV2Vault {
             _multiCall(callData);
         }
 
-        weth.safeTransfer(address(balancerVault), flashLoanAmount + feeAmount);
+        weth.safeTransfer(address(balancerVault), flashLoanAmount + _feeAmounts[0]);
     }
 
     /**
