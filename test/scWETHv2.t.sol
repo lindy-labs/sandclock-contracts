@@ -50,7 +50,6 @@ contract scWETHv2Test is Test {
 
     uint256 mainnetFork;
 
-    address constant EULER_TOKEN = 0xd9Fcd98c322942075A5C3860693e9f4f03AAE07b;
     address constant keeper = address(0x05);
     address constant alice = address(0x06);
     address constant treasury = address(0x07);
@@ -158,8 +157,8 @@ contract scWETHv2Test is Test {
         assertEq(vault.getAdapter(dummyAdapter.id()), address(dummyAdapter), "adapter not added to protocolAdapters");
         assertEq(vault.isSupported(id), true, "adapter not added to supportedProtocols");
         // Approvals
-        assertEq(ERC20(C.WSTETH).allowance(address(vault), C.AAVE_POOL), type(uint256).max, "allowance not set");
-        assertEq(ERC20(C.WETH).allowance(address(vault), C.AAVE_POOL), type(uint256).max, "allowance not set");
+        assertEq(ERC20(C.WSTETH).allowance(address(vault), C.AAVE_V3_POOL), type(uint256).max, "allowance not set");
+        assertEq(ERC20(C.WETH).allowance(address(vault), C.AAVE_V3_POOL), type(uint256).max, "allowance not set");
     }
 
     function test_removeAdapter_Reverts() public {
@@ -198,7 +197,7 @@ contract scWETHv2Test is Test {
 
         uint256 id = aaveV3Adapter.id();
         vault.removeAdapter(id, false);
-        _removeAdapterChecks(id, C.AAVE_POOL);
+        _removeAdapterChecks(id, C.AAVE_V3_POOL);
 
         id = compoundV3Adapter.id();
         vault.removeAdapter(id, false);
@@ -212,8 +211,8 @@ contract scWETHv2Test is Test {
     function test_claimRewards() public {
         _setUp(BLOCK_AFTER_EULER_EXPLOIT);
         uint256 rewardAmount = 100e18;
-        MockAdapter mockAdapter = new MockAdapter(ERC20(EULER_TOKEN));
-        deal(EULER_TOKEN, mockAdapter.rewardsHolder(), rewardAmount);
+        MockAdapter mockAdapter = new MockAdapter(ERC20(C.EULER_REWARDS_TOKEN));
+        deal(C.EULER_REWARDS_TOKEN, mockAdapter.rewardsHolder(), rewardAmount);
         vault.addAdapter(mockAdapter);
 
         uint256 id = mockAdapter.id();
@@ -221,10 +220,10 @@ contract scWETHv2Test is Test {
         vm.expectRevert(CallerNotKeeper.selector);
         vault.claimRewards(id, abi.encode(rewardAmount));
 
-        assertEq(ERC20(EULER_TOKEN).balanceOf(address(vault)), 0, "vault has EULER balance");
+        assertEq(ERC20(C.EULER_REWARDS_TOKEN).balanceOf(address(vault)), 0, "vault has EULER balance");
         hoax(keeper);
         vault.claimRewards(id, abi.encode(rewardAmount));
-        assertEq(ERC20(EULER_TOKEN).balanceOf(address(vault)), rewardAmount, "vault has no EULER balance");
+        assertEq(ERC20(C.EULER_REWARDS_TOKEN).balanceOf(address(vault)), rewardAmount, "vault has no EULER balance");
     }
 
     function _removeAdapterChecks(uint256 _id, address _pool) internal {
@@ -300,16 +299,16 @@ contract scWETHv2Test is Test {
             hex"6af479b2000000000000000000000000000000000000000000000000000000000000008000000000000000000000000000000000000000000000003635c9adc5dea000000000000000000000000000000000000000000000000000000d941bdaa15b045e0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002bd9fcd98c322942075a5c3860693e9f4f03aae07b002710c02aaa39b223fe8d0a0e5c4f27ead9083c756cc2000000000000000000000000000000000000000000869584cd000000000000000000000000100000000000000000000000000000000000001100000000000000000000000000000000000000000000007992ffbce5646cdd8a";
 
         uint256 eulerAmount = 1000e18;
-        deal(EULER_TOKEN, address(vault), eulerAmount);
+        deal(C.EULER_REWARDS_TOKEN, address(vault), eulerAmount);
 
         vm.expectRevert(CallerNotKeeper.selector);
-        vault.zeroExSwap(ERC20(EULER_TOKEN), eulerAmount, swapData, 0);
+        vault.zeroExSwap(ERC20(C.EULER_REWARDS_TOKEN), eulerAmount, swapData, 0);
 
         hoax(keeper);
-        vault.zeroExSwap(ERC20(EULER_TOKEN), eulerAmount, swapData, 0);
+        vault.zeroExSwap(ERC20(C.EULER_REWARDS_TOKEN), eulerAmount, swapData, 0);
 
         assertGe(weth.balanceOf(address(vault)), expectedWethAmount, "weth not received");
-        assertEq(ERC20(EULER_TOKEN).balanceOf(address(vault)), 0, "euler token not transferred out");
+        assertEq(ERC20(C.EULER_REWARDS_TOKEN).balanceOf(address(vault)), 0, "euler token not transferred out");
     }
 
     function test_zeroExSwap_WstEthToWeth() public {

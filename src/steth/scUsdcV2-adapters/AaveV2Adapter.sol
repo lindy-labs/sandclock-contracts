@@ -17,15 +17,11 @@ contract AaveV2Adapter is IAdapter {
     ERC20 constant usdc = ERC20(C.USDC);
     WETH constant weth = WETH(payable(C.WETH));
 
-    // Aave v2 lending pool
-    ILendingPool public constant pool = ILendingPool(0x7d2768dE32b0b80b7a3454c06BdAc94A69DDc7A9);
-    // Aave v2 protocol data provider
+    ILendingPool public constant pool = ILendingPool(C.AAVE_V2_LENDING_POOL);
     IProtocolDataProvider public constant aaveV2ProtocolDataProvider =
-        IProtocolDataProvider(0x057835Ad21a177dbdd3090bB1CAE03EaCF78Fc6d);
-    // Aave v2 interest bearing USDC (aUSDC) token
-    ERC20 public constant aUsdc = ERC20(0xBcca60bB61934080951369a648Fb03DF4F96263C);
-    // Aave v2 variable debt bearing WETH (variableDebtWETH) token
-    ERC20 public constant dWeth = ERC20(0xF63B34710400CAd3e044cFfDcAb00a0f32E33eCf);
+        IProtocolDataProvider(C.AAVE_V2_PROTOCOL_DATA_PROVIDER);
+    ERC20 public constant aUsdc = ERC20(C.AAVE_V2_AUSDC_TOKEN);
+    ERC20 public constant dWeth = ERC20(C.AAVE_V2_VAR_DEBT_WETH_TOKEN);
 
     /// @inheritdoc IAdapter
     uint256 public constant override id = 2;
