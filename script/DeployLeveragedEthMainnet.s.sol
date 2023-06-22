@@ -27,33 +27,13 @@ contract DeployScript is DeployLeveragedEth {
         console2.log("weth deposited into wethContract");
 
         // scUSDC
-        _swapETHForUSDC(0.01 ether);
+        _weth.deposit{value: 0.01 ether}();
+        console2.log("eth deposited for weth to swap for usdc");
+        _swapWethForUsdc(0.01 ether);
         console2.log("eth swapped for USDC");
         _deposit(_scUSDC, _usdc.balanceOf(address(_deployerAddress))); // 0.01 ether worth of USDC
         console2.log("usdc deposited into usdcContract");
 
         vm.stopBroadcast();
-    }
-
-    function _swapETHForUSDC(uint256 amount) internal {
-        _weth.deposit{value: amount}();
-        console2.log("eth deposited for weth to swap for usdc");
-
-        _weth.approve(address(_uniswapRouter), amount);
-        console2.log("weth approved for swap to usdc");
-
-        ISwapRouter.ExactInputSingleParams memory params = ISwapRouter.ExactInputSingleParams({
-            tokenIn: address(_weth),
-            tokenOut: address(_usdc),
-            fee: 500, // 0.05%
-            recipient: _deployerAddress,
-            deadline: block.timestamp + 1000,
-            amountIn: amount,
-            amountOutMinimum: 0,
-            sqrtPriceLimitX96: 0
-        });
-
-        _uniswapRouter.exactInputSingle(params);
-        console2.log("weth swapped for usdc");
     }
 }
