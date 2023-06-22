@@ -568,11 +568,10 @@ contract scWETHv2Test is Test {
         _setUp(BLOCK_BEFORE_EULER_EXPLOIT);
         flashLoanFeePercent = 5e15; // 0.5%
 
-        address BALANCER_ADMIN = 0x97207B095e4D5C9a6e4cfbfcd2C3358E03B90c4A;
-        IProtocolFeesCollector balancerFeeContract = IProtocolFeesCollector(0xce88686553686DA562CE7Cea497CE749DA109f9F);
+        IProtocolFeesCollector balancerFeeContract = IProtocolFeesCollector(C.BALANCER_FEES_COLLECTOR);
 
         // change balancer flashloan fees percentage
-        hoax(BALANCER_ADMIN);
+        hoax(C.BALANCER_ADMIN);
         balancerFeeContract.setFlashLoanFeePercentage(flashLoanFeePercent);
         assertEq(balancerFeeContract.getFlashLoanFeePercentage(), flashLoanFeePercent);
 
