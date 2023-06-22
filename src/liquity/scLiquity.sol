@@ -4,6 +4,8 @@ pragma solidity ^0.8.10;
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
+
+import {Constants as C} from "../lib/Constants.sol";
 import {IStabilityPool} from "../interfaces/liquity/IStabilityPool.sol";
 import {IPriceFeed} from "../interfaces/chainlink/IPriceFeed.sol";
 import {sc4626} from "../sc4626.sol";
@@ -20,12 +22,12 @@ contract scLiquity is sc4626 {
     uint256 public totalInvested;
     uint256 public totalProfit;
 
-    IStabilityPool public stabilityPool = IStabilityPool(0x66017D22b0f8556afDd19FC67041899Eb65a21bb);
-    IPriceFeed public lusd2eth = IPriceFeed(0x60c0b047133f696334a2b7f68af0b49d2F3D4F72);
-    ERC20 public lqty = ERC20(0x6DEA81C8171D0bA574754EF6F8b412F2Ed88c54D);
+    IStabilityPool public stabilityPool = IStabilityPool(C.LIQUITY_STABILITY_POOL);
+    IPriceFeed public lusd2eth = IPriceFeed(C.CHAINLINK_LUSD_ETH_PRICE_FEED);
+    ERC20 public lqty = ERC20(C.LIQUITY_LQTY_TOKEN);
 
     // 0x swap router
-    address xrouter = 0xDef1C0ded9bec7F1a1670819833240f027b25EfF;
+    address public xrouter = C.ZERO_EX_ROUTER;
 
     constructor(address _admin, address _keeper, ERC20 _lusd)
         sc4626(_admin, _keeper, _lusd, "Sandclock LUSD Vault", "scLUSD")

@@ -24,9 +24,6 @@ contract Swapper {
     // Uniswap V3 router
     ISwapRouter public constant swapRouter = ISwapRouter(C.UNISWAP_V3_SWAP_ROUTER);
 
-    // 0x router address
-    address public constant zeroExRouter = 0xDef1C0ded9bec7F1a1670819833240f027b25EfF;
-
     ICurvePool public constant curvePool = ICurvePool(C.CURVE_ETH_STETH_POOL);
 
     WETH public constant weth = WETH(payable(C.WETH));
@@ -114,15 +111,15 @@ contract Swapper {
     ) external returns (uint256) {
         uint256 tokenOutInitialBalance = _tokenOut.balanceOf(address(this));
 
-        _tokenIn.safeApprove(zeroExRouter, _amountIn);
+        _tokenIn.safeApprove(C.ZERO_EX_ROUTER, _amountIn);
 
-        zeroExRouter.functionCall(_swapData);
+        C.ZERO_EX_ROUTER.functionCall(_swapData);
 
         uint256 amountReceived = _tokenOut.balanceOf(address(this)) - tokenOutInitialBalance;
 
         if (amountReceived < _amountOutMin) revert AmountReceivedBelowMin();
 
-        _tokenIn.approve(zeroExRouter, 0);
+        _tokenIn.approve(C.ZERO_EX_ROUTER, 0);
 
         return amountReceived;
     }
