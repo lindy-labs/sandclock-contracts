@@ -18,13 +18,13 @@ contract AaveV3Adapter is IAdapter {
     WETH constant weth = WETH(payable(C.WETH));
 
     // Aave v3 pool contract
-    IPool public constant pool = IPool(C.AAVE_POOL);
+    IPool public constant pool = IPool(C.AAVE_V3_POOL);
     // Aave v3 pool data provider contract
-    IPoolDataProvider public constant aaveV3PoolDataProvider = IPoolDataProvider(C.AAVE_POOL_DATA_PROVIDER);
+    IPoolDataProvider public constant aaveV3PoolDataProvider = IPoolDataProvider(C.AAVE_V3_POOL_DATA_PROVIDER);
     // Aave v3 "aEthUSDC" token (supply token)
-    ERC20 public constant aUsdc = ERC20(C.AAVE_AUSDC_TOKEN);
+    ERC20 public constant aUsdc = ERC20(C.AAVE_V3_AUSDC_TOKEN);
     // Aave v3 "variableDebtEthWETH" token (variable debt token)
-    ERC20 public constant dWeth = ERC20(C.AAVAAVE_VAR_DEBT_WETH_TOKEN);
+    ERC20 public constant dWeth = ERC20(C.AAVE_V3_VAR_DEBT_WETH_TOKEN);
 
     /// @inheritdoc IAdapter
     uint256 public constant override id = 1;

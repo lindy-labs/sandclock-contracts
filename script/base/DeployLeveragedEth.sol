@@ -33,11 +33,12 @@ import {MockCurvePool} from "../../test/mocks/curve/MockCurvePool.sol";
 import {MockChainlinkPriceFeed} from "../../test/mocks/chainlink/MockChainlinkPriceFeed.sol";
 import {MockBalancerVault} from "../../test/mocks/balancer/MockBalancerVault.sol";
 import {MockSwapRouter} from "../../test/mocks/uniswap/MockSwapRouter.sol";
+import {MainnetDeployBase} from "../base/MainnetDeployBase.sol";
 
-abstract contract DeployLeveragedEth is CREATE3Script {
+abstract contract DeployLeveragedEth is MainnetDeployBase {
     WETH _weth = WETH(payable(C.WETH));
     ERC20 _usdc = ERC20(C.USDC);
-    MockAavePool _aavePool = MockAavePool(C.AAVE_POOL);
+    MockAavePool _aavePool = MockAavePool(C.AAVE_V3_POOL);
     ICurvePool _curveEthStEthPool = ICurvePool(C.CURVE_ETH_STETH_POOL);
     ISwapRouter _uniswapRouter = ISwapRouter(C.UNISWAP_V3_SWAP_ROUTER);
 
@@ -51,8 +52,6 @@ abstract contract DeployLeveragedEth is CREATE3Script {
     address _alice = C.ALICE;
     address _bob = C.BOB;
 
-    constructor() CREATE3Script(vm.envString("VERSION")) {}
-
     function _deploy() internal {
         vm.startBroadcast(_deployerPrivateKey);
 
@@ -62,8 +61,8 @@ abstract contract DeployLeveragedEth is CREATE3Script {
             targetLtv: 0.7e18,
             slippageTolerance: 0.99e18,
             aavePool: _aavePool,
-            aaveAwstEth: IAToken(C.AAVE_AWSTETH_TOKEN),
-            aaveVarDWeth: ERC20(C.AAVAAVE_VAR_DEBT_WETH_TOKEN),
+            aaveAwstEth: IAToken(C.AAVE_V3_AWSTETH_TOKEN),
+            aaveVarDWeth: ERC20(C.AAVE_V3_VAR_DEBT_WETH_TOKEN),
             curveEthStEthPool: _curveEthStEthPool,
             stEth: ILido(C.STETH),
             wstEth: IwstETH(C.WSTETH),
@@ -83,9 +82,9 @@ abstract contract DeployLeveragedEth is CREATE3Script {
             usdc: _usdc,
             weth: WETH(payable(C.WETH)),
             aavePool: _aavePool,
-            aavePoolDataProvider: IPoolDataProvider(C.AAVE_POOL_DATA_PROVIDER),
-            aaveAUsdc: IAToken(C.AAVE_AUSDC_TOKEN),
-            aaveVarDWeth: ERC20(C.AAVAAVE_VAR_DEBT_WETH_TOKEN),
+            aavePoolDataProvider: IPoolDataProvider(C.AAVE_V3_POOL_DATA_PROVIDER),
+            aaveAUsdc: IAToken(C.AAVE_V3_AUSDC_TOKEN),
+            aaveVarDWeth: ERC20(C.AAVE_V3_VAR_DEBT_WETH_TOKEN),
             uniswapSwapRouter: _uniswapRouter,
             chainlinkUsdcToEthPriceFeed: AggregatorV3Interface(C.CHAINLINK_USDC_ETH_PRICE_FEED),
             balancerVault: IVault(C.BALANCER_VAULT)

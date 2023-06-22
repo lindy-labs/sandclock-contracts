@@ -128,15 +128,12 @@ contract DeployScript is DeployLeveragedEth, Test {
 
     function _divergeLTV(scWETH vaultToken) internal {
         console2.log("forcing LTV diverge scWETH");
-        ERC20 dWeth = ERC20(address(C.AAVAAVE_VAR_DEBT_WETH_TOKEN));
+        ERC20 dWeth = ERC20(address(C.AAVE_V3_VAR_DEBT_WETH_TOKEN));
 
         console2.log("LTV before", vaultToken.getLtv());
         console2.log("dWeth token balance before", dWeth.balanceOf(address(vaultToken)));
 
-        // deal(C.AAVAAVE_VAR_DEBT_WETH_TOKEN, address(vaultToken), 42e19);
-        deal(C.AAVAAVE_VAR_DEBT_IMPLEMENTATION_CONTRACT, address(vaultToken), 42e19);
-        // _setTokenBalance(C.AAVAAVE_VAR_DEBT_WETH_TOKEN, address(vaultToken), 42e19);
-        // _setTokenBalance(C.AAVAAVE_VAR_DEBT_IMPLEMENTATION_CONTRACT, address(vaultToken), 42e19);
+        deal(C.AAVE_V3_VAR_DEBT_IMPLEMENTATION_CONTRACT, address(vaultToken), 42e19);
 
         console2.log("dWeth token balance after", dWeth.balanceOf(address(vaultToken)));
         console2.log("LTV after", vaultToken.getLtv());
@@ -144,14 +141,12 @@ contract DeployScript is DeployLeveragedEth, Test {
 
     function _divergeLTV(scUSDC vaultToken) internal {
         console2.log("forcing LTV diverge scUSDC");
-        ERC20 dWeth = ERC20(address(C.AAVAAVE_VAR_DEBT_WETH_TOKEN));
+        ERC20 dWeth = ERC20(address(C.AAVE_V3_VAR_DEBT_WETH_TOKEN));
 
         console2.log("LTV before", vaultToken.getLtv());
         console2.log("dWeth token balance before", dWeth.balanceOf(address(vaultToken)));
 
-        // _setTokenBalance(C.AAVAAVE_VAR_DEBT_WETH_TOKEN, address(vaultToken), 42e19);
-        _setTokenBalance(C.AAVAAVE_VAR_DEBT_IMPLEMENTATION_CONTRACT, address(vaultToken), 42e19);
-        // deal(C.AAVAAVE_VAR_DEBT_WETH_TOKEN, address(vaultToken), 42e19);
+        _setTokenBalance(C.AAVE_V3_VAR_DEBT_IMPLEMENTATION_CONTRACT, address(vaultToken), 42e19);
 
         console2.log("dWeth token balance after", dWeth.balanceOf(address(vaultToken)));
         console2.log("LTV after", vaultToken.getLtv());

@@ -14,7 +14,7 @@ import {IAdapter} from "../IAdapter.sol";
 contract MorphoAaveV3Adapter is IAdapter {
     using SafeTransferLib for ERC20;
 
-    IMorpho public constant morpho = IMorpho(0x33333aea097c193e66081E930c33020272b33333);
+    IMorpho public constant morpho = IMorpho(C.MORPHO);
 
     uint256 public constant id = uint256(keccak256("MorphoAaveV3Adapter"));
 
@@ -57,7 +57,7 @@ contract MorphoAaveV3Adapter is IAdapter {
         return morpho.borrowBalance(C.WETH, _account);
     }
 
-    function getMaxLtv() external view override returns (uint256) {
+    function getMaxLtv() external pure override returns (uint256) {
         // same as the maxLtv for aave v3 on eMode
         return 0.9e18;
     }

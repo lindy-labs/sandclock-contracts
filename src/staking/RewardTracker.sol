@@ -20,7 +20,6 @@ contract RewardTracker is BonusTracker, DebtTracker, AccessControl {
     event VaultAdded(address vault);
     event TreasuryUpdated(address indexed user, address newTreasury);
 
-    error OverflowAmountTooLarge();
     error CallerNotDistirbutor();
     error VaultNotWhitelisted();
     error VaultAssetNotSupported();
@@ -38,6 +37,9 @@ contract RewardTracker is BonusTracker, DebtTracker, AccessControl {
 
     /// @notice The last stored rewardPerToken value
     uint256 public rewardPerTokenStored;
+
+    /// @notice The last stored balance of reward tokens
+    uint256 public rewardBalanceStored;
 
     /// @notice Role allowed to call notifyReward()
     bytes32 public constant DISTRIBUTOR = keccak256("DISTRIBUTOR");
@@ -156,6 +158,7 @@ contract RewardTracker is BonusTracker, DebtTracker, AccessControl {
 
         if (reward > 0) {
             rewards[_receiver] = 0;
+            rewardBalanceStored -= reward;
             rewardToken.safeTransfer(_receiver, reward);
             emit RewardPaid(_receiver, reward);
         }
@@ -168,30 +171,22 @@ contract RewardTracker is BonusTracker, DebtTracker, AccessControl {
 
     /// @notice The amount of reward tokens each staked token has earned so far
     function rewardPerToken() external view returns (uint256) {
-        return _calcRewardPerToken(totalSupply + totalBonus, lastTimeRewardApplicable(), rewardRate);
+        return _calcRewardPerToken(lastTimeRewardApplicable(), rewardRate);
     }
 
     /// @notice The amount of reward tokens an account has accrued so far. Does not
     /// include already withdrawn rewards.
     function earned(address _account) external view returns (uint256) {
-        return _earned(
-            _account,
-            balanceOf[_account] + multiplierPointsOf[_account],
-            _calcRewardPerToken(totalSupply + totalBonus, lastTimeRewardApplicable(), rewardRate),
-            rewards[_account]
-        );
+        return _earned(_account, _calcRewardPerToken(lastTimeRewardApplicable(), rewardRate));
     }
 
-    /// @notice Lets a reward distributor start a new reward period. The reward tokens must have already
+    /// @notice Starts a new reward distribution period. The reward tokens must have already
     /// been transferred to this contract before calling this function. If it is called
     /// when a reward period is still active, a new reward period will begin from the time
     /// of calling this function, using the leftover rewards from the old reward period plus
     /// the newly sent rewards as the reward.
-    /// @dev If the reward amount will cause an overflow when computing rewardPerToken, then
-    /// this function will revert.
-    /// @param _reward The amount of reward tokens to use in the new reward period.
-    function notifyRewardAmount(uint256 _reward) external onlyDistributor {
-        _notifyRewardAmount(_reward);
+    function startRewardsDistribution() external {
+        _startRewardsDistribution();
     }
 
     /// @notice Lets a reward distributor fetch performance fees from
@@ -199,11 +194,9 @@ contract RewardTracker is BonusTracker, DebtTracker, AccessControl {
     function fetchRewards(ERC4626 _vault) external onlyDistributor {
         if (!isVault[address(_vault)]) revert VaultNotWhitelisted();
 
-        uint256 beforeBalance = rewardToken.balanceOf(address(this));
         _vault.redeem(_vault.balanceOf(address(this)), address(this), address(this));
 
-        uint256 afterBalance = rewardToken.balanceOf(address(this));
-        _notifyRewardAmount(afterBalance - beforeBalance);
+        _startRewardsDistribution();
     }
 
     /// @notice Lets an admin add a vault for collecting fees from.
@@ -223,12 +216,15 @@ contract RewardTracker is BonusTracker, DebtTracker, AccessControl {
         emit TreasuryUpdated(msg.sender, _newTreasury);
     }
 
-    function _notifyRewardAmount(uint256 _reward) internal {
+    function _startRewardsDistribution() internal {
         /// -----------------------------------------------------------------------
         /// Validation
         /// -----------------------------------------------------------------------
 
-        if (_reward == 0) {
+        uint256 rewardBalanceCurrent = rewardToken.balanceOf(address(this));
+        uint256 rewardBalanceStored_ = rewardBalanceStored;
+
+        if (rewardBalanceCurrent == rewardBalanceStored_) {
             return;
         }
 
@@ -238,39 +234,34 @@ contract RewardTracker is BonusTracker, DebtTracker, AccessControl {
 
         uint256 rewardRate_ = rewardRate;
         uint64 periodFinish_ = periodFinish;
-        uint64 lastTimeRewardApplicable_ = block.timestamp < periodFinish_ ? uint64(block.timestamp) : periodFinish_;
+        uint64 lastTimeRewardApplicable_ = lastTimeRewardApplicable();
         uint64 duration_ = duration;
-        uint256 totalSupply_ = totalSupply + totalBonus;
 
         /// -----------------------------------------------------------------------
         /// State updates
         /// -----------------------------------------------------------------------
 
         // accrue rewards
-        rewardPerTokenStored = _calcRewardPerToken(totalSupply_, lastTimeRewardApplicable_, rewardRate_);
-        lastUpdateTime = lastTimeRewardApplicable_;
+        rewardPerTokenStored = _calcRewardPerToken(lastTimeRewardApplicable_, rewardRate_);
 
         // record new reward
+        uint256 reward = rewardBalanceCurrent - rewardBalanceStored_;
+        rewardBalanceStored = rewardBalanceCurrent;
         uint256 newRewardRate;
 
         if (block.timestamp >= periodFinish_) {
-            newRewardRate = _reward / duration_;
+            newRewardRate = reward / duration_;
         } else {
             uint256 remaining = periodFinish_ - block.timestamp;
             uint256 leftover = remaining * rewardRate_;
-            newRewardRate = (_reward + leftover) / duration_;
-        }
-
-        // prevent overflow when computing rewardPerToken
-        if (newRewardRate >= ((type(uint256).max / PRECISION) / duration_)) {
-            revert OverflowAmountTooLarge();
+            newRewardRate = (reward + leftover) / duration_;
         }
 
         rewardRate = newRewardRate;
         lastUpdateTime = uint64(block.timestamp);
         periodFinish = uint64(block.timestamp + duration_);
 
-        emit RewardAdded(_reward);
+        emit RewardAdded(reward);
     }
 
     function withdraw(uint256 assets, address receiver, address owner) public override returns (uint256 shares) {
@@ -332,39 +323,36 @@ contract RewardTracker is BonusTracker, DebtTracker, AccessControl {
         emit DebtPaid(msg.sender, debt);
     }
 
-    function _earned(address _account, uint256 _accountBalance, uint256 rewardPerToken_, uint256 _accountRewards)
-        internal
-        view
-        returns (uint256)
-    {
+    function _earned(address _account, uint256 rewardPerToken_) internal view returns (uint256) {
+        uint256 accountBalance = balanceOf[_account] + multiplierPointsOf[_account];
+
         return
-            _accountBalance.mulDivDown(rewardPerToken_ - userRewardPerTokenPaid[_account], PRECISION) + _accountRewards;
+            accountBalance.mulDivDown(rewardPerToken_ - userRewardPerTokenPaid[_account], PRECISION) + rewards[_account];
     }
 
-    function _calcRewardPerToken(uint256 _totalSupply, uint256 _lastTimeRewardApplicable, uint256 _rewardRate)
+    function _calcRewardPerToken(uint256 _lastTimeRewardApplicable, uint256 _rewardRate)
         internal
         view
         returns (uint256)
     {
-        if (_totalSupply == 0) {
+        uint256 totalSupply_ = totalSupply + totalBonus;
+        if (totalSupply_ == 0) {
             return rewardPerTokenStored;
         }
 
         return rewardPerTokenStored
-            + _rewardRate.mulDivDown((_lastTimeRewardApplicable - lastUpdateTime) * PRECISION, _totalSupply);
+            + _rewardRate.mulDivDown((_lastTimeRewardApplicable - lastUpdateTime) * PRECISION, totalSupply_);
     }
 
     function _updateReward(address _account) internal override {
         // storage loads
-        uint256 accountBalance = balanceOf[_account] + multiplierPointsOf[_account];
         uint64 lastTimeRewardApplicable_ = lastTimeRewardApplicable();
-        uint256 totalSupply_ = totalSupply + totalBonus;
-        uint256 rewardPerToken_ = _calcRewardPerToken(totalSupply_, lastTimeRewardApplicable_, rewardRate);
+        uint256 rewardPerToken_ = _calcRewardPerToken(lastTimeRewardApplicable_, rewardRate);
 
         // accrue rewards
         rewardPerTokenStored = rewardPerToken_;
         lastUpdateTime = lastTimeRewardApplicable_;
-        rewards[_account] = _earned(_account, accountBalance, rewardPerToken_, rewards[_account]);
+        rewards[_account] = _earned(_account, rewardPerToken_);
         userRewardPerTokenPaid[_account] = rewardPerToken_;
     }
 

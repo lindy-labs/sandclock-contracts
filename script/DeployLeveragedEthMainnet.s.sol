@@ -35,11 +35,6 @@ contract DeployScript is DeployLeveragedEth {
         vm.stopBroadcast();
     }
 
-    function _deposit(sc4626 vault, uint256 amount) internal {
-        vault.asset().approve(address(vault), amount);
-        vault.deposit(amount, _deployerAddress);
-    }
-
     function _swapETHForUSDC(uint256 amount) internal {
         _weth.deposit{value: amount}();
         console2.log("eth deposited for weth to swap for usdc");
