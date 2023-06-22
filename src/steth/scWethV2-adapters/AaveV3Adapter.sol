@@ -14,9 +14,9 @@ contract AaveV3Adapter is IAdapter {
     using SafeTransferLib for ERC20;
     using SafeTransferLib for WETH;
 
-    IPool public constant pool = IPool(C.AAVE_POOL);
-    ERC20 public constant aWstEth = ERC20(C.AAVE_AWSTETH_TOKEN);
-    ERC20 public constant dWeth = ERC20(C.AAVAAVE_VAR_DEBT_WETH_TOKEN);
+    IPool public constant pool = IPool(C.AAVE_V3_POOL);
+    ERC20 public constant aWstEth = ERC20(C.AAVE_V3_AWSTETH_TOKEN);
+    ERC20 public constant dWeth = ERC20(C.AAVE_V3_VAR_DEBT_WETH_TOKEN);
 
     uint256 public constant id = uint256(keccak256("AaveV3Adapter"));
 
