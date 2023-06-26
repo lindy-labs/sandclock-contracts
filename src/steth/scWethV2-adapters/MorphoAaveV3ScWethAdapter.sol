@@ -11,12 +11,12 @@ import {Constants as C} from "../../lib/Constants.sol";
 import {IMorpho} from "../../interfaces/morpho/IMorpho.sol";
 import {IAdapter} from "../IAdapter.sol";
 
-contract MorphoAaveV3Adapter is IAdapter {
+contract MorphoAaveV3ScWethAdapter is IAdapter {
     using SafeTransferLib for ERC20;
 
     IMorpho public constant morpho = IMorpho(C.MORPHO);
 
-    uint256 public constant id = uint256(keccak256("MorphoAaveV3Adapter"));
+    uint256 public constant id = 4;
 
     function setApprovals() external override {
         ERC20(C.WSTETH).safeApprove(address(morpho), type(uint256).max);

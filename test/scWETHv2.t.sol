@@ -27,9 +27,9 @@ import {scWETHv2Helper} from "./helpers/scWETHv2Helper.sol";
 import "../src/errors/scErrors.sol";
 
 import {IAdapter} from "../src/steth/IAdapter.sol";
-import {AaveV3Adapter} from "../src/steth/scWethV2-adapters/AaveV3Adapter.sol";
-import {CompoundV3Adapter} from "../src/steth/scWethV2-adapters/CompoundV3Adapter.sol";
-import {EulerAdapter} from "../src/steth/scWethV2-adapters/EulerAdapter.sol";
+import {AaveV3ScWethAdapter} from "../src/steth/scWethV2-adapters/AaveV3ScWethAdapter.sol";
+import {CompoundV3ScWethAdapter} from "../src/steth/scWethV2-adapters/CompoundV3ScWethAdapter.sol";
+import {EulerScWethAdapter} from "../src/steth/scWethV2-adapters/EulerScWethAdapter.sol";
 import {Swapper} from "../src/steth/Swapper.sol";
 import {PriceConverter} from "../src/steth/PriceConverter.sol";
 import {MockAdapter} from "./mocks/adapters/MockAdapter.sol";
@@ -113,8 +113,8 @@ contract scWETHv2Test is Test {
 
     function _setupAdapters(uint256 _blockNumber) internal {
         // add adaptors
-        aaveV3Adapter = new AaveV3Adapter();
-        compoundV3Adapter = new CompoundV3Adapter();
+        aaveV3Adapter = new AaveV3ScWethAdapter();
+        compoundV3Adapter = new CompoundV3ScWethAdapter();
 
         vault.addAdapter(aaveV3Adapter);
         vault.addAdapter(compoundV3Adapter);
@@ -123,7 +123,7 @@ contract scWETHv2Test is Test {
         compoundV3AdapterId = compoundV3Adapter.id();
 
         if (_blockNumber == BLOCK_BEFORE_EULER_EXPLOIT) {
-            eulerAdapter = new EulerAdapter();
+            eulerAdapter = new EulerScWethAdapter();
             vault.addAdapter(eulerAdapter);
             eulerAdapterId = eulerAdapter.id();
         }
@@ -141,7 +141,7 @@ contract scWETHv2Test is Test {
     function test_addAdapter() public {
         _setUp(BLOCK_AFTER_EULER_EXPLOIT);
 
-        IAdapter dummyAdapter = new AaveV3Adapter();
+        IAdapter dummyAdapter = new AaveV3ScWethAdapter();
         // must fail if not called by admin
         vm.expectRevert(CallerNotAdmin.selector);
         vm.prank(alice);

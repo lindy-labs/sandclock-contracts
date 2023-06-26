@@ -14,10 +14,10 @@ import {scWETHv2} from "../../src/steth/scWETHv2.sol";
 import {scUSDCv2} from "../../src/steth/scUSDCv2.sol";
 import {Swapper} from "../../src/steth/Swapper.sol";
 import {PriceConverter} from "../../src/steth/PriceConverter.sol";
-import {AaveV3Adapter as scWethAaveV3Adapter} from "../../src/steth/scWethV2-adapters/AaveV3Adapter.sol";
-import {CompoundV3Adapter as scWethCompoundV3Adapter} from "../../src/steth/scWethV2-adapters/CompoundV3Adapter.sol";
-import {AaveV3Adapter as scUsdcAaveV3Adapter} from "../../src/steth/scUsdcV2-adapters/AaveV3Adapter.sol";
-import {AaveV2Adapter as scUsdcAaveV2Adapter} from "../../src/steth/scUsdcV2-adapters/AaveV2Adapter.sol";
+import {AaveV3ScWethAdapter} from "../../src/steth/scWethV2-adapters/AaveV3ScWethAdapter.sol";
+import {CompoundV3ScWethAdapter} from "../../src/steth/scWethV2-adapters/CompoundV3ScWethAdapter.sol";
+import {AaveV3ScUsdcAdapter} from "../../src/steth/scUsdcV2-adapters/AaveV3ScUsdcAdapter.sol";
+import {AaveV2ScUsdcAdapter} from "../../src/steth/scUsdcV2-adapters/AaveV2ScUsdcAdapter.sol";
 import {MainnetDeployBase} from "../base/MainnetDeployBase.sol";
 
 contract DeployScript is MainnetDeployBase {
@@ -42,10 +42,10 @@ contract DeployScript is MainnetDeployBase {
         vault = new scWETHv2(deployerAddress, keeper, 0.99e18, weth, _swapper, _priceConverter);
 
         // deploy & add adapters
-        scWethAaveV3Adapter aaveV3Adapter = new scWethAaveV3Adapter();
+        AaveV3ScWethAdapter aaveV3Adapter = new AaveV3ScWethAdapter();
         vault.addAdapter(aaveV3Adapter);
 
-        scWethCompoundV3Adapter compoundV3Adapter = new scWethCompoundV3Adapter();
+        CompoundV3ScWethAdapter compoundV3Adapter = new CompoundV3ScWethAdapter();
         vault.addAdapter(compoundV3Adapter);
 
         weth.deposit{value: 0.01 ether}(); // wrap 0.01 ETH into WETH
@@ -65,10 +65,10 @@ contract DeployScript is MainnetDeployBase {
         vault = new scUSDCv2(deployerAddress, keeper, _wethVault, _priceConveter, _swapper);
 
         // deploy & add adapters
-        scUsdcAaveV3Adapter aaveV3Adapter = new scUsdcAaveV3Adapter();
+        AaveV3ScUsdcAdapter aaveV3Adapter = new AaveV3ScUsdcAdapter();
         vault.addAdapter(aaveV3Adapter);
 
-        scUsdcAaveV2Adapter aaveV2Adapter = new scUsdcAaveV2Adapter();
+        AaveV2ScUsdcAdapter aaveV2Adapter = new AaveV2ScUsdcAdapter();
         vault.addAdapter(aaveV2Adapter);
 
         _swapWethForUsdc(0.01 ether);
