@@ -512,6 +512,38 @@ contract scWETHv2Test is Test {
         vault.redeem(giftAmount, alice, address(this)); // no shares anymore
     }
 
+    function test_withdraw_maintainsFloat(uint256 amount) public {
+        _setUp(BLOCK_BEFORE_EULER_EXPLOIT);
+
+        amount = bound(amount, vault.minimumFloatAmount() * 3, 15000 ether);
+        _depositToVault(address(this), amount);
+
+        // invest & create position on aave v3
+        uint256 investAmount = amount - vault.minimumFloatAmount();
+        uint256 flashLoanAmount = _calcSupplyBorrowFlashLoanAmount(aaveV3Adapter, investAmount);
+        uint256 aaveV3SupplyAmount = priceConverter.ethToWstEth(investAmount + flashLoanAmount).mulWadDown(0.99e18);
+
+        bytes[] memory callData = new bytes[](2);
+
+        callData[0] = abi.encodeWithSelector(scWETHv2.swapWethToWstEth.selector, investAmount + flashLoanAmount);
+        callData[1] = abi.encodeWithSelector(
+            scWETHv2.supplyAndBorrow.selector, aaveV3AdapterId, aaveV3SupplyAmount, flashLoanAmount
+        );
+
+        vm.prank(keeper);
+        vault.rebalance(investAmount, flashLoanAmount, callData);
+
+        // withdraw more than what is already in the vault as float
+        vault.withdraw(weth.balanceOf(address(vault)) + 1, address(this), address(this));
+
+        _floatCheck();
+
+        // withdraw everything
+        vault.redeem(vault.balanceOf(address(this)), address(this), address(this));
+
+        assertApproxEqRel(weth.balanceOf(address(this)), amount, 0.005e18, "user's end balance");
+    }
+
     function test_redeem_zero() public {
         _setUp(BLOCK_AFTER_EULER_EXPLOIT);
 
