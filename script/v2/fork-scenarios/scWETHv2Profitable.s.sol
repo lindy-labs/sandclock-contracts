@@ -52,7 +52,7 @@ contract scWETHv2SimulateProfits is MainnetDepolyBase, Test {
         vm.startBroadcast(deployerAddress);
 
         deploy();
-        depositToVault(10 ether);
+        depositToVault(100 ether);
 
         uint256 aaveV3AllocationPercent = 0.3e18;
         uint256 compoundV3AllocationPercent = 0.7e18;
@@ -60,9 +60,15 @@ contract scWETHv2SimulateProfits is MainnetDepolyBase, Test {
         vm.stopBroadcast();
 
         vm.startBroadcast(keeper);
-        uint256 float = weth.balanceOf(address(vault));
-        invest(float, aaveV3AllocationPercent, compoundV3AllocationPercent);
+        invest(weth.balanceOf(address(vault)), aaveV3AllocationPercent, compoundV3AllocationPercent);
         vm.stopBroadcast();
+
+        console.log("Assets before time skip", vault.totalAssets());
+
+        // fast forward 365 days in time and simulate an annual staking interest of 7.1%
+        simulate_stEthStakingInterest(365 days, 1.071e18);
+
+        console.log("Assets after time skip", vault.totalAssets());
     }
 
     function fork(uint256 _blockNumber) internal {
@@ -76,6 +82,7 @@ contract scWETHv2SimulateProfits is MainnetDepolyBase, Test {
         priceConverter = new PriceConverter(deployerAddress);
 
         vault = new scWETHv2(deployerAddress, keeper, 0.99e18, weth, swapper, priceConverter);
+        vaultHelper = new scWETHv2Helper(vault, priceConverter);
 
         addAdapters();
     }
@@ -103,8 +110,6 @@ contract scWETHv2SimulateProfits is MainnetDepolyBase, Test {
 
         (bytes[] memory callData,, uint256 totalFlashLoanAmount) =
             getInvestParams(investAmount, aaveV3AllocationPercent, compoundAllocationPercent);
-
-        console.log("totalFlashLoanAmount", totalFlashLoanAmount);
 
         vault.rebalance(investAmount, totalFlashLoanAmount, callData);
     }
@@ -146,6 +151,21 @@ contract scWETHv2SimulateProfits is MainnetDepolyBase, Test {
         );
 
         return (callData, aaveV3SupplyAmount + compoundSupplyAmount, totalFlashLoanAmount);
+    }
+
+    function simulate_stEthStakingInterest(uint256 timePeriod, uint256 stEthStakingInterest) internal {
+        // fast forward time to simulate supply and borrow interests
+        vm.warp(block.timestamp + timePeriod);
+        uint256 prevBalance = read_storage_uint(C.STETH, keccak256(abi.encodePacked("lido.Lido.beaconBalance")));
+        vm.store(
+            C.STETH,
+            keccak256(abi.encodePacked("lido.Lido.beaconBalance")),
+            bytes32(prevBalance.mulWadDown(stEthStakingInterest))
+        );
+    }
+
+    function read_storage_uint(address addr, bytes32 key) internal view returns (uint256) {
+        return abi.decode(abi.encode(vm.load(addr, key)), (uint256));
     }
 
     function _calcSupplyBorrowFlashLoanAmount(IAdapter adapter, uint256 amount)
