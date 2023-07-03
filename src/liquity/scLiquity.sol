@@ -40,6 +40,9 @@ contract scLiquity is sc4626 {
         require(msg.sender == address(stabilityPool));
     }
 
+    // @dev: The Liquity stability pool offers a marginal yield in the form of LQTY rewards for deposits made into it.
+    // However, the overhead of including these LQTY rewards into the scLiquity vault is quite high, mainly due to the substantial gas costs involved.
+    // Therefore, the decision was made not to incorporate LQTY rewards into the totalAssets value.
     function totalAssets() public view override returns (uint256 assets) {
         uint256 ethBalance = address(this).balance + stabilityPool.getDepositorETHGain(address(this));
 
