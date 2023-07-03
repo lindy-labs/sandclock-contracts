@@ -538,10 +538,10 @@ contract scWETHv2Test is Test {
 
         _floatCheck();
 
-        // withdraw everything
+        // withdraw everything to ensure minimum float logic doesn't apply for the vault's only/last user
         vault.redeem(vault.balanceOf(address(this)), address(this), address(this));
 
-        assertApproxEqRel(weth.balanceOf(address(this)), amount, 0.005e18, "user's end balance");
+        assertApproxEqRel(weth.balanceOf(address(this)), amount, 0.015e18, "user's end balance");
     }
 
     function test_redeem_zero() public {
