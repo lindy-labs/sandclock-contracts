@@ -8,10 +8,10 @@ import {WETH} from "solmate/tokens/WETH.sol";
 
 import {Constants as C} from "../../src/lib/Constants.sol";
 import {IAdapter} from "../../src/steth/IAdapter.sol";
-import {AaveV3Adapter} from "../../src/steth/scUsdcV2-adapters/AaveV3Adapter.sol";
+import {AaveV3ScUsdcAdapter} from "../../src/steth/scUsdcV2-adapters/AaveV3ScUsdcAdapter.sol";
 
-contract AaveV3AdapterTest is Test {
-    AaveV3Adapter adapter;
+contract AaveV3ScUsdcAdapterTest is Test {
+    AaveV3ScUsdcAdapter adapter;
     ERC20 usdc;
     WETH weth;
 
@@ -23,7 +23,7 @@ contract AaveV3AdapterTest is Test {
         usdc = ERC20(C.USDC);
         weth = WETH(payable(C.WETH));
 
-        adapter = new AaveV3Adapter();
+        adapter = new AaveV3ScUsdcAdapter();
     }
 
     function test_setApprovals() public {

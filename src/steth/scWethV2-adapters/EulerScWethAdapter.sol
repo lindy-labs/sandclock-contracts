@@ -10,7 +10,7 @@ import {IEulerDToken, IEulerEToken, IEulerMarkets} from "lib/euler-interfaces/co
 import {Constants as C} from "../../lib/Constants.sol";
 import {IAdapter} from "../IAdapter.sol";
 
-contract EulerAdapter is IAdapter {
+contract EulerScWethAdapter is IAdapter {
     using SafeTransferLib for ERC20;
     using SafeTransferLib for WETH;
     using FixedPointMathLib for uint256;
@@ -20,7 +20,7 @@ contract EulerAdapter is IAdapter {
     IEulerEToken constant eWstEth = IEulerEToken(C.EULER_ETOKEN_WSTETH);
     IEulerDToken constant dWeth = IEulerDToken(C.EULER_DTOKEN_WETH);
 
-    uint256 public constant id = uint256(keccak256("EulerAdapter"));
+    uint256 public constant id = 3;
 
     function setApprovals() external override {
         ERC20(C.WSTETH).safeApprove(protocol, type(uint256).max);
