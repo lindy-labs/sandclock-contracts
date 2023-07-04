@@ -10,12 +10,12 @@ import {Constants as C} from "../../lib/Constants.sol";
 import {IComet} from "../../interfaces/compound-v3/IComet.sol";
 import {IAdapter} from "../IAdapter.sol";
 
-contract CompoundV3Adapter is IAdapter {
+contract CompoundV3ScWethAdapter is IAdapter {
     using SafeTransferLib for ERC20;
 
     IComet public immutable compoundV3Comet = IComet(C.COMPOUND_V3_COMET_WETH);
 
-    uint256 public constant id = uint256(keccak256("CompoundV3Adapter"));
+    uint256 public constant id = 2;
 
     function setApprovals() external override {
         ERC20(C.WSTETH).safeApprove(address(compoundV3Comet), type(uint256).max);

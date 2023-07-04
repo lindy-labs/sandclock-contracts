@@ -17,9 +17,9 @@ import {ILendingPool} from "../src/interfaces/aave-v2/ILendingPool.sol";
 import {IProtocolDataProvider} from "../src/interfaces/aave-v2/IProtocolDataProvider.sol";
 import {IAdapter} from "../src/steth/IAdapter.sol";
 import {scUSDCv2} from "../src/steth/scUSDCv2.sol";
-import {AaveV2Adapter} from "../src/steth/scUsdcV2-adapters/AaveV2Adapter.sol";
-import {AaveV3Adapter} from "../src/steth/scUsdcV2-adapters/AaveV3Adapter.sol";
-import {EulerAdapter} from "../src/steth/scUsdcV2-adapters/EulerAdapter.sol";
+import {AaveV2ScUsdcAdapter} from "../src/steth/scUsdcV2-adapters/AaveV2ScUsdcAdapter.sol";
+import {AaveV3ScUsdcAdapter} from "../src/steth/scUsdcV2-adapters/AaveV3ScUsdcAdapter.sol";
+import {EulerScUsdcAdapter} from "../src/steth/scUsdcV2-adapters/EulerScUsdcAdapter.sol";
 
 import {scWETH} from "../src/steth/scWETH.sol";
 import {ISwapRouter} from "../src/interfaces/uniswap/ISwapRouter.sol";
@@ -79,9 +79,9 @@ contract scUSDCv2Test is Test {
 
     scWETH wethVault;
     scUSDCv2 vault;
-    AaveV3Adapter aaveV3;
-    AaveV2Adapter aaveV2;
-    EulerAdapter euler;
+    AaveV3ScUsdcAdapter aaveV3;
+    AaveV2ScUsdcAdapter aaveV2;
+    EulerScUsdcAdapter euler;
     Swapper swapper;
     PriceConverter priceConverter;
 
@@ -92,9 +92,9 @@ contract scUSDCv2Test is Test {
 
         usdc = ERC20(C.USDC);
         weth = WETH(payable(C.WETH));
-        aaveV3 = new AaveV3Adapter();
-        aaveV2 = new AaveV2Adapter();
-        euler = new EulerAdapter();
+        aaveV3 = new AaveV3ScUsdcAdapter();
+        aaveV2 = new AaveV2ScUsdcAdapter();
+        euler = new EulerScUsdcAdapter();
 
         _deployScWeth();
         _deployAndSetUpVault();

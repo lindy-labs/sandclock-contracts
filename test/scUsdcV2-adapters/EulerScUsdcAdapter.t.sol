@@ -8,10 +8,10 @@ import {WETH} from "solmate/tokens/WETH.sol";
 
 import {Constants as C} from "../../src/lib/Constants.sol";
 import {IAdapter} from "../../src/steth/IAdapter.sol";
-import {EulerAdapter} from "../../src/steth/scUsdcV2-adapters/EulerAdapter.sol";
+import {EulerScUsdcAdapter} from "../../src/steth/scUsdcV2-adapters/EulerScUsdcAdapter.sol";
 
-contract EulerAdapterTest is Test {
-    EulerAdapter adapter;
+contract EulerScUsdcAdapterTest is Test {
+    EulerScUsdcAdapter adapter;
     ERC20 usdc;
     WETH weth;
 
@@ -23,7 +23,7 @@ contract EulerAdapterTest is Test {
         usdc = ERC20(C.USDC);
         weth = WETH(payable(C.WETH));
 
-        adapter = new EulerAdapter();
+        adapter = new EulerScUsdcAdapter();
     }
 
     function test_setApprovals() public {

@@ -9,17 +9,17 @@ import {Address} from "openzeppelin-contracts/utils/Address.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
 import {IAdapter} from "../../src/steth/IAdapter.sol";
-import {MorphoAaveV3Adapter} from "../../src/steth/scWethV2-adapters/MorphoAaveV3Adapter.sol";
-import {AaveV3Adapter} from "../../src/steth/scWethV2-adapters/AaveV3Adapter.sol";
+import {MorphoAaveV3ScWethAdapter} from "../../src/steth/scWethV2-adapters/MorphoAaveV3ScWethAdapter.sol";
+import {AaveV3ScWethAdapter} from "../../src/steth/scWethV2-adapters/AaveV3ScWethAdapter.sol";
 import {Constants as C} from "../../src/lib/Constants.sol";
 import {IMorpho} from "../../src/interfaces/morpho/IMorpho.sol";
 
-contract MorphoAaveV3AdapterTest is Test {
+contract MorphoAaveV3ScWethAdapterTest is Test {
     using Address for address;
 
     uint256 mainnetFork;
 
-    MorphoAaveV3Adapter adapter;
+    MorphoAaveV3ScWethAdapter adapter;
 
     uint256 initWstEthAmount = 100 ether;
 
@@ -28,15 +28,11 @@ contract MorphoAaveV3AdapterTest is Test {
         vm.selectFork(mainnetFork);
         vm.rollFork(17180994);
 
-        adapter = new MorphoAaveV3Adapter();
+        adapter = new MorphoAaveV3ScWethAdapter();
 
         deal(C.WSTETH, address(this), initWstEthAmount);
 
         address(adapter).functionDelegateCall(abi.encodeWithSelector(IAdapter.setApprovals.selector));
-    }
-
-    function test_id() public {
-        assertEq(adapter.id(), uint256(keccak256("MorphoAaveV3Adapter")));
     }
 
     function test_supply() public {
@@ -139,7 +135,7 @@ contract MorphoAaveV3AdapterTest is Test {
     }
 
     function test_maxLtv() public {
-        AaveV3Adapter aaveV3Adapter = new AaveV3Adapter();
+        AaveV3ScWethAdapter aaveV3Adapter = new AaveV3ScWethAdapter();
         assertEq(adapter.getMaxLtv(), aaveV3Adapter.getMaxLtv());
     }
 

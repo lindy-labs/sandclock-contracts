@@ -13,7 +13,7 @@ import {IAdapter} from "../IAdapter.sol";
  * @title Euler Lending Protocol Adapter
  * @notice Facilitates lending and borrowing for the Euler lending protocol
  */
-contract EulerAdapter is IAdapter {
+contract EulerScUsdcAdapter is IAdapter {
     using FixedPointMathLib for uint256;
 
     ERC20 constant usdc = ERC20(C.USDC);

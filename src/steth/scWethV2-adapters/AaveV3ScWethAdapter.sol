@@ -10,7 +10,7 @@ import {IPool} from "aave-v3/interfaces/IPool.sol";
 import {Constants as C} from "../../lib/Constants.sol";
 import {IAdapter} from "../IAdapter.sol";
 
-contract AaveV3Adapter is IAdapter {
+contract AaveV3ScWethAdapter is IAdapter {
     using SafeTransferLib for ERC20;
     using SafeTransferLib for WETH;
 
@@ -18,7 +18,7 @@ contract AaveV3Adapter is IAdapter {
     ERC20 public constant aWstEth = ERC20(C.AAVE_V3_AWSTETH_TOKEN);
     ERC20 public constant dWeth = ERC20(C.AAVE_V3_VAR_DEBT_WETH_TOKEN);
 
-    uint256 public constant id = uint256(keccak256("AaveV3Adapter"));
+    uint256 public constant id = 1;
 
     function setApprovals() external override {
         ERC20(C.WSTETH).safeApprove(address(pool), type(uint256).max);
