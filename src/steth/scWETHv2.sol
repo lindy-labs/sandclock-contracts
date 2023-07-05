@@ -343,23 +343,35 @@ contract scWETHv2 is BaseV2Vault {
         uint256 n = protocolAdapters.length();
         uint256 flashLoanAmount;
         uint256 totalInvested_ = _totalCollateralInWeth() - totalDebt();
-        bytes[] memory callData = new bytes[](n + 1);
+        bytes[] memory callData = new bytes[](n + 1); // +1 for the last call to swap wstEth to weth
 
-        uint256 flashLoanAmount_;
-        uint256 amount_;
-        uint256 adapterId;
+        // limit the amount to withdraw to the total invested amount
+        if (_amount > totalInvested_) _amount = totalInvested_;
+
+        uint256 id;
         address adapter;
+        uint256 repayPerProtocol;
+        uint256 withdrawPerProtocol;
         for (uint256 i; i < n; i++) {
-            (adapterId, adapter) = protocolAdapters.at(i);
-            (flashLoanAmount_, amount_) = _calcFlashLoanAmountWithdrawing(adapter, _amount, totalInvested_);
+            (id, adapter) = protocolAdapters.at(i);
+            uint256 collateral = IAdapter(adapter).getCollateral(address(this));
 
-            flashLoanAmount += flashLoanAmount_;
+            // skip if there is no position on this protocol
+            if (collateral == 0) continue;
+
+            uint256 debt = IAdapter(adapter).getDebt(address(this));
+            uint256 assets = priceConverter.wstEthToEth(collateral) - debt;
+
+            // withdraw from each protocol in equal weight (based on the relative allocation)
+            withdrawPerProtocol = _amount.mulDivDown(assets, totalInvested_);
+            repayPerProtocol = withdrawPerProtocol.mulDivDown(debt, assets);
+            flashLoanAmount += repayPerProtocol;
 
             callData[i] = abi.encodeWithSelector(
                 this.repayAndWithdraw.selector,
-                adapterId,
-                flashLoanAmount_,
-                priceConverter.ethToWstEth(flashLoanAmount_ + amount_)
+                id,
+                repayPerProtocol,
+                priceConverter.ethToWstEth(repayPerProtocol + withdrawPerProtocol)
             );
         }
 
@@ -388,9 +400,7 @@ contract scWETHv2 is BaseV2Vault {
 
         if (assets <= float) return;
 
-        uint256 minimumFloat = minimumFloatAmount;
-        uint256 floatRequired = float < minimumFloat ? minimumFloat - float : 0;
-        uint256 missing = assets + floatRequired - float;
+        uint256 missing = assets + minimumFloatAmount - float;
 
         _withdrawToVault(missing);
     }
@@ -404,21 +414,6 @@ contract scWETHv2 is BaseV2Vault {
         _initiateFlashLoan();
         balancerVault.flashLoan(address(this), tokens, amounts, abi.encode(callData));
         _finalizeFlashLoan();
-    }
-
-    function _calcFlashLoanAmountWithdrawing(address _adapter, uint256 _totalAmount, uint256 _totalInvested)
-        internal
-        view
-        returns (uint256 flashLoanAmount, uint256 amount)
-    {
-        uint256 debt = IAdapter(_adapter).getDebt(address(this));
-        uint256 assets = priceConverter.wstEthToEth(IAdapter(_adapter).getCollateral(address(this))) - debt;
-
-        // withdraw from each protocol based on the allocation percent
-        amount = _totalAmount.mulDivDown(assets, _totalInvested);
-
-        // calculate the flashloan amount needed
-        flashLoanAmount = amount.mulDivDown(debt, assets);
     }
 
     function _harvest() internal {
