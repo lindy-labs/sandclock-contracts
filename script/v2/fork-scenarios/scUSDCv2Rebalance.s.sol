@@ -59,15 +59,15 @@ contract scUSDCv2Rebalance is MainnetDeployBase, Test {
         _assertLtvsAreAtTarget();
         _logVaultInfo();
 
-        // 2. warp time to change the ltvs
+        // warp time to change the ltvs
         vm.warp(block.timestamp + 365 days);
-        console2.log("\n-- after 356 days --");
+        console2.log("\n-- ltvs changed after 356 days --");
         _assertLtvsAreAboveTarget();
         _logVaultInfo();
 
-        // 3. rebalance to the target ltv
+        // 2. rebalance to the target ltv
         _rebalance();
-        console2.log("\n-- after rebalance --");
+        console2.log("\n-- rebalance to get ltvs to target values --");
         _assertLtvsAreAtTarget();
         _logVaultInfo();
 
@@ -76,9 +76,9 @@ contract scUSDCv2Rebalance is MainnetDeployBase, Test {
         // make a deposit of 200k USDC from bob
         _depositUsdc(200_000e6, bob);
 
-        // 4. rebalance to reinvest the additional deposit
+        // 3. rebalance to reinvest the additional deposit
         vm.startBroadcast(keeper);
-        console2.log("\n-- after reinvest --");
+        console2.log("\n-- reinvest additional deposits --");
         _invest();
         _assertLtvsAreAtTarget();
         _logVaultInfo();
@@ -88,9 +88,9 @@ contract scUSDCv2Rebalance is MainnetDeployBase, Test {
         ERC20 weth = scWethV2.asset();
         deal(address(weth), address(scWethV2), weth.balanceOf(address(scWethV2)).mulWadUp(1.1e18));
 
-        // 5. sell profit and reinvest
+        // 4. sell profit and reinvest
         vm.startBroadcast(keeper);
-        console2.log("\n-- after reinvesting profits --");
+        console2.log("\n-- sell & reinvest profits --");
         // note: selling profits can be done as part of the rebalance call (added to multicall data) but usdc received from selling will has to be estimated in that case
         scUsdcV2.sellProfit(0); // _usdcAmountOutMin = 0
         _invest();
