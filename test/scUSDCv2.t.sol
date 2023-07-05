@@ -596,6 +596,27 @@ contract scUSDCv2Test is Test {
         _assertCollateralAndDebt(euler.id(), 0, 0);
     }
 
+    function test_rebalance_WorksIfCallDataContainsAnEmptyItem() public {
+        _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
+        uint256 initialBalance = 1_000_000e6;
+        uint256 initialDebt = 100 ether;
+        deal(address(usdc), address(vault), initialBalance);
+
+        bytes[] memory callData = new bytes[](3);
+        callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV3.id(), initialBalance);
+        callData[1] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV3.id(), initialDebt);
+        callData[2] = ""; // empty bytes
+
+        vault.rebalance(callData);
+
+        assertEq(vault.totalDebt(), initialDebt, "total debt");
+        assertEq(vault.totalCollateral(), initialBalance, "total collateral");
+
+        _assertCollateralAndDebt(aaveV3.id(), initialBalance, initialDebt);
+        _assertCollateralAndDebt(aaveV2.id(), 0, 0);
+        _assertCollateralAndDebt(euler.id(), 0, 0);
+    }
+
     function test_rebalance_BorrowOnlyOnEuler() public {
         _setUpForkAtBlock(BLOCK_BEFORE_EULER_EXPLOIT);
         vault.addAdapter(euler);

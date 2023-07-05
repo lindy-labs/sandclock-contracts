@@ -150,6 +150,8 @@ abstract contract BaseV2Vault is sc4626, IFlashLoanRecipient {
 
     function _multiCall(bytes[] memory _callData) internal {
         for (uint256 i = 0; i < _callData.length; i++) {
+            if (_callData[i].length == 0) continue;
+
             address(this).functionDelegateCall(_callData[i]);
         }
     }
