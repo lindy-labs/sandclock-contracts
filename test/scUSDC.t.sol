@@ -21,6 +21,7 @@ import {IVault} from "../src/interfaces/balancer/IVault.sol";
 import {ICurvePool} from "../src/interfaces/curve/ICurvePool.sol";
 import {ILido} from "../src/interfaces/lido/ILido.sol";
 import {IwstETH} from "../src/interfaces/lido/IwstETH.sol";
+import {IProtocolFeesCollector} from "../src/interfaces/balancer/IProtocolFeesCollector.sol";
 import {MockSwapRouter} from "./mocks/uniswap/MockSwapRouter.sol";
 import "../src/errors/scErrors.sol";
 
@@ -1002,6 +1003,38 @@ contract scUSDCTest is Test {
         usdc.approve(address(vault), type(uint256).max);
         vault.deposit(deposit, alice);
         vm.stopPrank();
+
+        vm.prank(keeper);
+        vault.rebalance();
+
+        // simulate 50% loss
+        uint256 wethInvested = weth.balanceOf(address(wethVault));
+        deal(address(weth), address(wethVault), wethInvested / 2);
+
+        uint256 totalBefore = vault.totalAssets();
+
+        vault.exitAllPositions(0);
+
+        assertApproxEqRel(vault.getUsdcBalance(), totalBefore, 0.01e18, "vault usdc balance");
+        assertEq(vault.getCollateral(), 0, "vault collateral");
+        assertEq(vault.getDebt(), 0, "vault debt");
+    }
+
+    function test_exitAllPositions_PaysFlashLoanFees() public {
+        uint256 deposit = 1_000_000e6;
+        deal(address(usdc), alice, deposit);
+
+        vm.startPrank(alice);
+        usdc.approve(address(vault), type(uint256).max);
+        vault.deposit(deposit, alice);
+        vm.stopPrank();
+
+        IProtocolFeesCollector balancerFeeContract = IProtocolFeesCollector(C.BALANCER_FEES_COLLECTOR);
+
+        uint256 flashLoanFeePercent = 0.01e18;
+        vm.prank(C.BALANCER_ADMIN);
+        balancerFeeContract.setFlashLoanFeePercentage(flashLoanFeePercent);
+        assertEq(balancerFeeContract.getFlashLoanFeePercentage(), flashLoanFeePercent);
 
         vm.prank(keeper);
         vault.rebalance();

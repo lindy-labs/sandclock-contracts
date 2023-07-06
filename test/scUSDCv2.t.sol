@@ -30,6 +30,7 @@ import {IVault} from "../src/interfaces/balancer/IVault.sol";
 import {ICurvePool} from "../src/interfaces/curve/ICurvePool.sol";
 import {ILido} from "../src/interfaces/lido/ILido.sol";
 import {IwstETH} from "../src/interfaces/lido/IwstETH.sol";
+import {IProtocolFeesCollector} from "../src/interfaces/balancer/IProtocolFeesCollector.sol";
 import "../src/errors/scErrors.sol";
 import {FaultyAdapter} from "./mocks/adapters/FaultyAdapter.sol";
 
@@ -1287,6 +1288,48 @@ contract scUSDCv2Test is Test {
         emit Reallocated();
 
         vault.reallocate(1, callData);
+    }
+
+    function test_reallocate_PaysFlashLoanFees() public {
+        _setUpForkAtBlock(BLOCK_BEFORE_EULER_EXPLOIT);
+        vault.addAdapter(euler);
+
+        uint256 totalCollateral = 1_000_000e6;
+        uint256 totalDebt = 100 ether;
+        deal(address(usdc), address(vault), totalCollateral);
+
+        IProtocolFeesCollector balancerFeeContract = IProtocolFeesCollector(C.BALANCER_FEES_COLLECTOR);
+
+        uint256 flashLoanFeePercent = 0.01e18;
+        vm.prank(C.BALANCER_ADMIN);
+        balancerFeeContract.setFlashLoanFeePercentage(flashLoanFeePercent);
+        assertEq(balancerFeeContract.getFlashLoanFeePercentage(), flashLoanFeePercent);
+
+        bytes[] memory callData = new bytes[](2);
+        callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV3.id(), totalCollateral);
+        callData[1] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV3.id(), totalDebt);
+
+        vault.rebalance(callData);
+
+        // 1. move half of the position from Aave to Euler
+        uint256 collateralToMove = aaveV3.getCollateral(address(vault)) / 2;
+        uint256 debtToMove = aaveV3.getDebt(address(vault)) / 2;
+        uint256 flashLoanFee = debtToMove.mulWadUp(0.01e18);
+        uint256 flashLoanAmount = debtToMove;
+
+        callData = new bytes[](4);
+        callData[0] = abi.encodeWithSelector(scUSDCv2.repay.selector, aaveV3.id(), debtToMove);
+        callData[1] = abi.encodeWithSelector(scUSDCv2.withdraw.selector, aaveV3.id(), collateralToMove);
+        callData[2] = abi.encodeWithSelector(scUSDCv2.supply.selector, euler.id(), collateralToMove);
+        callData[3] = abi.encodeWithSelector(scUSDCv2.borrow.selector, euler.id(), debtToMove);
+
+        // expect to fail since flash loan fees are not accounted for
+        vm.expectRevert();
+        vault.reallocate(flashLoanAmount, callData);
+
+        // borrow more to cover the flash loan fees
+        callData[3] = abi.encodeWithSelector(scUSDCv2.borrow.selector, euler.id(), debtToMove + flashLoanFee);
+        vault.reallocate(flashLoanAmount, callData);
     }
 
     // #receiveFlashLoan ///
