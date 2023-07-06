@@ -65,7 +65,6 @@ contract scWETHv2Test is Test {
     uint256 eulerAllocationPercent = 0.3e18;
     uint256 compoundAllocationPercent = 0.2e18;
 
-    uint256 slippageTolerance = 0.99e18;
     uint256 maxLtv;
     WETH weth;
     ILido stEth;
@@ -135,7 +134,6 @@ contract scWETHv2Test is Test {
         assertEq(vault.hasRole(vault.KEEPER_ROLE(), keeper), true, "keeper role not set");
         assertEq(address(vault.asset()), C.WETH);
         assertEq(address(vault.balancerVault()), C.BALANCER_VAULT);
-        assertEq(vault.slippageTolerance(), slippageTolerance);
     }
 
     function test_addAdapter() public {
@@ -1167,7 +1165,7 @@ contract scWETHv2Test is Test {
         uint256 market2BorrowAmount = repayAmount - delta;
 
         callData[1] = abi.encodeWithSelector(
-            scWETHv2.swapWstEthToWeth.selector, priceConverter.ethToWstEth(delta), slippageTolerance
+            scWETHv2.swapWstEthToWeth.selector, priceConverter.ethToWstEth(delta), vault.slippageTolerance()
         );
 
         callData[2] = abi.encodeWithSelector(
@@ -1200,7 +1198,7 @@ contract scWETHv2Test is Test {
         uint256 delta = withdrawAmount - market2SupplyAmount;
 
         callData[1] = abi.encodeWithSelector(
-            scWETHv2.swapWstEthToWeth.selector, priceConverter.ethToWstEth(delta), slippageTolerance
+            scWETHv2.swapWstEthToWeth.selector, priceConverter.ethToWstEth(delta), vault.slippageTolerance()
         );
 
         callData[2] = abi.encodeWithSelector(
@@ -1239,7 +1237,7 @@ contract scWETHv2Test is Test {
         uint256 delta = withdrawAmount - (aaveV3SupplyAmount + compoundSupplyAmount);
 
         callData[1] = abi.encodeWithSelector(
-            scWETHv2.swapWstEthToWeth.selector, priceConverter.ethToWstEth(delta), slippageTolerance
+            scWETHv2.swapWstEthToWeth.selector, priceConverter.ethToWstEth(delta), vault.slippageTolerance()
         );
 
         callData[2] = abi.encodeWithSelector(
@@ -1302,7 +1300,7 @@ contract scWETHv2Test is Test {
         uint256 eulerBorrowAmount = repayAmount - delta;
 
         callData[2] = abi.encodeWithSelector(
-            scWETHv2.swapWstEthToWeth.selector, priceConverter.ethToWstEth(delta), slippageTolerance
+            scWETHv2.swapWstEthToWeth.selector, priceConverter.ethToWstEth(delta), vault.slippageTolerance()
         );
 
         callData[3] = abi.encodeWithSelector(
@@ -1392,7 +1390,8 @@ contract scWETHv2Test is Test {
             priceConverter.ethToWstEth(compoundFlashLoanAmount)
         );
 
-        callData[3] = abi.encodeWithSelector(scWETHv2.swapWstEthToWeth.selector, type(uint256).max, slippageTolerance);
+        callData[3] =
+            abi.encodeWithSelector(scWETHv2.swapWstEthToWeth.selector, type(uint256).max, vault.slippageTolerance());
 
         return (callData, aaveV3FlashLoanAmount + eulerFlashLoanAmount + compoundFlashLoanAmount);
     }
@@ -1661,7 +1660,7 @@ contract scWETHv2Test is Test {
     }
 
     function _deployVaultWithDefaultParams() internal returns (scWETHv2) {
-        return new scWETHv2(admin, keeper, slippageTolerance, WETH(payable(C.WETH)), new Swapper(), priceConverter);
+        return new scWETHv2(admin, keeper, WETH(payable(C.WETH)), new Swapper(), priceConverter);
     }
 
     function _simulate_stEthStakingInterest(uint256 timePeriod, uint256 stEthStakingInterest) internal {
