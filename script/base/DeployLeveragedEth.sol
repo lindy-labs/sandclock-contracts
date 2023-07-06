@@ -71,9 +71,8 @@ abstract contract DeployLeveragedEth is MainnetDeployBase {
             balancerVault: IVault(C.BALANCER_VAULT)
         });
 
-        console2.log("");
         _scWETH = new scWETH(scWethParams);
-        console2.log("scWETH: ", address(_scWETH));
+        console2.log("\nscWETH: ", address(_scWETH));
 
         scUSDC.ConstructorParams memory scUsdcParams = scUSDC.ConstructorParams({
             admin: _deployerAddress,
