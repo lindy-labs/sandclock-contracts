@@ -52,10 +52,10 @@ contract DeployScript is DeployLeveragedEth, Test {
         _divergeLTV(scUsdc);
     }
 
-    function _depositForUsers(ERC20 asset, sc4626 vaultToken) internal {
+    function _depositForUsers(ERC20 asset, sc4626 vault) internal {
         console2.log("depositing for users", 100 * 10 ** asset.decimals());
-        _deposit(asset, vaultToken, alice, address(vaultToken), 10 * 10 ** asset.decimals());
-        _deposit(asset, vaultToken, bob, address(vaultToken), 10 * 10 ** asset.decimals());
+        _deposit(asset, vault, alice, address(vault), 10 * 10 ** asset.decimals());
+        _deposit(asset, vault, bob, address(vault), 10 * 10 ** asset.decimals());
     }
 
     function _fund() internal {
@@ -85,19 +85,19 @@ contract DeployScript is DeployLeveragedEth, Test {
         vm.stopPrank();
     }
 
-    function _rebalance(scWETH vaultToken) internal {
+    function _rebalance(scWETH vault) internal {
         console2.log("rebalancing scWETH");
 
         vm.startPrank(keeper);
-        vaultToken.harvest();
+        vault.harvest();
         vm.stopPrank();
     }
 
-    function _rebalance(scUSDC vaultToken) internal {
+    function _rebalance(scUSDC vault) internal {
         console2.log("rebalancing scUsdc");
 
         vm.startPrank(keeper);
-        vaultToken.rebalance();
+        vault.rebalance();
         vm.stopPrank();
     }
 
@@ -109,47 +109,47 @@ contract DeployScript is DeployLeveragedEth, Test {
         console2.log("scUsdc profit after", scUsdc.getProfit());
     }
 
-    function _redeem(scWETH vaultToken, address redeemer) internal {
+    function _redeem(scWETH vault, address redeemer) internal {
         console2.log("redeeming scWETh", redeemer);
 
         uint256 withdrawAmount = 1e18;
-        uint256 sharesToRedeem = vaultToken.convertToShares(withdrawAmount);
+        uint256 sharesToRedeem = vault.convertToShares(withdrawAmount);
         vm.prank(redeemer);
-        vaultToken.redeem(sharesToRedeem, redeemer, redeemer);
+        vault.redeem(sharesToRedeem, redeemer, redeemer);
     }
 
-    function _redeem(scUSDC vaultToken, address redeemer) internal {
+    function _redeem(scUSDC vault, address redeemer) internal {
         console2.log("redeeming scUsdc", redeemer);
 
         uint256 withdrawAmount = 1e6;
         vm.prank(redeemer);
-        vaultToken.withdraw(withdrawAmount, redeemer, redeemer);
+        vault.withdraw(withdrawAmount, redeemer, redeemer);
     }
 
-    function _divergeLTV(scWETH vaultToken) internal {
+    function _divergeLTV(scWETH vault) internal {
         console2.log("forcing LTV diverge scWETH");
         ERC20 dWeth = ERC20(address(C.AAVE_V3_VAR_DEBT_WETH_TOKEN));
 
-        console2.log("LTV before", vaultToken.getLtv());
-        console2.log("dWeth token balance before", dWeth.balanceOf(address(vaultToken)));
+        console2.log("LTV before", vault.getLtv());
+        console2.log("dWeth token balance before", dWeth.balanceOf(address(vault)));
 
-        deal(C.AAVE_V3_VAR_DEBT_IMPLEMENTATION_CONTRACT, address(vaultToken), 42e19);
+        deal(C.AAVE_V3_VAR_DEBT_IMPLEMENTATION_CONTRACT, address(vault), 42e19);
 
-        console2.log("dWeth token balance after", dWeth.balanceOf(address(vaultToken)));
-        console2.log("LTV after", vaultToken.getLtv());
+        console2.log("dWeth token balance after", dWeth.balanceOf(address(vault)));
+        console2.log("LTV after", vault.getLtv());
     }
 
-    function _divergeLTV(scUSDC vaultToken) internal {
+    function _divergeLTV(scUSDC vault) internal {
         console2.log("forcing LTV diverge scUsdc");
         ERC20 dWeth = ERC20(address(C.AAVE_V3_VAR_DEBT_WETH_TOKEN));
 
-        console2.log("LTV before", vaultToken.getLtv());
-        console2.log("dWeth token balance before", dWeth.balanceOf(address(vaultToken)));
+        console2.log("LTV before", vault.getLtv());
+        console2.log("dWeth token balance before", dWeth.balanceOf(address(vault)));
 
-        _setTokenBalance(C.AAVE_V3_VAR_DEBT_IMPLEMENTATION_CONTRACT, address(vaultToken), 42e19);
+        _setTokenBalance(C.AAVE_V3_VAR_DEBT_IMPLEMENTATION_CONTRACT, address(vault), 42e19);
 
-        console2.log("dWeth token balance after", dWeth.balanceOf(address(vaultToken)));
-        console2.log("LTV after", vaultToken.getLtv());
+        console2.log("dWeth token balance after", dWeth.balanceOf(address(vault)));
+        console2.log("LTV after", vault.getLtv());
     }
 
     function _setTokenBalance(address token, address vault, uint256 amount) internal {
