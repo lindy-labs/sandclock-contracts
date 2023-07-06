@@ -28,10 +28,10 @@ contract DeployScript is DeployLeveragedEth, Test {
 
         _fund();
 
-        _deposit(weth, scWeth, alice, address(scWeth), 10 * 10 ** weth.decimals());
-        _deposit(weth, scWeth, bob, address(scWeth), 10 * 10 ** weth.decimals());
-        _deposit(usdc, scUsdc, alice, address(scUsdc), 10 * 10 ** usdc.decimals());
-        _deposit(usdc, scUsdc, bob, address(scUsdc), 10 * 10 ** usdc.decimals());
+        _deposit(weth, scWeth, alice, address(scWeth), C.INITIAL_WETH_DEPOSIT);
+        _deposit(weth, scWeth, bob, address(scWeth), C.INITIAL_WETH_DEPOSIT);
+        _deposit(usdc, scUsdc, alice, address(scUsdc), C.INITIAL_USDC_DEPOSIT);
+        _deposit(usdc, scUsdc, bob, address(scUsdc), C.INITIAL_USDC_DEPOSIT);
 
         _rebalance(scWeth);
 
@@ -45,10 +45,10 @@ contract DeployScript is DeployLeveragedEth, Test {
         _redeem(scUsdc, alice);
         _redeem(scUsdc, bob);
 
-        _deposit(weth, scWeth, alice, address(scWeth), 10 * 10 ** weth.decimals());
-        _deposit(weth, scWeth, bob, address(scWeth), 10 * 10 ** weth.decimals());
-        _deposit(usdc, scUsdc, alice, address(scUsdc), 10 * 10 ** usdc.decimals());
-        _deposit(usdc, scUsdc, bob, address(scUsdc), 10 * 10 ** usdc.decimals());
+        _deposit(weth, scWeth, alice, address(scWeth), C.INITIAL_WETH_DEPOSIT);
+        _deposit(weth, scWeth, bob, address(scWeth), C.INITIAL_WETH_DEPOSIT);
+        _deposit(usdc, scUsdc, alice, address(scUsdc), C.INITIAL_USDC_DEPOSIT);
+        _deposit(usdc, scUsdc, bob, address(scUsdc), C.INITIAL_USDC_DEPOSIT);
 
         _profit(); // create scUsdc profit scenario
 
@@ -60,18 +60,18 @@ contract DeployScript is DeployLeveragedEth, Test {
         console2.log("funding");
 
         // Dole out ETH
-        deal(alice, 10e18);
-        deal(bob, 10e18);
-        deal(keeper, 10e18);
+        deal(alice, C.INITIAL_WETH_FUNDING);
+        deal(bob, C.INITIAL_WETH_FUNDING);
+        deal(keeper, C.INITIAL_WETH_FUNDING);
 
         // Dole out WETH
-        deal(address(weth), 200e18);
-        deal(address(weth), alice, 100e18);
-        deal(address(weth), bob, 100e18);
+        deal(address(weth), C.INITIAL_WETH_FUNDING * 2);
+        deal(address(weth), alice, C.INITIAL_WETH_FUNDING);
+        deal(address(weth), bob, C.INITIAL_WETH_FUNDING);
 
         // Dole out USDC
-        deal(address(usdc), alice, 100e6);
-        deal(address(usdc), bob, 100e6);
+        deal(address(usdc), alice, C.INITIAL_USDC_FUNDING);
+        deal(address(usdc), bob, C.INITIAL_USDC_FUNDING);
     }
 
     function _deposit(ERC20 asset, sc4626 vault, address from, address to, uint256 amount) internal {

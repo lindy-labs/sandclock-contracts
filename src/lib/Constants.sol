@@ -71,6 +71,18 @@ library Constants {
     address public constant BALANCER_VAULT = 0xBA12222222228d8Ba445958a75a0704d566BF2C8;
 
     /*//////////////////////////////////////////////////////////////
+                          TESTING CONSTANTS
+    //////////////////////////////////////////////////////////////*/
+
+    uint256 public constant INITIAL_WETH_DEPOSIT = 10e18;
+
+    uint256 public constant INITIAL_USDC_DEPOSIT = 100e6;
+
+    uint256 public constant INITIAL_WETH_FUNDING = 100e18;
+
+    uint256 public constant INITIAL_USDC_FUNDING = 10000e6;
+
+    /*//////////////////////////////////////////////////////////////
                           TESTING ADDRESSES
     //////////////////////////////////////////////////////////////*/
 
