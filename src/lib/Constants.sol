@@ -67,6 +67,10 @@ library Constants {
 
     // address of the Balancer vault contract
     address public constant BALANCER_VAULT = 0xBA12222222228d8Ba445958a75a0704d566BF2C8;
+    // Balancer admin account
+    address public constant BALANCER_ADMIN = 0x97207B095e4D5C9a6e4cfbfcd2C3358E03B90c4A;
+    // address of the Balance Protocol Fees Collector contract
+    address public constant BALANCER_FEES_COLLECTOR = 0xce88686553686DA562CE7Cea497CE749DA109f9F;
 
     // address of the 0x swap router contract
     address public constant ZERO_EX_ROUTER = 0xDef1C0ded9bec7F1a1670819833240f027b25EfF;
