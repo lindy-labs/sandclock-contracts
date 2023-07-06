@@ -36,61 +36,55 @@ import {MockSwapRouter} from "../../test/mocks/uniswap/MockSwapRouter.sol";
 import {MainnetDeployBase} from "../base/MainnetDeployBase.sol";
 
 abstract contract DeployLeveragedEth is MainnetDeployBase {
-    WETH _weth = WETH(payable(C.WETH));
-    ERC20 _usdc = ERC20(C.USDC);
-    MockAavePool _aavePool = MockAavePool(C.AAVE_V3_POOL);
-    ICurvePool _curveEthStEthPool = ICurvePool(C.CURVE_ETH_STETH_POOL);
-    ISwapRouter _uniswapRouter = ISwapRouter(C.UNISWAP_V3_SWAP_ROUTER);
+    MockAavePool aavePool = MockAavePool(C.AAVE_V3_POOL);
+    ICurvePool curveEthStEthPool = ICurvePool(C.CURVE_ETH_STETH_POOL);
+    ISwapRouter uniswapRouter = ISwapRouter(C.UNISWAP_V3_SWAP_ROUTER);
 
-    scWETH _scWETH;
-    scUSDC _scUSDC;
+    scWETH scWeth;
+    scUSDC scUsdc;
 
-    uint256 _deployerPrivateKey = uint256(vm.envBytes32("PRIVATE_KEY"));
-    address _deployerAddress = vm.addr(_deployerPrivateKey);
-
-    address _keeper = vm.envAddress("KEEPER");
-    address _alice = C.ALICE;
-    address _bob = C.BOB;
+    address alice = C.ALICE;
+    address bob = C.BOB;
 
     function _deploy() internal {
-        vm.startBroadcast(_deployerPrivateKey);
+        vm.startBroadcast(deployerPrivateKey);
 
         scWETH.ConstructorParams memory scWethParams = scWETH.ConstructorParams({
-            admin: _deployerAddress,
-            keeper: _keeper,
+            admin: deployerAddress,
+            keeper: keeper,
             targetLtv: 0.7e18,
             slippageTolerance: 0.99e18,
-            aavePool: _aavePool,
+            aavePool: aavePool,
             aaveAwstEth: IAToken(C.AAVE_V3_AWSTETH_TOKEN),
             aaveVarDWeth: ERC20(C.AAVE_V3_VAR_DEBT_WETH_TOKEN),
-            curveEthStEthPool: _curveEthStEthPool,
+            curveEthStEthPool: curveEthStEthPool,
             stEth: ILido(C.STETH),
             wstEth: IwstETH(C.WSTETH),
-            weth: _weth,
+            weth: weth,
             stEthToEthPriceFeed: AggregatorV3Interface(C.CHAINLINK_STETH_ETH_PRICE_FEED),
             balancerVault: IVault(C.BALANCER_VAULT)
         });
 
-        _scWETH = new scWETH(scWethParams);
-        console2.log("\nscWETH: ", address(_scWETH));
+        scWeth = new scWETH(scWethParams);
+        console2.log("\nscWETH: ", address(scWeth));
 
         scUSDC.ConstructorParams memory scUsdcParams = scUSDC.ConstructorParams({
-            admin: _deployerAddress,
-            keeper: _keeper,
-            scWETH: _scWETH,
-            usdc: _usdc,
+            admin: deployerAddress,
+            keeper: keeper,
+            scWETH: scWeth,
+            usdc: usdc,
             weth: WETH(payable(C.WETH)),
-            aavePool: _aavePool,
+            aavePool: aavePool,
             aavePoolDataProvider: IPoolDataProvider(C.AAVE_V3_POOL_DATA_PROVIDER),
             aaveAUsdc: IAToken(C.AAVE_V3_AUSDC_TOKEN),
             aaveVarDWeth: ERC20(C.AAVE_V3_VAR_DEBT_WETH_TOKEN),
-            uniswapSwapRouter: _uniswapRouter,
+            uniswapSwapRouter: uniswapRouter,
             chainlinkUsdcToEthPriceFeed: AggregatorV3Interface(C.CHAINLINK_USDC_ETH_PRICE_FEED),
             balancerVault: IVault(C.BALANCER_VAULT)
         });
 
-        _scUSDC = new scUSDC(scUsdcParams);
-        console2.log("scUSDC: ", address(_scUSDC));
+        scUsdc = new scUSDC(scUsdcParams);
+        console2.log("scUSDC: ", address(scUsdc));
 
         vm.stopBroadcast();
     }
