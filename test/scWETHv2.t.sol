@@ -27,9 +27,9 @@ import {scWETHv2Helper} from "./helpers/scWETHv2Helper.sol";
 import "../src/errors/scErrors.sol";
 
 import {IAdapter} from "../src/steth/IAdapter.sol";
-import {AaveV3Adapter} from "../src/steth/scWethV2-adapters/AaveV3Adapter.sol";
-import {CompoundV3Adapter} from "../src/steth/scWethV2-adapters/CompoundV3Adapter.sol";
-import {EulerAdapter} from "../src/steth/scWethV2-adapters/EulerAdapter.sol";
+import {AaveV3ScWethAdapter} from "../src/steth/scWethV2-adapters/AaveV3ScWethAdapter.sol";
+import {CompoundV3ScWethAdapter} from "../src/steth/scWethV2-adapters/CompoundV3ScWethAdapter.sol";
+import {EulerScWethAdapter} from "../src/steth/scWethV2-adapters/EulerScWethAdapter.sol";
 import {Swapper} from "../src/steth/Swapper.sol";
 import {PriceConverter} from "../src/steth/PriceConverter.sol";
 import {MockAdapter} from "./mocks/adapters/MockAdapter.sol";
@@ -113,8 +113,8 @@ contract scWETHv2Test is Test {
 
     function _setupAdapters(uint256 _blockNumber) internal {
         // add adaptors
-        aaveV3Adapter = new AaveV3Adapter();
-        compoundV3Adapter = new CompoundV3Adapter();
+        aaveV3Adapter = new AaveV3ScWethAdapter();
+        compoundV3Adapter = new CompoundV3ScWethAdapter();
 
         vault.addAdapter(aaveV3Adapter);
         vault.addAdapter(compoundV3Adapter);
@@ -123,7 +123,7 @@ contract scWETHv2Test is Test {
         compoundV3AdapterId = compoundV3Adapter.id();
 
         if (_blockNumber == BLOCK_BEFORE_EULER_EXPLOIT) {
-            eulerAdapter = new EulerAdapter();
+            eulerAdapter = new EulerScWethAdapter();
             vault.addAdapter(eulerAdapter);
             eulerAdapterId = eulerAdapter.id();
         }
@@ -141,7 +141,7 @@ contract scWETHv2Test is Test {
     function test_addAdapter() public {
         _setUp(BLOCK_AFTER_EULER_EXPLOIT);
 
-        IAdapter dummyAdapter = new AaveV3Adapter();
+        IAdapter dummyAdapter = new AaveV3ScWethAdapter();
         // must fail if not called by admin
         vm.expectRevert(CallerNotAdmin.selector);
         vm.prank(alice);
@@ -510,6 +510,38 @@ contract scWETHv2Test is Test {
 
         vm.expectRevert();
         vault.redeem(giftAmount, alice, address(this)); // no shares anymore
+    }
+
+    function test_withdraw_maintainsFloat(uint256 amount) public {
+        _setUp(BLOCK_BEFORE_EULER_EXPLOIT);
+
+        amount = bound(amount, vault.minimumFloatAmount() * 3, 15000 ether);
+        _depositToVault(address(this), amount);
+
+        // invest & create position on aave v3
+        uint256 investAmount = amount - vault.minimumFloatAmount();
+        uint256 flashLoanAmount = _calcSupplyBorrowFlashLoanAmount(aaveV3Adapter, investAmount);
+        uint256 aaveV3SupplyAmount = priceConverter.ethToWstEth(investAmount + flashLoanAmount).mulWadDown(0.99e18);
+
+        bytes[] memory callData = new bytes[](2);
+
+        callData[0] = abi.encodeWithSelector(scWETHv2.swapWethToWstEth.selector, investAmount + flashLoanAmount);
+        callData[1] = abi.encodeWithSelector(
+            scWETHv2.supplyAndBorrow.selector, aaveV3AdapterId, aaveV3SupplyAmount, flashLoanAmount
+        );
+
+        vm.prank(keeper);
+        vault.rebalance(investAmount, flashLoanAmount, callData);
+
+        // withdraw more than what is already in the vault as float
+        vault.withdraw(weth.balanceOf(address(vault)) + 1, address(this), address(this));
+
+        _floatCheck();
+
+        // withdraw everything to ensure minimum float logic doesn't apply for the vault's only/last user
+        vault.redeem(vault.balanceOf(address(this)), address(this), address(this));
+
+        assertApproxEqRel(weth.balanceOf(address(this)), amount, 0.015e18, "user's end balance");
     }
 
     function test_redeem_zero() public {

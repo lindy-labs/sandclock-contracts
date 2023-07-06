@@ -10,14 +10,6 @@ import {AccessControl} from "openzeppelin-contracts/access/AccessControl.sol";
 import {Constants as C} from "../../src/lib/Constants.sol";
 import {ISwapRouter} from "../../src/interfaces/uniswap/ISwapRouter.sol";
 import {sc4626} from "../../src/sc4626.sol";
-import {scWETHv2} from "../../src/steth/scWETHv2.sol";
-import {scUSDCv2} from "../../src/steth/scUSDCv2.sol";
-import {Swapper} from "../../src/steth/Swapper.sol";
-import {PriceConverter} from "../../src/steth/PriceConverter.sol";
-import {AaveV3Adapter as scWethAaveV3Adapter} from "../../src/steth/scWethV2-adapters/AaveV3Adapter.sol";
-import {CompoundV3Adapter as scWethCompoundV3Adapter} from "../../src/steth/scWethV2-adapters/CompoundV3Adapter.sol";
-import {AaveV3Adapter as scUsdcAaveV3Adapter} from "../../src/steth/scUsdcV2-adapters/AaveV3Adapter.sol";
-import {AaveV2Adapter as scUsdcAaveV2Adapter} from "../../src/steth/scUsdcV2-adapters/AaveV2Adapter.sol";
 
 abstract contract MainnetDeployBase is CREATE3Script {
     uint256 deployerPrivateKey = uint256(vm.envBytes32("PRIVATE_KEY"));
