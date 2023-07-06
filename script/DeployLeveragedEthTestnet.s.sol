@@ -28,8 +28,10 @@ contract DeployScript is DeployLeveragedEth, Test {
 
         _fund();
 
-        _depositForUsers(weth, scWeth);
-        _depositForUsers(usdc, scUsdc);
+        _deposit(weth, scWeth, alice, address(scWeth), 10 * 10 ** weth.decimals());
+        _deposit(weth, scWeth, bob, address(scWeth), 10 * 10 ** weth.decimals());
+        _deposit(usdc, scUsdc, alice, address(scUsdc), 10 * 10 ** usdc.decimals());
+        _deposit(usdc, scUsdc, bob, address(scUsdc), 10 * 10 ** usdc.decimals());
 
         _rebalance(scWeth);
 
@@ -43,19 +45,15 @@ contract DeployScript is DeployLeveragedEth, Test {
         _redeem(scUsdc, alice);
         _redeem(scUsdc, bob);
 
-        _depositForUsers(usdc, scUsdc);
-        _depositForUsers(weth, scWeth);
+        _deposit(weth, scWeth, alice, address(scWeth), 10 * 10 ** weth.decimals());
+        _deposit(weth, scWeth, bob, address(scWeth), 10 * 10 ** weth.decimals());
+        _deposit(usdc, scUsdc, alice, address(scUsdc), 10 * 10 ** usdc.decimals());
+        _deposit(usdc, scUsdc, bob, address(scUsdc), 10 * 10 ** usdc.decimals());
 
         _profit(); // create scUsdc profit scenario
 
         _divergeLTV(scWeth);
         _divergeLTV(scUsdc);
-    }
-
-    function _depositForUsers(ERC20 asset, sc4626 vault) internal {
-        console2.log("depositing for users", 100 * 10 ** asset.decimals());
-        _deposit(asset, vault, alice, address(vault), 10 * 10 ** asset.decimals());
-        _deposit(asset, vault, bob, address(vault), 10 * 10 ** asset.decimals());
     }
 
     function _fund() internal {
