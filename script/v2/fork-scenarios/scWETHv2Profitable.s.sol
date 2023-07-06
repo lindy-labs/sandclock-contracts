@@ -48,11 +48,11 @@ contract scWETHv2SimulateProfits is MainnetDeployBase, Test {
     mapping(IAdapter => uint256) targetLtv;
 
     function run() external {
-        fork(17529069);
+        _fork(17529069);
         vm.startBroadcast(deployerAddress);
 
-        deploy();
-        depositToVault(100 ether);
+        _deploy();
+        _depositToVault(100 ether);
 
         uint256 aaveV3AllocationPercent = 0.3e18;
         uint256 compoundV3AllocationPercent = 0.7e18;
@@ -60,34 +60,34 @@ contract scWETHv2SimulateProfits is MainnetDeployBase, Test {
         vm.stopBroadcast();
 
         vm.startBroadcast(keeper);
-        invest(weth.balanceOf(address(vault)), aaveV3AllocationPercent, compoundV3AllocationPercent);
+        _invest(weth.balanceOf(address(vault)), aaveV3AllocationPercent, compoundV3AllocationPercent);
         vm.stopBroadcast();
 
         console.log("Assets before time skip", vault.totalAssets());
 
         // fast forward 365 days in time and simulate an annual staking interest of 7.1%
-        simulate_stEthStakingInterest(365 days, 1.071e18);
+        _simulate_stEthStakingInterest(365 days, 1.071e18);
 
         console.log("Assets after time skip", vault.totalAssets());
     }
 
-    function fork(uint256 _blockNumber) internal {
+    function _fork(uint256 _blockNumber) internal {
         mainnetFork = vm.createFork(vm.envString("RPC_URL_MAINNET"));
         vm.selectFork(mainnetFork);
         vm.rollFork(_blockNumber);
     }
 
-    function deploy() internal {
+    function _deploy() internal {
         Swapper swapper = new Swapper();
         priceConverter = new PriceConverter(deployerAddress);
 
         vault = new scWETHv2(deployerAddress, keeper, 0.99e18, weth, swapper, priceConverter);
         vaultHelper = new scWETHv2Helper(vault, priceConverter);
 
-        addAdapters();
+        _addAdapters();
     }
 
-    function addAdapters() internal {
+    function _addAdapters() internal {
         aaveV3Adapter = new scWethAaveV3Adapter();
         aaveV3AdapterId = aaveV3Adapter.id();
         vault.addAdapter(aaveV3Adapter);
@@ -99,35 +99,35 @@ contract scWETHv2SimulateProfits is MainnetDeployBase, Test {
         targetLtv[compoundV3Adapter] = 0.8e18; // the target Ltv at which all subsequent compound deposits must be done
     }
 
-    function depositToVault(uint256 amount) internal {
-        deal(address(weth), deployerAddress, amount);
-        _deposit(vault, amount);
+    function _depositToVault(uint256 _amount) internal {
+        deal(address(weth), deployerAddress, _amount);
+        _deposit(vault, _amount);
     }
 
     /// @dev invest the float lying in the vault to aaveV3 and compoundV3
-    function invest(uint256 amount, uint256 aaveV3AllocationPercent, uint256 compoundAllocationPercent) internal {
-        uint256 investAmount = amount - vault.minimumFloatAmount();
+    function _invest(uint256 _amount, uint256 _aaveV3AllocationPercent, uint256 _compoundAllocationPercent) internal {
+        uint256 investAmount = _amount - vault.minimumFloatAmount();
 
         (bytes[] memory callData,, uint256 totalFlashLoanAmount) =
-            getInvestParams(investAmount, aaveV3AllocationPercent, compoundAllocationPercent);
+            _getInvestParams(investAmount, _aaveV3AllocationPercent, _compoundAllocationPercent);
 
         vault.rebalance(investAmount, totalFlashLoanAmount, callData);
     }
 
     /// @return : supplyBorrowParams, totalSupplyAmount, totalDebtTaken
     /// @dev : NOTE: ASSUMING ZERO BALANCER FLASH LOAN FEES
-    function getInvestParams(uint256 amount, uint256 aaveV3Allocation, uint256 compoundAllocation)
+    function _getInvestParams(uint256 _amount, uint256 _aaveV3Allocation, uint256 _compoundAllocation)
         internal
         view
         returns (bytes[] memory, uint256, uint256)
     {
-        require(aaveV3Allocation + compoundAllocation == 1e18, "allocationPercents dont add up to 100%");
+        require(_aaveV3Allocation + _compoundAllocation == 1e18, "allocationPercents dont add up to 100%");
 
-        uint256 investAmount = amount;
+        uint256 investAmount = _amount;
         uint256 stEthRateTolerance = 0.999e18;
 
-        uint256 aaveV3Amount = investAmount.mulWadDown(aaveV3Allocation);
-        uint256 compoundAmount = investAmount.mulWadDown(compoundAllocation);
+        uint256 aaveV3Amount = investAmount.mulWadDown(_aaveV3Allocation);
+        uint256 compoundAmount = investAmount.mulWadDown(_compoundAllocation);
 
         uint256 aaveV3FlashLoanAmount = _calcSupplyBorrowFlashLoanAmount(aaveV3Adapter, aaveV3Amount);
         uint256 compoundFlashLoanAmount = _calcSupplyBorrowFlashLoanAmount(compoundV3Adapter, compoundAmount);
@@ -153,32 +153,32 @@ contract scWETHv2SimulateProfits is MainnetDeployBase, Test {
         return (callData, aaveV3SupplyAmount + compoundSupplyAmount, totalFlashLoanAmount);
     }
 
-    function simulate_stEthStakingInterest(uint256 timePeriod, uint256 stEthStakingInterest) internal {
+    function _simulate_stEthStakingInterest(uint256 _timePeriod, uint256 _stEthStakingInterest) internal {
         // fast forward time to simulate supply and borrow interests
-        vm.warp(block.timestamp + timePeriod);
-        uint256 prevBalance = read_storage_uint(C.STETH, keccak256(abi.encodePacked("lido.Lido.beaconBalance")));
+        vm.warp(block.timestamp + _timePeriod);
+        uint256 prevBalance = _read_storage_uint(C.STETH, keccak256(abi.encodePacked("lido.Lido.beaconBalance")));
         vm.store(
             C.STETH,
             keccak256(abi.encodePacked("lido.Lido.beaconBalance")),
-            bytes32(prevBalance.mulWadDown(stEthStakingInterest))
+            bytes32(prevBalance.mulWadDown(_stEthStakingInterest))
         );
     }
 
-    function read_storage_uint(address addr, bytes32 key) internal view returns (uint256) {
-        return abi.decode(abi.encode(vm.load(addr, key)), (uint256));
+    function _read_storage_uint(address _addr, bytes32 _key) internal view returns (uint256) {
+        return abi.decode(abi.encode(vm.load(_addr, _key)), (uint256));
     }
 
-    function _calcSupplyBorrowFlashLoanAmount(IAdapter adapter, uint256 amount)
+    function _calcSupplyBorrowFlashLoanAmount(IAdapter _adapter, uint256 _amount)
         internal
         view
         returns (uint256 flashLoanAmount)
     {
-        uint256 debt = vault.getDebt(adapter.id());
-        uint256 collateral = vaultHelper.getCollateralInWeth(adapter);
+        uint256 debt = vault.getDebt(_adapter.id());
+        uint256 collateral = vaultHelper.getCollateralInWeth(_adapter);
 
-        uint256 target = targetLtv[adapter].mulWadDown(amount + collateral);
+        uint256 target = targetLtv[_adapter].mulWadDown(_amount + collateral);
 
         // calculate the flashloan amount needed
-        flashLoanAmount = (target - debt).divWadDown(C.ONE - targetLtv[adapter]);
+        flashLoanAmount = (target - debt).divWadDown(C.ONE - targetLtv[_adapter]);
     }
 }
