@@ -28,52 +28,52 @@ contract DeployScript is DeployLeveragedEth, Test {
 
         _fund();
 
-        _depositForUsers(_weth, _scWETH);
-        _depositForUsers(_usdc, _scUSDC);
+        _depositForUsers(weth, scWeth);
+        _depositForUsers(usdc, scUsdc);
 
-        _rebalance(_scWETH);
+        _rebalance(scWeth);
 
         // double rebalance passes
-        _rebalance(_scUSDC);
-        _rebalance(_scUSDC);
+        _rebalance(scUsdc);
+        _rebalance(scUsdc);
 
-        _redeem(_scWETH, _alice);
-        _redeem(_scWETH, _bob);
+        _redeem(scWeth, alice);
+        _redeem(scWeth, bob);
 
-        _redeem(_scUSDC, _alice);
-        _redeem(_scUSDC, _bob);
+        _redeem(scUsdc, alice);
+        _redeem(scUsdc, bob);
 
-        _depositForUsers(_usdc, _scUSDC);
-        _depositForUsers(_weth, _scWETH);
+        _depositForUsers(usdc, scUsdc);
+        _depositForUsers(weth, scWeth);
 
-        _profit(); // create scUSDC profit scenario
+        _profit(); // create scUsdc profit scenario
 
-        _divergeLTV(_scWETH);
-        _divergeLTV(_scUSDC);
+        _divergeLTV(scWeth);
+        _divergeLTV(scUsdc);
     }
 
     function _depositForUsers(ERC20 asset, sc4626 vaultToken) internal {
         console2.log("depositing for users", 100 * 10 ** asset.decimals());
-        _deposit(asset, vaultToken, _alice, address(vaultToken), 10 * 10 ** asset.decimals());
-        _deposit(asset, vaultToken, _bob, address(vaultToken), 10 * 10 ** asset.decimals());
+        _deposit(asset, vaultToken, alice, address(vaultToken), 10 * 10 ** asset.decimals());
+        _deposit(asset, vaultToken, bob, address(vaultToken), 10 * 10 ** asset.decimals());
     }
 
     function _fund() internal {
         console2.log("funding");
 
         // Dole out ETH
-        deal(_alice, 10e18);
-        deal(_bob, 10e18);
-        deal(_keeper, 10e18);
+        deal(alice, 10e18);
+        deal(bob, 10e18);
+        deal(keeper, 10e18);
 
         // Dole out WETH
-        deal(address(_weth), 200e18);
-        deal(address(_weth), _alice, 100e18);
-        deal(address(_weth), _bob, 100e18);
+        deal(address(weth), 200e18);
+        deal(address(weth), alice, 100e18);
+        deal(address(weth), bob, 100e18);
 
         // Dole out USDC
-        deal(address(_usdc), _alice, 100e6);
-        deal(address(_usdc), _bob, 100e6);
+        deal(address(usdc), alice, 100e6);
+        deal(address(usdc), bob, 100e6);
     }
 
     function _deposit(ERC20 asset, sc4626 vault, address from, address to, uint256 amount) internal {
@@ -88,25 +88,25 @@ contract DeployScript is DeployLeveragedEth, Test {
     function _rebalance(scWETH vaultToken) internal {
         console2.log("rebalancing scWETH");
 
-        vm.startPrank(_keeper);
+        vm.startPrank(keeper);
         vaultToken.harvest();
         vm.stopPrank();
     }
 
     function _rebalance(scUSDC vaultToken) internal {
-        console2.log("rebalancing scUSDC");
+        console2.log("rebalancing scUsdc");
 
-        vm.startPrank(_keeper);
+        vm.startPrank(keeper);
         vaultToken.rebalance();
         vm.stopPrank();
     }
 
     function _profit() internal {
-        console2.log("generate profit for scUSDC vault");
+        console2.log("generate profit for scUsdc vault");
 
-        console2.log("scUSDC profit before", _scUSDC.getProfit());
-        deal(address(_weth), address(_scWETH), 100e18);
-        console2.log("scUSDC profit after", _scUSDC.getProfit());
+        console2.log("scUsdc profit before", scUsdc.getProfit());
+        deal(address(weth), address(scWeth), 100e18);
+        console2.log("scUsdc profit after", scUsdc.getProfit());
     }
 
     function _redeem(scWETH vaultToken, address redeemer) internal {
@@ -119,7 +119,7 @@ contract DeployScript is DeployLeveragedEth, Test {
     }
 
     function _redeem(scUSDC vaultToken, address redeemer) internal {
-        console2.log("redeeming scUSDC", redeemer);
+        console2.log("redeeming scUsdc", redeemer);
 
         uint256 withdrawAmount = 1e6;
         vm.prank(redeemer);
@@ -140,7 +140,7 @@ contract DeployScript is DeployLeveragedEth, Test {
     }
 
     function _divergeLTV(scUSDC vaultToken) internal {
-        console2.log("forcing LTV diverge scUSDC");
+        console2.log("forcing LTV diverge scUsdc");
         ERC20 dWeth = ERC20(address(C.AAVE_V3_VAR_DEBT_WETH_TOKEN));
 
         console2.log("LTV before", vaultToken.getLtv());

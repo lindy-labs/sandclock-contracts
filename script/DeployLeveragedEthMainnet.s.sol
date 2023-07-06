@@ -18,20 +18,20 @@ contract DeployScript is DeployLeveragedEth {
     }
 
     function _postDeployment() internal {
-        vm.startBroadcast(_deployerPrivateKey);
+        vm.startBroadcast(deployerPrivateKey);
 
         // scWETH
-        _weth.deposit{value: 0.01 ether}(); // wrap 0.01 ETH into WETH
+        weth.deposit{value: 0.01 ether}(); // wrap 0.01 ETH into WETH
         console2.log("eth deposited for weth");
-        _deposit(_scWETH, 0.01 ether); // 0.01 WETH
+        _deposit(scWeth, 0.01 ether); // 0.01 WETH
         console2.log("weth deposited into wethContract");
 
         // scUSDC
-        _weth.deposit{value: 0.01 ether}();
+        weth.deposit{value: 0.01 ether}();
         console2.log("eth deposited for weth to swap for usdc");
         _swapWethForUsdc(0.01 ether);
         console2.log("eth swapped for USDC");
-        _deposit(_scUSDC, _usdc.balanceOf(address(_deployerAddress))); // 0.01 ether worth of USDC
+        _deposit(scUsdc, usdc.balanceOf(address(deployerAddress))); // 0.01 ether worth of USDC
         console2.log("usdc deposited into usdcContract");
 
         vm.stopBroadcast();
