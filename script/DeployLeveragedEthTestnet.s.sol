@@ -103,15 +103,14 @@ contract DeployScript is DeployLeveragedEth, Test {
         console2.log("generate profit for scUsdc vault");
 
         console2.log("scUsdc profit before", scUsdc.getProfit());
-        deal(address(weth), address(scWeth), 100e18);
+        deal(address(weth), address(scWeth), C.INITIAL_WETH_FUNDING);
         console2.log("scUsdc profit after", scUsdc.getProfit());
     }
 
     function _redeem(scWETH vault, address redeemer) internal {
         console2.log("redeeming scWETh", redeemer);
 
-        uint256 withdrawAmount = 1e18;
-        uint256 sharesToRedeem = vault.convertToShares(withdrawAmount);
+        uint256 sharesToRedeem = vault.convertToShares(C.INITIAL_WETH_DEPOSIT);
         vm.prank(redeemer);
         vault.redeem(sharesToRedeem, redeemer, redeemer);
     }
@@ -119,9 +118,8 @@ contract DeployScript is DeployLeveragedEth, Test {
     function _redeem(scUSDC vault, address redeemer) internal {
         console2.log("redeeming scUsdc", redeemer);
 
-        uint256 withdrawAmount = 1e6;
         vm.prank(redeemer);
-        vault.withdraw(withdrawAmount, redeemer, redeemer);
+        vault.withdraw(C.INITIAL_USDC_DEPOSIT, redeemer, redeemer);
     }
 
     function _divergeLTV(scWETH vault) internal {
