@@ -16,10 +16,11 @@ import {scWETHv2} from "../../../src/steth/scWETHv2.sol";
 import {scUSDCv2} from "../../../src/steth/scUSDCv2.sol";
 import {Swapper} from "../../../src/steth/Swapper.sol";
 import {PriceConverter} from "../../../src/steth/PriceConverter.sol";
-import {AaveV3Adapter as scWethAaveV3Adapter} from "../../../src/steth/scWethV2-adapters/AaveV3Adapter.sol";
-import {CompoundV3Adapter as scWethCompoundV3Adapter} from "../../../src/steth/scWethV2-adapters/CompoundV3Adapter.sol";
-import {AaveV3Adapter as scUsdcAaveV3Adapter} from "../../../src/steth/scUsdcV2-adapters/AaveV3Adapter.sol";
-import {AaveV2Adapter as scUsdcAaveV2Adapter} from "../../../src/steth/scUsdcV2-adapters/AaveV2Adapter.sol";
+import {AaveV3ScWethAdapter as scWethAaveV3Adapter} from "../../../src/steth/scWethV2-adapters/AaveV3ScWethAdapter.sol";
+import {CompoundV3ScWethAdapter as scWethCompoundV3Adapter} from
+    "../../../src/steth/scWethV2-adapters/CompoundV3ScWethAdapter.sol";
+import {AaveV3ScUsdcAdapter as scUsdcAaveV3Adapter} from "../../../src/steth/scUsdcV2-adapters/AaveV3ScUsdcAdapter.sol";
+import {AaveV2ScUsdcAdapter as scUsdcAaveV2Adapter} from "../../../src/steth/scUsdcV2-adapters/AaveV2ScUsdcAdapter.sol";
 import {MainnetDeployBase} from "../../base/MainnetDeployBase.sol";
 import {IAdapter} from "../../../src/steth/IAdapter.sol";
 import {scWETHv2Helper} from "../../../test/helpers/scWETHv2Helper.sol";
@@ -81,7 +82,7 @@ contract scWETHv2SimulateProfits is MainnetDeployBase, Test {
         Swapper swapper = new Swapper();
         priceConverter = new PriceConverter(deployerAddress);
 
-        vault = new scWETHv2(deployerAddress, keeper, 0.99e18, weth, swapper, priceConverter);
+        vault = new scWETHv2(deployerAddress, keeper, weth, swapper, priceConverter);
         vaultHelper = new scWETHv2Helper(vault, priceConverter);
 
         _addAdapters();
