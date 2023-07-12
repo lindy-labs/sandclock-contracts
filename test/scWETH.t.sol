@@ -745,6 +745,27 @@ contract scWETHTest is Test {
         assertEq(vault.balanceOf(treasury), perfFees, "perf fee must be the same");
     }
 
+    function test_invest_at_almostZeroLtv(uint256 amount) public {
+        amount = bound(amount, 1e18, 1e20);
+        vault.setTreasury(treasury);
+
+        _depositToVault(address(this), amount);
+
+        vm.startPrank(keeper);
+        vault.harvest();
+        vault.applyNewTargetLtv(1e8);
+        vault.harvest();
+
+        assertEq(weth.balanceOf(address(vault)), 0, "there is float in the vault");
+        assertApproxEqRel(
+            vault.getCollateral(),
+            vault.totalAssets(),
+            1e10,
+            "collateral must almost equal assets, meaning everything is deposited to Lido"
+        );
+        assertApproxEqRel(vault.getLeverage(), C.ONE, 1e10, "leverage must be almost one");
+    }
+
     //////////////////////////// INTERNAL METHODS ////////////////////////////////////////
 
     function _createDefaultWethVaultConstructorParams() internal view returns (scWETH.ConstructorParams memory) {
