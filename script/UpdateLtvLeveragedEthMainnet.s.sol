@@ -34,9 +34,12 @@ contract UpdateLtvLeveragedEthMainnet is Script {
         if (borrowInterest > lidoInterest) {
             vault.applyNewTargetLtv(lowestLtv);
             vault.harvest();
+
+            console.log("Applied new Target Ltv", lowestLtv);
         } else {
             if (vault.getLtv() < bestLtv) {
                 vault.applyNewTargetLtv(bestLtv);
+                console.log("Applied new Target Ltv", bestLtv);
             }
         }
     }
