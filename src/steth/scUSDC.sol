@@ -230,18 +230,22 @@ contract scUSDC is sc4626 {
 
     /**
      * @notice Handles the repayment and collateral release logic for flash loans.
-     * @param userData Data passed to the callback function.
+     * @param _userData Data passed to the callback function.
      */
-    function receiveFlashLoan(address[] memory, uint256[] memory amounts, uint256[] memory, bytes memory userData)
-        external
-    {
+    function receiveFlashLoan(
+        address[] memory,
+        uint256[] memory _amounts,
+        uint256[] memory _fees,
+        bytes memory _userData
+    ) external {
         if (msg.sender != address(balancerVault)) {
             revert InvalidFlashLoanCaller();
         }
         _isFlashLoanInitiated();
 
-        uint256 flashLoanAmount = amounts[0];
-        (uint256 collateral, uint256 debt) = abi.decode(userData, (uint256, uint256));
+        uint256 flashLoanAmount = _amounts[0];
+        uint256 flashLoanFee = _fees[0];
+        (uint256 collateral, uint256 debt) = abi.decode(_userData, (uint256, uint256));
 
         aavePool.repay(address(weth), debt, C.AAVE_VAR_INTEREST_RATE_MODE, address(this));
         aavePool.withdraw(address(asset), collateral, address(this));
@@ -254,7 +258,7 @@ contract scUSDC is sc4626 {
             fee: 500,
             recipient: address(this),
             deadline: block.timestamp,
-            amountOut: flashLoanAmount,
+            amountOut: flashLoanAmount + flashLoanFee,
             amountInMaximum: type(uint256).max, // ignore slippage
             sqrtPriceLimitX96: 0
         });
@@ -263,7 +267,7 @@ contract scUSDC is sc4626 {
 
         asset.approve(address(swapRouter), 0);
 
-        weth.safeTransfer(address(balancerVault), flashLoanAmount);
+        weth.safeTransfer(address(balancerVault), flashLoanAmount + flashLoanFee);
     }
 
     function totalAssets() public view override returns (uint256) {

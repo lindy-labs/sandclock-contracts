@@ -24,7 +24,8 @@ contract MockBalancerVault is IVault {
         require(amounts[0] <= weth.balanceOf(address(this)), "MockBalancerVault: INSUFFICIENT_WETH_BALANCE");
 
         uint256 initialBalance = weth.balanceOf(address(this));
-        uint256[] memory feeAmounts;
+        uint256[] memory feeAmounts = new uint256[](1);
+        feeAmounts[0] = 0;
 
         weth.transfer(recipient, amounts[0]);
         IFlashLoanRecipient(recipient).receiveFlashLoan(tokens, amounts, feeAmounts, userData);

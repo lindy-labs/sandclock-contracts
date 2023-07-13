@@ -58,18 +58,9 @@ contract scWETHv2 is BaseV2Vault {
 
     IwstETH constant wstETH = IwstETH(C.WSTETH);
 
-    constructor(
-        address _admin,
-        address _keeper,
-        uint256 _slippageTolerance,
-        WETH _weth,
-        Swapper _swapper,
-        PriceConverter _priceConverter
-    ) BaseV2Vault(_admin, _keeper, _weth, _priceConverter, _swapper, "Sandclock WETH Vault v2", "scWETHv2") {
-        if (_slippageTolerance > C.ONE) revert InvalidSlippageTolerance();
-
-        slippageTolerance = _slippageTolerance;
-    }
+    constructor(address _admin, address _keeper, WETH _weth, Swapper _swapper, PriceConverter _priceConverter)
+        BaseV2Vault(_admin, _keeper, _weth, _priceConverter, _swapper, "Sandclock WETH Vault v2", "scWETHv2")
+    {}
 
     /*//////////////////////////////////////////////////////////////
                             PUBLIC API
@@ -229,13 +220,13 @@ contract scWETHv2 is BaseV2Vault {
     }
 
     /// @dev called after the flashLoan on rebalance
-    function receiveFlashLoan(address[] memory, uint256[] memory amounts, uint256[] memory, bytes memory userData)
-        external
-    {
+    function receiveFlashLoan(
+        address[] memory,
+        uint256[] memory amounts,
+        uint256[] memory feeAmounts,
+        bytes memory userData
+    ) external {
         _isFlashLoanInitiated();
-
-        // the amount flashloaned
-        uint256 flashLoanAmount = amounts[0];
 
         // decode user data
         bytes[] memory callData = abi.decode(userData, (bytes[]));
@@ -243,7 +234,7 @@ contract scWETHv2 is BaseV2Vault {
         _multiCall(callData);
 
         // payback flashloan
-        asset.safeTransfer(address(balancerVault), flashLoanAmount);
+        asset.safeTransfer(address(balancerVault), amounts[0] + feeAmounts[0]);
 
         _enforceFloat();
     }
