@@ -110,7 +110,7 @@ contract DeployScript is DeployLeveragedEth, Test {
     function _redeem(scWETH vault, address redeemer) internal {
         console2.log("redeeming scWETh", redeemer);
 
-        uint256 sharesToRedeem = vault.convertToShares(C.INITIAL_WETH_DEPOSIT);
+        uint256 sharesToRedeem = vault.convertToShares(C.INITIAL_WETH_WITHDRAW);
         vm.prank(redeemer);
         vault.redeem(sharesToRedeem, redeemer, redeemer);
     }
@@ -119,7 +119,7 @@ contract DeployScript is DeployLeveragedEth, Test {
         console2.log("redeeming scUsdc", redeemer);
 
         vm.prank(redeemer);
-        vault.withdraw(C.INITIAL_USDC_DEPOSIT, redeemer, redeemer);
+        vault.withdraw(C.INITIAL_USDC_WITHDRAW, redeemer, redeemer);
     }
 
     function _divergeLTV(scWETH vault) internal {
