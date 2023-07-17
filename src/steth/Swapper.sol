@@ -16,6 +16,8 @@ import {Constants as C} from "../lib/Constants.sol";
 /**
  * @title Swapper
  * @notice Contract facilitating token swaps on Uniswap V3 and 0x.
+ * @dev This contract is only meant to be used via delegatecalls from another contract.
+ * @dev Using this contract directly for swaps might result in reverts.
  */
 contract Swapper {
     using SafeTransferLib for ERC20;

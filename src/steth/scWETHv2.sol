@@ -103,7 +103,8 @@ contract scWETHv2 is BaseV2Vault {
     }
 
     /// @notice swap weth to wstEth
-    /// @dev mainly to be used in the multicall to swap borrowed weth to wstEth for supplying to the lending markets
+    /// @dev the keeper will mostly used 0x (zeroExSwap method) for swapping weth to wstEth between rebalancing
+    /// @dev this method is just a precaution and to be only used by the keeper in case zeroEx API goes down
     /// @param _wethAmount amount of weth to be swapped to wstEth
     function swapWethToWstEth(uint256 _wethAmount) external {
         _onlyKeeperOrFlashLoan();
