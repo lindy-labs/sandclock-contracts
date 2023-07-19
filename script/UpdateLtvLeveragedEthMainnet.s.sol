@@ -36,11 +36,13 @@ contract UpdateLtvLeveragedEthMainnet is Script {
             vault.harvest();
 
             console.log("Applied new Target Ltv", lowestLtv);
-        } else {
-            if (vault.getLtv() < bestLtv) {
-                vault.applyNewTargetLtv(bestLtv);
-                console.log("Applied new Target Ltv", bestLtv);
-            }
+            
+            return;
+        }
+       
+        if (vault.getLtv() < bestLtv) {
+            vault.applyNewTargetLtv(bestLtv);
+            console.log("Applied new Target Ltv", bestLtv);
         }
     }
 }
