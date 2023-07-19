@@ -16,7 +16,7 @@ contract UpdateLtvLeveragedEthMainnet is Script {
     scWETH vault = scWETH(payable(vm.envAddress("scWETH")));
     IPool aaveV3Pool = IPool(C.AAVE_V3_POOL);
 
-    uint256 bestLtv = 0.8e18;
+    uint256 bestLtv = 0.85e18;
     uint256 lowestLtv = 1e8;
 
     function run() external {
