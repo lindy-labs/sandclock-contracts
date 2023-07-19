@@ -8,6 +8,7 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 import {WETH} from "solmate/tokens/WETH.sol";
 import {IAToken} from "aave-v3/interfaces/IAToken.sol";
 import {IPoolDataProvider} from "aave-v3/interfaces/IPoolDataProvider.sol";
+import {IPool} from "aave-v3/interfaces/IPool.sol";
 
 import {Constants as C} from "../../src/lib/Constants.sol";
 import {ICurvePool} from "../../src/interfaces/curve/ICurvePool.sol";
@@ -19,20 +20,6 @@ import {ISwapRouter} from "../../src/interfaces/uniswap/ISwapRouter.sol";
 import {scWETH} from "../../src/steth/scWETH.sol";
 import {scUSDC} from "../../src/steth/scUSDC.sol";
 
-import {MockWETH} from "../../test/mocks/MockWETH.sol";
-import {MockUSDC} from "../../test/mocks/MockUSDC.sol";
-import {MockAavePool} from "../../test/mocks/aave-v3/MockAavePool.sol";
-import {MockAavePoolDataProvider} from "../../test/mocks/aave-v3/MockAavePoolDataProvider.sol";
-import {MockAUsdc} from "../../test/mocks/aave-v3/MockAUsdc.sol";
-import {MockVarDebtWETH} from "../../test/mocks/aave-v3/MockVarDebtWETH.sol";
-import {MockAwstETH} from "../../test/mocks/aave-v3/MockAwstETH.sol";
-
-import {MockStETH} from "../../test/mocks/lido/MockStETH.sol";
-import {MockWstETH} from "../../test/mocks/lido/MockWstETH.sol";
-import {MockCurvePool} from "../../test/mocks/curve/MockCurvePool.sol";
-import {MockChainlinkPriceFeed} from "../../test/mocks/chainlink/MockChainlinkPriceFeed.sol";
-import {MockBalancerVault} from "../../test/mocks/balancer/MockBalancerVault.sol";
-import {MockSwapRouter} from "../../test/mocks/uniswap/MockSwapRouter.sol";
 import {MainnetDeployBase} from "../base/MainnetDeployBase.sol";
 
 /**
@@ -41,7 +28,7 @@ import {MainnetDeployBase} from "../base/MainnetDeployBase.sol";
  * forked node environment.
  */
 abstract contract DeployLeveragedEth is MainnetDeployBase {
-    MockAavePool aavePool = MockAavePool(C.AAVE_V3_POOL);
+    IPool aavePool = IPool(C.AAVE_V3_POOL);
     ICurvePool curveEthStEthPool = ICurvePool(C.CURVE_ETH_STETH_POOL);
     ISwapRouter uniswapRouter = ISwapRouter(C.UNISWAP_V3_SWAP_ROUTER);
 
