@@ -746,14 +746,14 @@ contract scWETHTest is Test {
     }
 
     function test_invest_at_almostZeroLtv(uint256 amount) public {
-        amount = bound(amount, 1e18, 1e20);
-        vault.setTreasury(treasury);
+        amount = bound(amount, 1 ether, 1000 ether);
+        uint256 lowestLtv = 1e8;
 
         _depositToVault(address(this), amount);
 
         vm.startPrank(keeper);
         vault.harvest();
-        vault.applyNewTargetLtv(1e8);
+        vault.applyNewTargetLtv(lowestLtv);
         vault.harvest();
 
         assertEq(weth.balanceOf(address(vault)), 0, "there is float in the vault");
