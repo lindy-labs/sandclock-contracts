@@ -23,9 +23,8 @@ import {scUSDC} from "../../src/steth/scUSDC.sol";
 import {MainnetDeployBase} from "../base/MainnetDeployBase.sol";
 
 /**
- * Base Testnet Deployment file that handles deployment.
- * Testnet deployments are equivalent to mainnet deployments because of
- * forked node environment.
+ * Base Deployment file that handles Forked & Mainnet deployment.
+ * Forked node deployments are equivalent to mainnet deployments.
  */
 abstract contract DeployLeveragedEth is MainnetDeployBase {
     IPool aavePool = IPool(C.AAVE_V3_POOL);
