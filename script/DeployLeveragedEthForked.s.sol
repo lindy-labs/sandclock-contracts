@@ -17,10 +17,10 @@ import {scUSDC} from "../src/steth/scUSDC.sol";
 
 /**
  * Deployment & Fixture exection script to be run against staging forked node.
- * i.e.: ` forge script script/DeployLeveragedEthTestnet.s.sol
+ * i.e.: ` forge script script/DeployLeveragedEthForked.s.sol
  *          --rpc-url=http://forked-node`
  */
-contract DeployLeveragedEthTestnet is DeployLeveragedEth, Test {
+contract DeployLeveragedEthForked is DeployLeveragedEth, Test {
     using stdStorage for StdStorage;
 
     uint256 public constant INITIAL_WETH_DEPOSIT = 10e18;
