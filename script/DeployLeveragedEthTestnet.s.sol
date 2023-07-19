@@ -15,6 +15,11 @@ import {sc4626} from "../src/sc4626.sol";
 import {scWETH} from "../src/steth/scWETH.sol";
 import {scUSDC} from "../src/steth/scUSDC.sol";
 
+/**
+ * Deployment & Fixture exection script to be run against staging forked node.
+ * i.e.: ` forge script script/DeployLeveragedEthTestnet.s.sol
+ *          --rpc-url=http://forked-node`
+ */
 contract DeployLeveragedEthTestnet is DeployLeveragedEth, Test {
     using stdStorage for StdStorage;
 
