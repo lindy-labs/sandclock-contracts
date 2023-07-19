@@ -75,22 +75,6 @@ library Constants {
     address public constant BALANCER_FEES_COLLECTOR = 0xce88686553686DA562CE7Cea497CE749DA109f9F;
 
     /*//////////////////////////////////////////////////////////////
-                          TESTING CONSTANTS
-    //////////////////////////////////////////////////////////////*/
-
-    uint256 public constant INITIAL_WETH_DEPOSIT = 10e18;
-
-    uint256 public constant INITIAL_WETH_WITHDRAW = 1e18;
-
-    uint256 public constant INITIAL_USDC_DEPOSIT = 100e6;
-
-    uint256 public constant INITIAL_USDC_WITHDRAW = 1e6;
-
-    uint256 public constant INITIAL_WETH_FUNDING = 100e18;
-
-    uint256 public constant INITIAL_USDC_FUNDING = 10000e6;
-
-    /*//////////////////////////////////////////////////////////////
                           TESTING ADDRESSES
     //////////////////////////////////////////////////////////////*/
 
