@@ -10,7 +10,7 @@ import {sc4626} from "../src/sc4626.sol";
 import {Constants as C} from "../src/lib/Constants.sol";
 import {ISwapRouter} from "../src/interfaces/uniswap/ISwapRouter.sol";
 
-contract DeployScript is DeployLeveragedEth {
+contract DeployLeveragedEthMainnet is DeployLeveragedEth {
     function run() external {
         _deploy();
 

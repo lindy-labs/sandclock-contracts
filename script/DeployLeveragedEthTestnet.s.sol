@@ -15,7 +15,7 @@ import {sc4626} from "../src/sc4626.sol";
 import {scWETH} from "../src/steth/scWETH.sol";
 import {scUSDC} from "../src/steth/scUSDC.sol";
 
-contract DeployScript is DeployLeveragedEth, Test {
+contract DeployLeveragedEthTestnet is DeployLeveragedEth, Test {
     using stdStorage for StdStorage;
 
     uint256 public constant INITIAL_WETH_DEPOSIT = 10e18;
