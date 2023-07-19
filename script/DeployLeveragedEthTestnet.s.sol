@@ -63,9 +63,6 @@ contract DeployScript is DeployLeveragedEth, Test {
         _deposit(usdc, scUsdc, bob, address(scUsdc), INITIAL_USDC_DEPOSIT);
 
         _profit(); // create scUsdc profit scenario
-
-        _divergeLTV(scWeth);
-        _divergeLTV(scUsdc);
     }
 
     function _fund() internal {
@@ -132,36 +129,5 @@ contract DeployScript is DeployLeveragedEth, Test {
 
         vm.prank(_redeemer);
         _vault.withdraw(INITIAL_USDC_WITHDRAW, _redeemer, _redeemer);
-    }
-
-    function _divergeLTV(scWETH _vault) internal {
-        console2.log("forcing LTV diverge scWETH");
-        ERC20 dWeth = ERC20(address(C.AAVE_V3_VAR_DEBT_WETH_TOKEN));
-
-        console2.log("LTV before", _vault.getLtv());
-        console2.log("dWeth token balance before", dWeth.balanceOf(address(_vault)));
-
-        deal(C.AAVE_V3_VAR_DEBT_IMPLEMENTATION_CONTRACT, address(_vault), 42e19);
-
-        console2.log("dWeth token balance after", dWeth.balanceOf(address(_vault)));
-        console2.log("LTV after", _vault.getLtv());
-    }
-
-    function _divergeLTV(scUSDC _vault) internal {
-        console2.log("forcing LTV diverge scUsdc");
-        ERC20 dWeth = ERC20(address(C.AAVE_V3_VAR_DEBT_WETH_TOKEN));
-
-        console2.log("LTV before", _vault.getLtv());
-        console2.log("dWeth token balance before", dWeth.balanceOf(address(_vault)));
-
-        _setTokenBalance(C.AAVE_V3_VAR_DEBT_IMPLEMENTATION_CONTRACT, address(_vault), 42e19);
-
-        console2.log("dWeth token balance after", dWeth.balanceOf(address(_vault)));
-        console2.log("LTV after", _vault.getLtv());
-    }
-
-    function _setTokenBalance(address _token, address _vault, uint256 _amount) internal {
-        console2.log("setting token balance with stdStore");
-        stdstore.target(address(_token)).sig(ERC20(_token).balanceOf.selector).with_key(_vault).checked_write(_amount);
     }
 }
