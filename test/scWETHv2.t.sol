@@ -20,6 +20,7 @@ import {ILido} from "../src/interfaces/lido/ILido.sol";
 import {IwstETH} from "../src/interfaces/lido/IwstETH.sol";
 import {ICurvePool} from "../src/interfaces/curve/ICurvePool.sol";
 import {IVault} from "../src/interfaces/balancer/IVault.sol";
+import {IProtocolFeesCollector} from "../src/interfaces/balancer/IProtocolFeesCollector.sol";
 import {AggregatorV3Interface} from "../src/interfaces/chainlink/AggregatorV3Interface.sol";
 import {sc4626} from "../src/sc4626.sol";
 import {BaseV2Vault} from "../src/steth/BaseV2Vault.sol";
@@ -65,7 +66,6 @@ contract scWETHv2Test is Test {
     uint256 eulerAllocationPercent = 0.3e18;
     uint256 compoundAllocationPercent = 0.2e18;
 
-    uint256 slippageTolerance = 0.99e18;
     uint256 maxLtv;
     WETH weth;
     ILido stEth;
@@ -82,6 +82,8 @@ contract scWETHv2Test is Test {
     IAdapter aaveV3Adapter;
     IAdapter eulerAdapter;
     IAdapter compoundV3Adapter;
+
+    uint256 flashLoanFeePercent;
 
     function _setUp(uint256 _blockNumber) internal {
         vm.createFork(vm.envString("RPC_URL_MAINNET"));
@@ -135,7 +137,6 @@ contract scWETHv2Test is Test {
         assertEq(vault.hasRole(vault.KEEPER_ROLE(), keeper), true, "keeper role not set");
         assertEq(address(vault.asset()), C.WETH);
         assertEq(address(vault.balancerVault()), C.BALANCER_VAULT);
-        assertEq(vault.slippageTolerance(), slippageTolerance);
     }
 
     function test_addAdapter() public {
@@ -590,6 +591,35 @@ contract scWETHv2Test is Test {
         _floatCheck();
 
         _investChecks(investAmount, priceConverter.wstEthToEth(totalSupplyAmount), totalFlashLoanAmount);
+    }
+
+    function test_invest_withNonZeroFlashLoanFees(uint256 amount) public {
+        _setUp(BLOCK_BEFORE_EULER_EXPLOIT);
+        flashLoanFeePercent = 5e15; // 0.5%
+
+        IProtocolFeesCollector balancerFeeContract = IProtocolFeesCollector(C.BALANCER_FEES_COLLECTOR);
+
+        // change balancer flashloan fees percentage
+        hoax(C.BALANCER_ADMIN);
+        balancerFeeContract.setFlashLoanFeePercentage(flashLoanFeePercent);
+        assertEq(balancerFeeContract.getFlashLoanFeePercentage(), flashLoanFeePercent);
+
+        amount = bound(amount, 10 ether, 15000 ether);
+        _depositToVault(address(this), amount);
+
+        uint256 initialBalance = weth.balanceOf(address(balancerFeeContract));
+
+        uint256 investAmount = amount - minimumFloatAmount;
+        (bytes[] memory callData,, uint256 totalFlashLoanAmount) =
+            _getInvestParams(investAmount, aaveV3AllocationPercent, eulerAllocationPercent, compoundAllocationPercent);
+
+        // must not revert (would have reverted if scWETHv2 was not paying fees)
+        hoax(keeper);
+        vault.rebalance(investAmount, totalFlashLoanAmount, callData);
+
+        // assert fees has been paid
+        uint256 expectedFees = totalFlashLoanAmount.mulWadUp(flashLoanFeePercent);
+        assertEq(weth.balanceOf(address(balancerFeeContract)) - initialBalance, expectedFees, "Balancer Fees not paid");
     }
 
     function test_disinvest_usingMulticallsAndZeroExSwap() public {
@@ -1167,7 +1197,7 @@ contract scWETHv2Test is Test {
         uint256 market2BorrowAmount = repayAmount - delta;
 
         callData[1] = abi.encodeWithSelector(
-            scWETHv2.swapWstEthToWeth.selector, priceConverter.ethToWstEth(delta), slippageTolerance
+            scWETHv2.swapWstEthToWeth.selector, priceConverter.ethToWstEth(delta), vault.slippageTolerance()
         );
 
         callData[2] = abi.encodeWithSelector(
@@ -1200,7 +1230,7 @@ contract scWETHv2Test is Test {
         uint256 delta = withdrawAmount - market2SupplyAmount;
 
         callData[1] = abi.encodeWithSelector(
-            scWETHv2.swapWstEthToWeth.selector, priceConverter.ethToWstEth(delta), slippageTolerance
+            scWETHv2.swapWstEthToWeth.selector, priceConverter.ethToWstEth(delta), vault.slippageTolerance()
         );
 
         callData[2] = abi.encodeWithSelector(
@@ -1239,7 +1269,7 @@ contract scWETHv2Test is Test {
         uint256 delta = withdrawAmount - (aaveV3SupplyAmount + compoundSupplyAmount);
 
         callData[1] = abi.encodeWithSelector(
-            scWETHv2.swapWstEthToWeth.selector, priceConverter.ethToWstEth(delta), slippageTolerance
+            scWETHv2.swapWstEthToWeth.selector, priceConverter.ethToWstEth(delta), vault.slippageTolerance()
         );
 
         callData[2] = abi.encodeWithSelector(
@@ -1302,7 +1332,7 @@ contract scWETHv2Test is Test {
         uint256 eulerBorrowAmount = repayAmount - delta;
 
         callData[2] = abi.encodeWithSelector(
-            scWETHv2.swapWstEthToWeth.selector, priceConverter.ethToWstEth(delta), slippageTolerance
+            scWETHv2.swapWstEthToWeth.selector, priceConverter.ethToWstEth(delta), vault.slippageTolerance()
         );
 
         callData[3] = abi.encodeWithSelector(
@@ -1316,6 +1346,7 @@ contract scWETHv2Test is Test {
     }
 
     /// @return : supplyBorrowParams, totalSupplyAmount, totalDebtTaken
+
     function _getInvestParams(
         uint256 amount,
         uint256 aaveV3Allocation,
@@ -1342,18 +1373,30 @@ contract scWETHv2Test is Test {
 
         uint256 totalFlashLoanAmount = aaveV3FlashLoanAmount + eulerFlashLoanAmount + compoundFlashLoanAmount;
 
+        // if there are flash loan fees then the below code borrows the required flashloan amount plus the flashloan fees
+        // but this actually increases our LTV to a little more than the target ltv (which might not be desired)
+
         bytes[] memory callData = new bytes[](4);
 
         callData[0] = abi.encodeWithSelector(scWETHv2.swapWethToWstEth.selector, investAmount + totalFlashLoanAmount);
 
         callData[1] = abi.encodeWithSelector(
-            scWETHv2.supplyAndBorrow.selector, aaveV3AdapterId, aaveV3SupplyAmount, aaveV3FlashLoanAmount
+            scWETHv2.supplyAndBorrow.selector,
+            aaveV3AdapterId,
+            aaveV3SupplyAmount,
+            aaveV3FlashLoanAmount.mulWadUp(1e18 + flashLoanFeePercent)
         );
         callData[2] = abi.encodeWithSelector(
-            scWETHv2.supplyAndBorrow.selector, eulerAdapterId, eulerSupplyAmount, eulerFlashLoanAmount
+            scWETHv2.supplyAndBorrow.selector,
+            eulerAdapterId,
+            eulerSupplyAmount,
+            eulerFlashLoanAmount.mulWadUp(1e18 + flashLoanFeePercent)
         );
         callData[3] = abi.encodeWithSelector(
-            scWETHv2.supplyAndBorrow.selector, compoundV3AdapterId, compoundSupplyAmount, compoundFlashLoanAmount
+            scWETHv2.supplyAndBorrow.selector,
+            compoundV3AdapterId,
+            compoundSupplyAmount,
+            compoundFlashLoanAmount.mulWadUp(1e18 + flashLoanFeePercent)
         );
 
         return (callData, aaveV3SupplyAmount + eulerSupplyAmount + compoundSupplyAmount, totalFlashLoanAmount);
@@ -1392,7 +1435,8 @@ contract scWETHv2Test is Test {
             priceConverter.ethToWstEth(compoundFlashLoanAmount)
         );
 
-        callData[3] = abi.encodeWithSelector(scWETHv2.swapWstEthToWeth.selector, type(uint256).max, slippageTolerance);
+        callData[3] =
+            abi.encodeWithSelector(scWETHv2.swapWstEthToWeth.selector, type(uint256).max, vault.slippageTolerance());
 
         return (callData, aaveV3FlashLoanAmount + eulerFlashLoanAmount + compoundFlashLoanAmount);
     }
@@ -1661,7 +1705,7 @@ contract scWETHv2Test is Test {
     }
 
     function _deployVaultWithDefaultParams() internal returns (scWETHv2) {
-        return new scWETHv2(admin, keeper, slippageTolerance, WETH(payable(C.WETH)), new Swapper(), priceConverter);
+        return new scWETHv2(admin, keeper, WETH(payable(C.WETH)), new Swapper(), priceConverter);
     }
 
     function _simulate_stEthStakingInterest(uint256 timePeriod, uint256 stEthStakingInterest) internal {

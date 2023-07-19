@@ -39,7 +39,7 @@ contract DeployScript is MainnetDeployBase {
     }
 
     function _deployScWethV2(PriceConverter _priceConverter, Swapper _swapper) internal returns (scWETHv2 vault) {
-        vault = new scWETHv2(deployerAddress, keeper, 0.99e18, weth, _swapper, _priceConverter);
+        vault = new scWETHv2(deployerAddress, keeper, weth, _swapper, _priceConverter);
 
         // deploy & add adapters
         AaveV3ScWethAdapter aaveV3Adapter = new AaveV3ScWethAdapter();
