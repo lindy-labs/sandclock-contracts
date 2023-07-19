@@ -5,7 +5,7 @@ import {CREATE3Script} from "./base/CREATE3Script.sol";
 import {RewardTracker} from "../src/staking/RewardTracker.sol";
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 
-contract DeployScript is CREATE3Script {
+contract DeployStaking is CREATE3Script {
     bytes32 public constant DISTRIBUTOR = keccak256("DISTRIBUTOR");
     bytes32 public constant DEFAULT_ADMIN_ROLE = 0x00;
 
