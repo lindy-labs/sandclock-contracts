@@ -19,15 +19,10 @@ contract DeployScript is DeployLeveragedEth, Test {
     using stdStorage for StdStorage;
 
     uint256 public constant INITIAL_WETH_DEPOSIT = 10e18;
-
     uint256 public constant INITIAL_WETH_WITHDRAW = 1e18;
-
     uint256 public constant INITIAL_USDC_DEPOSIT = 100e6;
-
     uint256 public constant INITIAL_USDC_WITHDRAW = 1e6;
-
     uint256 public constant INITIAL_WETH_FUNDING = 100e18;
-
     uint256 public constant INITIAL_USDC_FUNDING = 10000e6;
 
     function run() external {
