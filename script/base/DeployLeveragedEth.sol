@@ -57,7 +57,7 @@ abstract contract DeployLeveragedEth is MainnetDeployBase {
         scWETH.ConstructorParams memory scWethParams = scWETH.ConstructorParams({
             admin: deployerAddress,
             keeper: keeper,
-            targetLtv: 0.7e18,
+            targetLtv: 0.85e18,
             slippageTolerance: 0.99e18,
             aavePool: aavePool,
             aaveAwstEth: IAToken(C.AAVE_V3_AWSTETH_TOKEN),
