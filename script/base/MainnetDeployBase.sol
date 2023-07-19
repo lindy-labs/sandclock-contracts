@@ -11,6 +11,9 @@ import {Constants as C} from "../../src/lib/Constants.sol";
 import {ISwapRouter} from "../../src/interfaces/uniswap/ISwapRouter.sol";
 import {sc4626} from "../../src/sc4626.sol";
 
+/**
+ * Mainnet base deployment file that handles deployment.
+ */
 abstract contract MainnetDeployBase is CREATE3Script {
     uint256 deployerPrivateKey = uint256(vm.envBytes32("PRIVATE_KEY"));
     address deployerAddress = vm.addr(deployerPrivateKey);

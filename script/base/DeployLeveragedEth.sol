@@ -35,6 +35,11 @@ import {MockBalancerVault} from "../../test/mocks/balancer/MockBalancerVault.sol
 import {MockSwapRouter} from "../../test/mocks/uniswap/MockSwapRouter.sol";
 import {MainnetDeployBase} from "../base/MainnetDeployBase.sol";
 
+/**
+ * Base Testnet Deployment file that handles deployment.
+ * Testnet deployments are equivalent to mainnet deployments because of
+ * forked node environment.
+ */
 abstract contract DeployLeveragedEth is MainnetDeployBase {
     MockAavePool aavePool = MockAavePool(C.AAVE_V3_POOL);
     ICurvePool curveEthStEthPool = ICurvePool(C.CURVE_ETH_STETH_POOL);
