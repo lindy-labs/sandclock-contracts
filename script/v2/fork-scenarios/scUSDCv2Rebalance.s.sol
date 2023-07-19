@@ -110,7 +110,7 @@ contract scUSDCv2Rebalance is MainnetDeployBase, Test {
         Swapper swapper = new Swapper();
         priceConverter = new PriceConverter(deployerAddress);
 
-        scWethV2 = new scWETHv2(deployerAddress, keeper, 0.99e18, weth, swapper, priceConverter);
+        scWethV2 = new scWETHv2(deployerAddress, keeper, weth, swapper, priceConverter);
         scUsdcV2 = new scUSDCv2(deployerAddress, keeper, scWethV2, priceConverter, swapper);
 
         aaveV2Adapter = new AaveV2ScUsdcAdapter();
