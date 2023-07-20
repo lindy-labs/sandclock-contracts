@@ -40,10 +40,10 @@ contract DeployLeveragedEthForked is DeployLeveragedEth, Test {
 
         _fund();
 
-        _deposit(weth, scWeth, alice, address(scWeth), INITIAL_WETH_DEPOSIT);
-        _deposit(weth, scWeth, bob, address(scWeth), INITIAL_WETH_DEPOSIT);
-        _deposit(usdc, scUsdc, alice, address(scUsdc), INITIAL_USDC_DEPOSIT);
-        _deposit(usdc, scUsdc, bob, address(scUsdc), INITIAL_USDC_DEPOSIT);
+        _deposit(weth, scWeth, alice, INITIAL_WETH_DEPOSIT);
+        _deposit(weth, scWeth, bob, INITIAL_WETH_DEPOSIT);
+        _deposit(usdc, scUsdc, alice, INITIAL_USDC_DEPOSIT);
+        _deposit(usdc, scUsdc, bob, INITIAL_USDC_DEPOSIT);
 
         _rebalance(scWeth);
 
@@ -57,10 +57,10 @@ contract DeployLeveragedEthForked is DeployLeveragedEth, Test {
         _redeem(scUsdc, alice);
         _redeem(scUsdc, bob);
 
-        _deposit(weth, scWeth, alice, address(scWeth), INITIAL_WETH_DEPOSIT);
-        _deposit(weth, scWeth, bob, address(scWeth), INITIAL_WETH_DEPOSIT);
-        _deposit(usdc, scUsdc, alice, address(scUsdc), INITIAL_USDC_DEPOSIT);
-        _deposit(usdc, scUsdc, bob, address(scUsdc), INITIAL_USDC_DEPOSIT);
+        _deposit(weth, scWeth, alice, INITIAL_WETH_DEPOSIT);
+        _deposit(weth, scWeth, bob, INITIAL_WETH_DEPOSIT);
+        _deposit(usdc, scUsdc, alice, INITIAL_USDC_DEPOSIT);
+        _deposit(usdc, scUsdc, bob, INITIAL_USDC_DEPOSIT);
 
         _profit(); // create scUsdc profit scenario
     }
@@ -83,11 +83,11 @@ contract DeployLeveragedEthForked is DeployLeveragedEth, Test {
         deal(address(usdc), bob, INITIAL_USDC_FUNDING);
     }
 
-    function _deposit(ERC20 _asset, sc4626 _vault, address _from, address _to, uint256 _amount) internal {
+    function _deposit(ERC20 _asset, sc4626 _vault, address _from, uint256 _amount) internal {
         console2.log("depositing", _from);
 
         vm.startPrank(_from);
-        _asset.approve(address(_to), type(uint256).max);
+        _asset.approve(address(_vault), type(uint256).max);
         _vault.deposit(_amount, _from);
         vm.stopPrank();
     }
