@@ -45,6 +45,8 @@ library Constants {
     address public constant AAVE_V3_AWSTETH_TOKEN = 0x0B925eD163218f6662a35e0f0371Ac234f9E9371;
     // address of the Aave v3 "variableDebtEthWETH" token (variable debt token)
     address public constant AAVE_V3_VAR_DEBT_WETH_TOKEN = 0xeA51d7853EEFb32b6ee06b1C12E6dcCA88Be0fFE;
+    // address of the Aave v3 "variableDebtEthWETH" token implementation contract (variable debt token)
+    address public constant AAVE_V3_VAR_DEBT_IMPLEMENTATION_CONTRACT = 0xaC725CB59D16C81061BDeA61041a8A5e73DA9EC6;
 
     // EULER Contracts
     address public constant EULER = 0x27182842E098f60e3D576794A5bFFb0777E025d3;

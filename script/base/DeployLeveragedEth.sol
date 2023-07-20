@@ -6,11 +6,12 @@ import "forge-std/console2.sol";
 import {CREATE3Script} from "./CREATE3Script.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {WETH} from "solmate/tokens/WETH.sol";
-import {IPool} from "aave-v3/interfaces/IPool.sol";
 import {IAToken} from "aave-v3/interfaces/IAToken.sol";
 import {IPoolDataProvider} from "aave-v3/interfaces/IPoolDataProvider.sol";
+import {IPool} from "aave-v3/interfaces/IPool.sol";
 
 import {Constants as C} from "../../src/lib/Constants.sol";
+import {DeploymentConstants as DC} from "../../src/lib/DeploymentConstants.sol";
 import {ICurvePool} from "../../src/interfaces/curve/ICurvePool.sol";
 import {ILido} from "../../src/interfaces/lido/ILido.sol";
 import {IwstETH} from "../../src/interfaces/lido/IwstETH.sol";
@@ -20,128 +21,63 @@ import {ISwapRouter} from "../../src/interfaces/uniswap/ISwapRouter.sol";
 import {scWETH} from "../../src/steth/scWETH.sol";
 import {scUSDC} from "../../src/steth/scUSDC.sol";
 
-import {MockWETH} from "../../test/mocks/MockWETH.sol";
-import {MockUSDC} from "../../test/mocks/MockUSDC.sol";
-import {MockAavePool} from "../../test/mocks/aave-v3/MockAavePool.sol";
-import {MockAavePoolDataProvider} from "../../test/mocks/aave-v3/MockAavePoolDataProvider.sol";
-import {MockAUsdc} from "../../test/mocks/aave-v3/MockAUsdc.sol";
-import {MockVarDebtWETH} from "../../test/mocks/aave-v3/MockVarDebtWETH.sol";
-import {MockAwstETH} from "../../test/mocks/aave-v3/MockAwstETH.sol";
+import {MainnetDeployBase} from "../base/MainnetDeployBase.sol";
 
-import {MockStETH} from "../../test/mocks/lido/MockStETH.sol";
-import {MockWstETH} from "../../test/mocks/lido/MockWstETH.sol";
-import {MockCurvePool} from "../../test/mocks/curve/MockCurvePool.sol";
-import {MockChainlinkPriceFeed} from "../../test/mocks/chainlink/MockChainlinkPriceFeed.sol";
-import {MockBalancerVault} from "../../test/mocks/balancer/MockBalancerVault.sol";
-import {MockSwapRouter} from "../../test/mocks/uniswap/MockSwapRouter.sol";
+/**
+ * Base Deployment file that handles Forked & Mainnet deployment.
+ * Forked node deployments are equivalent to mainnet deployments.
+ */
+abstract contract DeployLeveragedEth is MainnetDeployBase {
+    IPool aavePool = IPool(C.AAVE_V3_POOL);
+    ICurvePool curveEthStEthPool = ICurvePool(C.CURVE_ETH_STETH_POOL);
+    ISwapRouter uniswapRouter = ISwapRouter(C.UNISWAP_V3_SWAP_ROUTER);
 
-abstract contract DeployLeveragedEth is CREATE3Script {
-    MockWETH weth;
-    MockUSDC usdc;
-    MockAavePool aavePool;
-    MockAavePoolDataProvider aavePoolDataProvider;
-    MockAUsdc aaveAUsdc;
-    MockVarDebtWETH aaveVarDWeth;
-    MockStETH stEth;
-    MockWstETH wstEth;
-    MockAwstETH aaveAwstEth;
-    MockCurvePool curveEthStEthPool;
-    MockChainlinkPriceFeed stEthToEthPriceFeed;
-    MockChainlinkPriceFeed usdcToEthPriceFeed;
-    MockBalancerVault balancerVault;
-    MockSwapRouter uniswapRouter;
-    scWETH wethContract;
-    scUSDC usdcContract;
+    scWETH scWeth;
+    scUSDC scUsdc;
 
-    address keeper = vm.envAddress("KEEPER");
+    address alice = DC.ALICE;
+    address bob = DC.BOB;
 
-    constructor() CREATE3Script(vm.envString("VERSION")) {}
-
-    function deploy() internal {
-        uint256 deployerPrivateKey = uint256(vm.envBytes32("PRIVATE_KEY"));
-
+    function _deploy() internal {
         vm.startBroadcast(deployerPrivateKey);
 
-        deployMockTokens();
-        deployMocks();
-
         scWETH.ConstructorParams memory scWethParams = scWETH.ConstructorParams({
-            admin: address(this),
+            admin: deployerAddress,
             keeper: keeper,
-            targetLtv: 0.7e18,
+            targetLtv: 0.85e18,
             slippageTolerance: 0.99e18,
             aavePool: aavePool,
-            aaveAwstEth: IAToken(address(aaveAwstEth)),
-            aaveVarDWeth: ERC20(address(aaveVarDWeth)),
+            aaveAwstEth: IAToken(C.AAVE_V3_AWSTETH_TOKEN),
+            aaveVarDWeth: ERC20(C.AAVE_V3_VAR_DEBT_WETH_TOKEN),
             curveEthStEthPool: curveEthStEthPool,
-            stEth: ILido(address(stEth)),
-            wstEth: IwstETH(address(wstEth)),
-            weth: WETH(payable(weth)),
-            stEthToEthPriceFeed: stEthToEthPriceFeed,
-            balancerVault: balancerVault
+            stEth: ILido(C.STETH),
+            wstEth: IwstETH(C.WSTETH),
+            weth: weth,
+            stEthToEthPriceFeed: AggregatorV3Interface(C.CHAINLINK_STETH_ETH_PRICE_FEED),
+            balancerVault: IVault(C.BALANCER_VAULT)
         });
 
-        wethContract = new scWETH(scWethParams);
+        scWeth = new scWETH(scWethParams);
+        console2.log("\nscWETH: ", address(scWeth));
 
         scUSDC.ConstructorParams memory scUsdcParams = scUSDC.ConstructorParams({
-            admin: address(this),
+            admin: deployerAddress,
             keeper: keeper,
-            scWETH: wethContract,
+            scWETH: scWeth,
             usdc: usdc,
-            weth: WETH(payable(weth)),
+            weth: WETH(payable(C.WETH)),
             aavePool: aavePool,
-            aavePoolDataProvider: aavePoolDataProvider,
-            aaveAUsdc: IAToken(address(aaveAUsdc)),
-            aaveVarDWeth: ERC20(address(aaveVarDWeth)),
+            aavePoolDataProvider: IPoolDataProvider(C.AAVE_V3_POOL_DATA_PROVIDER),
+            aaveAUsdc: IAToken(C.AAVE_V3_AUSDC_TOKEN),
+            aaveVarDWeth: ERC20(C.AAVE_V3_VAR_DEBT_WETH_TOKEN),
             uniswapSwapRouter: uniswapRouter,
-            chainlinkUsdcToEthPriceFeed: usdcToEthPriceFeed,
-            balancerVault: balancerVault
+            chainlinkUsdcToEthPriceFeed: AggregatorV3Interface(C.CHAINLINK_USDC_ETH_PRICE_FEED),
+            balancerVault: IVault(C.BALANCER_VAULT)
         });
 
-        usdcContract = new scUSDC(scUsdcParams);
+        scUsdc = new scUSDC(scUsdcParams);
+        console2.log("scUSDC: ", address(scUsdc));
 
         vm.stopBroadcast();
-    }
-
-    function deployMockTokens() internal virtual {}
-
-    function deployMocks() internal {
-        stEth = new MockStETH();
-        wstEth = new MockWstETH(stEth);
-        stEthToEthPriceFeed = new MockChainlinkPriceFeed(address(stEth), address(weth), 1e18);
-        usdcToEthPriceFeed = new MockChainlinkPriceFeed(address(usdc), address(weth), 0.001e18);
-        aavePool = new MockAavePool();
-        aavePool.setStEthToEthPriceFeed(stEthToEthPriceFeed, wstEth, weth);
-        aavePoolDataProvider = new MockAavePoolDataProvider(address(usdc), address(weth));
-        aaveAUsdc = new MockAUsdc(aavePool, usdc);
-        aaveVarDWeth = new MockVarDebtWETH(aavePool, weth);
-        aaveAwstEth = new MockAwstETH(aavePool, wstEth);
-        curveEthStEthPool = new MockCurvePool(stEth);
-        balancerVault = new MockBalancerVault(weth);
-        uniswapRouter = new MockSwapRouter();
-
-        console2.log("weth: contract MockWETH", address(weth));
-        console2.log("usdc: contract MockUSDC", address(usdc));
-        console2.log("aavePool: contract MockAavePool", address(aavePool));
-        console2.log("aavePoolDataProvider: contract MockAavePoolDataProvider", address(aavePoolDataProvider));
-        console2.log("aaveAUsdc: contract MockAUsdc", address(aaveAUsdc));
-        console2.log("aaveVarDWeth: contract MockVarDebtWETH", address(aaveVarDWeth));
-        console2.log("stEth: contract MockStETH", address(stEth));
-        console2.log("wstEth: contract MockWstETH", address(wstEth));
-        console2.log("aaveAwstEth: contract MockAwstETH", address(aaveAwstEth));
-        console2.log("curveEthStEthPool: contract MockCurvePool", address(curveEthStEthPool));
-        console2.log("stEthToEthPriceFeed: contract MockChainlinkPriceFeed", address(stEthToEthPriceFeed));
-        console2.log("usdcToEthPriceFeed: contract MockChainlinkPriceFeed", address(usdcToEthPriceFeed));
-        console2.log("balancerVault: contract MockBalancerVault", address(balancerVault));
-        console2.log("uniswapRouter: contract MockSwapRouter", address(uniswapRouter));
-        console2.log("");
-
-        weth.mint(address(balancerVault), 100e18);
-        weth.mint(address(aavePool), 100e18);
-        console2.log("weth: minted 100e18 to balancerVault", address(balancerVault));
-        console2.log("weth: minted 100e18 to aavePool", address(aavePool));
-
-        console2.log("NOTE: 1 mWETH = 1000 mUSDC");
-        console2.log("NOTE: 1 mstETH = 1 ETH");
     }
 }

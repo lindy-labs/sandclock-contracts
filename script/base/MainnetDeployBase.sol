@@ -11,6 +11,9 @@ import {Constants as C} from "../../src/lib/Constants.sol";
 import {ISwapRouter} from "../../src/interfaces/uniswap/ISwapRouter.sol";
 import {sc4626} from "../../src/sc4626.sol";
 
+/**
+ * Mainnet base deployment file that handles deployment.
+ */
 abstract contract MainnetDeployBase is CREATE3Script {
     uint256 deployerPrivateKey = uint256(vm.envBytes32("PRIVATE_KEY"));
     address deployerAddress = vm.addr(deployerPrivateKey);
@@ -26,7 +29,7 @@ abstract contract MainnetDeployBase is CREATE3Script {
         _contract.revokeRole(_contract.DEFAULT_ADMIN_ROLE(), _currentAdmin);
     }
 
-    function _deposit(sc4626 _vault, uint256 _amount) internal {
+    function _deposit(sc4626 _vault, uint256 _amount) internal virtual {
         _vault.asset().approve(address(_vault), _amount);
         _vault.deposit(_amount, deployerAddress);
     }
