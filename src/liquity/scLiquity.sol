@@ -23,7 +23,7 @@ contract scLiquity is sc4626 {
     uint256 public totalProfit;
 
     IStabilityPool public stabilityPool = IStabilityPool(C.LIQUITY_STABILITY_POOL);
-    IPriceFeed public lusd2eth = IPriceFeed(C.LIQUITY_USD_ETH_PRICE_FEED);
+    IPriceFeed public usd2eth = IPriceFeed(C.LIQUITY_USD_ETH_PRICE_FEED);
     ERC20 public lqty = ERC20(C.LIQUITY_LQTY_TOKEN);
 
     // 0x swap router
