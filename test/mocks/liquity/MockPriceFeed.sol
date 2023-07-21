@@ -1,18 +1,22 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >0.8.10;
 
-import {IPriceFeed} from "../../../src/interfaces/chainlink/IPriceFeed.sol";
+import {IPriceFeed} from "../../../src/interfaces/liquity/IPriceFeed.sol";
 
 contract MockPriceFeed is IPriceFeed {
     string public constant NAME = "PriceFeed";
 
-    int256 public lastGoodPrice;
+    uint256 public price;
 
-    function latestAnswer() external view override returns (int256) {
-        return lastGoodPrice;
+    function lastGoodPrice() external view override returns (uint256) {
+        return price;
     }
 
-    function setPrice(uint256 price) external {
-        lastGoodPrice = int256(price);
+    function fetchPrice() external view override returns (uint256) {
+        return price;
+    }
+
+    function setPrice(uint256 _price) external {
+        price = _price;
     }
 }
