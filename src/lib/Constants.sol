@@ -64,8 +64,8 @@ library Constants {
     address public constant CHAINLINK_USDC_ETH_PRICE_FEED = 0x986b5E1e1755e3C2440e960477f25201B0a8bbD4;
     // Chainlink pricefeed (stETH -> ETH)
     address public constant CHAINLINK_STETH_ETH_PRICE_FEED = 0x86392dC19c0b719886221c78AB11eb8Cf5c52812;
-    // Liquity pricefeed (LUSD -> ETH) with Chainlink as primary and Tellor as backup.
-    address public constant LIQUITY_LUSD_ETH_PRICE_FEED = 0x4c517D4e2C851CA76d7eC94B805269Df0f2201De;
+    // Liquity pricefeed (USD -> ETH) with Chainlink as primary and Tellor as backup.
+    address public constant LIQUITY_USD_ETH_PRICE_FEED = 0x4c517D4e2C851CA76d7eC94B805269Df0f2201De;
 
     // address of the Balancer vault contract
     address public constant BALANCER_VAULT = 0xBA12222222228d8Ba445958a75a0704d566BF2C8;

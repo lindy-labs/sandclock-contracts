@@ -23,7 +23,7 @@ contract scLiquity is sc4626 {
     uint256 public totalProfit;
 
     IStabilityPool public stabilityPool = IStabilityPool(C.LIQUITY_STABILITY_POOL);
-    IPriceFeed public lusd2eth = IPriceFeed(C.LIQUITY_LUSD_ETH_PRICE_FEED);
+    IPriceFeed public lusd2eth = IPriceFeed(C.LIQUITY_USD_ETH_PRICE_FEED);
     ERC20 public lqty = ERC20(C.LIQUITY_LQTY_TOKEN);
 
     // 0x swap router
@@ -47,7 +47,7 @@ contract scLiquity is sc4626 {
         uint256 ethBalance = address(this).balance + stabilityPool.getDepositorETHGain(address(this));
 
         // add eth balance in lusd terms using liquity oracle
-        assets = ethBalance.mulWadDown(uint256(lusd2eth.lastGoodPrice()));
+        assets = ethBalance.mulWadDown(uint256(usd2eth.lastGoodPrice()));
 
         // add float
         assets += asset.balanceOf(address(this));
