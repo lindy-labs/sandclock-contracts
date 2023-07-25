@@ -21,7 +21,7 @@ contract MockVault is Vault {
         address _xrouter
     ) Vault(_admin, _keeper, _lusd) {
         stabilityPool = _stabilityPool;
-        lusd2eth = _priceFeed;
+        usd2eth = _priceFeed;
         lqty = _lqty;
         xrouter = _xrouter;
         asset.approve(address(stabilityPool), type(uint256).max);
@@ -37,7 +37,7 @@ contract SandclockLUSDTest is DSTestPlus {
     MockVault vault;
     MockStabilityPool stabilityPool;
     MockLiquityPriceFeed priceFeed;
-    MockPriceFeed lusd2eth;
+    MockPriceFeed usd2eth;
 
     function setUp() public {
         underlying = new MockERC20("Mock LUSD", "LUSD", 18);
@@ -45,9 +45,9 @@ contract SandclockLUSDTest is DSTestPlus {
         xrouter = new Mock0x();
         priceFeed = new MockLiquityPriceFeed();
         stabilityPool = new MockStabilityPool(address(underlying), address(lqty), address(priceFeed));
-        lusd2eth = new MockPriceFeed();
-        lusd2eth.setPrice(935490589304841);
-        vault = new MockVault(address(this), address(this), underlying, stabilityPool, lusd2eth, lqty, address(xrouter));
+        usd2eth = new MockPriceFeed();
+        usd2eth.setPrice(935490589304841);
+        vault = new MockVault(address(this), address(this), underlying, stabilityPool, usd2eth, lqty, address(xrouter));
         vault.grantRole(vault.KEEPER_ROLE(), address(this));
     }
 
