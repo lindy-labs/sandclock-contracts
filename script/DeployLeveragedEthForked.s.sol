@@ -77,10 +77,12 @@ contract DeployLeveragedEthForked is DeployLeveragedEth, Test {
         deal(address(weth), INITIAL_WETH_FUNDING * 2);
         deal(address(weth), alice, INITIAL_WETH_FUNDING);
         deal(address(weth), bob, INITIAL_WETH_FUNDING);
+        deal(address(weth), keeper, INITIAL_WETH_FUNDING);
 
         // Dole out USDC
         deal(address(usdc), alice, INITIAL_USDC_FUNDING);
         deal(address(usdc), bob, INITIAL_USDC_FUNDING);
+        deal(address(usdc), keeper, INITIAL_USDC_FUNDING);
     }
 
     function _deposit(ERC20 _asset, sc4626 _vault, address _from, uint256 _amount) internal {
