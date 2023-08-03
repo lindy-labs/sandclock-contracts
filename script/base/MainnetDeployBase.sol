@@ -34,7 +34,7 @@ abstract contract MainnetDeployBase is CREATE3Script {
         _vault.deposit(_amount, deployerAddress);
     }
 
-    function _swapWethForUsdc(uint256 _amount) internal {
+    function _swapWethForUsdc(uint256 _amount) internal returns (uint256 amountOut) {
         weth.deposit{value: _amount}();
 
         weth.approve(C.UNISWAP_V3_SWAP_ROUTER, _amount);
@@ -50,6 +50,6 @@ abstract contract MainnetDeployBase is CREATE3Script {
             sqrtPriceLimitX96: 0
         });
 
-        ISwapRouter(C.UNISWAP_V3_SWAP_ROUTER).exactInputSingle(params);
+        amountOut = ISwapRouter(C.UNISWAP_V3_SWAP_ROUTER).exactInputSingle(params);
     }
 }

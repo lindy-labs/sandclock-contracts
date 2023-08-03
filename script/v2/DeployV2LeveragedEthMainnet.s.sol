@@ -71,8 +71,8 @@ contract DeployScript is MainnetDeployBase {
         AaveV2ScUsdcAdapter aaveV2Adapter = new AaveV2ScUsdcAdapter();
         vault.addAdapter(aaveV2Adapter);
 
-        _swapWethForUsdc(0.01 ether);
-        _deposit(vault, usdc.balanceOf(deployerAddress)); // 0.01 ether worth of USDC
+        uint256 usdcAmount = _swapWethForUsdc(0.01 ether);
+        _deposit(vault, usdcAmount); // 0.01 ether worth of USDC
 
         _transferAdminRoleToMultisig(vault, deployerAddress);
 
