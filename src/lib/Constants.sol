@@ -27,6 +27,8 @@ library Constants {
     address public constant WSTETH = 0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0;
     // address of the Lido stETH token contract
     address public constant STETH = 0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84;
+    // address of the LUSD token contract
+    address public constant LUSD = 0x5f98805A4E8be255a32880FDeC7F6728C6568bA0;
 
     // address of the Curve pool for ETH-stETH
     address public constant CURVE_ETH_STETH_POOL = 0xDC24316b9AE028F1497c275EB9192a3Ea0f67022;
