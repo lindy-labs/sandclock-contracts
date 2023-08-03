@@ -4,6 +4,7 @@ pragma solidity ^0.8.10;
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
+import {Address} from "openzeppelin-contracts/utils/Address.sol";
 
 import {Constants as C} from "../lib/Constants.sol";
 import {IStabilityPool} from "../interfaces/liquity/IStabilityPool.sol";
@@ -13,9 +14,7 @@ import {sc4626} from "../sc4626.sol";
 contract scLiquity is sc4626 {
     using SafeTransferLib for ERC20;
     using FixedPointMathLib for uint256;
-
-    error StrategyETHSwapFailed();
-    error StrategyLQTYSwapFailed();
+    using Address for address;
 
     event DepositedIntoStrategy(uint256 amount);
 
@@ -116,14 +115,12 @@ contract scLiquity is sc4626 {
         // swap LQTY -> LUSD
         if (_lqtyAmount > 0) {
             lqty.safeApprove(xrouter, _lqtyAmount);
-            (bool success,) = xrouter.call{value: 0}(_lqtySwapData);
-            if (!success) revert StrategyLQTYSwapFailed();
+            xrouter.functionCall(_lqtySwapData);
         }
 
         // swap ETH -> LUSD
         if (_ethAmount > 0) {
-            (bool success,) = xrouter.call{value: _ethAmount}(_ethSwapData);
-            if (!success) revert StrategyETHSwapFailed();
+            xrouter.functionCallWithValue(_ethSwapData, _ethAmount);
         }
 
         // reinvest
