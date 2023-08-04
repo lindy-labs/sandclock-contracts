@@ -57,7 +57,7 @@ contract RewardTracker is BonusTracker, DebtTracker, AccessControl {
     ERC20 public immutable rewardToken;
 
     /// @notice The length of each reward period, in seconds
-    uint64 immutable duration;
+    uint64 public immutable duration;
 
     constructor(
         address _treasury,
