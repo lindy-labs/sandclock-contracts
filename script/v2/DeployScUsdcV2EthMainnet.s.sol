@@ -32,7 +32,7 @@ contract DeployScript is MainnetDeployBase {
 
         AaveV2ScUsdcAdapter aaveV2Adapter = new AaveV2ScUsdcAdapter();
         scUsdcV2.addAdapter(aaveV2Adapter);
-        console2.log("scUSDCv2 CompoundV3Adapter:", address(aaveV2Adapter));
+        console2.log("scUSDCv2 AaveV2Adapter:", address(aaveV2Adapter));
 
         // initial deposit
         uint256 usdcAmount = _swapWethForUsdc(0.01 ether);

@@ -6,7 +6,7 @@ import {MainnetDeployBase} from "../base/MainnetDeployBase.sol";
 import {scWETHv2} from "../../src/steth/scWETHv2.sol";
 import {Swapper} from "../../src/steth/Swapper.sol";
 import {PriceConverter} from "../../src/steth/PriceConverter.sol";
-import {AaveV3ScWethAdapter} from "../../src/steth/scWethV2-adapters/AaveV3ScWethAdapter.sol";
+import {MorphoAaveV3ScWethAdapter} from "../../src/steth/scWethV2-adapters/MorphoAaveV3ScWethAdapter.sol";
 import {CompoundV3ScWethAdapter} from "../../src/steth/scWethV2-adapters/CompoundV3ScWethAdapter.sol";
 
 contract DeployScript is MainnetDeployBase {
@@ -23,9 +23,9 @@ contract DeployScript is MainnetDeployBase {
         scWethV2 = new scWETHv2(deployerAddress, keeper, weth, swapper, priceConverter);
 
         // deploy & add adapters
-        AaveV3ScWethAdapter aaveV3Adapter = new AaveV3ScWethAdapter();
-        scWethV2.addAdapter(aaveV3Adapter);
-        console2.log("scWethV2 AaveV3Adapter:", address(aaveV3Adapter));
+        MorphoAaveV3ScWethAdapter morphoAdapter = new MorphoAaveV3ScWethAdapter();
+        scWethV2.addAdapter(morphoAdapter);
+        console2.log("scWethV2 MorphoAdapter:", address(morphoAdapter));
 
         CompoundV3ScWethAdapter compoundV3Adapter = new CompoundV3ScWethAdapter();
         scWethV2.addAdapter(compoundV3Adapter);
