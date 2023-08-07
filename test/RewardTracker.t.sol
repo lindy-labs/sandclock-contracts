@@ -54,6 +54,14 @@ contract RewardTrackerTest is DSTestPlus {
         stakingPool.grantRole(DISTRIBUTOR, address(this));
     }
 
+    function test_constructor() public {
+        assertTrue(stakingPool.hasRole(stakingPool.DEFAULT_ADMIN_ROLE(), address(this)), "admin role not set");
+        assertEq(stakingPool.treasury(), treasury, "treasury");
+        assertEq(address(stakingPool.asset()), address(stakeToken), "asset");
+        assertEq(address(stakingPool.rewardToken()), address(rewardToken), "reward token");
+        assertEq(stakingPool.duration(), DURATION, "duration");
+    }
+
     function testGas_deposit() public {
         hevm.warp(31 days);
         stakingPool.deposit(1 ether, address(this));
@@ -93,6 +101,13 @@ contract RewardTrackerTest is DSTestPlus {
         assertEqDecimal(stakingPool.balanceOf(tester), amount, 18);
     }
 
+    function test_deposit_FailsWhenSenderIsNotReceiver() public {
+        hevm.startPrank(tester);
+
+        hevm.expectRevert(RewardTracker.SenderHasToBeReceiver.selector);
+        stakingPool.deposit(1e18, address(this));
+    }
+
     function testCorrectness_mint(uint128 amount_) public {
         hevm.assume(amount_ > 0);
         uint256 amount = amount_;
@@ -112,6 +127,13 @@ contract RewardTrackerTest is DSTestPlus {
         assertEq(stakingPool.balanceOf(tester), shares); // tester has shares now
         assertEqDecimal(stakeToken.balanceOf(tester), 0, 18); // tester's stake tokens gone
         assertEqDecimal(stakeToken.balanceOf(address(stakingPool)), beforeStakingPoolStakeTokenBalance + amount, 18);
+    }
+
+    function test_mint_FailsWhenSenderIsNotReceiver() public {
+        hevm.startPrank(tester);
+
+        hevm.expectRevert(RewardTracker.SenderHasToBeReceiver.selector);
+        stakingPool.mint(1e18, address(this));
     }
 
     function testCorrectness_withdraw(uint128 amount_, uint56 warpTime, uint56 stakeTime) public {
@@ -244,6 +266,21 @@ contract RewardTrackerTest is DSTestPlus {
         assertEqDecimal(stakeToken.balanceOf(tester), amount, 18);
         assertEqDecimal(stakeToken.balanceOf(address(stakingPool)) - beforeStakingPoolStakeTokenBalance, 0, 18);
         assertEqDecimal(stakingPool.balanceOf(tester), 0, 18);
+    }
+
+    function test_redeem_FailsForZero() public {
+        uint256 amount = 1e18;
+        stakeToken.mint(tester, amount);
+
+        hevm.startPrank(tester);
+
+        stakeToken.approve(address(stakingPool), amount);
+        stakingPool.deposit(amount, tester);
+
+        hevm.warp(block.timestamp + 31 days);
+
+        hevm.expectRevert(bytes("ZERO_ASSETS"));
+        stakingPool.redeem(0, tester, tester);
     }
 
     function testCorrectness_claimReward(uint128 amount0_, uint128 amount1_, uint8 stakeTimeAsDurationPercentage)
