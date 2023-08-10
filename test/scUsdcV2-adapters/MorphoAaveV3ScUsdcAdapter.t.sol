@@ -62,6 +62,7 @@ contract MorphoAaveV3ScUsdcAdapterTest is Test {
         adapter.borrow(borrowAmount);
 
         assertEq(adapter.getDebt(address(adapter)), borrowAmount, "debt doesn't match");
+        assertEq(weth.balanceOf(address(adapter)), borrowAmount, "weth balance doesn't match");
     }
 
     function test_repay() public {
