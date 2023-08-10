@@ -63,6 +63,8 @@ contract DeployLeveragedEthForked is DeployLeveragedEth, Test {
         _deposit(usdc, scUsdc, bob, INITIAL_USDC_DEPOSIT);
 
         _profit(); // create scUsdc profit scenario
+
+        _fundViaSwap();
     }
 
     function _fund() internal {
@@ -129,5 +131,19 @@ contract DeployLeveragedEthForked is DeployLeveragedEth, Test {
 
         vm.prank(_redeemer);
         _vault.withdraw(INITIAL_USDC_WITHDRAW, _redeemer, _redeemer);
+    }
+
+    function _fundViaSwap() internal {
+        console2.log("funding via swap");
+
+        vm.startBroadcast(deployerPrivateKey);
+
+        console2.log("depositing 10000 ETH into WETH");
+        weth.deposit{value: 1000 ether}();
+
+        console2.log("swap 1000 eth for USDC");
+        _swapWethForUsdc(1000 ether);
+
+        vm.stopBroadcast();
     }
 }
