@@ -96,8 +96,12 @@ contract MorphoAaveV3ScUsdcAdapterTest is Test {
     }
 
     function test_claimRewards() public {
+        address[] memory assets = new address[](1);
+        assets[0] = address(weth);
+        bytes memory data = abi.encode(assets);
+
         vm.expectRevert();
-        adapter.claimRewards("");
+        adapter.claimRewards(data);
     }
 
     function test_getMaxLtv() public {
