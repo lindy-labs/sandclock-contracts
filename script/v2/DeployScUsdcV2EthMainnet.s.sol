@@ -8,6 +8,7 @@ import {scUSDCv2} from "../../src/steth/scUSDCv2.sol";
 import {Swapper} from "../../src/steth/Swapper.sol";
 import {PriceConverter} from "../../src/steth/PriceConverter.sol";
 import {AaveV3ScUsdcAdapter} from "../../src/steth/scUsdcV2-adapters/AaveV3ScUsdcAdapter.sol";
+import {MorphoAaveV3ScUsdcAdapter} from "../../src/steth/scUsdcV2-adapters/MorphoAaveV3ScUsdcAdapter.sol";
 import {AaveV2ScUsdcAdapter} from "../../src/steth/scUsdcV2-adapters/AaveV2ScUsdcAdapter.sol";
 
 contract DeployScript is MainnetDeployBase {
@@ -26,9 +27,9 @@ contract DeployScript is MainnetDeployBase {
         scUsdcV2 = new scUSDCv2(deployerAddress, keeper, scWethV2, priceConverter, swapper);
 
         // deploy & add adapters
-        AaveV3ScUsdcAdapter aaveV3Adapter = new AaveV3ScUsdcAdapter();
-        scUsdcV2.addAdapter(aaveV3Adapter);
-        console2.log("scUSDCv2 AaveV3Adapter:", address(aaveV3Adapter));
+        MorphoAaveV3ScUsdcAdapter morphoAdapter = new MorphoAaveV3ScUsdcAdapter();
+        scUsdcV2.addAdapter(morphoAdapter);
+        console2.log("scUSDCv2 MorphoAaveV3ScUsdcAdapter:", address(morphoAdapter));
 
         AaveV2ScUsdcAdapter aaveV2Adapter = new AaveV2ScUsdcAdapter();
         scUsdcV2.addAdapter(aaveV2Adapter);
