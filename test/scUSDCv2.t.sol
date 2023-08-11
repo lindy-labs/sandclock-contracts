@@ -20,6 +20,7 @@ import {scUSDCv2} from "../src/steth/scUSDCv2.sol";
 import {AaveV2ScUsdcAdapter} from "../src/steth/scUsdcV2-adapters/AaveV2ScUsdcAdapter.sol";
 import {AaveV3ScUsdcAdapter} from "../src/steth/scUsdcV2-adapters/AaveV3ScUsdcAdapter.sol";
 import {EulerScUsdcAdapter} from "../src/steth/scUsdcV2-adapters/EulerScUsdcAdapter.sol";
+import {MorphoAaveV3ScUsdcAdapter} from "../src/steth/scUsdcV2-adapters/MorphoAaveV3ScUsdcAdapter.sol";
 
 import {scWETH} from "../src/steth/scWETH.sol";
 import {ISwapRouter} from "../src/interfaces/uniswap/ISwapRouter.sol";
@@ -60,7 +61,7 @@ contract scUSDCv2Test is Test {
     // after the exploit, the euler protocol was disabled. At one point it should work again, so having the
     // tests run in both cases (when protocol is working and not) requires two blocks to fork from
     uint256 constant BLOCK_BEFORE_EULER_EXPLOIT = 16816801; // Mar-13-2023 04:50:47 AM +UTC before euler hack
-    uint256 constant BLOCK_AFTER_EULER_EXPLOIT = 17243956;
+    uint256 constant BLOCK_AFTER_EULER_EXPLOIT = 17529069;
 
     uint256 constant EUL_SWAP_BLOCK = 16744453; // block at which EUL->USDC swap data was fetched
     uint256 constant EUL_AMOUNT = 1_000e18;
@@ -83,6 +84,7 @@ contract scUSDCv2Test is Test {
     AaveV3ScUsdcAdapter aaveV3;
     AaveV2ScUsdcAdapter aaveV2;
     EulerScUsdcAdapter euler;
+    MorphoAaveV3ScUsdcAdapter morpho;
     Swapper swapper;
     PriceConverter priceConverter;
 
@@ -96,6 +98,7 @@ contract scUSDCv2Test is Test {
         aaveV3 = new AaveV3ScUsdcAdapter();
         aaveV2 = new AaveV2ScUsdcAdapter();
         euler = new EulerScUsdcAdapter();
+        morpho = new MorphoAaveV3ScUsdcAdapter();
 
         _deployScWeth();
         _deployAndSetUpVault();
@@ -452,7 +455,7 @@ contract scUSDCv2Test is Test {
         uint256 repayAmount = 1 ether;
         vault.repay(aaveV2.id(), repayAmount);
 
-        assertEq(aaveV2.getDebt(address(vault)), borrowAmount - repayAmount);
+        assertApproxEqAbs(aaveV2.getDebt(address(vault)), borrowAmount - repayAmount, 1);
     }
 
     function test_repay_EmitsEvent() public {
@@ -639,6 +642,30 @@ contract scUSDCv2Test is Test {
         _assertCollateralAndDebt(euler.id(), initialBalance, initialDebt);
     }
 
+    function test_rebalance_BorrowOnMorpho() public {
+        _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
+
+        uint256 initialBalance = 1_000_000e6;
+        uint256 initialDebt = 100 ether;
+        deal(address(usdc), address(vault), initialBalance);
+
+        // setup morpho
+        assertFalse(vault.isSupported(morpho.id()));
+        vault.addAdapter(morpho);
+        assertTrue(vault.isSupported(morpho.id()));
+
+        bytes[] memory callData = new bytes[](2);
+        callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, morpho.id(), initialBalance);
+        callData[1] = abi.encodeWithSelector(scUSDCv2.borrow.selector, morpho.id(), initialDebt);
+
+        vault.rebalance(callData);
+
+        assertApproxEqAbs(vault.totalCollateral(), initialBalance, 1, "total collateral");
+        assertApproxEqAbs(vault.totalDebt(), initialDebt, 1, "total debt");
+
+        _assertCollateralAndDebt(morpho.id(), initialBalance, initialDebt);
+    }
+
     function test_rebalance_BorrowOnlyOnAaveV2() public {
         _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
 
@@ -739,8 +766,8 @@ contract scUSDCv2Test is Test {
 
         vault.rebalance(callData);
 
-        assertEq(vault.totalCollateral(), initialBalance + additionalBalance, "total collateral after");
-        assertEq(vault.totalDebt(), initialDebt + additionalDebt, "total debt after");
+        assertApproxEqAbs(vault.totalCollateral(), initialBalance + additionalBalance, 1, "total collateral after");
+        assertApproxEqAbs(vault.totalDebt(), initialDebt + additionalDebt, 1, "total debt after");
     }
 
     function test_rebalance_TwoProtocols() public {
@@ -763,6 +790,34 @@ contract scUSDCv2Test is Test {
 
         _assertCollateralAndDebt(aaveV3.id(), initialBalance / 2, debtOnAaveV3);
         _assertCollateralAndDebt(aaveV2.id(), initialBalance / 2, debtOnAaveV2);
+    }
+
+    function test_rebalance_AaveV3AndMorpho() public {
+        _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
+        uint256 initialBalance = 1_000_000e6;
+        uint256 debtOnAaveV3 = 200 ether;
+        uint256 debtOnMorpho = 200 ether;
+        deal(address(usdc), address(vault), initialBalance);
+
+        console2.log("vault", address(vault));
+
+        // setup morpho
+        vault.addAdapter(morpho);
+        assertTrue(vault.isSupported(morpho.id()));
+
+        bytes[] memory callData = new bytes[](4);
+        callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV3.id(), initialBalance / 2);
+        callData[1] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV3.id(), debtOnAaveV3);
+        callData[2] = abi.encodeWithSelector(scUSDCv2.supply.selector, morpho.id(), initialBalance / 2);
+        callData[3] = abi.encodeWithSelector(scUSDCv2.borrow.selector, morpho.id(), debtOnMorpho);
+
+        vault.rebalance(callData);
+
+        assertApproxEqAbs(vault.totalCollateral(), initialBalance, 1, "total collateral");
+        assertApproxEqAbs(vault.totalDebt(), debtOnAaveV3 + debtOnMorpho, 1, "total debt");
+
+        _assertCollateralAndDebt(aaveV3.id(), initialBalance / 2, debtOnAaveV3);
+        _assertCollateralAndDebt(morpho.id(), initialBalance / 2, debtOnMorpho);
     }
 
     function test_rebalance_TwoProtocolsWithAdditionalDeposits() public {
@@ -2051,6 +2106,8 @@ contract scUSDCv2Test is Test {
             return "Aave v2";
         } else if (_protocolId == euler.id()) {
             return "Euler";
+        } else if (_protocolId == morpho.id()) {
+            return "Morpho";
         }
 
         revert("unknown protocol");
