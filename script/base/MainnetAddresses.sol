@@ -6,7 +6,7 @@ pragma solidity ^0.8.13;
  */
 library MainnetAddresses {
     address public constant SCWETHV2 = 0x4B68d2D0E94240481003Fc3Fd10ffB663b081c3D;
-    address public constant SCWETHV2_MORPHO_ADAPTER = 0x8532C8F0582584b83763c287a55bdE5552C5bF35;
+    address public constant SCWETHV2_MORPHO_ADAPTER = 0x4420F0E6A38863330FD4885d76e1265DAD5aa9df;
     address public constant SCWETHV2_COMPOUND_ADAPTER = 0x379022F4d2619c7fbB95f9005ea0897e3a31a0C4;
 
     address public constant SCUSDCV2 = 0xbb6EE8bE110602a05F268AcCFC46d55bd87DFB82;
