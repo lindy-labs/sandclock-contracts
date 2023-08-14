@@ -28,33 +28,31 @@ import {scWETHv2Utils} from "../utils/scWETHv2Utils.sol";
 
 /**
  * simulate initial rebalance in scWETHv2
- * forge script script/v2/manual-runs/scWETHv2Rebalane.s.sol --skip-simulation -vv
+ * forge script script/v2/manual-runs/scWETHv2Rebalance.s.sol --skip-simulation -vv
  */
-contract scWETHv2Rebalance is Test {
+contract scWETHv2Rebalance is scWETHv2Utils {
     using FixedPointMathLib for uint256;
 
-    uint256 keeperPrivateKey = uint256(vm.envBytes32("KEEPER_PRIVATE_KEY"));
+    WETH weth = WETH(payable(C.WETH));
+    // uint256 keeperPrivateKey = uint256(vm.envBytes32("KEEPER_PRIVATE_KEY"));
 
-    // uint256 mainnetFork;
+    address keeper = vm.envAddress("KEEPER");
+
+    address localWhale = 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266;
 
     function run() external {
-        // _fork(17529069);
-        vm.startBroadcast(deployerAddress);
+        vm.startBroadcast(keeper);
 
-        uint256 aaveV3AllocationPercent = 0.3e18;
+        uint256 morphoAllocationPercent = 0.3e18;
         uint256 compoundV3AllocationPercent = 0.7e18;
 
+        vault.deposit{value:10 ether}(localWhale);
+
+        uint256 float = weth.balanceOf(address(vault));
+        console2.log("\nInvesting %s weth", float);
+
+        _invest(float, morphoAllocationPercent, compoundV3AllocationPercent);
+
         vm.stopBroadcast();
-
-        vm.startBroadcast(keeper);
-        _invest(weth.balanceOf(address(vault)), aaveV3AllocationPercent, compoundV3AllocationPercent);
-        vm.stopBroadcast();
-
-        console.log("Assets before time skip", vault.totalAssets());
-
-        // fast forward 365 days in time and simulate an annual staking interest of 7.1%
-        _simulate_stEthStakingInterest(365 days, 1.071e18);
-
-        console.log("Assets after time skip", vault.totalAssets());
     }
 }
