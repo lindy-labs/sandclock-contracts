@@ -136,14 +136,10 @@ contract DeployLeveragedEthForked is DeployLeveragedEth, Test {
     function _fundViaSwap() internal {
         console2.log("funding via swap");
 
-        vm.startBroadcast(keeper);
-
         console2.log("depositing 1000 ETH into WETH");
         weth.deposit{value: 1000 ether}();
 
         console2.log("swap 1000 eth for USDC");
         _swapWethForUsdc(1000 ether);
-
-        vm.stopBroadcast();
     }
 }
