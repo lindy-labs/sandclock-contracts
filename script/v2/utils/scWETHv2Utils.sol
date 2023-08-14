@@ -27,19 +27,21 @@ import {scWETHv2Helper} from "../../../test/helpers/scWETHv2Helper.sol";
 contract scWETHv2Utils is CREATE3Script {
     using FixedPointMathLib for uint256;
 
-    scWETHv2 vault = scWETHv2(payable(vm.envAddress("scWETHv2")));
-    PriceConverter priceConverter = PriceConverter(vm.envAddress("PRICE_CONVERTER"));
-    scWETHv2Helper vaultHelper = scWETHv2Helper(vm.envAddress("scWETHv2Helper"));
+    // uint256 mainnetFork
 
-    IAdapter morphoAdapter = IAdapter(vm.envAddress('scWETHv2_MORPHO_ADAPTER'));
-    IAdapter compoundV3Adapter = IAdapter(vm.envAddress('scWETHv2_COMPOUND_ADAPTER'));
+    scWETHv2 vault = scWETHv2(payable(0x4B68d2D0E94240481003Fc3Fd10ffB663b081c3D));
+    PriceConverter priceConverter = PriceConverter(0xD76B0Ff4A487CaFE4E19ed15B73f12f6A92095Ca);
 
-    uint256 morphoAdapterId;
-    uint256 compoundV3AdapterId;
+    IAdapter morphoAdapter = IAdapter(0x4420F0E6A38863330FD4885d76e1265DAD5aa9df);
+    IAdapter compoundV3Adapter = IAdapter(0x379022F4d2619c7fbB95f9005ea0897e3a31a0C4);
 
     mapping(IAdapter => uint256) targetLtv;
 
-    constructor() CREATE3Script(vm.envString("VERSION")) {}
+    constructor() CREATE3Script(vm.envString("VERSION")) {
+        targetLtv[morphoAdapter] = 0.8e18;
+        targetLtv[compoundV3Adapter] = 0.8e18;
+    }
+
 
     /// @dev invest the float lying in the vault to morpho and compoundV3
     function _invest(uint256 _amount, uint256 _morphoAllocationPercent, uint256 _compoundAllocationPercent) internal {
@@ -81,29 +83,14 @@ contract scWETHv2Utils is CREATE3Script {
         callData[0] = abi.encodeWithSelector(scWETHv2.swapWethToWstEth.selector, investAmount + totalFlashLoanAmount);
 
         callData[1] = abi.encodeWithSelector(
-            scWETHv2.supplyAndBorrow.selector, morphoAdapterId, morphoSupplyAmount, morphoFlashLoanAmount
+            scWETHv2.supplyAndBorrow.selector, morphoAdapter.id(), morphoSupplyAmount, morphoFlashLoanAmount
         );
         callData[2] = abi.encodeWithSelector(
-            scWETHv2.supplyAndBorrow.selector, compoundV3AdapterId, compoundSupplyAmount, compoundFlashLoanAmount
+            scWETHv2.supplyAndBorrow.selector, compoundV3Adapter.id(), compoundSupplyAmount, compoundFlashLoanAmount
         );
 
         return (callData, morphoSupplyAmount + compoundSupplyAmount, totalFlashLoanAmount);
     }
-
-    // function _simulate_stEthStakingInterest(uint256 _timePeriod, uint256 _stEthStakingInterest) internal {
-    //     // fast forward time to simulate supply and borrow interests
-    //     vm.warp(block.timestamp + _timePeriod);
-    //     uint256 prevBalance = _read_storage_uint(C.STETH, keccak256(abi.encodePacked("lido.Lido.beaconBalance")));
-    //     vm.store(
-    //         C.STETH,
-    //         keccak256(abi.encodePacked("lido.Lido.beaconBalance")),
-    //         bytes32(prevBalance.mulWadDown(_stEthStakingInterest))
-    //     );
-    // }
-
-    // function _read_storage_uint(address _addr, bytes32 _key) internal view returns (uint256) {
-    //     return abi.decode(abi.encode(vm.load(_addr, _key)), (uint256));
-    // }
 
     function _calcSupplyBorrowFlashLoanAmount(IAdapter _adapter, uint256 _amount)
         internal
@@ -111,7 +98,7 @@ contract scWETHv2Utils is CREATE3Script {
         returns (uint256 flashLoanAmount)
     {
         uint256 debt = vault.getDebt(_adapter.id());
-        uint256 collateral = vaultHelper.getCollateralInWeth(_adapter);
+        uint256 collateral = getCollateralInWeth(_adapter);
 
         uint256 target = targetLtv[_adapter].mulWadDown(_amount + collateral);
 
@@ -119,9 +106,7 @@ contract scWETHv2Utils is CREATE3Script {
         flashLoanAmount = (target - debt).divWadDown(C.ONE - targetLtv[_adapter]);
     }
 
-    // function _fork(uint256 _blockNumber) internal {
-    //     mainnetFork = vm.createFork(vm.envString("RPC_URL_MAINNET"));
-    //     vm.selectFork(mainnetFork);
-    //     vm.rollFork(_blockNumber);
-    // }
+    function getCollateralInWeth(IAdapter adapter) public view returns (uint256) {
+        return priceConverter.wstEthToEth(adapter.getCollateral(address(vault)));
+    }
 }
