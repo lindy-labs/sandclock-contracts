@@ -1132,32 +1132,13 @@ contract scWETHv2Test is Test {
             vaultHelper.getLtv(compoundV3Adapter), compoundLtv, "compound ltv must decrease after simulated profits"
         );
 
-        uint256 aaveV3FlashLoanAmount = _calcSupplyBorrowFlashLoanAmount(aaveV3Adapter, 0);
-        uint256 compoundFlashLoanAmount = _calcSupplyBorrowFlashLoanAmount(compoundV3Adapter, 0);
-
-        uint256 stEthRateTolerance = 0.999e18;
-        uint256 aaveV3SupplyAmount = priceConverter.ethToWstEth(aaveV3FlashLoanAmount).mulWadDown(stEthRateTolerance);
-        uint256 compoundSupplyAmount =
-            priceConverter.ethToWstEth(compoundFlashLoanAmount).mulWadDown(stEthRateTolerance);
-
-        bytes[] memory callDataAfterProfits = new bytes[](3);
-
-        callDataAfterProfits[0] =
-            abi.encodeWithSelector(scWETHv2.swapWethToWstEth.selector, aaveV3FlashLoanAmount + compoundFlashLoanAmount);
-
-        callDataAfterProfits[1] = abi.encodeWithSelector(
-            scWETHv2.supplyAndBorrow.selector, aaveV3AdapterId, aaveV3SupplyAmount, aaveV3FlashLoanAmount
-        );
-
-        callDataAfterProfits[2] = abi.encodeWithSelector(
-            scWETHv2.supplyAndBorrow.selector, compoundV3AdapterId, compoundSupplyAmount, compoundFlashLoanAmount
-        );
+        (bytes[] memory callDataAfterProfits,, uint totalFlashLoanAmountAfterProfits) = _getInvestParams(0, 0.8e18, 0, 0.2e18);
 
         vm.expectEmit(true, true, false, false);
         emit Harvested(0, 0); // just testing for the event emission and not the actual numbers since the actual profit is a  little tedious to simulate
 
         hoax(keeper);
-        vault.rebalance(0, aaveV3FlashLoanAmount + compoundFlashLoanAmount, callDataAfterProfits);
+        vault.rebalance(0, totalFlashLoanAmountAfterProfits, callDataAfterProfits);
 
         _floatCheck();
 

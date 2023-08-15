@@ -40,6 +40,12 @@ contract scWETHv2Rebalance is scWETHv2Utils {
 
     address localWhale = 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266;
 
+    // NOTE: If allocation percents need to be changed, use the reallocation script first, and only then change the values here
+    // Do not change them directly here without calling reallocation script first, 
+    // else only subsequent invests will be done at the new allocation percents
+    uint256 morphoAllocationPercent = 0.4e18;
+    uint256 compoundV3AllocationPercent = 0.6e18;
+
     function run() external {
         // ONLY FOR TESTING
         vm.startBroadcast(localWhale);
@@ -47,9 +53,6 @@ contract scWETHv2Rebalance is scWETHv2Utils {
         vm.stopBroadcast();
 
         vm.startBroadcast(keeper);
-
-        uint256 morphoAllocationPercent = 0.3e18;
-        uint256 compoundV3AllocationPercent = 0.7e18;
 
         uint256 float = weth.balanceOf(address(vault));
         console2.log("\nInvesting %s weth", float);
