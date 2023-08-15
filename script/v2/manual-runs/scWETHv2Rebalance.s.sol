@@ -27,7 +27,7 @@ import {scWETHv2Helper} from "../../../test/helpers/scWETHv2Helper.sol";
 import {scWETHv2Utils} from "../utils/scWETHv2Utils.sol";
 
 /**
- * invests underlying float in the vault 
+ * invests underlying float in the vault
  * and at the same time also reinvests profits made till now by the vault
  * forge script script/v2/manual-runs/scWETHv2Rebalance.s.sol -vv
  */
