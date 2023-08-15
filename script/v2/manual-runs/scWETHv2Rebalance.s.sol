@@ -41,12 +41,15 @@ contract scWETHv2Rebalance is scWETHv2Utils {
     address localWhale = 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266;
 
     function run() external {
+        // ONLY FOR TESTING
+        vm.startBroadcast(localWhale);
+        vault.deposit{value: 1.5 ether}(localWhale);
+        vm.stopBroadcast();
+
         vm.startBroadcast(keeper);
 
         uint256 morphoAllocationPercent = 0.3e18;
         uint256 compoundV3AllocationPercent = 0.7e18;
-
-        vault.deposit{value:10 ether}(localWhale);
 
         uint256 float = weth.balanceOf(address(vault));
         console2.log("\nInvesting %s weth", float);

@@ -42,7 +42,6 @@ contract scWETHv2Utils is CREATE3Script {
         targetLtv[compoundV3Adapter] = 0.8e18;
     }
 
-
     /// @dev invest the float lying in the vault to morpho and compoundV3
     function _invest(uint256 _amount, uint256 _morphoAllocationPercent, uint256 _compoundAllocationPercent) internal {
         uint256 investAmount = _amount - vault.minimumFloatAmount();
