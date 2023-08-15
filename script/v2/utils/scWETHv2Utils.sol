@@ -43,6 +43,8 @@ contract scWETHv2Utils is CREATE3Script {
     }
 
     /// @dev invest the float lying in the vault to morpho and compoundV3
+    /// @dev also reinvests profits made,i.e increases the ltv
+    /// @dev if there is no undelying float in the contract, run this method with _amount=0 to just reinvest profits
     function _invest(uint256 _amount, uint256 _morphoAllocationPercent, uint256 _compoundAllocationPercent) internal {
         uint256 investAmount = _amount - vault.minimumFloatAmount();
 
