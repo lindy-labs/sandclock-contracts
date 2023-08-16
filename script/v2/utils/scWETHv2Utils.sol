@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity ^0.8.13;
 
+import "forge-std/console2.sol";
+
 import {CREATE3Script} from "../../base/CREATE3Script.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {WETH} from "solmate/tokens/WETH.sol";
@@ -28,6 +30,8 @@ import {scWETHv2StrategyParams as Params} from "../../base/scWETHv2StrategyParam
 contract scWETHv2Utils is CREATE3Script {
     using FixedPointMathLib for uint256;
 
+    WETH weth = WETH(payable(C.WETH));
+
     scWETHv2 vault = scWETHv2(payable(0x4B68d2D0E94240481003Fc3Fd10ffB663b081c3D));
     PriceConverter priceConverter = PriceConverter(0xD76B0Ff4A487CaFE4E19ed15B73f12f6A92095Ca);
 
@@ -44,8 +48,11 @@ contract scWETHv2Utils is CREATE3Script {
     /// @dev invest the float lying in the vault to morpho and compoundV3
     /// @dev also reinvests profits made,i.e increases the ltv
     /// @dev if there is no undelying float in the contract, run this method with _amount=0 to just reinvest profits
-    function _invest(uint256 _amount) internal {
-        uint256 investAmount = _amount - vault.minimumFloatAmount();
+    function _invest() internal {
+        uint256 float = weth.balanceOf(address(vault));
+        uint256 investAmount = float - vault.minimumFloatAmount();
+
+        console2.log("\nInvesting %s weth", float);
 
         (bytes[] memory callData,, uint256 totalFlashLoanAmount) = _getInvestParams(investAmount);
 
