@@ -8,12 +8,13 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 import {WETH} from "solmate/tokens/WETH.sol";
 import {AccessControl} from "openzeppelin-contracts/access/AccessControl.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
+import {Surl} from "surl/Surl.sol";
 
 import {Constants as C} from "../../../src/lib/Constants.sol";
 import {ISwapRouter} from "../../../src/interfaces/uniswap/ISwapRouter.sol";
 import {sc4626} from "../../../src/sc4626.sol";
 import {scWETHv2} from "../../../src/steth/scWETHv2.sol";
-import {BaseV2Vault} from "../../../src/steth/BaseVault.sol";
+import {BaseV2Vault} from "../../../src/steth/BaseV2Vault.sol";
 import {scUSDCv2} from "../../../src/steth/scUSDCv2.sol";
 import {Swapper} from "../../../src/steth/Swapper.sol";
 import {PriceConverter} from "../../../src/steth/PriceConverter.sol";
@@ -30,6 +31,7 @@ import {scWETHv2StrategyParams as Params} from "../../base/scWETHv2StrategyParam
  */
 contract scWETHv2Utils is CREATE3Script {
     using FixedPointMathLib for uint256;
+    using Surl for *;
 
     WETH weth = WETH(payable(C.WETH));
 
@@ -85,7 +87,7 @@ contract scWETHv2Utils is CREATE3Script {
 
         bytes[] memory callData = new bytes[](3);
 
-        callData[0] = abi.encodeWithSelector(BaseV2Vault.zeroExSwap.selector, weth, _amount + totalFlashLoanAmount, swapData, 1);
+        // callData[0] = abi.encodeWithSelector(BaseV2Vault.zeroExSwap.selector, weth, _amount + totalFlashLoanAmount, swapData, 1);
 
         callData[1] = abi.encodeWithSelector(
             scWETHv2.supplyAndBorrow.selector, morphoAdapter.id(), morphoSupplyAmount, morphoFlashLoanAmount
@@ -96,6 +98,8 @@ contract scWETHv2Utils is CREATE3Script {
 
         return (callData, morphoSupplyAmount + compoundSupplyAmount, totalFlashLoanAmount);
     }
+
+    function wethToWstEthSwapData() internal view returns (bytes memory) {}
 
     function _calcSupplyBorrowFlashLoanAmount(IAdapter _adapter, uint256 _amount)
         internal
