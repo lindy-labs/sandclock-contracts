@@ -13,6 +13,7 @@ import {Constants as C} from "../../../src/lib/Constants.sol";
 import {ISwapRouter} from "../../../src/interfaces/uniswap/ISwapRouter.sol";
 import {sc4626} from "../../../src/sc4626.sol";
 import {scWETHv2} from "../../../src/steth/scWETHv2.sol";
+import {BaseV2Vault} from "../../../src/steth/BaseVault.sol";
 import {scUSDCv2} from "../../../src/steth/scUSDCv2.sol";
 import {Swapper} from "../../../src/steth/Swapper.sol";
 import {PriceConverter} from "../../../src/steth/PriceConverter.sol";
@@ -84,7 +85,7 @@ contract scWETHv2Utils is CREATE3Script {
 
         bytes[] memory callData = new bytes[](3);
 
-        callData[0] = abi.encodeWithSelector(scWETHv2.swapWethToWstEth.selector, _amount + totalFlashLoanAmount);
+        callData[0] = abi.encodeWithSelector(BaseV2Vault.zeroExSwap.selector, weth, _amount + totalFlashLoanAmount, swapData, 1);
 
         callData[1] = abi.encodeWithSelector(
             scWETHv2.supplyAndBorrow.selector, morphoAdapter.id(), morphoSupplyAmount, morphoFlashLoanAmount
