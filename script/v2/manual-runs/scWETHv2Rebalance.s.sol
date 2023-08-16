@@ -8,6 +8,8 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 import {WETH} from "solmate/tokens/WETH.sol";
 import {AccessControl} from "openzeppelin-contracts/access/AccessControl.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
+import {Surl} from "surl/Surl.sol";
+import {Strings} from "openzeppelin-contracts/utils/Strings.sol";
 
 import {Constants as C} from "../../../src/lib/Constants.sol";
 import {ISwapRouter} from "../../../src/interfaces/uniswap/ISwapRouter.sol";
@@ -29,10 +31,16 @@ import {scWETHv2Utils} from "../utils/scWETHv2Utils.sol";
 /**
  * invests underlying float in the vault
  * and at the same time also reinvests profits made till now by the vault
- * forge script script/v2/manual-runs/scWETHv2Rebalance.s.sol -vv
+
+ * cmd
+ * first run a local anvil node using " anvil -f YOUR_RPC_URL"
+ * Then run the script using
+ * forge script script/v2/manual-runs/scWETHv2Rebalance.s.sol -rpc-url http://127.0.0.1:8545 --ffi
  */
 contract scWETHv2Rebalance is scWETHv2Utils {
     using FixedPointMathLib for uint256;
+    using Surl for *;
+    using Strings for *;
 
     uint256 keeperPrivateKey = uint256(vm.envBytes32("KEEPER_PRIVATE_KEY"));
 
@@ -41,8 +49,21 @@ contract scWETHv2Rebalance is scWETHv2Utils {
     address localWhale = 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266;
 
     function run() external {
-        _test();
+        swapData(1e18);
+        // _test();
         // _main();
+    }
+
+    function swapData(uint _amount) internal {
+        string memory url = string(abi.encodePacked("https://api.0x.org/swap/v1/quote?buyToken=0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0&sellToken=WETH&sellAmount=", _amount.toString()));
+
+        string[] memory headers = new string[](1);
+        headers[0] = string(abi.encodePacked("0x-api-key: ", vm.envString('ZEROX_API_KEY')));
+        (uint256 status, bytes memory data) = url.get(headers);
+
+        require(status == 200, "0x GET request Failed");
+
+        console2.logBytes(data);
     }
 
     function _test() internal {
@@ -52,8 +73,8 @@ contract scWETHv2Rebalance is scWETHv2Utils {
 
         vm.startBroadcast(keeper);
 
-        _invest();
-        _logs();
+        // _invest();
+        // _logs();
 
         vm.stopBroadcast();
     }
