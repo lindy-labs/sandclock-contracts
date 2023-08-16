@@ -34,7 +34,6 @@ import {scWETHv2Utils} from "../utils/scWETHv2Utils.sol";
 contract scWETHv2Rebalance is scWETHv2Utils {
     using FixedPointMathLib for uint256;
 
-    WETH weth = WETH(payable(C.WETH));
     uint256 keeperPrivateKey = uint256(vm.envBytes32("KEEPER_PRIVATE_KEY"));
 
     address keeper = vm.envAddress("KEEPER");
@@ -54,6 +53,7 @@ contract scWETHv2Rebalance is scWETHv2Utils {
         vm.startBroadcast(keeper);
 
         _invest();
+        _logs();
 
         vm.stopBroadcast();
     }
@@ -62,23 +62,19 @@ contract scWETHv2Rebalance is scWETHv2Utils {
         vm.startBroadcast(keeperPrivateKey);
 
         _invest();
+        _logs();
 
         vm.stopBroadcast();
     }
 
-    function _invest() internal {
-        uint256 float = weth.balanceOf(address(vault));
-        console2.log("\nInvesting %s weth", float);
-
-        _invest(float);
-
-        _logs();
-    }
-
     function _logs() internal view {
-        console2.log("\n Total Collateral %s wstEth", vault.totalCollateral());
-        console2.log("\n Total Debt %s weth", vault.totalDebt());
+        uint256 collateralInWeth = priceConverter.wstEthToEth(vault.totalCollateral());
+        uint256 debt = vault.totalDebt();
+        console2.log("\n Total Collateral %s weth", collateralInWeth);
+        console2.log("\n Total Debt %s weth", debt);
+        console2.log("\n Invested Amount %s weth", collateralInWeth - debt);
         console2.log("\n Total Assets %s weth", vault.totalAssets());
         console2.log("\n Net Leverage", getLeverage());
+        console2.log("\n Net LTV", debt.divWadUp(collateralInWeth));
     }
 }
