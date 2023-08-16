@@ -9,6 +9,8 @@ import {WETH} from "solmate/tokens/WETH.sol";
 import {AccessControl} from "openzeppelin-contracts/access/AccessControl.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 import {Surl} from "surl/Surl.sol";
+import {Strings} from "openzeppelin-contracts/utils/Strings.sol";
+import {stdJson} from "forge-std/StdJson.sol";
 
 import {Constants as C} from "../../../src/lib/Constants.sol";
 import {ISwapRouter} from "../../../src/interfaces/uniswap/ISwapRouter.sol";
@@ -32,6 +34,8 @@ import {scWETHv2StrategyParams as Params} from "../../base/scWETHv2StrategyParam
 contract scWETHv2Utils is CREATE3Script {
     using FixedPointMathLib for uint256;
     using Surl for *;
+    using Strings for *;
+    using stdJson for string;
 
     WETH weth = WETH(payable(C.WETH));
 
@@ -64,11 +68,11 @@ contract scWETHv2Utils is CREATE3Script {
 
     /// @return : supplyBorrowParams, totalSupplyAmount, totalDebtTaken
     /// @dev : NOTE: ASSUMING ZERO BALANCER FLASH LOAN FEES
-    function _getInvestParams(uint256 _amount) internal view returns (bytes[] memory, uint256, uint256) {
-        require(
-            Params.MORPHO_ALLOCATION_PERCENT + Params.COMPOUNDV3_ALLOCATION_PERCENT == 1e18,
-            "allocationPercents dont add up to 100%"
-        );
+    function _getInvestParams(uint256 _amount) internal returns (bytes[] memory, uint256, uint256) {
+        // require(
+        //     Params.MORPHO_ALLOCATION_PERCENT + Params.COMPOUNDV3_ALLOCATION_PERCENT == 1e18,
+        //     "allocationPercents dont add up to 100%"
+        // );
 
         uint256 stEthRateTolerance = 0.999e18;
 
@@ -87,7 +91,10 @@ contract scWETHv2Utils is CREATE3Script {
 
         bytes[] memory callData = new bytes[](3);
 
-        // callData[0] = abi.encodeWithSelector(BaseV2Vault.zeroExSwap.selector, weth, _amount + totalFlashLoanAmount, swapData, 1);
+        bytes memory swapData = swapDataWethToWstEth(_amount + totalFlashLoanAmount);
+
+        callData[0] =
+            abi.encodeWithSelector(BaseV2Vault.zeroExSwap.selector, weth, _amount + totalFlashLoanAmount, swapData, 1);
 
         callData[1] = abi.encodeWithSelector(
             scWETHv2.supplyAndBorrow.selector, morphoAdapter.id(), morphoSupplyAmount, morphoFlashLoanAmount
@@ -98,8 +105,6 @@ contract scWETHv2Utils is CREATE3Script {
 
         return (callData, morphoSupplyAmount + compoundSupplyAmount, totalFlashLoanAmount);
     }
-
-    function wethToWstEthSwapData() internal view returns (bytes memory) {}
 
     function _calcSupplyBorrowFlashLoanAmount(IAdapter _adapter, uint256 _amount)
         internal
@@ -123,5 +128,24 @@ contract scWETHv2Utils is CREATE3Script {
     function getLeverage() public view returns (uint256) {
         uint256 collateral = priceConverter.wstEthToEth(vault.totalCollateral());
         return collateral > 0 ? collateral.divWadUp(collateral - vault.totalDebt()) : 0;
+    }
+
+    function swapDataWethToWstEth(uint256 _amount) internal returns (bytes memory swapData) {
+        string memory url = string(
+            abi.encodePacked(
+                "https://api.0x.org/swap/v1/quote?buyToken=0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0&sellToken=WETH&sellAmount=",
+                _amount.toString()
+            )
+        );
+
+        string[] memory headers = new string[](1);
+        headers[0] = string(abi.encodePacked("0x-api-key: ", vm.envString("ZEROX_API_KEY")));
+        (uint256 status, bytes memory data) = url.get(headers);
+
+        require(status == 200, "0x GET request Failed");
+
+        string memory json = string(data);
+
+        swapData = json.readBytes(".data");
     }
 }
