@@ -46,7 +46,6 @@ contract RebalanceScUsdcV2 is Script {
 
     /*//////////////////////////////////////////////////////////////*/
 
-    uint256 keeperPrivateKey = uint256(vm.envBytes32("KEEPER_PRIVATE_KEY"));
     address keeper = vm.envAddress("KEEPER");
     scUSDCv2 public scUsdcV2 = scUSDCv2(vm.envAddress("SC_USDC_V2"));
     MorphoAaveV3ScUsdcAdapter public morphoAdapter = MorphoAaveV3ScUsdcAdapter(vm.envAddress("MORPHO_SC_USDC_ADAPTER"));
@@ -97,7 +96,6 @@ contract RebalanceScUsdcV2 is Script {
     }
 
     function _checkEnvVariables() internal view {
-        require(keeperPrivateKey != 0, "keeper private key not set");
         require(keeper != address(0), "keeper address not set");
         require(address(scUsdcV2) != address(0), "scUsdcV2 address not set");
         require(address(morphoAdapter) != address(0), "morpho adapter address not set");
