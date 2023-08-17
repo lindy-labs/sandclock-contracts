@@ -11,6 +11,7 @@ import {AaveV2ScUsdcAdapter} from "../../src/steth/scUsdcV2-adapters/AaveV2ScUsd
 import {AaveV3ScUsdcAdapter} from "../../src/steth/scUsdcV2-adapters/AaveV3ScUsdcAdapter.sol";
 import {MorphoAaveV3ScUsdcAdapter} from "../../src/steth/scUsdcV2-adapters/MorphoAaveV3ScUsdcAdapter.sol";
 import {RebalanceScUsdcV2} from "../../script/v2/RebalanceScUsdcV2.s.sol";
+import {MainnetAddresses} from "../../script/base/MainnetAddresses.sol";
 
 contract RebalanceScUsdcV2Test is Test {
     using FixedPointMathLib for uint256;
@@ -31,7 +32,7 @@ contract RebalanceScUsdcV2Test is Test {
 
         script = new RebalanceScUsdcV2TestHarness();
 
-        vault = scUSDCv2(vm.envAddress("SC_USDC_V2"));
+        vault = scUSDCv2(MainnetAddresses.SCUSDCV2);
         priceConverter = vault.priceConverter();
         morpho = script.morphoAdapter();
         aaveV2 = script.aaveV2Adapter();
