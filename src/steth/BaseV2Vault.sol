@@ -141,6 +141,13 @@ abstract contract BaseV2Vault is sc4626, IFlashLoanRecipient {
     }
 
     /**
+     * @notice returns whether a token is whitelisted to be swapped out using zeroExSwap or not
+     */
+    function isTokenWhitelisted(ERC20 _token) external view returns (bool) {
+        return zeroExSwapWhitelist[_token];
+    }
+
+    /**
      * @notice Claim rewards from a lending market.
      * @param _adapterId The ID of the lending market adapter.
      * @param _callData The encoded data for the claimRewards function.

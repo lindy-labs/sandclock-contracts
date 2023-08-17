@@ -139,6 +139,34 @@ contract scWETHv2Test is Test {
         assertEq(address(vault.balancerVault()), C.BALANCER_VAULT);
     }
 
+    function test_whiteListOutToken() public {
+        _setUp(BLOCK_AFTER_EULER_EXPLOIT);
+        assertEq(vault.isTokenWhitelisted(vault.asset()), true, "Asset token not whitelisted");
+        assertEq(vault.isTokenWhitelisted(ERC20(C.WSTETH)), true, "WstEth token not whitelisted");
+
+        vm.expectRevert(CallerNotAdmin.selector);
+        vm.prank(alice);
+        vault.whiteListOutToken(ERC20(C.USDC), true);
+
+        assertEq(vault.isTokenWhitelisted(ERC20(C.USDC)), false);
+
+        vault.whiteListOutToken(ERC20(C.USDC), true);
+        assertEq(vault.isTokenWhitelisted(ERC20(C.USDC)), true);
+
+        vault.whiteListOutToken(ERC20(C.USDC), false);
+        assertEq(vault.isTokenWhitelisted(ERC20(C.USDC)), false);
+    }
+
+    function test_zeroExSwap_InvalidOutToken() public {
+        _setUp(BLOCK_AFTER_EULER_EXPLOIT);
+        uint256 amount = 10 ether;
+        _depositToVault(address(this), amount);
+
+        vm.expectRevert(InvalidOutToken.selector);
+        hoax(keeper);
+        vault.zeroExSwap(weth, ERC20(C.USDC), amount, "", 0);
+    }
+
     function test_addAdapter() public {
         _setUp(BLOCK_AFTER_EULER_EXPLOIT);
 
