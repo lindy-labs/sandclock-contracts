@@ -133,19 +133,28 @@ abstract contract BaseV2Vault is sc4626, IFlashLoanRecipient {
 
     /**
      * @notice Sell any token for the "asset" token on 0x exchange.
-     * @param _token The token to sell.
+     * @param _tokenIn The token to sell.
+     * @param _tokenOut The token to buy.
      * @param _amount The amount of tokens to sell.
      * @param _swapData The swap data for 0xrouter.
      * @param _assetAmountOutMin The minimum amount of "asset" token to receive for the swap.
      */
-    function zeroExSwap(ERC20 _token, uint256 _amount, bytes calldata _swapData, uint256 _assetAmountOutMin) external {
+    function zeroExSwap(
+        ERC20 _tokenIn,
+        ERC20 _tokenOut,
+        uint256 _amount,
+        bytes calldata _swapData,
+        uint256 _assetAmountOutMin
+    ) external {
         _onlyKeeperOrFlashLoan();
 
         bytes memory result = address(swapper).functionDelegateCall(
-            abi.encodeWithSelector(Swapper.zeroExSwap.selector, _token, asset, _amount, _assetAmountOutMin, _swapData)
+            abi.encodeWithSelector(
+                Swapper.zeroExSwap.selector, _tokenIn, _tokenOut, _amount, _assetAmountOutMin, _swapData
+            )
         );
 
-        emit TokenSwapped(address(_token), _amount, abi.decode(result, (uint256)));
+        emit TokenSwapped(address(_tokenIn), _amount, abi.decode(result, (uint256)));
     }
 
     function _multiCall(bytes[] memory _callData) internal {
