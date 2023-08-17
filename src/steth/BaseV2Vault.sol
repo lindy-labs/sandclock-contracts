@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.19;
 
+import {InvalidOutToken} from "../errors/scErrors.sol";
+
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {Address} from "openzeppelin-contracts/utils/Address.sol";
 import {EnumerableMap} from "openzeppelin-contracts/utils/structs/EnumerableMap.sol";
@@ -27,6 +29,7 @@ abstract contract BaseV2Vault is sc4626, IFlashLoanRecipient {
     event ProtocolAdapterRemoved(address indexed admin, uint256 adapterId);
     event RewardsClaimed(uint256 adapterId);
     event TokenSwapped(address token, uint256 amount, uint256 amountReceived);
+    event TokenWhitelisted(address token, bool value);
 
     // Balancer vault for flashloans
     IVault public constant balancerVault = IVault(C.BALANCER_VAULT);
@@ -39,6 +42,9 @@ abstract contract BaseV2Vault is sc4626, IFlashLoanRecipient {
 
     // mapping of IDs to lending protocol adapter contracts
     EnumerableMap.UintToAddressMap internal protocolAdapters;
+
+    // mapping for the tokenOuts allowed during zeroExSwap
+    mapping(ERC20 => bool) internal zeroExSwapWhitelist;
 
     constructor(
         address _admin,
@@ -54,6 +60,23 @@ abstract contract BaseV2Vault is sc4626, IFlashLoanRecipient {
 
         priceConverter = _priceConverter;
         swapper = _swapper;
+
+        zeroExSwapWhitelist[_asset] = true;
+    }
+
+    /**
+     * @notice whitelist (or cancel whitelist) a token to be swapped out using zeroExSwap
+     * @param _token The token to whitelist
+     * @param _value whether to whitelist or cancel whitelist
+     */
+    function whiteListOutToken(ERC20 _token, bool _value) external {
+        _onlyAdmin();
+
+        if (address(_token) == address(0)) revert ZeroAddress();
+
+        zeroExSwapWhitelist[_token] = _value;
+
+        emit TokenWhitelisted(address(_token), _value);
     }
 
     /**
@@ -147,6 +170,8 @@ abstract contract BaseV2Vault is sc4626, IFlashLoanRecipient {
         uint256 _assetAmountOutMin
     ) external {
         _onlyKeeperOrFlashLoan();
+
+        if (!zeroExSwapWhitelist[_tokenOut]) revert InvalidOutToken();
 
         bytes memory result = address(swapper).functionDelegateCall(
             abi.encodeWithSelector(

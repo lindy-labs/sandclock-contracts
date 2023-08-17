@@ -1944,7 +1944,7 @@ contract scUSDCv2Test is Test {
         _setUpForkAtBlock(EUL_SWAP_BLOCK);
         vm.startPrank(alice);
         vm.expectRevert(CallerNotKeeper.selector);
-        vault.zeroExSwap(ERC20(C.EULER_REWARDS_TOKEN), ERC20(C.WETH), 0, bytes("0"), 0);
+        vault.zeroExSwap(ERC20(C.EULER_REWARDS_TOKEN), ERC20(C.USDC), 0, bytes("0"), 0);
     }
 
     function test_zeroExSwap_SwapsEulerForUsdc() public {
@@ -1958,7 +1958,7 @@ contract scUSDCv2Test is Test {
         assertEq(vault.usdcBalance(), initialUsdcBalance, "usdc balance");
         assertEq(vault.totalAssets(), initialUsdcBalance, "total assets");
 
-        vault.zeroExSwap(ERC20(C.EULER_REWARDS_TOKEN), ERC20(C.WETH), EUL_AMOUNT, EUL_SWAP_DATA, EUL_SWAP_USDC_RECEIVED);
+        vault.zeroExSwap(ERC20(C.EULER_REWARDS_TOKEN), ERC20(C.USDC), EUL_AMOUNT, EUL_SWAP_DATA, EUL_SWAP_USDC_RECEIVED);
 
         assertEq(ERC20(C.EULER_REWARDS_TOKEN).balanceOf(address(vault)), EUL_AMOUNT, "euler end balance");
         assertEq(vault.totalAssets(), initialUsdcBalance + EUL_SWAP_USDC_RECEIVED, "vault total assets");
@@ -1974,7 +1974,7 @@ contract scUSDCv2Test is Test {
         vm.expectEmit(true, true, true, true);
         emit TokenSwapped(C.EULER_REWARDS_TOKEN, EUL_AMOUNT, EUL_SWAP_USDC_RECEIVED);
 
-        vault.zeroExSwap(ERC20(C.EULER_REWARDS_TOKEN), ERC20(C.WETH), EUL_AMOUNT, EUL_SWAP_DATA, 0);
+        vault.zeroExSwap(ERC20(C.EULER_REWARDS_TOKEN), ERC20(C.USDC), EUL_AMOUNT, EUL_SWAP_DATA, 0);
     }
 
     function test_zeroExSwap_FailsIfUsdcAmountReceivedIsLessThanMin() public {
@@ -1984,7 +1984,7 @@ contract scUSDCv2Test is Test {
 
         vm.expectRevert(AmountReceivedBelowMin.selector);
         vault.zeroExSwap(
-            ERC20(C.EULER_REWARDS_TOKEN), ERC20(C.WETH), EUL_AMOUNT, EUL_SWAP_DATA, EUL_SWAP_USDC_RECEIVED + 1
+            ERC20(C.EULER_REWARDS_TOKEN), ERC20(C.USDC), EUL_AMOUNT, EUL_SWAP_DATA, EUL_SWAP_USDC_RECEIVED + 1
         );
     }
 
@@ -1996,7 +1996,7 @@ contract scUSDCv2Test is Test {
         bytes memory invalidSwapData = hex"6af479b20000";
 
         vm.expectRevert("Address: low-level call failed");
-        vault.zeroExSwap(ERC20(C.EULER_REWARDS_TOKEN), ERC20(C.WETH), EUL_AMOUNT, invalidSwapData, 0);
+        vault.zeroExSwap(ERC20(C.EULER_REWARDS_TOKEN), ERC20(C.USDC), EUL_AMOUNT, invalidSwapData, 0);
     }
 
     /// #claimRewards ///
