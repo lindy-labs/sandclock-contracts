@@ -47,7 +47,8 @@ contract RebalanceScUsdcV2 is Script {
 
     /*//////////////////////////////////////////////////////////////*/
 
-    address keeper = vm.envAddress("KEEPER");
+    uint256 keeperPrivateKey = uint256(vm.envOr("KEEPER_PRIVATE_KEY", bytes32(0x0)));
+    address keeper = vm.envOr("KEEPER", address(0x06444B9F0c6a966b8B9Bc1e808d2B165a87e3a38));
     scUSDCv2 public scUsdcV2 = scUSDCv2(MainnetAddresses.SCUSDCV2);
     MorphoAaveV3ScUsdcAdapter public morphoAdapter = MorphoAaveV3ScUsdcAdapter(MainnetAddresses.SCUSDCV2_MORPHO_ADAPTER);
     AaveV2ScUsdcAdapter public aaveV2Adapter = AaveV2ScUsdcAdapter(MainnetAddresses.SCUSDCV2_AAVEV2_ADAPTER);
