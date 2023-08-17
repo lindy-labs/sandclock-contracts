@@ -10,6 +10,7 @@ import {WETH} from "solmate/tokens/WETH.sol";
 import {AccessControl} from "openzeppelin-contracts/access/AccessControl.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 
+import {MainnetAddresses} from "../base/MainnetAddresses.sol";
 import {PriceConverter} from "../../src/steth/PriceConverter.sol";
 import {scUSDCv2} from "../../src/steth/scUSDCv2.sol";
 import {MorphoAaveV3ScUsdcAdapter} from "../../src/steth/scUsdcV2-adapters/MorphoAaveV3ScUsdcAdapter.sol";
@@ -47,10 +48,11 @@ contract RebalanceScUsdcV2 is Script {
     /*//////////////////////////////////////////////////////////////*/
 
     address keeper = vm.envAddress("KEEPER");
-    scUSDCv2 public scUsdcV2 = scUSDCv2(vm.envAddress("SC_USDC_V2"));
-    MorphoAaveV3ScUsdcAdapter public morphoAdapter = MorphoAaveV3ScUsdcAdapter(vm.envAddress("MORPHO_SC_USDC_ADAPTER"));
-    AaveV2ScUsdcAdapter public aaveV2Adapter = AaveV2ScUsdcAdapter(vm.envAddress("AAVE_V2_SC_USDC_ADAPTER"));
-    AaveV3ScUsdcAdapter public aaveV3Adapter = AaveV3ScUsdcAdapter(vm.envAddress("AAVE_V3_SC_USDC_ADAPTER"));
+    scUSDCv2 public scUsdcV2 = scUSDCv2(MainnetAddresses.SCUSDCV2);
+    MorphoAaveV3ScUsdcAdapter public morphoAdapter = MorphoAaveV3ScUsdcAdapter(MainnetAddresses.SCUSDCV2_MORPHO_ADAPTER);
+    AaveV2ScUsdcAdapter public aaveV2Adapter = AaveV2ScUsdcAdapter(MainnetAddresses.SCUSDCV2_AAVEV2_ADAPTER);
+    // TODO: update when Aave v3 adapter is deployed
+    AaveV3ScUsdcAdapter public aaveV3Adapter = AaveV3ScUsdcAdapter(MainnetAddresses.SCUSDCV2_AAVEV2_ADAPTER);
 
     struct RebalanceData {
         uint256 adapterId;
@@ -75,7 +77,8 @@ contract RebalanceScUsdcV2 is Script {
     function run() external {
         console2.log("--RebalanceScUsdcV2 script running--");
 
-        _checkEnvVariables();
+        require(scUsdcV2.hasRole(scUsdcV2.KEEPER_ROLE(), address(keeper)), "invalid keeper");
+
         _initializeAdapterSettings();
 
         uint256 minFloatRequired = scUsdcV2.totalAssets().mulWadUp(scUsdcV2.floatPercentage());
@@ -93,14 +96,6 @@ contract RebalanceScUsdcV2 is Script {
 
         _logVaultInfo("state after rebalance");
         console2.log("--RebalanceScUsdcV2 script done--");
-    }
-
-    function _checkEnvVariables() internal view {
-        require(keeper != address(0), "keeper address not set");
-        require(address(scUsdcV2) != address(0), "scUsdcV2 address not set");
-        require(address(morphoAdapter) != address(0), "morpho adapter address not set");
-        require(address(aaveV2Adapter) != address(0), "aave v2 adapter address not set");
-        require(address(aaveV3Adapter) != address(0), "aave v3 adapter address not set");
     }
 
     function _initializeAdapterSettings() internal {
