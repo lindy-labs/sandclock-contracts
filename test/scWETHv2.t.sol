@@ -1174,7 +1174,9 @@ contract scWETHv2Test is Test {
 
         bytes[] memory callData = new bytes[](3);
 
-        callData[0] = abi.encodeWithSelector(BaseV2Vault.zeroExSwap.selector, weth, wstEth, investAmount + totalFlashLoanAmount, swapData, 1);
+        callData[0] = abi.encodeWithSelector(
+            BaseV2Vault.zeroExSwap.selector, weth, wstEth, investAmount + totalFlashLoanAmount, swapData, 1
+        );
 
         callData[1] = abi.encodeWithSelector(
             scWETHv2.supplyAndBorrow.selector,
