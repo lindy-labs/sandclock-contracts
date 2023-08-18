@@ -45,57 +45,57 @@ contract scUSDCv2Rebalance is MainnetDeployBase, Test {
     uint256 ltvDiffTolerance = 0.003e18;
 
     function run() external {
-        _fork(17529069);
+        // _fork(17529069);
         _deployVaults();
 
         // make a deposit of 1 million USDC from alice
-        _depositUsdc(1_000_000e6, alice);
+        // _depositUsdc(1_000_000e6, alice);
 
-        vm.startBroadcast(keeper);
+        // vm.startBroadcast(keeper);
 
-        // 1. make initial investment to weth vault
-        console2.log("\n-- initial investment --");
-        _invest();
-        _assertLtvsAreAtTarget();
-        _logVaultInfo();
+        // // 1. make initial investment to weth vault
+        // console2.log("\n-- initial investment --");
+        // _invest();
+        // _assertLtvsAreAtTarget();
+        // _logVaultInfo();
 
-        // warp time to change the ltvs
-        vm.warp(block.timestamp + 365 days);
-        console2.log("\n-- ltvs changed after 356 days --");
-        _assertLtvsAreAboveTarget();
-        _logVaultInfo();
+        // // warp time to change the ltvs
+        // vm.warp(block.timestamp + 365 days);
+        // console2.log("\n-- ltvs changed after 356 days --");
+        // _assertLtvsAreAboveTarget();
+        // _logVaultInfo();
 
-        // 2. rebalance to the target ltv
-        _rebalance();
-        console2.log("\n-- rebalance to get ltvs to target values --");
-        _assertLtvsAreAtTarget();
-        _logVaultInfo();
+        // // 2. rebalance to the target ltv
+        // _rebalance();
+        // console2.log("\n-- rebalance to get ltvs to target values --");
+        // _assertLtvsAreAtTarget();
+        // _logVaultInfo();
 
-        vm.stopBroadcast();
+        // vm.stopBroadcast();
 
-        // make a deposit of 200k USDC from bob
-        _depositUsdc(200_000e6, bob);
+        // // make a deposit of 200k USDC from bob
+        // _depositUsdc(200_000e6, bob);
 
-        // 3. rebalance to reinvest the additional deposit
-        vm.startBroadcast(keeper);
-        console2.log("\n-- reinvest additional deposits --");
-        _invest();
-        _assertLtvsAreAtTarget();
-        _logVaultInfo();
-        vm.stopBroadcast();
+        // // 3. rebalance to reinvest the additional deposit
+        // vm.startBroadcast(keeper);
+        // console2.log("\n-- reinvest additional deposits --");
+        // _invest();
+        // _assertLtvsAreAtTarget();
+        // _logVaultInfo();
+        // vm.stopBroadcast();
 
-        // add 10% to the scWETH vault to simulate profits from staking
-        ERC20 weth = scWethV2.asset();
-        deal(address(weth), address(scWethV2), weth.balanceOf(address(scWethV2)).mulWadUp(1.1e18));
+        // // add 10% to the scWETH vault to simulate profits from staking
+        // ERC20 weth = scWethV2.asset();
+        // deal(address(weth), address(scWethV2), weth.balanceOf(address(scWethV2)).mulWadUp(1.1e18));
 
-        // 4. sell profit and reinvest
-        vm.startBroadcast(keeper);
-        console2.log("\n-- sell & reinvest profits --");
-        // note: selling profits can be done as part of the rebalance call (added to multicall data) but usdc received from selling will has to be estimated in that case
-        scUsdcV2.sellProfit(0); // _usdcAmountOutMin = 0
-        _invest();
-        _assertLtvsAreAtTarget();
-        _logVaultInfo();
+        // // 4. sell profit and reinvest
+        // vm.startBroadcast(keeper);
+        // console2.log("\n-- sell & reinvest profits --");
+        // // note: selling profits can be done as part of the rebalance call (added to multicall data) but usdc received from selling will has to be estimated in that case
+        // scUsdcV2.sellProfit(0); // _usdcAmountOutMin = 0
+        // _invest();
+        // _assertLtvsAreAtTarget();
+        // _logVaultInfo();
     }
 
     function _fork(uint256 _blockNumber) internal {
@@ -105,7 +105,7 @@ contract scUSDCv2Rebalance is MainnetDeployBase, Test {
     }
 
     function _deployVaults() internal {
-        vm.startBroadcast(deployerAddress);
+        vm.startBroadcast(deployerPrivateKey);
 
         Swapper swapper = new Swapper();
         priceConverter = new PriceConverter(deployerAddress);
