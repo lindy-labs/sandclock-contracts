@@ -158,12 +158,12 @@ contract scWETHv2Test is Test {
         assertEq(vault.isTokenWhitelisted(ERC20(C.USDC)), false);
     }
 
-    function test_zeroExSwap_TokenNotAllowed() public {
+    function test_zeroExSwap_TokenOutNotAllowed() public {
         _setUp(BLOCK_AFTER_EULER_EXPLOIT);
         uint256 amount = 10 ether;
         _depositToVault(address(this), amount);
 
-        vm.expectRevert(abi.encodeWithSelector(TokenNotAllowed.selector, C.USDC));
+        vm.expectRevert(abi.encodeWithSelector(TokenOutNotAllowed.selector, C.USDC));
         hoax(keeper);
         vault.zeroExSwap(weth, ERC20(C.USDC), amount, "", 0);
     }

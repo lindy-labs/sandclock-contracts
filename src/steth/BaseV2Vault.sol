@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.19;
 
-import {TokenNotAllowed} from "../errors/scErrors.sol";
+import {TokenOutNotAllowed} from "../errors/scErrors.sol";
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {Address} from "openzeppelin-contracts/utils/Address.sol";
@@ -178,7 +178,7 @@ abstract contract BaseV2Vault is sc4626, IFlashLoanRecipient {
     ) external {
         _onlyKeeperOrFlashLoan();
 
-        if (!zeroExSwapWhitelist[_tokenOut]) revert TokenNotAllowed(address(_tokenOut));
+        if (!zeroExSwapWhitelist[_tokenOut]) revert TokenOutNotAllowed(address(_tokenOut));
 
         bytes memory result = address(swapper).functionDelegateCall(
             abi.encodeWithSelector(
