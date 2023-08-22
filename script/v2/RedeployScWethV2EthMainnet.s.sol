@@ -16,7 +16,7 @@ contract RedeployScript is MainnetDeployBase {
     PriceConverter priceConverter = PriceConverter(MainnetAddresses.PRICE_CONVERTER);
     MorphoAaveV3ScWethAdapter morphoAdapter = MorphoAaveV3ScWethAdapter(MainnetAddresses.SCWETHV2_MORPHO_ADAPTER);
     CompoundV3ScWethAdapter compoundV3Adapter = CompoundV3ScWethAdapter(MainnetAddresses.SCWETHV2_COMPOUND_ADAPTER);
-    // @note: update after the deployment of the AaveV3ScUsdcAdapter
+    // TODO: update after the deployment of the AaveV3ScWethAdapter
     AaveV3ScWethAdapter aaveV3Adapter = AaveV3ScWethAdapter(address(0));
 
     function run() external returns (scWETHv2 scWethV2) {
@@ -44,6 +44,8 @@ contract RedeployScript is MainnetDeployBase {
         // initial deposit
         weth.deposit{value: 0.01 ether}(); // wrap 0.01 ETH into WETH
         _deposit(scWethV2, 0.01 ether); // 0.01 WETH
+
+        _setTreasury(scWethV2, MainnetAddresses.TREASURY);
 
         _transferAdminRoleToMultisig(scWethV2, deployerAddress);
 

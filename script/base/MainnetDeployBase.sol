@@ -29,6 +29,10 @@ abstract contract MainnetDeployBase is CREATE3Script {
         _contract.revokeRole(_contract.DEFAULT_ADMIN_ROLE(), _currentAdmin);
     }
 
+    function _setTreasury(sc4626 _vault, address _treasury) internal {
+        _vault.setTreasury(_treasury);
+    }
+
     function _deposit(sc4626 _vault, uint256 _amount) internal virtual {
         _vault.asset().approve(address(_vault), _amount);
         _vault.deposit(_amount, deployerAddress);

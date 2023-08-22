@@ -43,6 +43,8 @@ contract DeployScript is MainnetDeployBase {
 
         _transferAdminRoleToMultisig(scWethV2, deployerAddress);
 
+        _setTreasury(scWethV2, MainnetAddresses.TREASURY);
+
         vm.stopBroadcast();
     }
 }

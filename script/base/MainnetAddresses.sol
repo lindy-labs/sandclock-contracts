@@ -17,4 +17,7 @@ library MainnetAddresses {
     address public constant SWAPPER = 0x6649f12b5ef495a3861b21E3206B1AbfA33A6531;
 
     address public constant KEEPER = 0x06444B9F0c6a966b8B9Bc1e808d2B165a87e3a38;
+
+    // TODO: TREASURY == MULTISIG for now, change to the staking contract address once it's deployed
+    address public constant TREASURY = 0x035F210e5d14054E8AE5A6CFA76d643aA200D56E;
 }

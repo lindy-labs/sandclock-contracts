@@ -4,6 +4,7 @@ pragma solidity ^0.8.13;
 import "forge-std/console2.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
+import {MainnetAddresses} from "./base/MainnetAddresses.sol";
 import {MainnetDeployBase} from "./base/MainnetDeployBase.sol";
 import {ISwapRouter} from "../src/interfaces/uniswap/ISwapRouter.sol";
 import {Constants as C} from "../src/lib/Constants.sol";
@@ -27,6 +28,8 @@ contract DeployLiquity is MainnetDeployBase {
         uint256 lusdAmount = _swapUsdcForLusd(usdcAmount);
 
         _deposit(vault, lusdAmount);
+
+        _setTreasury(vault, MainnetAddresses.TREASURY);
 
         _transferAdminRoleToMultisig(vault, deployerAddress);
 
