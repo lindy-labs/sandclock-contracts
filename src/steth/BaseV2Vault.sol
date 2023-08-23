@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.19;
 
+import {TokenOutNotAllowed} from "../errors/scErrors.sol";
+
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {Address} from "openzeppelin-contracts/utils/Address.sol";
 import {EnumerableMap} from "openzeppelin-contracts/utils/structs/EnumerableMap.sol";
@@ -27,6 +29,7 @@ abstract contract BaseV2Vault is sc4626, IFlashLoanRecipient {
     event ProtocolAdapterRemoved(address indexed admin, uint256 adapterId);
     event RewardsClaimed(uint256 adapterId);
     event TokenSwapped(address token, uint256 amount, uint256 amountReceived);
+    event TokenWhitelisted(address token, bool value);
 
     // Balancer vault for flashloans
     IVault public constant balancerVault = IVault(C.BALANCER_VAULT);
@@ -39,6 +42,9 @@ abstract contract BaseV2Vault is sc4626, IFlashLoanRecipient {
 
     // mapping of IDs to lending protocol adapter contracts
     EnumerableMap.UintToAddressMap internal protocolAdapters;
+
+    // mapping for the tokenOuts allowed during zeroExSwap
+    mapping(ERC20 => bool) internal zeroExSwapWhitelist;
 
     constructor(
         address _admin,
@@ -54,6 +60,23 @@ abstract contract BaseV2Vault is sc4626, IFlashLoanRecipient {
 
         priceConverter = _priceConverter;
         swapper = _swapper;
+
+        zeroExSwapWhitelist[_asset] = true;
+    }
+
+    /**
+     * @notice whitelist (or cancel whitelist) a token to be swapped out using zeroExSwap
+     * @param _token The token to whitelist
+     * @param _value whether to whitelist or cancel whitelist
+     */
+    function whiteListOutToken(ERC20 _token, bool _value) external {
+        _onlyAdmin();
+
+        if (address(_token) == address(0)) revert ZeroAddress();
+
+        zeroExSwapWhitelist[_token] = _value;
+
+        emit TokenWhitelisted(address(_token), _value);
     }
 
     /**
@@ -118,6 +141,13 @@ abstract contract BaseV2Vault is sc4626, IFlashLoanRecipient {
     }
 
     /**
+     * @notice returns whether a token is whitelisted to be swapped out using zeroExSwap or not
+     */
+    function isTokenWhitelisted(ERC20 _token) external view returns (bool) {
+        return zeroExSwapWhitelist[_token];
+    }
+
+    /**
      * @notice Claim rewards from a lending market.
      * @param _adapterId The ID of the lending market adapter.
      * @param _callData The encoded data for the claimRewards function.
@@ -133,19 +163,30 @@ abstract contract BaseV2Vault is sc4626, IFlashLoanRecipient {
 
     /**
      * @notice Sell any token for the "asset" token on 0x exchange.
-     * @param _token The token to sell.
+     * @param _tokenIn The token to sell.
+     * @param _tokenOut The token to buy.
      * @param _amount The amount of tokens to sell.
      * @param _swapData The swap data for 0xrouter.
      * @param _assetAmountOutMin The minimum amount of "asset" token to receive for the swap.
      */
-    function zeroExSwap(ERC20 _token, uint256 _amount, bytes calldata _swapData, uint256 _assetAmountOutMin) external {
+    function zeroExSwap(
+        ERC20 _tokenIn,
+        ERC20 _tokenOut,
+        uint256 _amount,
+        bytes calldata _swapData,
+        uint256 _assetAmountOutMin
+    ) external {
         _onlyKeeperOrFlashLoan();
 
+        if (!zeroExSwapWhitelist[_tokenOut]) revert TokenOutNotAllowed(address(_tokenOut));
+
         bytes memory result = address(swapper).functionDelegateCall(
-            abi.encodeWithSelector(Swapper.zeroExSwap.selector, _token, asset, _amount, _assetAmountOutMin, _swapData)
+            abi.encodeWithSelector(
+                Swapper.zeroExSwap.selector, _tokenIn, _tokenOut, _amount, _assetAmountOutMin, _swapData
+            )
         );
 
-        emit TokenSwapped(address(_token), _amount, abi.decode(result, (uint256)));
+        emit TokenSwapped(address(_tokenIn), _amount, abi.decode(result, (uint256)));
     }
 
     function _multiCall(bytes[] memory _callData) internal {

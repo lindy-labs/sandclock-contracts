@@ -27,7 +27,7 @@ contract DeployLeveragedEthForked is DeployLeveragedEth, Test {
     uint256 public constant INITIAL_WETH_WITHDRAW = 1e18;
     uint256 public constant INITIAL_USDC_DEPOSIT = 100e6;
     uint256 public constant INITIAL_USDC_WITHDRAW = 1e6;
-    uint256 public constant INITIAL_WETH_FUNDING = 100e18;
+    uint256 public constant INITIAL_WETH_FUNDING = 10000e18;
     uint256 public constant INITIAL_USDC_FUNDING = 10000e6;
 
     function run() external {
@@ -136,9 +136,9 @@ contract DeployLeveragedEthForked is DeployLeveragedEth, Test {
     function _fundViaSwap() internal {
         console2.log("funding via swap");
 
-        vm.startBroadcast(deployerPrivateKey);
+        vm.startBroadcast(keeper);
 
-        console2.log("depositing 10000 ETH into WETH");
+        console2.log("depositing 1000 ETH into WETH");
         weth.deposit{value: 1000 ether}();
 
         console2.log("swap 1000 eth for USDC");

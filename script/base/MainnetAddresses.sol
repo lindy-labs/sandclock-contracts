@@ -15,4 +15,6 @@ library MainnetAddresses {
 
     address public constant PRICE_CONVERTER = 0xD76B0Ff4A487CaFE4E19ed15B73f12f6A92095Ca;
     address public constant SWAPPER = 0x6649f12b5ef495a3861b21E3206B1AbfA33A6531;
+
+    address public constant KEEPER = 0x06444B9F0c6a966b8B9Bc1e808d2B165a87e3a38;
 }
