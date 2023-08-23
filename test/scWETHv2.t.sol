@@ -139,6 +139,35 @@ contract scWETHv2Test is Test {
         assertEq(address(vault.balancerVault()), C.BALANCER_VAULT);
     }
 
+    function test_whiteListOutToken() public {
+        _setUp(BLOCK_AFTER_EULER_EXPLOIT);
+        assertEq(vault.isTokenWhitelisted(vault.asset()), true, "Asset token not whitelisted");
+        assertEq(vault.isTokenWhitelisted(ERC20(C.WSTETH)), true, "WstEth token not whitelisted");
+
+        vm.expectRevert(CallerNotAdmin.selector);
+        vm.prank(alice);
+        vault.whiteListOutToken(ERC20(C.USDC), true);
+
+        vm.expectRevert(ZeroAddress.selector);
+        vault.whiteListOutToken(ERC20(address(0x00)), true);
+
+        vault.whiteListOutToken(ERC20(C.USDC), true);
+        assertEq(vault.isTokenWhitelisted(ERC20(C.USDC)), true);
+
+        vault.whiteListOutToken(ERC20(C.USDC), false);
+        assertEq(vault.isTokenWhitelisted(ERC20(C.USDC)), false);
+    }
+
+    function test_zeroExSwap_TokenOutNotAllowed() public {
+        _setUp(BLOCK_AFTER_EULER_EXPLOIT);
+        uint256 amount = 10 ether;
+        _depositToVault(address(this), amount);
+
+        vm.expectRevert(abi.encodeWithSelector(TokenOutNotAllowed.selector, C.USDC));
+        hoax(keeper);
+        vault.zeroExSwap(weth, ERC20(C.USDC), amount, "", 0);
+    }
+
     function test_addAdapter() public {
         _setUp(BLOCK_AFTER_EULER_EXPLOIT);
 
@@ -303,10 +332,10 @@ contract scWETHv2Test is Test {
         deal(C.EULER_REWARDS_TOKEN, address(vault), eulerAmount);
 
         vm.expectRevert(CallerNotKeeper.selector);
-        vault.zeroExSwap(ERC20(C.EULER_REWARDS_TOKEN), eulerAmount, swapData, 0);
+        vault.zeroExSwap(ERC20(C.EULER_REWARDS_TOKEN), ERC20(C.WETH), eulerAmount, swapData, 0);
 
         hoax(keeper);
-        vault.zeroExSwap(ERC20(C.EULER_REWARDS_TOKEN), eulerAmount, swapData, 0);
+        vault.zeroExSwap(ERC20(C.EULER_REWARDS_TOKEN), ERC20(C.WETH), eulerAmount, swapData, 0);
 
         assertGe(weth.balanceOf(address(vault)), expectedWethAmount, "weth not received");
         assertEq(ERC20(C.EULER_REWARDS_TOKEN).balanceOf(address(vault)), 0, "euler token not transferred out");
@@ -322,7 +351,7 @@ contract scWETHv2Test is Test {
 
         deal(address(wstEth), address(vault), wstEthAmount);
         vm.prank(keeper);
-        vault.zeroExSwap(ERC20(address(wstEth)), wstEthAmount, swapData, 0);
+        vault.zeroExSwap(ERC20(address(wstEth)), ERC20(C.WETH), wstEthAmount, swapData, 0);
 
         assertGe(weth.balanceOf(address(vault)), expectedWethAmount, "weth not received");
         assertEq(wstEth.balanceOf(address(vault)), 0, "wstEth not transferred out");
@@ -666,8 +695,9 @@ contract scWETHv2Test is Test {
         );
 
         // swap wstEth to weth using zeroEx swap
-        callData[1] =
-            abi.encodeWithSelector(BaseV2Vault.zeroExSwap.selector, wstEth, wstEthAmountToWithdraw, swapData, 0);
+        callData[1] = abi.encodeWithSelector(
+            BaseV2Vault.zeroExSwap.selector, wstEth, ERC20(C.WETH), wstEthAmountToWithdraw, swapData, 0
+        );
 
         hoax(keeper);
         vault.rebalance(0, expectedWethAmountAfterSwap, callData);
@@ -1144,6 +1174,66 @@ contract scWETHv2Test is Test {
         assertApproxEqRel(balance, profit.mulWadDown(vault.performanceFee()), 0.015e18);
     }
 
+    function test_invest_withZeroExWethToWstEthSwap() public {
+        _setUp(17934941);
+
+        bytes memory swapData =
+            hex"6af479b20000000000000000000000000000000000000000000000000000000000000080000000000000000000000000000000000000000000000011e3ab8395c6e8000000000000000000000000000000000000000000000000000f97a7ede4f09e7a5b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002bc02aaa39b223fe8d0a0e5c4f27ead9083c756cc20000647f39c581f595b53c5cb19bd0b3f8da6c935e2ca0000000000000000000000000000000000000000000869584cd000000000000000000000000588ebf90cce940403c2d3650519313ed5c414cc200000000000000000000000000000000095789faafab13e98e0d8e807cdbbddf";
+
+        vault.setTreasury(treasury);
+        uint256 amount = 100 ether;
+        _depositToVault(address(this), amount);
+
+        uint256 investAmount = amount - minimumFloatAmount;
+
+        uint256 stEthRateTolerance = 0.999e18;
+
+        uint256 aaveV3Amount = investAmount.mulWadDown(0.5e18);
+        uint256 compoundAmount = investAmount.mulWadDown(0.5e18);
+
+        uint256 aaveV3FlashLoanAmount = _calcSupplyBorrowFlashLoanAmount(aaveV3Adapter, aaveV3Amount);
+        uint256 compoundFlashLoanAmount = _calcSupplyBorrowFlashLoanAmount(compoundV3Adapter, compoundAmount);
+
+        uint256 aaveV3SupplyAmount =
+            priceConverter.ethToWstEth(aaveV3Amount + aaveV3FlashLoanAmount).mulWadDown(stEthRateTolerance);
+        uint256 compoundSupplyAmount =
+            priceConverter.ethToWstEth(compoundAmount + compoundFlashLoanAmount).mulWadDown(stEthRateTolerance);
+
+        uint256 totalFlashLoanAmount = aaveV3FlashLoanAmount + compoundFlashLoanAmount;
+
+        bytes[] memory callData = new bytes[](3);
+
+        callData[0] = abi.encodeWithSelector(
+            BaseV2Vault.zeroExSwap.selector, weth, wstEth, investAmount + totalFlashLoanAmount, swapData, 1
+        );
+
+        callData[1] = abi.encodeWithSelector(
+            scWETHv2.supplyAndBorrow.selector,
+            aaveV3AdapterId,
+            aaveV3SupplyAmount,
+            aaveV3FlashLoanAmount.mulWadUp(1e18 + flashLoanFeePercent)
+        );
+
+        callData[2] = abi.encodeWithSelector(
+            scWETHv2.supplyAndBorrow.selector,
+            compoundV3AdapterId,
+            compoundSupplyAmount,
+            compoundFlashLoanAmount.mulWadUp(1e18 + flashLoanFeePercent)
+        );
+
+        hoax(keeper);
+        vault.rebalance(investAmount, totalFlashLoanAmount, callData);
+
+        _floatCheck();
+        _investChecksWithoutEuler(
+            investAmount,
+            priceConverter.wstEthToEth(aaveV3SupplyAmount + compoundSupplyAmount),
+            totalFlashLoanAmount,
+            0.5e18,
+            0.5e18
+        );
+    }
+
     //////////////////////////// INTERNAL METHODS ////////////////////////////////////////
 
     function _calcSupplyBorrowFlashLoanAmount(IAdapter adapter, uint256 amount)
@@ -1506,6 +1596,53 @@ contract scWETHv2Test is Test {
         );
         assertApproxEqRel(vaultHelper.getLtv(eulerAdapter), targetLtv[eulerAdapter], 0.005e18, "euler ltv not correct");
 
+        assertApproxEqRel(
+            vaultHelper.getLtv(compoundV3Adapter), targetLtv[compoundV3Adapter], 0.005e18, "compound ltv not correct"
+        );
+    }
+
+    function _investChecksWithoutEuler(
+        uint256 amount,
+        uint256 totalSupplyAmount,
+        uint256 totalDebtTaken,
+        uint256 aaveV3Allocation,
+        uint256 compoundAllocation
+    ) internal {
+        uint256 totalCollateral = priceConverter.wstEthToEth(vault.totalCollateral());
+        uint256 totalDebt = vault.totalDebt();
+        assertApproxEqRel(totalCollateral - totalDebt, amount, 0.01e18, "totalAssets not equal amount");
+        assertEq(vault.totalInvested(), amount, "totalInvested not updated");
+        assertApproxEqRel(totalCollateral, totalSupplyAmount, 0.0001e18, "totalCollateral not equal totalSupplyAmount");
+        assertApproxEqRel(totalDebt, totalDebtTaken, 100, "totalDebt not equal totalDebtTaken");
+
+        uint256 aaveV3Deposited = vaultHelper.getCollateralInWeth(aaveV3Adapter) - vault.getDebt(aaveV3Adapter.id());
+        uint256 compoundDeposited =
+            vaultHelper.getCollateralInWeth(compoundV3Adapter) - vault.getDebt(compoundV3Adapter.id());
+
+        assertApproxEqRel(
+            aaveV3Deposited, amount.mulWadDown(aaveV3Allocation), 0.005e18, "aaveV3 allocation not correct"
+        );
+        assertApproxEqRel(
+            compoundDeposited, amount.mulWadDown(compoundAllocation), 0.005e18, "compound allocation not correct"
+        );
+
+        assertApproxEqRel(
+            vaultHelper.allocationPercent(aaveV3Adapter),
+            aaveV3Allocation,
+            0.005e18,
+            "aaveV3 allocationPercent not correct"
+        );
+
+        assertApproxEqRel(
+            vaultHelper.allocationPercent(compoundV3Adapter),
+            compoundAllocation,
+            0.005e18,
+            "compound allocationPercent not correct"
+        );
+
+        assertApproxEqRel(
+            vaultHelper.getLtv(aaveV3Adapter), targetLtv[aaveV3Adapter], 0.005e18, "aaveV3 ltv not correct"
+        );
         assertApproxEqRel(
             vaultHelper.getLtv(compoundV3Adapter), targetLtv[compoundV3Adapter], 0.005e18, "compound ltv not correct"
         );
