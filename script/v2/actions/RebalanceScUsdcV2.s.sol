@@ -10,13 +10,13 @@ import {WETH} from "solmate/tokens/WETH.sol";
 import {AccessControl} from "openzeppelin-contracts/access/AccessControl.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 
-import {MainnetAddresses} from "../base/MainnetAddresses.sol";
-import {PriceConverter} from "../../src/steth/PriceConverter.sol";
-import {scUSDCv2} from "../../src/steth/scUSDCv2.sol";
-import {MorphoAaveV3ScUsdcAdapter} from "../../src/steth/scUsdcV2-adapters/MorphoAaveV3ScUsdcAdapter.sol";
-import {AaveV2ScUsdcAdapter} from "../../src/steth/scUsdcV2-adapters/AaveV2ScUsdcAdapter.sol";
-import {AaveV3ScUsdcAdapter} from "../../src/steth/scUsdcV2-adapters/AaveV3ScUsdcAdapter.sol";
-import {IAdapter} from "../../src/steth/IAdapter.sol";
+import {MainnetAddresses} from "../../base/MainnetAddresses.sol";
+import {PriceConverter} from "../../../src/steth/PriceConverter.sol";
+import {scUSDCv2} from "../../../src/steth/scUSDCv2.sol";
+import {MorphoAaveV3ScUsdcAdapter} from "../../../src/steth/scUsdcV2-adapters/MorphoAaveV3ScUsdcAdapter.sol";
+import {AaveV2ScUsdcAdapter} from "../../../src/steth/scUsdcV2-adapters/AaveV2ScUsdcAdapter.sol";
+import {AaveV3ScUsdcAdapter} from "../../../src/steth/scUsdcV2-adapters/AaveV3ScUsdcAdapter.sol";
+import {IAdapter} from "../../../src/steth/IAdapter.sol";
 
 /**
  * A script for executing rebalance functionality for scUsdcV2 vaults.
@@ -48,7 +48,7 @@ contract RebalanceScUsdcV2 is Script {
     /*//////////////////////////////////////////////////////////////*/
 
     uint256 keeperPrivateKey = uint256(vm.envOr("KEEPER_PRIVATE_KEY", bytes32(0x0)));
-    address keeper = vm.envOr("KEEPER", address(0x06444B9F0c6a966b8B9Bc1e808d2B165a87e3a38));
+    address keeper = keeperPrivateKey != 0 ? vm.addr(keeperPrivateKey) : MainnetAddresses.KEEPER;
     scUSDCv2 public scUsdcV2 = scUSDCv2(MainnetAddresses.SCUSDCV2);
     MorphoAaveV3ScUsdcAdapter public morphoAdapter = MorphoAaveV3ScUsdcAdapter(MainnetAddresses.SCUSDCV2_MORPHO_ADAPTER);
     AaveV2ScUsdcAdapter public aaveV2Adapter = AaveV2ScUsdcAdapter(MainnetAddresses.SCUSDCV2_AAVEV2_ADAPTER);
