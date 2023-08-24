@@ -16,8 +16,7 @@ contract RedeployScript is MainnetDeployBase {
     PriceConverter priceConverter = PriceConverter(MainnetAddresses.PRICE_CONVERTER);
     MorphoAaveV3ScWethAdapter morphoAdapter = MorphoAaveV3ScWethAdapter(MainnetAddresses.SCWETHV2_MORPHO_ADAPTER);
     CompoundV3ScWethAdapter compoundV3Adapter = CompoundV3ScWethAdapter(MainnetAddresses.SCWETHV2_COMPOUND_ADAPTER);
-    // TODO: update after the deployment of the AaveV3ScWethAdapter
-    AaveV3ScWethAdapter aaveV3Adapter = AaveV3ScWethAdapter(address(0));
+    AaveV3ScWethAdapter aaveV3Adapter = AaveV3ScWethAdapter(MainnetAddresses.SCWETHV2_AAVEV3_ADAPTER);
 
     function run() external returns (scWETHv2 scWethV2) {
         vm.startBroadcast(deployerAddress);

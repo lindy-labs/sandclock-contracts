@@ -20,8 +20,7 @@ contract RedeployScript is MainnetDeployBase {
     PriceConverter priceConverter = PriceConverter(MainnetAddresses.PRICE_CONVERTER);
     MorphoAaveV3ScUsdcAdapter morphoAdapter = MorphoAaveV3ScUsdcAdapter(MainnetAddresses.SCUSDCV2_MORPHO_ADAPTER);
     AaveV2ScUsdcAdapter aaveV2Adapter = AaveV2ScUsdcAdapter(MainnetAddresses.SCUSDCV2_AAVEV2_ADAPTER);
-    // @note: update after the deployment of the AaveV3ScUsdcAdapter
-    AaveV3ScUsdcAdapter aaveV3Adapter = AaveV3ScUsdcAdapter(address(0));
+    AaveV3ScUsdcAdapter aaveV3Adapter = AaveV3ScUsdcAdapter(MainnetAddresses.SCUSDCV2_AAVEV3_ADAPTER);
 
     function run() external returns (scUSDCv2 scUsdcV2) {
         require(address(scWethV2) != address(0), "invalid address for ScWethV2 contract");
