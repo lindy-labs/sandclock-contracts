@@ -12,6 +12,7 @@ import {AaveV3ScUsdcAdapter} from "../../src/steth/scUsdcV2-adapters/AaveV3ScUsd
 import {MorphoAaveV3ScUsdcAdapter} from "../../src/steth/scUsdcV2-adapters/MorphoAaveV3ScUsdcAdapter.sol";
 import {RebalanceScUsdcV2} from "../../script/v2/actions/RebalanceScUsdcV2.s.sol";
 import {MainnetAddresses} from "../../script/base/MainnetAddresses.sol";
+import {Constants} from "../../src/lib/Constants.sol";
 
 contract RebalanceScUsdcV2Test is Test {
     using FixedPointMathLib for uint256;
@@ -28,7 +29,7 @@ contract RebalanceScUsdcV2Test is Test {
     function setUp() public {
         mainnetFork = vm.createFork(vm.envString("RPC_URL_MAINNET"));
         vm.selectFork(mainnetFork);
-        vm.rollFork(17920182);
+        vm.rollFork(17987643);
 
         script = new RebalanceScUsdcV2TestHarness();
 
@@ -332,6 +333,38 @@ contract RebalanceScUsdcV2Test is Test {
         assertApproxEqRel(vault.wethInvested(), expectedDebt, 0.001e18, "weth invested");
         assertApproxEqRel(vault.totalDebt(), expectedDebt, 0.001e18, "total debt");
         assertApproxEqRel(vault.totalCollateral(), expectedCollateral, 0.001e18, "total collateral");
+    }
+
+    function test_run_worksWithAaveV3AdapterAdded() public {
+        deal(address(vault.asset()), address(this), 100e6);
+        vault.asset().approve(address(vault), 100e6);
+        vault.deposit(100e6, address(this));
+
+        _addAaveV3Adapter();
+
+        script.setMorphoInvestableAmountPercent(0);
+        script.setAaveV2InvestableAmountPercent(0);
+        script.setAaveV3InvestableAmountPercent(1e18); // 100%
+        script.setAaveV3TargetLtv(0.5e18); // 50%
+        script.setUseAaveV3(true);
+
+        uint256 expectedFloat = vault.totalAssets().mulWadDown(vault.floatPercentage());
+        uint256 investableAmount = vault.usdcBalance() - expectedFloat;
+        uint256 expectedAaveV3Debt = priceConverter.usdcToEth(investableAmount).mulWadDown(script.aaveV3TargetLtv());
+
+        script.run();
+
+        assertApproxEqRel(vault.getCollateral(aaveV3.id()), investableAmount, 0.001e18, "aave v3 collateral");
+        assertApproxEqRel(vault.getDebt(aaveV3.id()), expectedAaveV3Debt, 0.001e18, "aave v3 debt");
+    }
+
+    function _addAaveV3Adapter() internal {
+        if (!vault.isSupported(aaveV3.id())) {
+            vm.prank(Constants.MULTISIG);
+            vault.addAdapter(aaveV3);
+            assertTrue(vault.isSupported(aaveV3.id()), "aave v3 not supported");
+            script.setUseAaveV3(true);
+        }
     }
 }
 

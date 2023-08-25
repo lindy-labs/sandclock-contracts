@@ -52,8 +52,7 @@ contract RebalanceScUsdcV2 is Script {
     scUSDCv2 public scUsdcV2 = scUSDCv2(MainnetAddresses.SCUSDCV2);
     MorphoAaveV3ScUsdcAdapter public morphoAdapter = MorphoAaveV3ScUsdcAdapter(MainnetAddresses.SCUSDCV2_MORPHO_ADAPTER);
     AaveV2ScUsdcAdapter public aaveV2Adapter = AaveV2ScUsdcAdapter(MainnetAddresses.SCUSDCV2_AAVEV2_ADAPTER);
-    // TODO: update when Aave v3 adapter is deployed
-    AaveV3ScUsdcAdapter public aaveV3Adapter = AaveV3ScUsdcAdapter(MainnetAddresses.SCUSDCV2_AAVEV2_ADAPTER);
+    AaveV3ScUsdcAdapter public aaveV3Adapter = AaveV3ScUsdcAdapter(MainnetAddresses.SCUSDCV2_AAVEV3_ADAPTER);
 
     struct RebalanceData {
         uint256 adapterId;
