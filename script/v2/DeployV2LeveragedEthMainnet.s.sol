@@ -16,8 +16,10 @@ import {Swapper} from "../../src/steth/Swapper.sol";
 import {PriceConverter} from "../../src/steth/PriceConverter.sol";
 import {AaveV3ScWethAdapter} from "../../src/steth/scWethV2-adapters/AaveV3ScWethAdapter.sol";
 import {CompoundV3ScWethAdapter} from "../../src/steth/scWethV2-adapters/CompoundV3ScWethAdapter.sol";
+import {MorphoAaveV3ScWethAdapter} from "../../src/steth/scWethV2-adapters/MorphoAaveV3ScWethAdapter.sol";
 import {AaveV3ScUsdcAdapter} from "../../src/steth/scUsdcV2-adapters/AaveV3ScUsdcAdapter.sol";
 import {AaveV2ScUsdcAdapter} from "../../src/steth/scUsdcV2-adapters/AaveV2ScUsdcAdapter.sol";
+import {MorphoAaveV3ScUsdcAdapter} from "../../src/steth/scUsdcV2-adapters/MorphoAaveV3ScUsdcAdapter.sol";
 import {MainnetDeployBase} from "../base/MainnetDeployBase.sol";
 
 contract DeployScript is MainnetDeployBase {
@@ -48,6 +50,9 @@ contract DeployScript is MainnetDeployBase {
         CompoundV3ScWethAdapter compoundV3Adapter = new CompoundV3ScWethAdapter();
         vault.addAdapter(compoundV3Adapter);
 
+        MorphoAaveV3ScWethAdapter morphoAdapter = new MorphoAaveV3ScWethAdapter();
+        vault.addAdapter(morphoAdapter);
+
         weth.deposit{value: 0.01 ether}(); // wrap 0.01 ETH into WETH
         _deposit(vault, 0.01 ether); // 0.01 WETH
 
@@ -56,6 +61,7 @@ contract DeployScript is MainnetDeployBase {
         console2.log("scWethV2 vault:", address(vault));
         console2.log("scWethV2 AaveV3Adapter:", address(aaveV3Adapter));
         console2.log("scWETHV2 CompoundV3Adapter:", address(compoundV3Adapter));
+        console2.log("scWethV2 MorphoAdapter:", address(morphoAdapter));
     }
 
     function _deployScUsdcV2(scWETHv2 _wethVault, PriceConverter _priceConveter, Swapper _swapper)
@@ -71,6 +77,9 @@ contract DeployScript is MainnetDeployBase {
         AaveV2ScUsdcAdapter aaveV2Adapter = new AaveV2ScUsdcAdapter();
         vault.addAdapter(aaveV2Adapter);
 
+        MorphoAaveV3ScUsdcAdapter morphoAdapter = new MorphoAaveV3ScUsdcAdapter();
+        vault.addAdapter(morphoAdapter);
+
         uint256 usdcAmount = _swapWethForUsdc(0.01 ether);
         _deposit(vault, usdcAmount); // 0.01 ether worth of USDC
 
@@ -78,6 +87,7 @@ contract DeployScript is MainnetDeployBase {
 
         console2.log("scUSDCv2 vault:", address(vault));
         console2.log("scUSDCv2 AaveV3Adapter:", address(aaveV3Adapter));
-        console2.log("scUSDCv2 CompoundV3Adapter:", address(aaveV2Adapter));
+        console2.log("scUSDCv2 AaveV2Adapter:", address(aaveV2Adapter));
+        console2.log("scUSDCv2 MorphoAaveV3Adapter:", address(morphoAdapter));
     }
 }

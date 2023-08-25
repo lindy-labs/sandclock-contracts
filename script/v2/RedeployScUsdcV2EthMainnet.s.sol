@@ -12,14 +12,17 @@ import {AaveV3ScUsdcAdapter} from "../../src/steth/scUsdcV2-adapters/AaveV3ScUsd
 import {MorphoAaveV3ScUsdcAdapter} from "../../src/steth/scUsdcV2-adapters/MorphoAaveV3ScUsdcAdapter.sol";
 import {AaveV2ScUsdcAdapter} from "../../src/steth/scUsdcV2-adapters/AaveV2ScUsdcAdapter.sol";
 
-contract DeployScript is MainnetDeployBase {
-    scWETHv2 scWethV2 = scWETHv2(payable(MainnetAddresses.SCWETHV2));
+contract RedeployScript is MainnetDeployBase {
+    // @note: change scWethV2 to the address of the deployed scWethV2 contract
+    scWETHv2 scWethV2 = scWETHv2(payable(vm.envAddress("SC_WETH_V2")));
+
     Swapper swapper = Swapper(MainnetAddresses.SWAPPER);
     PriceConverter priceConverter = PriceConverter(MainnetAddresses.PRICE_CONVERTER);
+    MorphoAaveV3ScUsdcAdapter morphoAdapter = MorphoAaveV3ScUsdcAdapter(MainnetAddresses.SCUSDCV2_MORPHO_ADAPTER);
+    AaveV2ScUsdcAdapter aaveV2Adapter = AaveV2ScUsdcAdapter(MainnetAddresses.SCUSDCV2_AAVEV2_ADAPTER);
+    AaveV3ScUsdcAdapter aaveV3Adapter = AaveV3ScUsdcAdapter(MainnetAddresses.SCUSDCV2_AAVEV3_ADAPTER);
 
     function run() external returns (scUSDCv2 scUsdcV2) {
-        require(address(swapper) != address(0), "invalid address for Swapper contract");
-        require(address(priceConverter) != address(0), "invalid address for PriceConverter contract");
         require(address(scWethV2) != address(0), "invalid address for ScWethV2 contract");
 
         vm.startBroadcast(deployerAddress);
@@ -27,18 +30,21 @@ contract DeployScript is MainnetDeployBase {
         // deploy vault
         scUsdcV2 = new scUSDCv2(deployerAddress, keeper, scWethV2, priceConverter, swapper);
 
-        // deploy & add adapters
-        MorphoAaveV3ScUsdcAdapter morphoAdapter = new MorphoAaveV3ScUsdcAdapter();
-        scUsdcV2.addAdapter(morphoAdapter);
-        console2.log("scUSDCv2 MorphoAaveV3ScUsdcAdapter:", address(morphoAdapter));
+        // add adapters
+        if (address(morphoAdapter) != address(0)) {
+            scUsdcV2.addAdapter(morphoAdapter);
+            console2.log("added MorphoAaveV3ScUsdcAdapter:", address(morphoAdapter));
+        }
 
-        AaveV2ScUsdcAdapter aaveV2Adapter = new AaveV2ScUsdcAdapter();
-        scUsdcV2.addAdapter(aaveV2Adapter);
-        console2.log("scUSDCv2 AaveV2Adapter:", address(aaveV2Adapter));
+        if (address(aaveV2Adapter) != address(0)) {
+            scUsdcV2.addAdapter(aaveV2Adapter);
+            console2.log("added AaveV2ScUsdcAdapter:", address(aaveV2Adapter));
+        }
 
-        AaveV3ScUsdcAdapter aaveV3Adapter = new AaveV3ScUsdcAdapter();
-        scUsdcV2.addAdapter(aaveV3Adapter);
-        console2.log("scUSDCv2 AaveV3Adapter:", address(aaveV3Adapter));
+        if (address(aaveV3Adapter) != address(0)) {
+            scUsdcV2.addAdapter(aaveV3Adapter);
+            console2.log("added AaveV3ScUsdcAdapter:", address(aaveV3Adapter));
+        }
 
         // initial deposit
         uint256 usdcAmount = _swapWethForUsdc(0.01 ether);
