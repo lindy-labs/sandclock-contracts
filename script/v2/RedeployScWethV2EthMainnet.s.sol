@@ -8,42 +8,45 @@ import {scWETHv2} from "../../src/steth/scWETHv2.sol";
 import {Swapper} from "../../src/steth/Swapper.sol";
 import {PriceConverter} from "../../src/steth/PriceConverter.sol";
 import {AaveV3ScWethAdapter} from "../../src/steth/scWethV2-adapters/AaveV3ScWethAdapter.sol";
-import {MorphoAaveV3ScWethAdapter} from "../../src/steth/scWethV2-adapters/MorphoAaveV3ScWethAdapter.sol";
 import {CompoundV3ScWethAdapter} from "../../src/steth/scWethV2-adapters/CompoundV3ScWethAdapter.sol";
+import {MorphoAaveV3ScWethAdapter} from "../../src/steth/scWethV2-adapters/MorphoAaveV3ScWethAdapter.sol";
 
-contract DeployScript is MainnetDeployBase {
+contract RedeployScript is MainnetDeployBase {
     Swapper swapper = Swapper(MainnetAddresses.SWAPPER);
     PriceConverter priceConverter = PriceConverter(MainnetAddresses.PRICE_CONVERTER);
+    MorphoAaveV3ScWethAdapter morphoAdapter = MorphoAaveV3ScWethAdapter(MainnetAddresses.SCWETHV2_MORPHO_ADAPTER);
+    CompoundV3ScWethAdapter compoundV3Adapter = CompoundV3ScWethAdapter(MainnetAddresses.SCWETHV2_COMPOUND_ADAPTER);
+    AaveV3ScWethAdapter aaveV3Adapter = AaveV3ScWethAdapter(MainnetAddresses.SCWETHV2_AAVEV3_ADAPTER);
 
     function run() external returns (scWETHv2 scWethV2) {
-        require(address(swapper) != address(0), "invalid address for Swapper contract");
-        require(address(priceConverter) != address(0), "invalid address for PriceConverter contract");
-
         vm.startBroadcast(deployerAddress);
 
         // deploy vault
         scWethV2 = new scWETHv2(deployerAddress, keeper, weth, swapper, priceConverter);
 
-        // deploy & add adapters
-        MorphoAaveV3ScWethAdapter morphoAdapter = new MorphoAaveV3ScWethAdapter();
-        scWethV2.addAdapter(morphoAdapter);
-        console2.log("scWethV2 MorphoAdapter:", address(morphoAdapter));
+        // add adapters
+        if (address(morphoAdapter) != address(0)) {
+            scWethV2.addAdapter(morphoAdapter);
+            console2.log("added MorphoAaveV3ScWethAdapter:", address(morphoAdapter));
+        }
 
-        CompoundV3ScWethAdapter compoundV3Adapter = new CompoundV3ScWethAdapter();
-        scWethV2.addAdapter(compoundV3Adapter);
-        console2.log("scWETHV2 CompoundV3Adapter:", address(compoundV3Adapter));
+        if (address(compoundV3Adapter) != address(0)) {
+            scWethV2.addAdapter(compoundV3Adapter);
+            console2.log("added CompoundV3ScWethAdapter:", address(compoundV3Adapter));
+        }
 
-        AaveV3ScWethAdapter aaveV3Adapter = new AaveV3ScWethAdapter();
-        scWethV2.addAdapter(aaveV3Adapter);
-        console2.log("scWETHV2 AaveV3Adapter:", address(aaveV3Adapter));
+        if (address(aaveV3Adapter) != address(0)) {
+            scWethV2.addAdapter(aaveV3Adapter);
+            console2.log("added AaveV3ScWethAdapter:", address(aaveV3Adapter));
+        }
 
         // initial deposit
         weth.deposit{value: 0.01 ether}(); // wrap 0.01 ETH into WETH
         _deposit(scWethV2, 0.01 ether); // 0.01 WETH
 
-        _transferAdminRoleToMultisig(scWethV2, deployerAddress);
-
         _setTreasury(scWethV2, MainnetAddresses.TREASURY);
+
+        _transferAdminRoleToMultisig(scWethV2, deployerAddress);
 
         vm.stopBroadcast();
     }
