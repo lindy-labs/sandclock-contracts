@@ -10,6 +10,7 @@ import {AccessControl} from "openzeppelin-contracts/access/AccessControl.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 
 import {Constants as C} from "../../../src/lib/Constants.sol";
+import {MainnetAddresses as MA} from "../../base/MainnetAddresses.sol";
 import {ISwapRouter} from "../../../src/interfaces/uniswap/ISwapRouter.sol";
 import {sc4626} from "../../../src/sc4626.sol";
 import {scWETHv2} from "../../../src/steth/scWETHv2.sol";
@@ -40,30 +41,8 @@ contract scWETHv2Rebalance is scWETHv2Utils {
 
     uint256 keeperPrivateKey = uint256(vm.envBytes32("KEEPER_PRIVATE_KEY"));
 
-    address keeper = vm.envAddress("KEEPER");
-
-    address localWhale = 0x95222290DD7278Aa3Ddd389Cc1E1d165CC4BAfe5;
-
     function run() external {
-        _test();
-        // _main();
-    }
-
-    function _test() internal {
-        vm.startBroadcast(localWhale);
-        vault.deposit{value: 1.5 ether}(localWhale);
-        vm.stopBroadcast();
-
-        vm.startBroadcast(keeper);
-
-        _invest();
-        _logs();
-
-        vm.stopBroadcast();
-    }
-
-    function _main() internal {
-        vm.startBroadcast(keeperPrivateKey);
+        vm.startBroadcast(MA.KEEPER);
 
         _invest();
         _logs();
