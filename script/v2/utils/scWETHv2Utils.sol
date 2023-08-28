@@ -13,6 +13,7 @@ import {Strings} from "openzeppelin-contracts/utils/Strings.sol";
 import {stdJson} from "forge-std/StdJson.sol";
 
 import {Constants as C} from "../../../src/lib/Constants.sol";
+import {MainnetAddresses as MA} from "../../base/MainnetAddresses.sol";
 import {ISwapRouter} from "../../../src/interfaces/uniswap/ISwapRouter.sol";
 import {sc4626} from "../../../src/sc4626.sol";
 import {scWETHv2} from "../../../src/steth/scWETHv2.sol";
@@ -39,13 +40,13 @@ contract scWETHv2Utils is CREATE3Script {
 
     WETH weth = WETH(payable(C.WETH));
 
-    scWETHv2 vault = scWETHv2(payable(0x4c406C068106375724275Cbff028770C544a1333));
-    PriceConverter priceConverter = PriceConverter(0xD76B0Ff4A487CaFE4E19ed15B73f12f6A92095Ca);
+    scWETHv2 public vault = scWETHv2(payable(MA.SCWETHV2));
+    PriceConverter public priceConverter = PriceConverter(MA.PRICE_CONVERTER);
 
-    IAdapter morphoAdapter = IAdapter(0x4420F0E6A38863330FD4885d76e1265DAD5aa9df);
-    IAdapter compoundV3Adapter = IAdapter(0x379022F4d2619c7fbB95f9005ea0897e3a31a0C4);
+    IAdapter public morphoAdapter = IAdapter(MA.SCWETHV2_MORPHO_ADAPTER);
+    IAdapter public compoundV3Adapter = IAdapter(MA.SCWETHV2_COMPOUND_ADAPTER);
 
-    mapping(IAdapter => uint256) targetLtv;
+    mapping(IAdapter => uint256) public targetLtv;
 
     constructor() CREATE3Script(vm.envString("VERSION")) {
         targetLtv[morphoAdapter] = Params.MORPHO_TARGET_LTV;
@@ -69,11 +70,6 @@ contract scWETHv2Utils is CREATE3Script {
     /// @return : supplyBorrowParams, totalSupplyAmount, totalDebtTaken
     /// @dev : NOTE: ASSUMING ZERO BALANCER FLASH LOAN FEES
     function _getInvestParams(uint256 _amount) internal returns (bytes[] memory, uint256, uint256) {
-        // require(
-        //     Params.MORPHO_ALLOCATION_PERCENT + Params.COMPOUNDV3_ALLOCATION_PERCENT == 1e18,
-        //     "allocationPercents dont add up to 100%"
-        // );
-
         uint256 stEthRateTolerance = 0.999e18;
 
         uint256 morphoAmount = _amount.mulWadDown(Params.MORPHO_ALLOCATION_PERCENT);
@@ -92,7 +88,7 @@ contract scWETHv2Utils is CREATE3Script {
         bytes[] memory callData = new bytes[](3);
 
         uint256 wethSwapAmount = _amount + totalFlashLoanAmount;
-        bytes memory swapData = swapDataWethToWstEth(wethSwapAmount);
+        bytes memory swapData = _getSwapDataWethToWstEth(wethSwapAmount);
 
         callData[0] =
             abi.encodeWithSelector(BaseV2Vault.zeroExSwap.selector, C.WETH, C.WSTETH, wethSwapAmount, swapData, 0);
@@ -121,17 +117,7 @@ contract scWETHv2Utils is CREATE3Script {
         flashLoanAmount = (target - debt).divWadDown(C.ONE - targetLtv[_adapter]);
     }
 
-    function getCollateralInWeth(IAdapter adapter) public view returns (uint256) {
-        return priceConverter.wstEthToEth(adapter.getCollateral(address(vault)));
-    }
-
-    /// @notice returns the net leverage that the strategy is using right now (1e18 = 100%)
-    function getLeverage() public view returns (uint256) {
-        uint256 collateral = priceConverter.wstEthToEth(vault.totalCollateral());
-        return collateral > 0 ? collateral.divWadUp(collateral - vault.totalDebt()) : 0;
-    }
-
-    function swapDataWethToWstEth(uint256 _amount) internal returns (bytes memory swapData) {
+    function _getSwapDataWethToWstEth(uint256 _amount) internal returns (bytes memory swapData) {
         string memory url = string(
             abi.encodePacked(
                 "https://api.0x.org/swap/v1/quote?buyToken=0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0&sellToken=WETH&sellAmount=",
@@ -148,5 +134,43 @@ contract scWETHv2Utils is CREATE3Script {
         string memory json = string(data);
 
         swapData = json.readBytes(".data");
+    }
+
+    ////////////////////////////// VIEW METHODS FOR LOGGING ////////////////////////////////////////////////////
+
+    function getCollateralInWeth(IAdapter adapter) public view returns (uint256) {
+        return priceConverter.wstEthToEth(adapter.getCollateral(address(vault)));
+    }
+
+    /// @notice returns the net LTV (Loan to Value) at which the vault has borrowed till now (1e18 = 100%)
+    function getLtv() public view returns (uint256 ltv) {
+        uint256 collateral = priceConverter.wstEthToEth(vault.totalCollateral());
+        if (collateral > 0) {
+            // getDebt / totalSupplied
+            ltv = vault.totalDebt().divWadUp(collateral);
+        }
+    }
+
+    /// @notice returns the loan to value ration of the vault contract in a particular protocol
+    /// @param adapter the address of the adapter contract of the protocol
+    function getLtv(IAdapter adapter) public view returns (uint256) {
+        uint256 collateral = getCollateralInWeth(adapter);
+
+        if (collateral == 0) return 0;
+        return vault.getDebt(adapter.id()).divWadDown(collateral);
+    }
+
+    /// @notice returns the asset allocation (in percent) in a particular protocol (1e18 = 100%)
+    /// @param adapter the address of the adapter contract of the protocol
+    function allocationPercent(IAdapter adapter) external view returns (uint256) {
+        return (getCollateralInWeth(adapter) - vault.getDebt(adapter.id())).divWadDown(
+            priceConverter.wstEthToEth(vault.totalCollateral()) - vault.totalDebt()
+        );
+    }
+
+    /// @notice returns the net leverage that the strategy is using right now (1e18 = 100%)
+    function getLeverage() public view returns (uint256) {
+        uint256 collateral = priceConverter.wstEthToEth(vault.totalCollateral());
+        return collateral > 0 ? collateral.divWadUp(collateral - vault.totalDebt()) : 0;
     }
 }
