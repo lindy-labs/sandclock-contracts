@@ -33,7 +33,7 @@ import {scWETHv2Utils} from "../utils/scWETHv2Utils.sol";
  * cmd
  * first run a local anvil node using " anvil -f YOUR_RPC_URL"
  * Then run the script using
- * forge script script/v2/manual-runs/scWETHv2Rebalance.s.sol -rpc-url http://127.0.0.1:8545 --ffi
+ * forge script script/v2/manual-runs/scWETHv2Rebalance.s.sol --rpc-url http://127.0.0.1:8545 --ffi
  */
 contract scWETHv2Rebalance is scWETHv2Utils {
     using FixedPointMathLib for uint256;
@@ -42,7 +42,7 @@ contract scWETHv2Rebalance is scWETHv2Utils {
 
     address keeper = vm.envAddress("KEEPER");
 
-    address localWhale = 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266;
+    address localWhale = 0x95222290DD7278Aa3Ddd389Cc1E1d165CC4BAfe5;
 
     function run() external {
         _test();
