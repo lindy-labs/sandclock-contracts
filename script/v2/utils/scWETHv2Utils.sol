@@ -20,14 +20,13 @@ import {CompoundV3ScWethAdapter as scWethCompoundV3Adapter} from
     "../../../src/steth/scWethV2-adapters/CompoundV3ScWethAdapter.sol";
 import {IAdapter} from "../../../src/steth/IAdapter.sol";
 import {scWETHv2Helper} from "../../../test/helpers/scWETHv2Helper.sol";
+import {scWETHv2StrategyParams as Params} from "../../base/scWETHv2StrategyParams.sol";
 
 /**
  * Contract containing the base methods required by all scWETHv2 scripts
  */
 contract scWETHv2Utils is CREATE3Script {
     using FixedPointMathLib for uint256;
-
-    // uint256 mainnetFork
 
     scWETHv2 vault = scWETHv2(payable(0x4B68d2D0E94240481003Fc3Fd10ffB663b081c3D));
     PriceConverter priceConverter = PriceConverter(0xD76B0Ff4A487CaFE4E19ed15B73f12f6A92095Ca);
@@ -38,36 +37,33 @@ contract scWETHv2Utils is CREATE3Script {
     mapping(IAdapter => uint256) targetLtv;
 
     constructor() CREATE3Script(vm.envString("VERSION")) {
-        targetLtv[morphoAdapter] = 0.8e18;
-        targetLtv[compoundV3Adapter] = 0.8e18;
+        targetLtv[morphoAdapter] = Params.MORPHO_TARGET_LTV;
+        targetLtv[compoundV3Adapter] = Params.COMPOUNDV3_TARGET_LTV;
     }
 
     /// @dev invest the float lying in the vault to morpho and compoundV3
     /// @dev also reinvests profits made,i.e increases the ltv
     /// @dev if there is no undelying float in the contract, run this method with _amount=0 to just reinvest profits
-    function _invest(uint256 _amount, uint256 _morphoAllocationPercent, uint256 _compoundAllocationPercent) internal {
+    function _invest(uint256 _amount) internal {
         uint256 investAmount = _amount - vault.minimumFloatAmount();
 
-        (bytes[] memory callData,, uint256 totalFlashLoanAmount) =
-            _getInvestParams(investAmount, _morphoAllocationPercent, _compoundAllocationPercent);
+        (bytes[] memory callData,, uint256 totalFlashLoanAmount) = _getInvestParams(investAmount);
 
         vault.rebalance(investAmount, totalFlashLoanAmount, callData);
     }
 
     /// @return : supplyBorrowParams, totalSupplyAmount, totalDebtTaken
     /// @dev : NOTE: ASSUMING ZERO BALANCER FLASH LOAN FEES
-    function _getInvestParams(uint256 _amount, uint256 _morphoAllocation, uint256 _compoundAllocation)
-        internal
-        view
-        returns (bytes[] memory, uint256, uint256)
-    {
-        require(_morphoAllocation + _compoundAllocation == 1e18, "allocationPercents dont add up to 100%");
+    function _getInvestParams(uint256 _amount) internal view returns (bytes[] memory, uint256, uint256) {
+        require(
+            Params.MORPHO_ALLOCATION_PERCENT + Params.COMPOUNDV3_ALLOCATION_PERCENT == 1e18,
+            "allocationPercents dont add up to 100%"
+        );
 
-        uint256 investAmount = _amount;
         uint256 stEthRateTolerance = 0.999e18;
 
-        uint256 morphoAmount = investAmount.mulWadDown(_morphoAllocation);
-        uint256 compoundAmount = investAmount.mulWadDown(_compoundAllocation);
+        uint256 morphoAmount = _amount.mulWadDown(Params.MORPHO_ALLOCATION_PERCENT);
+        uint256 compoundAmount = _amount.mulWadDown(Params.COMPOUNDV3_ALLOCATION_PERCENT);
 
         uint256 morphoFlashLoanAmount = _calcSupplyBorrowFlashLoanAmount(morphoAdapter, morphoAmount);
         uint256 compoundFlashLoanAmount = _calcSupplyBorrowFlashLoanAmount(compoundV3Adapter, compoundAmount);
@@ -81,7 +77,7 @@ contract scWETHv2Utils is CREATE3Script {
 
         bytes[] memory callData = new bytes[](3);
 
-        callData[0] = abi.encodeWithSelector(scWETHv2.swapWethToWstEth.selector, investAmount + totalFlashLoanAmount);
+        callData[0] = abi.encodeWithSelector(scWETHv2.swapWethToWstEth.selector, _amount + totalFlashLoanAmount);
 
         callData[1] = abi.encodeWithSelector(
             scWETHv2.supplyAndBorrow.selector, morphoAdapter.id(), morphoSupplyAmount, morphoFlashLoanAmount

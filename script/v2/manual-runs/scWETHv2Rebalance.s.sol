@@ -27,8 +27,9 @@ import {scWETHv2Helper} from "../../../test/helpers/scWETHv2Helper.sol";
 import {scWETHv2Utils} from "../utils/scWETHv2Utils.sol";
 
 /**
- * simulate initial rebalance in scWETHv2
- * forge script script/v2/manual-runs/scWETHv2Rebalance.s.sol --skip-simulation -vv
+ * invests underlying float in the vault 
+ * and at the same time also reinvests profits made till now by the vault
+ * forge script script/v2/manual-runs/scWETHv2Rebalance.s.sol -vv
  */
 contract scWETHv2Rebalance is scWETHv2Utils {
     using FixedPointMathLib for uint256;
@@ -39,12 +40,6 @@ contract scWETHv2Rebalance is scWETHv2Utils {
     address keeper = vm.envAddress("KEEPER");
 
     address localWhale = 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266;
-
-    // NOTE: If allocation percents need to be changed, use the reallocation script first, and only then change the values here
-    // Do not change them directly here without calling reallocation script first,
-    // else only subsequent invests will be done at the new allocation percents
-    uint256 morphoAllocationPercent = 0.4e18;
-    uint256 compoundV3AllocationPercent = 0.6e18;
 
     function run() external {
         _test();
@@ -58,15 +53,7 @@ contract scWETHv2Rebalance is scWETHv2Utils {
 
         vm.startBroadcast(keeper);
 
-        uint256 float = weth.balanceOf(address(vault));
-        console2.log("\nInvesting %s weth", float);
-
-        _invest(float, morphoAllocationPercent, compoundV3AllocationPercent);
-
-        console2.log("\n Total Collateral %s wstEth", vault.totalCollateral());
-        console2.log("\n Total Debt %s weth", vault.totalDebt());
-        console2.log("\n Total Assets %s weth", vault.totalAssets());
-        console2.log("\n Net Leverage", getLeverage());
+        _invest();
 
         vm.stopBroadcast();
     }
@@ -74,16 +61,24 @@ contract scWETHv2Rebalance is scWETHv2Utils {
     function _main() internal {
         vm.startBroadcast(keeperPrivateKey);
 
+        _invest();
+
+        vm.stopBroadcast();
+    }
+
+    function _invest() internal {
         uint256 float = weth.balanceOf(address(vault));
         console2.log("\nInvesting %s weth", float);
 
-        _invest(float, morphoAllocationPercent, compoundV3AllocationPercent);
+        _invest(float);
 
+        _logs();
+    }
+
+    function _logs() internal view {
         console2.log("\n Total Collateral %s wstEth", vault.totalCollateral());
         console2.log("\n Total Debt %s weth", vault.totalDebt());
         console2.log("\n Total Assets %s weth", vault.totalAssets());
         console2.log("\n Net Leverage", getLeverage());
-
-        vm.stopBroadcast();
     }
 }
