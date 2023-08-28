@@ -39,13 +39,15 @@ import {scWETHv2Utils} from "../utils/scWETHv2Utils.sol";
 contract scWETHv2Rebalance is scWETHv2Utils {
     using FixedPointMathLib for uint256;
 
-    uint256 keeperPrivateKey = uint256(vm.envBytes32("KEEPER_PRIVATE_KEY"));
+    uint256 keeperPrivateKey = uint256(vm.envOr("KEEPER_PRIVATE_KEY", bytes32(0x00)));
 
     function run() external {
-        vm.startBroadcast(MA.KEEPER);
+        address keeper = keeperPrivateKey != 0 ? vm.addr(keeperPrivateKey) : MA.KEEPER;
+        console2.log("keeper", keeper);
+        vm.startBroadcast(keeper);
 
         _invest();
-        _logs();
+        // _logs();
 
         vm.stopBroadcast();
     }

@@ -100,8 +100,6 @@ contract scWETHv2RebalanceTest is Test {
         uint256 amount = 10 ether;
         vault.deposit{value: amount}(address(this));
 
-        uint256 investAmount = weth.balanceOf(address(vault)) - vault.minimumFloatAmount();
-
         script.run();
 
         uint256 altv = script.getLtv(morphoAdapter);
