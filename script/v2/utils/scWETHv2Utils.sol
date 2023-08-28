@@ -39,7 +39,7 @@ contract scWETHv2Utils is CREATE3Script {
 
     WETH weth = WETH(payable(C.WETH));
 
-    scWETHv2 vault = scWETHv2(payable(0x4B68d2D0E94240481003Fc3Fd10ffB663b081c3D));
+    scWETHv2 vault = scWETHv2(payable(0x4c406C068106375724275Cbff028770C544a1333));
     PriceConverter priceConverter = PriceConverter(0xD76B0Ff4A487CaFE4E19ed15B73f12f6A92095Ca);
 
     IAdapter morphoAdapter = IAdapter(0x4420F0E6A38863330FD4885d76e1265DAD5aa9df);
@@ -91,11 +91,10 @@ contract scWETHv2Utils is CREATE3Script {
 
         bytes[] memory callData = new bytes[](3);
 
-        uint wethSwapAmount  = _amount + totalFlashLoanAmount;
+        uint256 wethSwapAmount = _amount + totalFlashLoanAmount;
         bytes memory swapData = swapDataWethToWstEth(wethSwapAmount);
 
-        callData[0] =
-            abi.encodeWithSelector(BaseV2Vault.zeroExSwap.selector, weth, wethSwapAmount, swapData, 1);
+        callData[0] = abi.encodeWithSelector(BaseV2Vault.zeroExSwap.selector, weth, wethSwapAmount, swapData, 1);
 
         callData[1] = abi.encodeWithSelector(
             scWETHv2.supplyAndBorrow.selector, morphoAdapter.id(), morphoSupplyAmount, morphoFlashLoanAmount
