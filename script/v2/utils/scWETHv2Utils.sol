@@ -110,4 +110,10 @@ contract scWETHv2Utils is CREATE3Script {
     function getCollateralInWeth(IAdapter adapter) public view returns (uint256) {
         return priceConverter.wstEthToEth(adapter.getCollateral(address(vault)));
     }
+
+    /// @notice returns the net leverage that the strategy is using right now (1e18 = 100%)
+    function getLeverage() public view returns (uint256) {
+        uint256 collateral = priceConverter.wstEthToEth(vault.totalCollateral());
+        return collateral > 0 ? collateral.divWadUp(collateral - vault.totalDebt()) : 0;
+    }
 }
