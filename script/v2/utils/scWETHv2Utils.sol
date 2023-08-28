@@ -94,7 +94,8 @@ contract scWETHv2Utils is CREATE3Script {
         uint256 wethSwapAmount = _amount + totalFlashLoanAmount;
         bytes memory swapData = swapDataWethToWstEth(wethSwapAmount);
 
-        callData[0] = abi.encodeWithSelector(BaseV2Vault.zeroExSwap.selector, weth, wethSwapAmount, swapData, 1);
+        callData[0] =
+            abi.encodeWithSelector(BaseV2Vault.zeroExSwap.selector, C.WETH, C.WSTETH, wethSwapAmount, swapData, 1);
 
         callData[1] = abi.encodeWithSelector(
             scWETHv2.supplyAndBorrow.selector, morphoAdapter.id(), morphoSupplyAmount, morphoFlashLoanAmount
