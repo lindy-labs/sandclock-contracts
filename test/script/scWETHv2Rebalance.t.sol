@@ -17,7 +17,6 @@ import {WETH} from "solmate/tokens/WETH.sol";
 import {Constants as C} from "../../src/lib/Constants.sol";
 import {scWETHv2Rebalance} from "../../script/v2/manual-runs/scWETHv2Rebalance.s.sol";
 import {scWETHv2} from "../../src/steth/scWETHv2.sol";
-import {scWETHv2StrategyParams as Params} from "../../script/base/scWETHv2StrategyParams.sol";
 import {IAdapter} from "../../src/steth/IAdapter.sol";
 
 contract scWETHv2RebalanceTest is Test {
@@ -67,27 +66,27 @@ contract scWETHv2RebalanceTest is Test {
 
         assertApproxEqRel(
             morphoDeposited,
-            investAmount.mulWadDown(Params.MORPHO_ALLOCATION_PERCENT),
+            investAmount.mulWadDown(script.MORPHO_ALLOCATION_PERCENT()),
             0.006e18,
             "morpho allocation not correct"
         );
         assertApproxEqRel(
             compoundDeposited,
-            investAmount.mulWadDown(Params.COMPOUNDV3_ALLOCATION_PERCENT),
+            investAmount.mulWadDown(script.COMPOUNDV3_ALLOCATION_PERCENT()),
             0.006e18,
             "compound allocation not correct"
         );
 
         assertApproxEqRel(
             script.allocationPercent(morphoAdapter),
-            Params.MORPHO_ALLOCATION_PERCENT,
+            script.MORPHO_ALLOCATION_PERCENT(),
             0.005e18,
             "morpho allocationPercent not correct"
         );
 
         assertApproxEqRel(
             script.allocationPercent(compoundV3Adapter),
-            Params.COMPOUNDV3_ALLOCATION_PERCENT,
+            script.COMPOUNDV3_ALLOCATION_PERCENT(),
             0.005e18,
             "compound allocationPercent not correct"
         );
