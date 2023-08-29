@@ -120,7 +120,7 @@ contract scWETHv2Rebalance is Script, scWETHv2Helper {
     }
 
     // returns callData, totalFlashLoanAmount
-    /// @notice Returns the required calldata for investin float or reinvesting profits given the adapters to invest to and their respective allocationPercent
+    /// @notice Returns the required calldata for investing float or reinvesting profits given the adapters to invest to and their respective allocationPercent
     /// @dev : NOTE: ASSUMING ZERO BALANCER FLASH LOAN FEES
     function _getInvestParams(uint256 _amount) internal returns (bytes[] memory, uint256) {
         uint256 stEthRateTolerance = 0.999e18;
@@ -141,8 +141,6 @@ contract scWETHv2Rebalance is Script, scWETHv2Helper {
             totalFlashLoanAmount += flashLoanAmounts[i];
             totalAllocationPercent += allocationPercents[i];
         }
-
-        console2.log("totalAllocationPercent", totalAllocationPercent);
 
         require(totalAllocationPercent == 1e18, "totalAllocationPercent != 100%");
 
