@@ -442,6 +442,39 @@ contract RebalanceScUsdcV2Test is Test {
         script.run();
     }
 
+    function test_run_usesProfitSellingToLeverageDown() public {
+        script.run(); // initial rebalance
+        script = new RebalanceScUsdcV2TestHarness(); // reset script state
+
+        // simulate 100% profit
+        uint256 wethInvested = vault.wethInvested();
+        WETH weth = vault.weth();
+        deal(address(weth), address(vault.scWETH()), weth.balanceOf(address(vault.scWETH())) * 2);
+        assertEq(vault.getProfit(), wethInvested, "profit != wethInvested");
+
+        // reduce the leverage enough that the selling profit & reinvesting covers the difference
+        uint256 targetLtv = script.morphoTargetLtv() - 0.25e18;
+        script.setMorphoTargetLtv(targetLtv);
+
+        uint256 initialCollateral = vault.totalCollateral();
+        uint256 initialDebt = vault.totalDebt();
+        uint256 expectedFloat = vault.totalAssets().mulWadDown(vault.floatPercentage());
+        uint256 expectedCollateral = vault.totalAssets() - expectedFloat;
+        uint256 expectedDebt = priceConverter.usdcToEth(expectedCollateral).mulWadDown(script.morphoTargetLtv());
+
+        script.run();
+
+        assertApproxEqAbs(vault.getProfit(), 0, 1, "profit not sold entirely");
+        assertApproxEqRel(vault.wethInvested(), expectedDebt, 0.001e18, "weth invested");
+        assertApproxEqRel(vault.totalDebt(), expectedDebt, 0.001e18, "total debt");
+        assertApproxEqRel(vault.totalCollateral(), expectedCollateral, 0.001e18, "total collateral");
+        assertTrue(vault.totalCollateral() > initialCollateral, "total collateral not increased");
+        assertTrue(vault.totalDebt() >= initialDebt, "total debt decreased");
+
+        uint256 currentLtv = vault.priceConverter().ethToUsdc(vault.totalDebt()).divWadDown(vault.totalCollateral());
+        assertApproxEqRel(currentLtv, targetLtv, 0.001e18, "current ltv");
+    }
+
     function _addAaveV3Adapter() internal {
         if (!vault.isSupported(aaveV3.id())) {
             vm.prank(Constants.MULTISIG);
