@@ -29,20 +29,25 @@ contract RebalanceScUsdcV2 is Script {
     //////////////////////////////////////////////////////////////*/
 
     // @dev The following parameters are used to configure the rebalance script.
+    // minUsdcProfitToReinvest - the minimum amount of weth profit (converted to USDC) that needs to be made for reinvesting to make sense (ie gas costs < profit made)
+    // maxProfitSellSlippage - the maximum amount of slippage allowed when selling weth profit for usdc
     // use adapter - whether or not to use a specific adapter
     // investable amount percent - the percentage of the available funds that can be invested for a specific adapter (all have to sum up to 100% or 1e18)
     // target ltv - the target loan to value ratio for a specific adapter
+
+    uint256 public minUsdcProfitToReinvest = 10e6; // 10 USDC (set to a more realistic value ~100 USDC)
+    uint256 public maxProfitSellSlippage = 0.01e18; // 1%
 
     bool public useMorpho = true;
     uint256 public morphoInvestableAmountPercent = 1e18; // 100%
     uint256 public morphoTargetLtv = 0.7e18; // 70%
 
     bool public useAaveV2 = true;
-    uint256 public aaveV2InvestableAmountPercent = 0e18; // 100%
+    uint256 public aaveV2InvestableAmountPercent = 0e18; // 0%
     uint256 public aaveV2TargetLtv = 0.7e18; // 70%
 
     bool public useAaveV3 = false;
-    uint256 public aaveV3InvestableAmountPercent = 0e18; // 100%
+    uint256 public aaveV3InvestableAmountPercent = 0e18; // 0%
     uint256 public aaveV3TargetLtv = 0.7e18; // 70%
 
     /*//////////////////////////////////////////////////////////////*/
@@ -81,10 +86,11 @@ contract RebalanceScUsdcV2 is Script {
 
         _initializeAdapterSettings();
 
+        uint256 minUsdcFromProfitSelling = _sellWethProfitIfAboveDefinedMin();
+        uint256 minUsdcBalance = minUsdcFromProfitSelling + scUsdcV2.usdcBalance();
         uint256 minFloatRequired = scUsdcV2.totalAssets().mulWadUp(scUsdcV2.floatPercentage());
-        uint256 usdcBalance = scUsdcV2.usdcBalance();
-        uint256 missingFloat = minFloatRequired > usdcBalance ? minFloatRequired - usdcBalance : 0;
-        uint256 investableAmount = minFloatRequired < usdcBalance ? usdcBalance - minFloatRequired : 0;
+        uint256 missingFloat = minFloatRequired > minUsdcBalance ? minFloatRequired - minUsdcBalance : 0;
+        uint256 investableAmount = minFloatRequired < minUsdcBalance ? minUsdcBalance - minFloatRequired : 0;
 
         _createRebalanceMulticallDataForAllAdapters(investableAmount, missingFloat);
 
@@ -135,6 +141,20 @@ contract RebalanceScUsdcV2 is Script {
             morphoInvestableAmountPercent + aaveV2InvestableAmountPercent + aaveV3InvestableAmountPercent == 1e18,
             "total investable amount percent must be 100%"
         );
+    }
+
+    function _sellWethProfitIfAboveDefinedMin() internal returns (uint256) {
+        uint256 wethProfit = scUsdcV2.getProfit();
+        // account for slippage when selling weth profit for usdc
+        uint256 minExpectedUsdcProfit =
+            scUsdcV2.priceConverter().ethToUsdc(wethProfit).mulWadDown(1e18 - maxProfitSellSlippage);
+
+        // if profit is too small, don't sell & reinvest
+        if (minExpectedUsdcProfit < minUsdcProfitToReinvest) return 0;
+
+        multicallData.push(abi.encodeWithSelector(scUSDCv2.sellProfit.selector, minExpectedUsdcProfit));
+
+        return minExpectedUsdcProfit;
     }
 
     function _createRebalanceMulticallDataForAllAdapters(uint256 _investableAmount, uint256 _missingFloat) internal {
@@ -232,6 +252,7 @@ contract RebalanceScUsdcV2 is Script {
     function _logVaultInfo(string memory message) internal view {
         console2.log("\t", message);
         console2.log("total assets\t\t", scUsdcV2.totalAssets());
+        console2.log("weth profit\t\t", scUsdcV2.getProfit());
         console2.log("float\t\t\t", scUsdcV2.usdcBalance());
         console2.log("total collateral\t", scUsdcV2.totalCollateral());
         console2.log("total debt\t\t", scUsdcV2.totalDebt());

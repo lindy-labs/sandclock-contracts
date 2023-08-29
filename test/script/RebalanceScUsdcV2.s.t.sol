@@ -4,6 +4,7 @@ pragma solidity ^0.8.19;
 import "forge-std/console2.sol";
 import "forge-std/Test.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
+import {WETH} from "solmate/tokens/WETH.sol";
 
 import {scUSDCv2} from "../../src/steth/scUSDCv2.sol";
 import {PriceConverter} from "../../src/steth/PriceConverter.sol";
@@ -358,6 +359,89 @@ contract RebalanceScUsdcV2Test is Test {
         assertApproxEqRel(vault.getDebt(aaveV3.id()), expectedAaveV3Debt, 0.001e18, "aave v3 debt");
     }
 
+    function test_run_sellsProfitsAndReinvests() public {
+        script.run(); // initial rebalance
+        script = new RebalanceScUsdcV2TestHarness(); // reset script state
+        assertTrue(vault.getProfit() == 0, "profit != 0");
+
+        uint256 wethInvested = vault.wethInvested();
+
+        // simulate 100% profit
+        WETH weth = vault.weth();
+        deal(address(weth), address(vault.scWETH()), weth.balanceOf(address(vault.scWETH())) * 2);
+
+        uint256 wethProfit = vault.getProfit();
+        assertApproxEqAbs(wethProfit, wethInvested, 1, "profit != wethInvested");
+
+        uint256 expectedFloat = vault.totalAssets().mulWadDown(vault.floatPercentage());
+        uint256 approxUsdcReinvested =
+            priceConverter.ethToUsdc(wethProfit.mulWadDown(1e18 - script.maxProfitSellSlippage()));
+        uint256 approxAdditionalDebt =
+            priceConverter.usdcToEth(approxUsdcReinvested).mulWadDown(script.morphoTargetLtv());
+        uint256 initialCollateral = vault.totalCollateral();
+        uint256 initialDebt = vault.totalDebt();
+
+        script.run();
+
+        assertEq(vault.getProfit(), 0, "profit not sold entirely");
+        assertTrue(vault.usdcBalance() >= expectedFloat, "float balance");
+        assertApproxEqRel(
+            vault.totalCollateral(), initialCollateral + approxUsdcReinvested, 0.01e18, "total collateral"
+        );
+        assertApproxEqRel(vault.totalDebt(), initialDebt + approxAdditionalDebt, 0.01e18, "total debt");
+        assertApproxEqRel(vault.wethInvested(), wethInvested + approxAdditionalDebt, 0.01e18, "weth invested");
+    }
+
+    function test_run_doesntSellProfitIfBelowDefinedMin() public {
+        script.run(); // initial rebalance
+        script = new RebalanceScUsdcV2TestHarness(); // reset script state
+        assertTrue(vault.getProfit() == 0, "profit != 0");
+
+        // simulate 100% profit
+        WETH weth = vault.weth();
+        deal(address(weth), address(vault.scWETH()), weth.balanceOf(address(vault.scWETH())) * 2);
+
+        uint256 wethProfit = vault.getProfit();
+        // set min profit to reinvest to 2x the actual profit
+        script.setMinUsdcProfitToReinvest(vault.priceConverter().ethToUsdc(wethProfit * 2));
+
+        uint256 wethInvested = vault.wethInvested();
+        uint256 expectedFloat = vault.totalAssets().mulWadDown(vault.floatPercentage());
+        uint256 initialCollateral = vault.totalCollateral();
+        uint256 initialDebt = vault.totalDebt();
+
+        uint256 missingFloat = expectedFloat - vault.usdcBalance();
+        uint256 wethDisinvested = vault.priceConverter().usdcToEth(missingFloat);
+
+        script.run();
+
+        assertEq(vault.getProfit(), wethProfit, "profit");
+        assertTrue(vault.usdcBalance() >= expectedFloat, "float balance");
+        assertApproxEqRel(vault.totalCollateral(), initialCollateral - missingFloat, 0.005e18, "total collateral");
+        assertApproxEqRel(vault.totalDebt(), initialDebt - wethDisinvested, 0.005e18, "total debt");
+        assertApproxEqRel(vault.wethInvested(), wethInvested - wethDisinvested, 0.005e18, "weth invested");
+    }
+
+    function test_run_failsIfRealizedSlippageOnSellingProfitsIsTooHigh() public {
+        // make a big deposit so that the profit is big enough to trigger the slippage check
+        deal(address(vault.asset()), address(this), 10_000_000e6);
+        vault.asset().approve(address(vault), 10_000_000e6);
+        vault.deposit(10_000_000e6, address(this));
+
+        script.run(); // initial rebalance
+        script = new RebalanceScUsdcV2TestHarness(); // reset script state
+        assertTrue(vault.getProfit() == 0, "profit != 0");
+
+        // simulate 100% profit
+        WETH weth = vault.weth();
+        deal(address(weth), address(vault.scWETH()), weth.balanceOf(address(vault.scWETH())) * 2);
+
+        script.setMaxProfitSellSlippage(0.001e18); // 0.1%
+
+        vm.expectRevert("Too little received");
+        script.run();
+    }
+
     function _addAaveV3Adapter() internal {
         if (!vault.isSupported(aaveV3.id())) {
             vm.prank(Constants.MULTISIG);
@@ -369,6 +453,14 @@ contract RebalanceScUsdcV2Test is Test {
 }
 
 contract RebalanceScUsdcV2TestHarness is RebalanceScUsdcV2 {
+    function setMinUsdcProfitToReinvest(uint256 _minUsdcProfitToReinvest) public {
+        minUsdcProfitToReinvest = _minUsdcProfitToReinvest;
+    }
+
+    function setMaxProfitSellSlippage(uint256 _maxProfitSellSlippage) public {
+        maxProfitSellSlippage = _maxProfitSellSlippage;
+    }
+
     function setUseMorpho(bool _isUsed) public {
         useMorpho = _isUsed;
     }
