@@ -53,15 +53,28 @@ contract scWETHv2Rebalance is Script, scWETHv2Helper {
 
     IAdapter public morphoAdapter = IAdapter(MA.SCWETHV2_MORPHO_ADAPTER);
     IAdapter public compoundV3Adapter = IAdapter(MA.SCWETHV2_COMPOUND_ADAPTER);
+    IAdapter public aaveV3Adapter = IAdapter(MA.SCWETHV2_AAVEV3_ADAPTER);
 
     mapping(IAdapter => uint256) public targetLtv;
 
     // to be used for testing
     bytes demoSwapData;
 
+    ////////////////////////// BUTTONS ///////////////////////////////
+    uint256 public constant MORPHO_ALLOCATION_PERCENT = 0.4e18;
+    uint256 public constant MORPHO_TARGET_LTV = 0.8e18;
+
+    uint256 public constant COMPOUNDV3_ALLOCATION_PERCENT = 0.6e18;
+    uint256 public constant COMPOUNDV3_TARGET_LTV = 0.8e18;
+
+    uint256 public constant AAVEV3_ALLOCATION_PERCENT = 0;
+    uint256 public constant AAVEV3_TARGET_LTV = 0.8e18;
+    ///////////////////////////////////////////////////////////////////////
+
     constructor() scWETHv2Helper(scWETHv2(payable(MA.SCWETHV2)), PriceConverter(MA.PRICE_CONVERTER)) {
-        targetLtv[morphoAdapter] = Params.MORPHO_TARGET_LTV;
-        targetLtv[compoundV3Adapter] = Params.COMPOUNDV3_TARGET_LTV;
+        targetLtv[morphoAdapter] = MORPHO_TARGET_LTV;
+        targetLtv[compoundV3Adapter] = COMPOUNDV3_TARGET_LTV;
+        targetLtv[aaveV3Adapter] = AAVEV3_TARGET_LTV;
     }
 
     function run() external {
@@ -84,30 +97,53 @@ contract scWETHv2Rebalance is Script, scWETHv2Helper {
 
         console2.log("\nInvesting %s weth", investAmount);
 
-        (bytes[] memory callData,, uint256 totalFlashLoanAmount) = _getInvestParams(investAmount);
+        IAdapter[] memory adapters = new IAdapter[](2);
+        adapters[0] = morphoAdapter;
+        adapters[1] = compoundV3Adapter;
+
+        uint256[] memory allocationPercents = new uint[](2);
+        allocationPercents[0] = Params.MORPHO_ALLOCATION_PERCENT;
+        allocationPercents[1] = Params.COMPOUNDV3_ALLOCATION_PERCENT;
+
+        (bytes[] memory callData, uint256 totalFlashLoanAmount) =
+            _getInvestParams(investAmount, adapters, allocationPercents);
 
         vault.rebalance(investAmount, totalFlashLoanAmount, callData);
     }
 
-    /// @return : supplyBorrowParams, totalSupplyAmount, totalDebtTaken
+    // returns callData, totalFlashLoanAmount
+    /// @notice Returns the required calldata for investin float or reinvesting profits given the adapters to invest to and their respective allocationPercent
+    /// @param _adapters array containing the adapters to invest to
+    /// @param _allocationPercents array containing the allocation percents for the adapters respectively
     /// @dev : NOTE: ASSUMING ZERO BALANCER FLASH LOAN FEES
-    function _getInvestParams(uint256 _amount) internal returns (bytes[] memory, uint256, uint256) {
+    function _getInvestParams(uint256 _amount, IAdapter[] memory _adapters, uint256[] memory _allocationPercents)
+        internal
+        returns (bytes[] memory, uint256)
+    {
         uint256 stEthRateTolerance = 0.999e18;
+        uint256 n = _adapters.length;
+        uint256 totalAllocationPercent;
 
-        uint256 morphoAmount = _amount.mulWadDown(Params.MORPHO_ALLOCATION_PERCENT);
-        uint256 compoundAmount = _amount.mulWadDown(Params.COMPOUNDV3_ALLOCATION_PERCENT);
+        require(_allocationPercents.length == n, "array lengths don't match");
 
-        uint256 morphoFlashLoanAmount = _calcSupplyBorrowFlashLoanAmount(morphoAdapter, morphoAmount);
-        uint256 compoundFlashLoanAmount = _calcSupplyBorrowFlashLoanAmount(compoundV3Adapter, compoundAmount);
+        uint256[] memory flashLoanAmounts = new uint[](n);
+        uint256[] memory supplyAmounts = new uint[](n);
 
-        uint256 morphoSupplyAmount =
-            priceConverter.ethToWstEth(morphoAmount + morphoFlashLoanAmount).mulWadDown(stEthRateTolerance);
-        uint256 compoundSupplyAmount =
-            priceConverter.ethToWstEth(compoundAmount + compoundFlashLoanAmount).mulWadDown(stEthRateTolerance);
+        uint256 totalFlashLoanAmount;
 
-        uint256 totalFlashLoanAmount = morphoFlashLoanAmount + compoundFlashLoanAmount;
+        for (uint256 i; i < n; i++) {
+            uint256 adapterInvestAmount = _amount.mulWadDown(_allocationPercents[i]); // amount to be invested in this adapter
+            flashLoanAmounts[i] = _calcSupplyBorrowFlashLoanAmount(_adapters[i], adapterInvestAmount);
+            supplyAmounts[i] =
+                priceConverter.ethToWstEth(adapterInvestAmount + flashLoanAmounts[i]).mulWadDown(stEthRateTolerance);
 
-        bytes[] memory callData = new bytes[](3);
+            totalFlashLoanAmount += flashLoanAmounts[i];
+            totalAllocationPercent += _allocationPercents[i];
+        }
+
+        require(totalAllocationPercent == 1e18, "totalAllocationPercent != 100%");
+
+        bytes[] memory callData = new bytes[](n+1);
 
         uint256 wethSwapAmount = _amount + totalFlashLoanAmount;
         bytes memory swapData = demoSwapData.length != 0 ? demoSwapData : getSwapDataWethToWstEth(wethSwapAmount);
@@ -115,28 +151,13 @@ contract scWETHv2Rebalance is Script, scWETHv2Helper {
         callData[0] =
             abi.encodeWithSelector(BaseV2Vault.zeroExSwap.selector, C.WETH, C.WSTETH, wethSwapAmount, swapData, 0);
 
-        callData[1] = abi.encodeWithSelector(
-            scWETHv2.supplyAndBorrow.selector, morphoAdapter.id(), morphoSupplyAmount, morphoFlashLoanAmount
-        );
-        callData[2] = abi.encodeWithSelector(
-            scWETHv2.supplyAndBorrow.selector, compoundV3Adapter.id(), compoundSupplyAmount, compoundFlashLoanAmount
-        );
+        for (uint256 i = 1; i < n + 1; i++) {
+            callData[i] = abi.encodeWithSelector(
+                scWETHv2.supplyAndBorrow.selector, _adapters[i - 1].id(), supplyAmounts[i - 1], flashLoanAmounts[i - 1]
+            );
+        }
 
-        return (callData, morphoSupplyAmount + compoundSupplyAmount, totalFlashLoanAmount);
-    }
-
-    function _calcSupplyBorrowFlashLoanAmount(IAdapter _adapter, uint256 _amount)
-        internal
-        view
-        returns (uint256 flashLoanAmount)
-    {
-        uint256 debt = vault.getDebt(_adapter.id());
-        uint256 collateral = getCollateralInWeth(_adapter);
-
-        uint256 target = targetLtv[_adapter].mulWadDown(_amount + collateral);
-
-        // calculate the flashloan amount needed
-        flashLoanAmount = (target - debt).divWadDown(C.ONE - targetLtv[_adapter]);
+        return (callData, totalFlashLoanAmount);
     }
 
     function getSwapDataWethToWstEth(uint256 _amount) public returns (bytes memory swapData) {
@@ -156,6 +177,20 @@ contract scWETHv2Rebalance is Script, scWETHv2Helper {
         string memory json = string(data);
 
         swapData = json.readBytes(".data");
+    }
+
+    function _calcSupplyBorrowFlashLoanAmount(IAdapter _adapter, uint256 _amount)
+        internal
+        view
+        returns (uint256 flashLoanAmount)
+    {
+        uint256 debt = vault.getDebt(_adapter.id());
+        uint256 collateral = getCollateralInWeth(_adapter);
+
+        uint256 target = targetLtv[_adapter].mulWadDown(_amount + collateral);
+
+        // calculate the flashloan amount needed
+        flashLoanAmount = (target - debt).divWadDown(C.ONE - targetLtv[_adapter]);
     }
 
     function _logs() internal view {

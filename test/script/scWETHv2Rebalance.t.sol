@@ -130,13 +130,18 @@ contract scWETHv2RebalanceTest is Test {
 
         script.run();
 
-        // assertApproxEqRel(altv, script.getLtv(morphoAdapter), 0.0015e18, "morpho ltvs not reset after reinvest");
-        // assertApproxEqRel(
-        //     compoundLtv, script.getLtv(compoundV3Adapter), 0.0015e18, "compound ltvs not reset after reinvest"
-        // );
-        // assertApproxEqRel(ltv, script.getLtv(), 0.005e18, "net ltv not reset after reinvest");
+        assertApproxEqRel(altv, script.getLtv(morphoAdapter), 0.0015e18, "morpho ltvs not reset after reinvest");
+        assertApproxEqRel(
+            compoundLtv, script.getLtv(compoundV3Adapter), 0.0015e18, "compound ltvs not reset after reinvest"
+        );
+        assertApproxEqRel(ltv, script.getLtv(), 0.005e18, "net ltv not reset after reinvest");
 
-        // assertEq(weth.balanceOf(address(vault)), vault.minimumFloatAmount(), "float not invested");
+        assertEq(weth.balanceOf(address(vault)), vault.minimumFloatAmount(), "float not invested");
+    }
+
+    function testApiRequests() public {
+        bytes memory swapData = script.getSwapDataWethToWstEth(10 ether);
+        assertGt(swapData.length, 0, "Empty swapData returned");
     }
 
     function _simulate_stEthStakingInterest(uint256 timePeriod, uint256 stEthStakingInterest) internal {
