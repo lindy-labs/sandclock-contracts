@@ -139,8 +139,10 @@ contract scWETHv2RebalanceTest is Test {
     }
 
     function testApiRequests() public {
-        bytes memory swapData = script.getSwapDataWethToWstEth(10 ether);
+        bytes memory swapData = script.getSwapData(10 ether, C.WSTETH, C.WETH);
         assertGt(swapData.length, 0, "Empty swapData returned");
+        console2.logBytes(swapData);
+        console.log("swapData");
     }
 
     function _simulate_stEthStakingInterest(uint256 timePeriod, uint256 stEthStakingInterest) internal {
