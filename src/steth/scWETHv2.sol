@@ -165,7 +165,7 @@ contract scWETHv2 is BaseV2Vault {
         // add float
         assets += asset.balanceOf(address(this));
 
-        // add wstEth leftovers
+        // add wstEth leftovers (happens because we cannot know the exact amount of wstEth received for weth -> wstEth swap in advance when rebalancing/investing)
         assets += priceConverter.wstEthToEth(wstETH.balanceOf(address(this)));
     }
 
