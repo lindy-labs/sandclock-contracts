@@ -1221,6 +1221,8 @@ contract scWETHv2Test is Test {
             compoundFlashLoanAmount.mulWadUp(1e18 + flashLoanFeePercent)
         );
 
+        uint256 totalAssetsBefore = vault.totalAssets();
+
         hoax(keeper);
         vault.rebalance(investAmount, totalFlashLoanAmount, callData);
 
@@ -1232,6 +1234,8 @@ contract scWETHv2Test is Test {
             0.5e18,
             0.5e18
         );
+
+        assertApproxEqRel(vault.totalAssets(), totalAssetsBefore, 0.001e18, "total assets diff");
     }
 
     //////////////////////////// INTERNAL METHODS ////////////////////////////////////////

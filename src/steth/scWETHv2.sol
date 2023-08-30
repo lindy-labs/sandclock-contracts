@@ -164,6 +164,9 @@ contract scWETHv2 is BaseV2Vault {
 
         // add float
         assets += asset.balanceOf(address(this));
+
+        // add wstEth leftovers
+        assets += priceConverter.wstEthToEth(wstETH.balanceOf(address(this)));
     }
 
     /// @notice returns the wstEth deposited of the vault in a particular protocol
@@ -413,7 +416,7 @@ contract scWETHv2 is BaseV2Vault {
     function _harvest() internal {
         // store the old total
         uint256 oldTotalInvested = totalInvested;
-        uint256 assets = _totalCollateralInWeth() - totalDebt();
+        uint256 assets = priceConverter.wstEthToEth(totalCollateral() + wstETH.balanceOf(address(this))) - totalDebt();
 
         if (assets > oldTotalInvested) {
             totalInvested = assets;
