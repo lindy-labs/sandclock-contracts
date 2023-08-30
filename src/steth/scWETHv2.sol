@@ -92,7 +92,7 @@ contract scWETHv2 is BaseV2Vault {
     {
         _onlyKeeper();
 
-        if (_totalInvestAmount > asset.balanceOf(address(this))) revert InsufficientDepositBalance();
+        if (_totalInvestAmount > _wethBalance()) revert InsufficientDepositBalance();
 
         // needed otherwise counted as profit during harvest
         totalInvested += _totalInvestAmount;
@@ -101,7 +101,7 @@ contract scWETHv2 is BaseV2Vault {
 
         _harvest();
 
-        emit Rebalanced(totalCollateral(), totalDebt(), asset.balanceOf(address(this)));
+        emit Rebalanced(totalCollateral(), totalDebt(), _wethBalance());
     }
 
     /// @notice swap weth to wstEth
@@ -125,7 +125,7 @@ contract scWETHv2 is BaseV2Vault {
 
         if (_slippageTolerance > C.ONE) revert InvalidSlippageTolerance();
 
-        uint256 wstEthBalance = wstETH.balanceOf(address(this));
+        uint256 wstEthBalance = _wstEthBalance();
 
         if (_wstEthAmount > wstEthBalance) {
             _wstEthAmount = wstEthBalance;
@@ -163,10 +163,10 @@ contract scWETHv2 is BaseV2Vault {
         assets -= totalDebt();
 
         // add float
-        assets += asset.balanceOf(address(this));
+        assets += _wethBalance();
 
         // add wstEth leftovers (happens because we cannot know the exact amount of wstEth received for weth -> wstEth swap in advance when rebalancing/investing)
-        assets += priceConverter.wstEthToEth(wstETH.balanceOf(address(this)));
+        assets += priceConverter.wstEthToEth(_wstEthBalance());
     }
 
     /// @notice returns the wstEth deposited of the vault in a particular protocol
@@ -290,7 +290,7 @@ contract scWETHv2 is BaseV2Vault {
 
         _burn(owner, shares);
 
-        uint256 balance = asset.balanceOf(address(this));
+        uint256 balance = _wethBalance();
 
         // since during withdrawing everything,
         // actual withdrawn amount might be less than totalAsssets
@@ -318,7 +318,7 @@ contract scWETHv2 is BaseV2Vault {
 
         _burn(owner, shares);
 
-        uint256 balance = asset.balanceOf(address(this));
+        uint256 balance = _wethBalance();
 
         // since during withdrawing everything,
         // actual withdrawn amount might be less than totalAsssets
@@ -377,23 +377,23 @@ contract scWETHv2 is BaseV2Vault {
 
         callData[n] = abi.encodeWithSelector(scWETHv2.swapWstEthToWeth.selector, type(uint256).max, slippageTolerance);
 
-        uint256 float = asset.balanceOf(address(this));
+        uint256 float = _wethBalance();
 
         _flashLoan(flashLoanAmount, callData);
 
-        emit WithdrawnToVault(asset.balanceOf(address(this)) - float);
+        emit WithdrawnToVault(_wethBalance() - float);
     }
 
     /// @notice reverts if float in the vault is not above the minimum required
     function _enforceFloat() internal view {
-        uint256 float = asset.balanceOf(address(this));
+        uint256 float = _wethBalance();
         uint256 floatRequired = minimumFloatAmount;
 
         if (float < floatRequired) revert FloatBalanceTooLow(float, floatRequired);
     }
 
     function beforeWithdraw(uint256 assets, uint256) internal override {
-        uint256 float = asset.balanceOf(address(this));
+        uint256 float = _wethBalance();
 
         if (assets <= float) return;
 
@@ -416,7 +416,7 @@ contract scWETHv2 is BaseV2Vault {
     function _harvest() internal {
         // store the old total
         uint256 oldTotalInvested = totalInvested;
-        uint256 assets = priceConverter.wstEthToEth(totalCollateral() + wstETH.balanceOf(address(this))) - totalDebt();
+        uint256 assets = priceConverter.wstEthToEth(totalCollateral() + _wstEthBalance()) - totalDebt();
 
         if (assets > oldTotalInvested) {
             totalInvested = assets;
@@ -436,5 +436,13 @@ contract scWETHv2 is BaseV2Vault {
 
     function _totalCollateralInWeth() internal view returns (uint256) {
         return priceConverter.wstEthToEth(totalCollateral());
+    }
+
+    function _wethBalance() internal view returns (uint256) {
+        return asset.balanceOf(address(this));
+    }
+
+    function _wstEthBalance() internal view returns (uint256) {
+        return wstETH.balanceOf(address(this));
     }
 }
