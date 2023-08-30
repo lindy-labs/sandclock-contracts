@@ -158,3 +158,8 @@ contract scWETHv2RebalanceTest is Test {
         return abi.decode(abi.encode(vm.load(addr, key)), (uint256));
     }
 }
+
+// TODO
+// Add tests f
+// investing when there is no underlying float in the contract (just reinvesting profits)
+// For other variations of allocation Percents
