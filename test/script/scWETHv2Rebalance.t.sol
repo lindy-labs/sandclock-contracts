@@ -25,7 +25,7 @@ contract scWETHv2RebalanceTest is Test {
 
     uint256 mainnetFork;
 
-    scWETHv2Rebalance script;
+    scWETHv2RebalanceTestHarness script;
     scWETHv2 vault;
     WETH weth = WETH(payable(C.WETH));
 
@@ -36,7 +36,7 @@ contract scWETHv2RebalanceTest is Test {
         vm.createFork(vm.envString("RPC_URL_MAINNET"));
         vm.selectFork(mainnetFork);
         vm.rollFork(18018649);
-        script = new scWETHv2Rebalance();
+        script = new scWETHv2RebalanceTestHarness();
         vault = script.vault();
 
         morphoAdapter = script.morphoAdapter();
@@ -138,13 +138,6 @@ contract scWETHv2RebalanceTest is Test {
         assertEq(weth.balanceOf(address(vault)), vault.minimumFloatAmount(), "float not invested");
     }
 
-    function testApiRequests() public {
-        bytes memory swapData = script.getSwapData(10 ether, C.WSTETH, C.WETH);
-        assertGt(swapData.length, 0, "Empty swapData returned");
-        console2.logBytes(swapData);
-        console.log("swapData");
-    }
-
     function _simulate_stEthStakingInterest(uint256 timePeriod, uint256 stEthStakingInterest) internal {
         // fast forward time to simulate supply and borrow interests
         vm.warp(block.timestamp + timePeriod);
@@ -165,3 +158,15 @@ contract scWETHv2RebalanceTest is Test {
 // Add tests f
 // investing when there is no underlying float in the contract (just reinvesting profits)
 // For other variations of allocation Percents
+
+contract scWETHv2RebalanceTestHarness is scWETHv2Rebalance {
+    bytes testSwapData;
+
+    function getSwapData(uint256, address, address) public view override returns (bytes memory swapData) {
+        return testSwapData;
+    }
+
+    function setDemoSwapData(bytes memory _swapData) external {
+        testSwapData = _swapData;
+    }
+}
