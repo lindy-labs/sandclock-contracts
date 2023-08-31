@@ -144,30 +144,35 @@ contract scUSDCv2 is BaseV2Vault {
     }
 
     /**
-     * @notice Emergency exit to release collateral if the vault is underwater.
+     * @notice Emergency exit to disinvest everything, repay all debt and withdraw all collateral to the vault.
      * @dev In unlikely situation that the vault makes a loss on ETH staked, the total debt would be higher than ETH available to "unstake",
      *  which can lead to withdrawals being blocked. To handle this situation, the vault can close all positions in all lending markets and release all of the assets (realize all losses).
      * @param _endUsdcBalanceMin The minimum USDC balance to end with after all positions are closed.
      */
     function exitAllPositions(uint256 _endUsdcBalanceMin) external {
-        _onlyAdmin();
+        _onlyKeeper();
 
-        uint256 debt = totalDebt();
-
-        if (wethInvested() >= debt) revert VaultNotUnderwater();
-
-        uint256 wethBalance = scWETH.redeem(scWETH.balanceOf(address(this)), address(this), address(this));
         uint256 collateral = totalCollateral();
+        uint256 debt = totalDebt();
+        uint256 wethBalance = scWETH.redeem(scWETH.balanceOf(address(this)), address(this), address(this));
 
-        address[] memory tokens = new address[](1);
-        tokens[0] = address(weth);
+        if (debt > wethBalance) {
+            address[] memory tokens = new address[](1);
+            tokens[0] = address(weth);
 
-        uint256[] memory amounts = new uint256[](1);
-        amounts[0] = debt - wethBalance;
+            uint256[] memory amounts = new uint256[](1);
+            amounts[0] = debt - wethBalance;
 
-        _initiateFlashLoan();
-        balancerVault.flashLoan(address(this), tokens, amounts, abi.encode(FlashLoanType.ExitAllPositions));
-        _finalizeFlashLoan();
+            _initiateFlashLoan();
+            balancerVault.flashLoan(address(this), tokens, amounts, abi.encode(FlashLoanType.ExitAllPositions));
+            _finalizeFlashLoan();
+        } else {
+            _repayAllDebtAndWithdrawCollateral();
+
+            uint256 wethLeft = _wethBalance();
+
+            if (wethLeft != 0) _swapWethForUsdc(wethLeft, 0);
+        }
 
         if (usdcBalance() < _endUsdcBalanceMin) revert EndUsdcBalanceTooLow();
 
@@ -194,7 +199,8 @@ contract scUSDCv2 is BaseV2Vault {
         FlashLoanType flashLoanType = abi.decode(_data, (FlashLoanType));
 
         if (flashLoanType == FlashLoanType.ExitAllPositions) {
-            _exitAllPositionsFlash(flashLoanAmount);
+            _repayAllDebtAndWithdrawCollateral();
+            _swapUsdcForExactWeth(flashLoanAmount);
         } else {
             (, bytes[] memory callData) = abi.decode(_data, (FlashLoanType, bytes[]));
             _multiCall(callData);
@@ -351,7 +357,7 @@ contract scUSDCv2 is BaseV2Vault {
     }
 
     function _repay(uint256 _adapterId, uint256 _amount) internal {
-        uint256 wethBalance = weth.balanceOf(address(this));
+        uint256 wethBalance = _wethBalance();
 
         _amount = _amount > wethBalance ? wethBalance : _amount;
 
@@ -367,7 +373,7 @@ contract scUSDCv2 is BaseV2Vault {
     }
 
     function _invest() internal {
-        uint256 wethBalance = weth.balanceOf(address(this));
+        uint256 wethBalance = _wethBalance();
 
         if (wethBalance > 0) {
             scWETH.deposit(wethBalance, address(this));
@@ -386,7 +392,7 @@ contract scUSDCv2 is BaseV2Vault {
         return amount;
     }
 
-    function _exitAllPositionsFlash(uint256 _flashLoanAmount) internal {
+    function _repayAllDebtAndWithdrawCollateral() internal {
         uint256 length = protocolAdapters.length();
 
         for (uint256 i = 0; i < length; i++) {
@@ -397,8 +403,6 @@ contract scUSDCv2 is BaseV2Vault {
             if (debt > 0) _repay(id, debt);
             if (collateral > 0) _withdraw(id, collateral);
         }
-
-        _swapUsdcForExactWeth(_flashLoanAmount);
     }
 
     function beforeWithdraw(uint256 _assets, uint256) internal override {
@@ -493,6 +497,10 @@ contract scUSDCv2 is BaseV2Vault {
 
     function _calculateWethProfit(uint256 _invested, uint256 _debt) internal pure returns (uint256) {
         return _invested > _debt ? _invested - _debt : 0;
+    }
+
+    function _wethBalance() internal view returns (uint256) {
+        return weth.balanceOf(address(this));
     }
 
     function _swapWethForUsdc(uint256 _wethAmount, uint256 _usdcAmountOutMin) internal returns (uint256) {
