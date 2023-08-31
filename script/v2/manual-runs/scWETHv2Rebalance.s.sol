@@ -56,7 +56,8 @@ contract scWETHv2Rebalance is Script, scWETHv2Helper {
     uint256 public AAVEV3_ALLOCATION_PERCENT = 0;
     uint256 public AAVEV3_TARGET_LTV = 0.8e18;
 
-    uint256 public disinvestThreshold = 0.01e18; // 1 %
+    uint256 public disinvestThreshold = 0.005e18; // 0.5 %
+    uint256 public minimumInvestAmount = 0.1 ether; // be it weth gained from profits or float amount lying in the vault
     ///////////////////////////////////////////////////////////////////////
 
     uint256 keeperPrivateKey = uint256(vm.envOr("KEEPER_PRIVATE_KEY", bytes32(0x00)));
@@ -81,55 +82,78 @@ contract scWETHv2Rebalance is Script, scWETHv2Helper {
         address keeper = keeperPrivateKey != 0 ? vm.addr(keeperPrivateKey) : MA.KEEPER;
 
         vm.startBroadcast(keeper);
+
         // disinvest if the ltv has overshoot from target on any protocol
-        // _disinvest();
+        _disinvest();
+
         _invest();
-        _logs();
+
+        // _logs();
 
         vm.stopBroadcast();
     }
 
     /// @notice invest the float lying in the vault to morpho and compoundV3
     /// @dev also reinvests profits made,i.e increases the ltv
-    /// @dev if there is no undelying float in the contract, run this method with _amount=0 to just reinvest profits
+    /// @dev if there is no undelying float in the contract, run this method to just reinvest profits
     function _invest() internal {
         uint256 float = weth.balanceOf(address(vault));
-        uint256 investAmount = float - vault.minimumFloatAmount();
+        uint256 minimumFloat = vault.minimumFloatAmount();
+
+        // investAmount == 0 just reinvests profits
+        uint256 investAmount = float > minimumFloat ? float - minimumFloat : 0;
 
         console2.log("\nInvesting %s weth", investAmount);
 
         (bytes[] memory callData, uint256 totalFlashLoanAmount) = _getInvestParams(investAmount);
 
-        vault.rebalance(investAmount, totalFlashLoanAmount, callData);
+        // invest or reinvest only if it the leveraged amount is greater than a certain threshold
+        // to save unecessary gas fees in small rebalances
+        if (totalFlashLoanAmount > minimumInvestAmount.mulWadDown(getLeverage())) {
+            console2.log("---- Running invest ----");
+            vault.rebalance(investAmount, totalFlashLoanAmount, callData);
+        }
     }
 
     /// @notice reduces the LTV in protocols where the strategy has overshoot the target ltv due to a loss
     function _disinvest() internal {
         _updateAdaptersToDisinvest();
 
-        (bytes[] memory callData, uint256 totalFlashLoanAmount) = _getDisInvestParams();
-
-        vault.rebalance(0, totalFlashLoanAmount, callData);
+        if (adaptersToDisinvest.length > 0) {
+            (bytes[] memory callData, uint256 totalFlashLoanAmount) = _getDisInvestParams();
+            console2.log("\n---- Running Disinvest ----\n");
+            vault.rebalance(0, totalFlashLoanAmount, callData);
+        }
     }
 
     function _initializeAdapters() internal {
+        uint256 totalAllocationPercent;
+
         if (MORPHO_ALLOCATION_PERCENT > 0) {
             adaptersToInvest.push(morphoAdapter);
             allocationPercents.push(MORPHO_ALLOCATION_PERCENT);
             targetLtv[morphoAdapter] = MORPHO_TARGET_LTV;
+
+            totalAllocationPercent += MORPHO_ALLOCATION_PERCENT;
         }
 
         if (AAVEV3_ALLOCATION_PERCENT > 0) {
             adaptersToInvest.push(aaveV3Adapter);
             allocationPercents.push(AAVEV3_ALLOCATION_PERCENT);
             targetLtv[aaveV3Adapter] = AAVEV3_TARGET_LTV;
+
+            totalAllocationPercent += AAVEV3_ALLOCATION_PERCENT;
         }
 
         if (COMPOUNDV3_ALLOCATION_PERCENT > 0) {
             adaptersToInvest.push(compoundV3Adapter);
             allocationPercents.push(COMPOUNDV3_ALLOCATION_PERCENT);
             targetLtv[compoundV3Adapter] = COMPOUNDV3_TARGET_LTV;
+
+            totalAllocationPercent += COMPOUNDV3_ALLOCATION_PERCENT;
         }
+
+        require(totalAllocationPercent == 1e18, "totalAllocationPercent != 100%");
     }
 
     function _updateAdaptersToDisinvest() internal {
@@ -148,9 +172,8 @@ contract scWETHv2Rebalance is Script, scWETHv2Helper {
     /// @notice Returns the required calldata for investing float or reinvesting profits given the adapters to invest to and their respective allocationPercent
     /// @dev : NOTE: ASSUMING ZERO BALANCER FLASH LOAN FEES
     function _getInvestParams(uint256 _amount) internal returns (bytes[] memory, uint256) {
-        uint256 stEthRateTolerance = 0.999e18;
+        uint256 stEthRateTolerance = 0.9995e18;
         uint256 n = adaptersToInvest.length;
-        uint256 totalAllocationPercent;
 
         uint256[] memory flashLoanAmounts = new uint[](n);
         uint256[] memory supplyAmounts = new uint[](n);
@@ -164,18 +187,19 @@ contract scWETHv2Rebalance is Script, scWETHv2Helper {
                 priceConverter.ethToWstEth(adapterInvestAmount + flashLoanAmounts[i]).mulWadDown(stEthRateTolerance);
 
             totalFlashLoanAmount += flashLoanAmounts[i];
-            totalAllocationPercent += allocationPercents[i];
         }
-
-        require(totalAllocationPercent == 1e18, "totalAllocationPercent != 100%");
 
         bytes[] memory callData = new bytes[](n+1);
 
         uint256 wethSwapAmount = _amount + totalFlashLoanAmount;
         bytes memory swapData = getSwapData(wethSwapAmount, C.WETH, C.WSTETH);
 
-        callData[0] =
-            abi.encodeWithSelector(BaseV2Vault.zeroExSwap.selector, C.WETH, C.WSTETH, wethSwapAmount, swapData, 0);
+        if (swapData.length > 0) {
+            callData[0] =
+                abi.encodeWithSelector(BaseV2Vault.zeroExSwap.selector, C.WETH, C.WSTETH, wethSwapAmount, swapData, 0);
+        } else {
+            callData[0] = abi.encodeWithSelector(scWETHv2.swapWethToWstEth.selector, wethSwapAmount);
+        }
 
         for (uint256 i = 1; i < n + 1; i++) {
             callData[i] = abi.encodeWithSelector(
@@ -191,6 +215,7 @@ contract scWETHv2Rebalance is Script, scWETHv2Helper {
 
     function _getDisInvestParams() internal returns (bytes[] memory, uint256) {
         uint256 n = adaptersToDisinvest.length;
+
         uint256[] memory flashLoanAmounts = new uint[](n);
         uint256 totalFlashLoanAmount;
 
@@ -220,14 +245,20 @@ contract scWETHv2Rebalance is Script, scWETHv2Helper {
 
         bytes memory swapData = getSwapData(swapAmount, C.WSTETH, C.WETH);
 
-        callData[n] = abi.encodeWithSelector(
-            BaseV2Vault.zeroExSwap.selector,
-            C.WSTETH,
-            C.WETH,
-            swapAmount,
-            swapData,
-            C.ONE - wstEthToWethSlippageTolerance
-        );
+        if (swapData.length > 0) {
+            callData[n] = abi.encodeWithSelector(
+                BaseV2Vault.zeroExSwap.selector,
+                C.WSTETH,
+                C.WETH,
+                swapAmount,
+                swapData,
+                C.ONE - wstEthToWethSlippageTolerance
+            );
+        } else {
+            callData[n] = abi.encodeWithSelector(
+                scWETHv2.swapWstEthToWeth.selector, type(uint256).max, C.ONE - wstEthToWethSlippageTolerance
+            );
+        }
 
         return (callData, totalFlashLoanAmount);
     }
@@ -292,5 +323,6 @@ contract scWETHv2Rebalance is Script, scWETHv2Helper {
         console2.log("\n Total Assets %s weth", vault.totalAssets());
         console2.log("\n Net Leverage", getLeverage());
         console2.log("\n Net LTV", debt.divWadUp(collateralInWeth));
+        console2.log("\n WstEth Balance", ERC20(C.WSTETH).balanceOf(address(this)));
     }
 }
