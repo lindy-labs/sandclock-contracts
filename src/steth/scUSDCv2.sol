@@ -1,13 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.19;
 
-import {
-    VaultNotUnderwater,
-    NoProfitsToSell,
-    FlashLoanAmountZero,
-    EndUsdcBalanceTooLow,
-    FloatBalanceTooLow
-} from "../errors/scErrors.sol";
+import {NoProfitsToSell, FlashLoanAmountZero, EndUsdcBalanceTooLow, FloatBalanceTooLow} from "../errors/scErrors.sol";
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {WETH} from "solmate/tokens/WETH.sol";
