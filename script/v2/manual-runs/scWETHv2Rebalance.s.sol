@@ -172,7 +172,7 @@ contract scWETHv2Rebalance is Script, scWETHv2Helper {
         bytes[] memory callData = new bytes[](n+1);
 
         uint256 wethSwapAmount = _amount + totalFlashLoanAmount;
-        bytes memory swapData = demoSwapData.length != 0 ? demoSwapData : getSwapData(wethSwapAmount, C.WETH, C.WSTETH);
+        bytes memory swapData = getSwapData(wethSwapAmount, C.WETH, C.WSTETH);
 
         callData[0] =
             abi.encodeWithSelector(BaseV2Vault.zeroExSwap.selector, C.WETH, C.WSTETH, wethSwapAmount, swapData, 0);
@@ -232,7 +232,7 @@ contract scWETHv2Rebalance is Script, scWETHv2Helper {
         return (callData, totalFlashLoanAmount);
     }
 
-    function getSwapData(uint256 _amount, address _from, address _to) public returns (bytes memory swapData) {
+    function getSwapData(uint256 _amount, address _from, address _to) public virtual returns (bytes memory swapData) {
         string memory url = string(
             abi.encodePacked(
                 "https://api.0x.org/swap/v1/quote?buyToken=",
@@ -292,12 +292,5 @@ contract scWETHv2Rebalance is Script, scWETHv2Helper {
         console2.log("\n Total Assets %s weth", vault.totalAssets());
         console2.log("\n Net Leverage", getLeverage());
         console2.log("\n Net LTV", debt.divWadUp(collateralInWeth));
-    }
-
-    ///////////////////////////////// FOR TESTING ONLY ///////////////////////////
-    bytes demoSwapData;
-
-    function setDemoSwapData(bytes memory _data) external {
-        demoSwapData = _data;
     }
 }
