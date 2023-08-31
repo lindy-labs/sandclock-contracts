@@ -56,8 +56,12 @@ contract scWETHv2Rebalance is Script, scWETHv2Helper {
     uint256 public AAVEV3_ALLOCATION_PERCENT = 0;
     uint256 public AAVEV3_TARGET_LTV = 0.8e18;
 
+    // if the ltv overshoots the target ltv by this threshold, disinvest
     uint256 public disinvestThreshold = 0.005e18; // 0.5 %
-    uint256 public minimumInvestAmount = 0.1 ether; // be it weth gained from profits or float amount lying in the vault
+
+    // be it weth gained from profits or float amount lying in the vault
+    // the contract rebalance method won't be called if the minimum amount to invest is less than this threshold
+    uint256 public minimumInvestAmount = 0.1 ether;
     ///////////////////////////////////////////////////////////////////////
 
     uint256 keeperPrivateKey = uint256(vm.envOr("KEEPER_PRIVATE_KEY", bytes32(0x00)));
@@ -279,11 +283,12 @@ contract scWETHv2Rebalance is Script, scWETHv2Helper {
         headers[0] = string(abi.encodePacked("0x-api-key: ", vm.envString("ZEROX_API_KEY")));
         (uint256 status, bytes memory data) = url.get(headers);
 
-        require(status == 200, "0x GET request Failed");
-
-        string memory json = string(data);
-
-        swapData = json.readBytes(".data");
+        if (status != 200) {
+            console2.log("----- 0x GET request Failed ---- Using backup swappers -------");
+        } else {
+            string memory json = string(data);
+            swapData = json.readBytes(".data");
+        }
     }
 
     function _calcSupplyBorrowFlashLoanAmount(IAdapter _adapter, uint256 _amount)
