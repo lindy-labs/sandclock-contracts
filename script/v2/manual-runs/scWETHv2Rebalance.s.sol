@@ -97,6 +97,31 @@ contract scWETHv2Rebalance is Script, scWETHv2Helper {
         vm.stopBroadcast();
     }
 
+    //////////////////////////////// REBALANCE /////////////////////////////////////////////
+    function _rebalance() internal {}
+
+    function _getRebalanceParams() internal returns (bytes[] memory, uint256) {}
+
+    /// @notice returns the amount to flashloan for an adapter
+    /// @dev doesn't matter if the vault has to supply/borrow or repay/withdraw
+    /// @dev this supports both scenarios
+    function _calcRebalanceFlashLoanAmount(IAdapter _adapter, uint256 _amount)
+        internal
+        view
+        returns (uint256 flashLoanAmount, bool isSupplyBorrow)
+    {
+        uint256 debt = vault.getDebt(_adapter.id());
+        uint256 collateral = getCollateralInWeth(_adapter);
+
+        uint256 target = targetLtv[_adapter].mulWadDown(_amount + collateral);
+
+        isSupplyBorrow = target > debt;
+
+        // calculate the flashloan amount needed
+        flashLoanAmount = (isSupplyBorrow ? target - debt : debt - target).divWadDown(C.ONE - targetLtv[_adapter]);
+    }
+
+    //////////////////////////////// INVEST /////////////////////////////////////////////
     function _initializeAdapters() internal {
         uint256 totalAllocationPercent;
 
@@ -127,18 +152,6 @@ contract scWETHv2Rebalance is Script, scWETHv2Helper {
         require(totalAllocationPercent == 1e18, "totalAllocationPercent != 100%");
     }
 
-    function _updateAdaptersToDisinvest() internal {
-        // for disinvesting check through all the supported adapters everytime
-        IAdapter[3] memory allAdapters = [morphoAdapter, compoundV3Adapter, aaveV3Adapter];
-
-        for (uint256 i; i < allAdapters.length; i++) {
-            uint256 ltv = getLtv(allAdapters[i]);
-            if (ltv > targetLtv[allAdapters[i]] + disinvestThreshold) {
-                adaptersToDisinvest.push(allAdapters[i]);
-            }
-        }
-    }
-
     /// @notice invest the float lying in the vault to morpho and compoundV3
     /// @dev also reinvests profits made,i.e increases the ltv
     /// @dev if there is no undelying float in the contract, run this method to just reinvest profits
@@ -158,17 +171,6 @@ contract scWETHv2Rebalance is Script, scWETHv2Helper {
         if (totalFlashLoanAmount > minimumInvestAmount.mulWadDown(getLeverage())) {
             console2.log("---- Running invest ----");
             vault.rebalance(investAmount, totalFlashLoanAmount, callData);
-        }
-    }
-
-    /// @notice reduces the LTV in protocols where the strategy has overshoot the target ltv due to a loss
-    function _disinvest() internal {
-        _updateAdaptersToDisinvest();
-
-        if (adaptersToDisinvest.length > 0) {
-            (bytes[] memory callData, uint256 totalFlashLoanAmount) = _getDisInvestParams();
-            console2.log("\n---- Running Disinvest ----\n");
-            vault.rebalance(0, totalFlashLoanAmount, callData);
         }
     }
 
@@ -217,6 +219,45 @@ contract scWETHv2Rebalance is Script, scWETHv2Helper {
         return (callData, totalFlashLoanAmount);
     }
 
+    function _calcSupplyBorrowFlashLoanAmount(IAdapter _adapter, uint256 _amount)
+        internal
+        view
+        returns (uint256 flashLoanAmount)
+    {
+        uint256 debt = vault.getDebt(_adapter.id());
+        uint256 collateral = getCollateralInWeth(_adapter);
+
+        uint256 target = targetLtv[_adapter].mulWadDown(_amount + collateral);
+
+        // calculate the flashloan amount needed
+        flashLoanAmount = (target - debt).divWadDown(C.ONE - targetLtv[_adapter]);
+    }
+
+    //////////////////////////////// DISINVEST /////////////////////////////////////////////
+
+    function _updateAdaptersToDisinvest() internal {
+        // for disinvesting check through all the supported adapters everytime
+        IAdapter[3] memory allAdapters = [morphoAdapter, compoundV3Adapter, aaveV3Adapter];
+
+        for (uint256 i; i < allAdapters.length; i++) {
+            uint256 ltv = getLtv(allAdapters[i]);
+            if (ltv > targetLtv[allAdapters[i]] + disinvestThreshold) {
+                adaptersToDisinvest.push(allAdapters[i]);
+            }
+        }
+    }
+
+    /// @notice reduces the LTV in protocols where the strategy has overshoot the target ltv due to a loss
+    function _disinvest() internal {
+        _updateAdaptersToDisinvest();
+
+        if (adaptersToDisinvest.length > 0) {
+            (bytes[] memory callData, uint256 totalFlashLoanAmount) = _getDisInvestParams();
+            console2.log("\n---- Running Disinvest ----\n");
+            vault.rebalance(0, totalFlashLoanAmount, callData);
+        }
+    }
+
     function _getDisInvestParams() internal returns (bytes[] memory, uint256) {
         uint256 n = adaptersToDisinvest.length;
 
@@ -224,8 +265,7 @@ contract scWETHv2Rebalance is Script, scWETHv2Helper {
         uint256 totalFlashLoanAmount;
 
         for (uint256 i; i < n; i++) {
-            flashLoanAmounts[i] =
-                _calcRepayWithdrawFlashLoanAmount(adaptersToDisinvest[i], 0, targetLtv[adaptersToDisinvest[i]]);
+            flashLoanAmounts[i] = _calcRepayWithdrawFlashLoanAmount(adaptersToDisinvest[i], 0);
 
             totalFlashLoanAmount += flashLoanAmounts[i];
         }
@@ -267,6 +307,22 @@ contract scWETHv2Rebalance is Script, scWETHv2Helper {
         return (callData, totalFlashLoanAmount);
     }
 
+    function _calcRepayWithdrawFlashLoanAmount(IAdapter adapter, uint256 amount)
+        internal
+        view
+        returns (uint256 flashLoanAmount)
+    {
+        uint256 debt = vault.getDebt(adapter.id());
+        uint256 collateral = getCollateralInWeth(adapter);
+
+        uint256 target = targetLtv[adapter].mulWadDown(amount + collateral);
+
+        // calculate the flashloan amount needed
+        flashLoanAmount = (debt - target).divWadDown(C.ONE - targetLtv[adapter]);
+    }
+
+    //////////////////////////////// HELPERS /////////////////////////////////////////////
+
     function getSwapData(uint256 _amount, address _from, address _to) public virtual returns (bytes memory swapData) {
         string memory url = string(
             abi.encodePacked(
@@ -289,34 +345,6 @@ contract scWETHv2Rebalance is Script, scWETHv2Helper {
             string memory json = string(data);
             swapData = json.readBytes(".data");
         }
-    }
-
-    function _calcSupplyBorrowFlashLoanAmount(IAdapter _adapter, uint256 _amount)
-        internal
-        view
-        returns (uint256 flashLoanAmount)
-    {
-        uint256 debt = vault.getDebt(_adapter.id());
-        uint256 collateral = getCollateralInWeth(_adapter);
-
-        uint256 target = targetLtv[_adapter].mulWadDown(_amount + collateral);
-
-        // calculate the flashloan amount needed
-        flashLoanAmount = (target - debt).divWadDown(C.ONE - targetLtv[_adapter]);
-    }
-
-    function _calcRepayWithdrawFlashLoanAmount(IAdapter adapter, uint256 amount, uint256 ltv)
-        internal
-        view
-        returns (uint256 flashLoanAmount)
-    {
-        uint256 debt = vault.getDebt(adapter.id());
-        uint256 collateral = getCollateralInWeth(adapter);
-
-        uint256 target = ltv.mulWadDown(amount + collateral);
-
-        // calculate the flashloan amount needed
-        flashLoanAmount = (debt - target).divWadDown(C.ONE - ltv);
     }
 
     function _logs() internal view {
