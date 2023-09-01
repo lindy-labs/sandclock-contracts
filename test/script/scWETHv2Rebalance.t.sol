@@ -202,7 +202,22 @@ contract scWETHv2RebalanceTest is Test {
             weth.balanceOf(address(vault)), vault.minimumFloatAmount().mulWadDown(1.01e18), "weth dust after disinvest"
         );
         assertApproxEqRel(vault.totalAssets(), assets, 0.001e18, "disinvest must not change total assets");
-        assertGe(leverage, script.getLeverage(), "leverage not decreased after disinvest");
+        assertGe(leverage, script.getLeverage(), "leverage not increased after disinvest");
+
+        // assert allocations must not change
+        assertApproxEqRel(
+            script.allocationPercent(morphoAdapter),
+            script.MORPHO_ALLOCATION_PERCENT(),
+            0.005e18,
+            "morpho allocationPercent not correct"
+        );
+
+        assertApproxEqRel(
+            script.allocationPercent(compoundV3Adapter),
+            script.COMPOUNDV3_ALLOCATION_PERCENT(),
+            0.005e18,
+            "compound allocationPercent not correct"
+        );
     }
 
     function testScriptDisinvestsAndInvests() public {
@@ -218,7 +233,32 @@ contract scWETHv2RebalanceTest is Test {
         script.updateMorphoTargetLtv(updatedMorphoTargetLtv);
         script.updateCompoundV3TargetLtv(updatedCompoundV3TargetLtv);
 
+        uint256 assets = vault.totalAssets();
+
         script.run();
+
+        assertApproxEqRel(script.getLtv(morphoAdapter), updatedMorphoTargetLtv, 0.005e18, "morpho ltv not updated");
+
+        assertApproxEqRel(
+            script.getLtv(compoundV3Adapter), updatedCompoundV3TargetLtv, 0.005e18, "compound ltv not updated"
+        );
+
+        assertApproxEqRel(vault.totalAssets(), assets, 0.001e18, "must not change total assets");
+
+        // assert allocations must not change
+        assertApproxEqRel(
+            script.allocationPercent(morphoAdapter),
+            script.MORPHO_ALLOCATION_PERCENT(),
+            0.005e18,
+            "morpho allocationPercent not correct"
+        );
+
+        assertApproxEqRel(
+            script.allocationPercent(compoundV3Adapter),
+            script.COMPOUNDV3_ALLOCATION_PERCENT(),
+            0.005e18,
+            "compound allocationPercent not correct"
+        );
     }
 
     //////////////////////////////////// INTERNAL METHODS ///////////////////////////////////////

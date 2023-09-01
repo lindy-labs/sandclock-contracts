@@ -97,39 +97,6 @@ contract scWETHv2Rebalance is Script, scWETHv2Helper {
         vm.stopBroadcast();
     }
 
-    /// @notice invest the float lying in the vault to morpho and compoundV3
-    /// @dev also reinvests profits made,i.e increases the ltv
-    /// @dev if there is no undelying float in the contract, run this method to just reinvest profits
-    function _invest() internal {
-        uint256 float = weth.balanceOf(address(vault));
-        uint256 minimumFloat = vault.minimumFloatAmount();
-
-        // investAmount == 0 just reinvests profits
-        uint256 investAmount = float > minimumFloat ? float - minimumFloat : 0;
-
-        console2.log("\nInvesting %s weth", investAmount);
-
-        (bytes[] memory callData, uint256 totalFlashLoanAmount) = _getInvestParams(investAmount);
-
-        // invest or reinvest only if it the leveraged amount is greater than a certain threshold
-        // to save unecessary gas fees in small rebalances
-        if (totalFlashLoanAmount > minimumInvestAmount.mulWadDown(getLeverage())) {
-            console2.log("---- Running invest ----");
-            vault.rebalance(investAmount, totalFlashLoanAmount, callData);
-        }
-    }
-
-    /// @notice reduces the LTV in protocols where the strategy has overshoot the target ltv due to a loss
-    function _disinvest() internal {
-        _updateAdaptersToDisinvest();
-
-        if (adaptersToDisinvest.length > 0) {
-            (bytes[] memory callData, uint256 totalFlashLoanAmount) = _getDisInvestParams();
-            console2.log("\n---- Running Disinvest ----\n");
-            vault.rebalance(0, totalFlashLoanAmount, callData);
-        }
-    }
-
     function _initializeAdapters() internal {
         uint256 totalAllocationPercent;
 
@@ -169,6 +136,39 @@ contract scWETHv2Rebalance is Script, scWETHv2Helper {
             if (ltv > targetLtv[allAdapters[i]] + disinvestThreshold) {
                 adaptersToDisinvest.push(allAdapters[i]);
             }
+        }
+    }
+
+    /// @notice invest the float lying in the vault to morpho and compoundV3
+    /// @dev also reinvests profits made,i.e increases the ltv
+    /// @dev if there is no undelying float in the contract, run this method to just reinvest profits
+    function _invest() internal {
+        uint256 float = weth.balanceOf(address(vault));
+        uint256 minimumFloat = vault.minimumFloatAmount();
+
+        // investAmount == 0 just reinvests profits
+        uint256 investAmount = float > minimumFloat ? float - minimumFloat : 0;
+
+        console2.log("\nInvesting %s weth", investAmount);
+
+        (bytes[] memory callData, uint256 totalFlashLoanAmount) = _getInvestParams(investAmount);
+
+        // invest or reinvest only if it the leveraged amount is greater than a certain threshold
+        // to save unecessary gas fees in small rebalances
+        if (totalFlashLoanAmount > minimumInvestAmount.mulWadDown(getLeverage())) {
+            console2.log("---- Running invest ----");
+            vault.rebalance(investAmount, totalFlashLoanAmount, callData);
+        }
+    }
+
+    /// @notice reduces the LTV in protocols where the strategy has overshoot the target ltv due to a loss
+    function _disinvest() internal {
+        _updateAdaptersToDisinvest();
+
+        if (adaptersToDisinvest.length > 0) {
+            (bytes[] memory callData, uint256 totalFlashLoanAmount) = _getDisInvestParams();
+            console2.log("\n---- Running Disinvest ----\n");
+            vault.rebalance(0, totalFlashLoanAmount, callData);
         }
     }
 
