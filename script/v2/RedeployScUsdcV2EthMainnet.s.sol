@@ -14,7 +14,7 @@ import {AaveV2ScUsdcAdapter} from "../../src/steth/scUsdcV2-adapters/AaveV2ScUsd
 
 contract RedeployScript is MainnetDeployBase {
     // @note: change scWethV2 to the address of the deployed scWethV2 contract
-    scWETHv2 scWethV2 = scWETHv2(payable(vm.envAddress("SC_WETH_V2")));
+    scWETHv2 scWethV2 = scWETHv2(payable(vm.envOr("SC_WETH_V2", MainnetAddresses.SCWETHV2)));
 
     Swapper swapper = Swapper(MainnetAddresses.SWAPPER);
     PriceConverter priceConverter = PriceConverter(MainnetAddresses.PRICE_CONVERTER);
