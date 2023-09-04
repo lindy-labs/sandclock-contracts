@@ -93,16 +93,14 @@ contract RebalanceScUsdcV2Test is Test {
         script.run(); // initial rebalance
         script = new RebalanceScUsdcV2TestHarness(); // reset script state
 
-        assertTrue(vault.wethInvested() > 0, "weth invested");
-        assertTrue(vault.totalDebt() > 0, "total debt");
-        assertTrue(vault.totalCollateral() > 0, "total collateral");
-        assertTrue(vault.usdcBalance() > 0, "usdc balance");
+        _assertInitialState();
 
-        script.setMorphoTargetLtv(script.morphoTargetLtv() - 0.1e18);
+        uint256 newTargetLtv = script.morphoTargetLtv() - 0.1e18;
+        script.setMorphoTargetLtv(newTargetLtv);
 
         uint256 expectedFloat = vault.totalAssets().mulWadDown(vault.floatPercentage());
         uint256 expectedCollateral = vault.totalCollateral();
-        uint256 expectedDebt = priceConverter.usdcToEth(expectedCollateral).mulWadDown(script.morphoTargetLtv());
+        uint256 expectedDebt = priceConverter.usdcToEth(expectedCollateral).mulWadDown(newTargetLtv);
 
         script.run();
 
@@ -119,20 +117,17 @@ contract RebalanceScUsdcV2Test is Test {
         script.run(); // initial rebalance
         script = new RebalanceScUsdcV2TestHarness(); // reset script state
 
-        assertTrue(vault.wethInvested() > 0, "weth invested");
-        assertTrue(vault.totalDebt() > 0, "total debt");
-        assertTrue(vault.totalCollateral() > 0, "total collateral");
-        assertTrue(vault.usdcBalance() > 0, "usdc balance");
+        _assertInitialState();
 
-        script.setMorphoTargetLtv(script.morphoTargetLtv() - 0.1e18);
-        script.setAaveV2TargetLtv(script.aaveV2TargetLtv() - 0.2e18);
+        uint256 newMorphoTargetLtv = script.morphoTargetLtv() - 0.1e18;
+        uint256 newAaveV2TargetLtv = script.aaveV2TargetLtv() - 0.2e18;
+        script.setMorphoTargetLtv(newMorphoTargetLtv);
+        script.setAaveV2TargetLtv(newAaveV2TargetLtv);
 
         uint256 morphoExpectedCollateral = vault.getCollateral(morpho.id());
-        uint256 moprhoExpectedDebt =
-            priceConverter.usdcToEth(morphoExpectedCollateral).mulWadDown(script.morphoTargetLtv());
+        uint256 moprhoExpectedDebt = priceConverter.usdcToEth(morphoExpectedCollateral).mulWadDown(newMorphoTargetLtv);
         uint256 aaveV2ExpectedCollateral = vault.getCollateral(aaveV2.id());
-        uint256 aaveV2ExpectedDebt =
-            priceConverter.usdcToEth(aaveV2ExpectedCollateral).mulWadDown(script.aaveV2TargetLtv());
+        uint256 aaveV2ExpectedDebt = priceConverter.usdcToEth(aaveV2ExpectedCollateral).mulWadDown(newAaveV2TargetLtv);
 
         script.run();
 
@@ -150,20 +145,17 @@ contract RebalanceScUsdcV2Test is Test {
         script.run(); // initial rebalance
         script = new RebalanceScUsdcV2TestHarness(); // reset script state
 
-        assertTrue(vault.wethInvested() > 0, "weth invested");
-        assertTrue(vault.totalDebt() > 0, "total debt");
-        assertTrue(vault.totalCollateral() > 0, "total collateral");
-        assertTrue(vault.usdcBalance() > 0, "usdc balance");
+        _assertInitialState();
 
-        script.setMorphoTargetLtv(script.morphoTargetLtv() - 0.1e18);
-        script.setAaveV2TargetLtv(script.aaveV2TargetLtv() + 0.1e18);
+        uint256 newMorphoTargetLtv = script.morphoTargetLtv() - 0.1e18;
+        uint256 newAaveV2TargetLtv = script.aaveV2TargetLtv() + 0.1e18;
+        script.setMorphoTargetLtv(newMorphoTargetLtv);
+        script.setAaveV2TargetLtv(newAaveV2TargetLtv);
 
         uint256 morphoExpectedCollateral = vault.getCollateral(morpho.id());
-        uint256 moprhoExpectedDebt =
-            priceConverter.usdcToEth(morphoExpectedCollateral).mulWadDown(script.morphoTargetLtv());
+        uint256 moprhoExpectedDebt = priceConverter.usdcToEth(morphoExpectedCollateral).mulWadDown(newMorphoTargetLtv);
         uint256 aaveV2ExpectedCollateral = vault.getCollateral(aaveV2.id());
-        uint256 aaveV2ExpectedDebt =
-            priceConverter.usdcToEth(aaveV2ExpectedCollateral).mulWadDown(script.aaveV2TargetLtv());
+        uint256 aaveV2ExpectedDebt = priceConverter.usdcToEth(aaveV2ExpectedCollateral).mulWadDown(newAaveV2TargetLtv);
 
         script.run();
 
@@ -177,21 +169,19 @@ contract RebalanceScUsdcV2Test is Test {
         script.run(); // initial rebalance
         script = new RebalanceScUsdcV2TestHarness(); // reset script state
 
-        assertTrue(vault.wethInvested() > 0, "weth invested");
-        assertTrue(vault.totalDebt() > 0, "total debt");
-        assertTrue(vault.totalCollateral() > 0, "total collateral");
-        assertTrue(vault.usdcBalance() > 0, "usdc balance");
+        _assertInitialState();
 
         // additional deposit
         deal(address(vault.asset()), address(this), 100e6);
         vault.asset().approve(address(vault), 100e6);
         vault.deposit(100e6, address(this));
 
-        script.setMorphoTargetLtv(script.morphoTargetLtv() - 0.1e18);
+        uint256 newMorphoTargetLtv = script.morphoTargetLtv() - 0.1e18;
+        script.setMorphoTargetLtv(newMorphoTargetLtv);
 
         uint256 expectedFloat = vault.totalAssets().mulWadDown(vault.floatPercentage());
         uint256 expectedCollateral = vault.totalAssets() - expectedFloat;
-        uint256 expectedDebt = priceConverter.usdcToEth(expectedCollateral).mulWadDown(script.morphoTargetLtv());
+        uint256 expectedDebt = priceConverter.usdcToEth(expectedCollateral).mulWadDown(newMorphoTargetLtv);
 
         script.run();
 
@@ -205,21 +195,19 @@ contract RebalanceScUsdcV2Test is Test {
         script.run(); // initial rebalance
         script = new RebalanceScUsdcV2TestHarness(); // reset script state
 
-        assertTrue(vault.wethInvested() > 0, "weth invested");
-        assertTrue(vault.totalDebt() > 0, "total debt");
-        assertTrue(vault.totalCollateral() > 0, "total collateral");
-        assertTrue(vault.usdcBalance() > 0, "usdc balance");
+        _assertInitialState();
 
         // additional deposit
         deal(address(vault.asset()), address(this), 1e6);
         vault.asset().approve(address(vault), 1e6);
         vault.deposit(1e6, address(this));
 
-        script.setMorphoTargetLtv(script.morphoTargetLtv() - 0.5e18);
+        uint256 newMorphoTargetLtv = script.morphoTargetLtv() - 0.5e18;
+        script.setMorphoTargetLtv(newMorphoTargetLtv);
 
         uint256 expectedFloat = vault.totalAssets().mulWadDown(vault.floatPercentage());
         uint256 expectedCollateral = vault.totalAssets() - expectedFloat;
-        uint256 expectedDebt = priceConverter.usdcToEth(expectedCollateral).mulWadDown(script.morphoTargetLtv());
+        uint256 expectedDebt = priceConverter.usdcToEth(expectedCollateral).mulWadDown(newMorphoTargetLtv);
 
         script.run();
 
@@ -233,16 +221,14 @@ contract RebalanceScUsdcV2Test is Test {
         script.run(); // initial rebalance
         script = new RebalanceScUsdcV2TestHarness(); // reset script state
 
-        assertTrue(vault.wethInvested() > 0, "weth invested");
-        assertTrue(vault.totalDebt() > 0, "total debt");
-        assertTrue(vault.totalCollateral() > 0, "total collateral");
-        assertTrue(vault.usdcBalance() > 0, "usdc balance");
+        _assertInitialState();
 
-        script.setMorphoTargetLtv(0.6e18);
+        uint256 newMorphoTargetLtv = 0.6e18;
+        script.setMorphoTargetLtv(newMorphoTargetLtv);
 
         uint256 expectedFloat = vault.totalAssets().mulWadDown(vault.floatPercentage());
         uint256 expectedCollateral = vault.totalAssets() - expectedFloat;
-        uint256 expectedDebt = priceConverter.usdcToEth(expectedCollateral).mulWadDown(script.morphoTargetLtv());
+        uint256 expectedDebt = priceConverter.usdcToEth(expectedCollateral).mulWadDown(newMorphoTargetLtv);
 
         script.run();
 
@@ -259,10 +245,7 @@ contract RebalanceScUsdcV2Test is Test {
         script.run(); // initial rebalance
         script = new RebalanceScUsdcV2TestHarness(); // reset script state
 
-        assertTrue(vault.wethInvested() > 0, "weth invested");
-        assertTrue(vault.totalDebt() > 0, "total debt");
-        assertTrue(vault.totalCollateral() > 0, "total collateral");
-        assertTrue(vault.usdcBalance() > 0, "usdc balance");
+        _assertInitialState();
 
         vault.withdraw(vault.usdcBalance(), address(this), address(this));
         assertEq(vault.usdcBalance(), 0, "usdc balance");
@@ -286,19 +269,17 @@ contract RebalanceScUsdcV2Test is Test {
         script.run(); // initial rebalance
         script = new RebalanceScUsdcV2TestHarness(); // reset script state
 
-        assertTrue(vault.wethInvested() > 0, "weth invested");
-        assertTrue(vault.totalDebt() > 0, "total debt");
-        assertTrue(vault.totalCollateral() > 0, "total collateral");
-        assertTrue(vault.usdcBalance() > 0, "usdc balance");
+        _assertInitialState();
 
         vault.withdraw(vault.usdcBalance(), address(this), address(this));
         assertEq(vault.usdcBalance(), 0, "usdc balance");
 
-        script.setMorphoTargetLtv(script.morphoTargetLtv() + 0.05e18);
+        uint256 newMorphoTargetLtv = script.morphoTargetLtv() + 0.05e18;
+        script.setMorphoTargetLtv(newMorphoTargetLtv);
 
         uint256 expectedFloat = vault.totalAssets().mulWadDown(vault.floatPercentage());
         uint256 expectedCollateral = vault.totalAssets() - expectedFloat;
-        uint256 expectedDebt = priceConverter.usdcToEth(expectedCollateral).mulWadDown(script.morphoTargetLtv());
+        uint256 expectedDebt = priceConverter.usdcToEth(expectedCollateral).mulWadDown(newMorphoTargetLtv);
 
         script.run();
 
@@ -315,19 +296,17 @@ contract RebalanceScUsdcV2Test is Test {
         script.run(); // initial rebalance
         script = new RebalanceScUsdcV2TestHarness(); // reset script state
 
-        assertTrue(vault.wethInvested() > 0, "weth invested");
-        assertTrue(vault.totalDebt() > 0, "total debt");
-        assertTrue(vault.totalCollateral() > 0, "total collateral");
-        assertTrue(vault.usdcBalance() > 0, "usdc balance");
+        _assertInitialState();
 
         vault.withdraw(vault.usdcBalance(), address(this), address(this));
         assertEq(vault.usdcBalance(), 0, "usdc balance");
 
-        script.setMorphoTargetLtv(script.morphoTargetLtv() - 0.05e18);
+        uint256 newMorphoTargetLtv = script.morphoTargetLtv() - 0.05e18;
+        script.setMorphoTargetLtv(newMorphoTargetLtv);
 
         uint256 expectedFloat = vault.totalAssets().mulWadDown(vault.floatPercentage());
         uint256 expectedCollateral = vault.totalAssets() - expectedFloat;
-        uint256 expectedDebt = priceConverter.usdcToEth(expectedCollateral).mulWadDown(script.morphoTargetLtv());
+        uint256 expectedDebt = priceConverter.usdcToEth(expectedCollateral).mulWadDown(newMorphoTargetLtv);
 
         script.run();
 
@@ -346,12 +325,13 @@ contract RebalanceScUsdcV2Test is Test {
         script.setMorphoInvestableAmountPercent(0);
         script.setAaveV2InvestableAmountPercent(0);
         script.setAaveV3InvestableAmountPercent(1e18); // 100%
-        script.setAaveV3TargetLtv(0.5e18); // 50%
+        uint256 newAaveV3TargetLtv = 0.5e18;
+        script.setAaveV3TargetLtv(newAaveV3TargetLtv); // 50%
         script.setUseAaveV3(true);
 
         uint256 expectedFloat = vault.totalAssets().mulWadDown(vault.floatPercentage());
         uint256 investableAmount = vault.usdcBalance() - expectedFloat;
-        uint256 expectedAaveV3Debt = priceConverter.usdcToEth(investableAmount).mulWadDown(script.aaveV3TargetLtv());
+        uint256 expectedAaveV3Debt = priceConverter.usdcToEth(investableAmount).mulWadDown(newAaveV3TargetLtv);
 
         script.run();
 
@@ -362,6 +342,8 @@ contract RebalanceScUsdcV2Test is Test {
     function test_run_sellsProfitsAndReinvests() public {
         script.run(); // initial rebalance
         script = new RebalanceScUsdcV2TestHarness(); // reset script state
+        _assertInitialState();
+
         assertTrue(vault.getProfit() == 0, "profit != 0");
 
         uint256 wethInvested = vault.wethInvested();
@@ -395,6 +377,8 @@ contract RebalanceScUsdcV2Test is Test {
     function test_run_doesntSellProfitIfBelowDefinedMin() public {
         script.run(); // initial rebalance
         script = new RebalanceScUsdcV2TestHarness(); // reset script state
+        _assertInitialState();
+
         assertTrue(vault.getProfit() == 0, "profit != 0");
 
         // simulate 100% profit
@@ -430,6 +414,8 @@ contract RebalanceScUsdcV2Test is Test {
 
         script.run(); // initial rebalance
         script = new RebalanceScUsdcV2TestHarness(); // reset script state
+        _assertInitialState();
+
         assertTrue(vault.getProfit() == 0, "profit != 0");
 
         // simulate 100% profit
@@ -446,6 +432,8 @@ contract RebalanceScUsdcV2Test is Test {
         script.run(); // initial rebalance
         script = new RebalanceScUsdcV2TestHarness(); // reset script state
 
+        _assertInitialState();
+
         // simulate 100% profit
         uint256 wethInvested = vault.wethInvested();
         WETH weth = vault.weth();
@@ -460,7 +448,7 @@ contract RebalanceScUsdcV2Test is Test {
         uint256 initialDebt = vault.totalDebt();
         uint256 expectedFloat = vault.totalAssets().mulWadDown(vault.floatPercentage());
         uint256 expectedCollateral = vault.totalAssets() - expectedFloat;
-        uint256 expectedDebt = priceConverter.usdcToEth(expectedCollateral).mulWadDown(script.morphoTargetLtv());
+        uint256 expectedDebt = priceConverter.usdcToEth(expectedCollateral).mulWadDown(targetLtv);
 
         script.run();
 
@@ -482,6 +470,13 @@ contract RebalanceScUsdcV2Test is Test {
             assertTrue(vault.isSupported(aaveV3.id()), "aave v3 not supported");
             script.setUseAaveV3(true);
         }
+    }
+
+    function _assertInitialState() internal {
+        assertTrue(vault.wethInvested() > 0, "weth invested");
+        assertTrue(vault.totalDebt() > 0, "total debt");
+        assertTrue(vault.totalCollateral() > 0, "total collateral");
+        assertTrue(vault.usdcBalance() > 0, "usdc balance");
     }
 }
 
