@@ -19,7 +19,8 @@ import {AaveV3ScUsdcAdapter} from "../../../src/steth/scUsdcV2-adapters/AaveV3Sc
 import {IAdapter} from "../../../src/steth/IAdapter.sol";
 
 /**
- * A script for executing rebalance functionality for scUsdcV2 vaults.
+ * A script for executing "exitAllPositions" function on the scUsdcV2 vault.
+ * This results in withdrawing all WETH invested into  leveraged staking (scWETH vault), repaying all WETH debt (using a flashloan if necessary) and withdrawing all USDC collateral to the vault.
  */
 contract ExitAllPositionsScUsdcV2 is Script {
     using FixedPointMathLib for uint256;
@@ -27,6 +28,10 @@ contract ExitAllPositionsScUsdcV2 is Script {
     /*//////////////////////////////////////////////////////////////
                           SCRIPT PARAMETERS
     //////////////////////////////////////////////////////////////*/
+
+    // @dev: maxAceeptableLossPercent - the maximum acceptable loss in percent of the current total assets amount
+
+    uint256 public maxAceeptableLossPercent = 0.02e18; // 2%
 
     /*//////////////////////////////////////////////////////////////*/
 
@@ -38,20 +43,21 @@ contract ExitAllPositionsScUsdcV2 is Script {
     AaveV3ScUsdcAdapter public aaveV3Adapter = AaveV3ScUsdcAdapter(MainnetAddresses.SCUSDCV2_AAVEV3_ADAPTER);
 
     function run() external {
-        console2.log("--RebalanceScUsdcV2 script running--");
+        console2.log("--ExitAllPositions script running--");
 
         require(scUsdcV2.hasRole(scUsdcV2.KEEPER_ROLE(), address(keeper)), "invalid keeper");
 
         uint256 totalAssets = scUsdcV2.totalAssets();
+        uint256 minEndTotalAssets = totalAssets.mulWadDown(1e18 - maxAceeptableLossPercent);
 
         _logVaultInfo("state before");
 
         vm.startBroadcast(keeper);
-        scUsdcV2.exitAllPositions(totalAssets);
+        scUsdcV2.exitAllPositions(minEndTotalAssets);
         vm.stopBroadcast();
 
         _logVaultInfo("state after");
-        console2.log("--RebalanceScUsdcV2 script done--");
+        console2.log("--ExitAllPositions script done--");
     }
 
     function _logVaultInfo(string memory message) internal view {

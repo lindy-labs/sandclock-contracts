@@ -35,6 +35,7 @@ contract ExitAllPositionsScUsdcV2Test is Test {
         vm.selectFork(mainnetFork);
         vm.rollFork(17987643);
 
+        // TODO: use a mainnet (instead of redeploying) address for the vault when scUSDCv2 is deployed on mainnet
         RedeployScriptTestHarness redeployScript = new RedeployScriptTestHarness();
         redeployScript.setDeployerAddress(address(this));
         vault = redeployScript.run();
@@ -68,6 +69,9 @@ contract ExitAllPositionsScUsdcV2Test is Test {
         vm.prank(MainnetAddresses.KEEPER);
         vault.rebalance(callData);
 
+        uint256 totalAssetsBefore = vault.totalAssets();
+        uint256 maxLossPercent = script.maxAceeptableLossPercent();
+
         assertEq(vault.wethInvested(), debtAmount, "weth invested");
         assertEq(vault.totalDebt(), debtAmount, "total debt");
         assertEq(vault.totalCollateral(), investAmount, "total collateral");
@@ -79,6 +83,7 @@ contract ExitAllPositionsScUsdcV2Test is Test {
         assertEq(vault.wethInvested(), 0, "weth invested");
         assertEq(vault.totalDebt(), 0, "total debt");
         assertEq(vault.totalCollateral(), 0, "total collateral");
+        assertApproxEqRel(vault.totalAssets(), totalAssetsBefore, maxLossPercent, "total assets");
     }
 }
 
