@@ -156,17 +156,14 @@ contract scWETHv2 is BaseV2Vault {
 
     /// @notice returns the total assets (in WETH) held by the strategy
     function totalAssets() public view override returns (uint256 assets) {
-        // value of the supplied collateral in eth terms using chainlink oracle
-        assets = _totalCollateralInWeth();
+        // value of the supplied collateral + wstEth leftovers (vault's balance) in eth terms using chainlink oracle
+        assets = priceConverter.wstEthToEth(totalCollateral() + _wstEthBalance());
 
         // subtract the debt
         assets -= totalDebt();
 
         // add float
         assets += _wethBalance();
-
-        // add wstEth leftovers (happens because we cannot know the exact amount of wstEth received for weth -> wstEth swap in advance when rebalancing/investing)
-        assets += priceConverter.wstEthToEth(_wstEthBalance());
     }
 
     /// @notice returns the wstEth deposited of the vault in a particular protocol
