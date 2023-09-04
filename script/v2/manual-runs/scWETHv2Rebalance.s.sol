@@ -34,6 +34,11 @@ import {BaseV2Vault} from "../../../src/steth/BaseV2Vault.sol";
 /**
  * invests underlying float in the vault
  * and at the same time also reinvests profits made till now by the vault
+ * 
+ * WHAT SHOULD THE SCRIPT DO
+ * invest float if there is any
+ * reinvest profits/ increase back the ltv of the protocol to the target ltv
+ * disinvest/ decrease the ltv of any protocol if it has overshoot
  *
  * cmd
  * first run a local anvil node using " anvil -f YOUR_RPC_URL"
