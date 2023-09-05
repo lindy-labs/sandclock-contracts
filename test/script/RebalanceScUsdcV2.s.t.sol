@@ -211,6 +211,7 @@ contract RebalanceScUsdcV2Test is Test {
 
         script.run();
 
+        assertApproxEqRel(vault.usdcBalance(), expectedFloat, 0.001e18, "usdc balance");
         assertApproxEqRel(vault.wethInvested(), expectedDebt, 0.001e18, "weth invested");
         assertApproxEqRel(vault.totalDebt(), expectedDebt, 0.001e18, "total debt");
         assertApproxEqRel(vault.totalCollateral(), expectedCollateral, 0.001e18, "total collateral");
@@ -232,6 +233,7 @@ contract RebalanceScUsdcV2Test is Test {
 
         script.run();
 
+        assertApproxEqRel(vault.usdcBalance(), expectedFloat, 0.001e18, "usdc balance");
         assertApproxEqRel(vault.wethInvested(), expectedDebt, 0.001e18, "weth invested");
         assertApproxEqRel(vault.totalDebt(), expectedDebt, 0.001e18, "total debt");
         assertApproxEqRel(vault.totalCollateral(), expectedCollateral, 0.001e18, "total collateral");
