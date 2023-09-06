@@ -141,7 +141,7 @@ contract scUSDCv2 is BaseV2Vault {
      * @notice Emergency exit to disinvest everything, repay all debt and withdraw all collateral to the vault.
      * @dev In unlikely situation that the vault makes a loss on ETH staked, the total debt would be higher than ETH available to "unstake",
      *  which can lead to withdrawals being blocked. To handle this situation, the vault can close all positions in all lending markets and release all of the assets (realize all losses).
-     * @param _endUsdcBalanceMin The minimum USDC balance to end with after all positions are closed.
+     * @param _endUsdcBalanceMin The minimum USDC balance of the vault at the end of execution (after all positions are closed).
      */
     function exitAllPositions(uint256 _endUsdcBalanceMin) external {
         _onlyKeeper();
@@ -151,6 +151,7 @@ contract scUSDCv2 is BaseV2Vault {
         uint256 wethBalance = scWETH.redeem(scWETH.balanceOf(address(this)), address(this), address(this));
 
         if (debt > wethBalance) {
+            // not enough WETH to repay all debt, flashloan the difference
             address[] memory tokens = new address[](1);
             tokens[0] = address(weth);
 
@@ -163,6 +164,7 @@ contract scUSDCv2 is BaseV2Vault {
         } else {
             _repayAllDebtAndWithdrawCollateral();
 
+            // if some WETH remains after repaying all debt, swap it to USDC
             uint256 wethLeft = _wethBalance();
 
             if (wethLeft != 0) _swapWethForUsdc(wethLeft, 0);
