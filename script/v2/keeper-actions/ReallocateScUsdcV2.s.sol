@@ -3,13 +3,13 @@ pragma solidity ^0.8.13;
 
 import "forge-std/console2.sol";
 import "forge-std/Test.sol";
-import "forge-std/Script.sol";
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {WETH} from "solmate/tokens/WETH.sol";
 import {AccessControl} from "openzeppelin-contracts/access/AccessControl.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 
+import {ScUsdcV2ScriptBase} from "../../base/ScUsdcV2ScriptBase.sol";
 import {MainnetAddresses} from "../../base/MainnetAddresses.sol";
 import {PriceConverter} from "../../../src/steth/PriceConverter.sol";
 import {scUSDCv2} from "../../../src/steth/scUSDCv2.sol";
@@ -21,16 +21,8 @@ import {IAdapter} from "../../../src/steth/IAdapter.sol";
 /**
  * A script for executing rebalance functionality for scUsdcV2 vaults.
  */
-contract ReallocateScUsdcV2 is Script {
+contract ReallocateScUsdcV2 is ScUsdcV2ScriptBase {
     using FixedPointMathLib for uint256;
-
-    uint256 keeperPrivateKey = uint256(vm.envOr("KEEPER_PRIVATE_KEY", bytes32(0x0)));
-    address keeper = keeperPrivateKey != 0 ? vm.addr(keeperPrivateKey) : MainnetAddresses.KEEPER;
-    scUSDCv2 public scUsdcV2 = scUSDCv2(MainnetAddresses.SCUSDCV2);
-    PriceConverter priceConverter = PriceConverter(MainnetAddresses.PRICE_CONVERTER);
-    MorphoAaveV3ScUsdcAdapter public morphoAdapter = MorphoAaveV3ScUsdcAdapter(MainnetAddresses.SCUSDCV2_MORPHO_ADAPTER);
-    AaveV2ScUsdcAdapter public aaveV2Adapter = AaveV2ScUsdcAdapter(MainnetAddresses.SCUSDCV2_AAVEV2_ADAPTER);
-    AaveV3ScUsdcAdapter public aaveV3Adapter = AaveV3ScUsdcAdapter(MainnetAddresses.SCUSDCV2_AAVEV3_ADAPTER);
 
     /*//////////////////////////////////////////////////////////////
                           SCRIPT PARAMETERS
@@ -94,6 +86,7 @@ contract ReallocateScUsdcV2 is Script {
         vm.stopBroadcast();
 
         _logPositions("\tafter reallocate");
+        console2.log("--ReallocateScUsdcV2 script done--");
     }
 
     function _logPositions(string memory message) internal view {
