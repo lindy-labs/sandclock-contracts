@@ -1805,14 +1805,14 @@ contract scUSDCv2Test is Test {
 
     /// #exitAllPositions ///
 
-    function test_exitAllPositions_FailsIfCallerNotAdmin() public {
+    function test_exitAllPositions_FailsIfCallerNotKeeper() public {
         _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
         vm.prank(alice);
-        vm.expectRevert(CallerNotAdmin.selector);
+        vm.expectRevert(CallerNotKeeper.selector);
         vault.exitAllPositions(0);
     }
 
-    function test_exitAllPositions_FailsIfVaultIsNotUnderawater() public {
+    function test_exitAllPositions_RepaysDebtAndReleasesCollateralOnOneProtocolAndNoProfit() public {
         _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
         uint256 initialBalance = 1_000_000e6;
         deal(address(usdc), address(vault), initialBalance);
@@ -1823,11 +1823,20 @@ contract scUSDCv2Test is Test {
 
         vault.rebalance(callData);
 
-        vm.expectRevert(VaultNotUnderwater.selector);
+        assertEq(vault.getProfit(), 0, "profit");
+
+        uint256 totalBefore = vault.totalAssets();
+
         vault.exitAllPositions(0);
+
+        assertApproxEqRel(vault.usdcBalance(), totalBefore, 0.001e18, "vault usdc balance");
+        assertEq(weth.balanceOf(address(vault)), 0, "weth balance");
+        assertEq(vault.wethInvested(), 0, "weth invested");
+        assertEq(vault.totalCollateral(), 0, "total collateral");
+        assertEq(vault.totalDebt(), 0, "total debt");
     }
 
-    function test_exitAllPositions_RepaysDebtAndReleasesCollateralOnOneProtocol() public {
+    function test_exitAllPositions_RepaysDebtAndReleasesCollateralOnOneProtocolWhenUnderwater() public {
         _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
         uint256 initialBalance = 1_000_000e6;
         deal(address(usdc), address(vault), initialBalance);
@@ -1853,6 +1862,36 @@ contract scUSDCv2Test is Test {
         assertApproxEqRel(vault.usdcBalance(), totalBefore, 0.01e18, "vault usdc balance");
         assertEq(vault.totalCollateral(), 0, "vault collateral");
         assertEq(vault.totalDebt(), 0, "vault debt");
+        assertEq(weth.balanceOf(address(vault)), 0, "weth balance");
+        assertEq(vault.wethInvested(), 0, "weth invested");
+    }
+
+    function test_exitAllPositions_RepaysDebtAndReleasesCollateralOnOneProtocolWhenInProfit() public {
+        _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
+        uint256 initialBalance = 1_000_000e6;
+        deal(address(usdc), address(vault), initialBalance);
+
+        bytes[] memory callData = new  bytes[](2);
+        callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV2.id(), initialBalance);
+        callData[1] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV2.id(), 200 ether);
+
+        vault.rebalance(callData);
+
+        // simulate 50% profit
+        uint256 wethInvested = weth.balanceOf(address(wethVault));
+        deal(address(weth), address(wethVault), wethInvested.mulWadUp(1.5e18));
+
+        assertEq(vault.getProfit(), 100 ether, "profit");
+
+        uint256 totalBefore = vault.totalAssets();
+
+        vault.exitAllPositions(0);
+
+        assertApproxEqRel(vault.usdcBalance(), totalBefore, 0.005e18, "vault usdc balance");
+        assertEq(vault.totalCollateral(), 0, "vault collateral");
+        assertEq(vault.totalDebt(), 0, "vault debt");
+        assertEq(weth.balanceOf(address(vault)), 0, "weth balance");
+        assertEq(vault.wethInvested(), 0, "weth invested");
     }
 
     function test_exitAllPositions_RepaysDebtAndReleasesCollateralOnAllProtocols() public {
@@ -1904,10 +1943,6 @@ contract scUSDCv2Test is Test {
 
         vault.rebalance(callData);
 
-        // simulate 50% loss
-        uint256 wethInvested = weth.balanceOf(address(wethVault));
-        deal(address(weth), address(wethVault), wethInvested / 2);
-
         uint256 invested = vault.wethInvested();
         uint256 debt = vault.totalDebt();
         uint256 collateral = vault.totalCollateral();
@@ -1917,7 +1952,7 @@ contract scUSDCv2Test is Test {
         vault.exitAllPositions(0);
     }
 
-    function test_exitAllPositions_FailsIfEndBalanceIsLowerThanMin() public {
+    function test_exitAllPositions_FailsIfEndBalanceIsLowerThanMinWhenUnderwater() public {
         _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
         uint256 initialBalance = 1_000_000e6;
         deal(address(usdc), address(vault), initialBalance);
@@ -1931,6 +1966,27 @@ contract scUSDCv2Test is Test {
         // simulate 50% loss
         uint256 wethInvested = weth.balanceOf(address(wethVault));
         deal(address(weth), address(wethVault), wethInvested / 2);
+
+        uint256 invalidEndUsdcBalanceMin = vault.totalAssets().mulWadDown(1.05e18);
+
+        vm.expectRevert(EndUsdcBalanceTooLow.selector);
+        vault.exitAllPositions(invalidEndUsdcBalanceMin);
+    }
+
+    function test_exitAllPositions_FailsIfEndBalanceIsLowerThanMinWhenInProfit() public {
+        _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
+        uint256 initialBalance = 1_000_000e6;
+        deal(address(usdc), address(vault), initialBalance);
+
+        bytes[] memory callData = new  bytes[](2);
+        callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV2.id(), initialBalance);
+        callData[1] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV2.id(), 200 ether);
+
+        vault.rebalance(callData);
+
+        // simulate 50% profit on invested weth
+        uint256 wethInvested = weth.balanceOf(address(wethVault));
+        deal(address(weth), address(wethVault), wethInvested.mulWadUp(1.5e18));
 
         uint256 invalidEndUsdcBalanceMin = vault.totalAssets().mulWadDown(1.05e18);
 
