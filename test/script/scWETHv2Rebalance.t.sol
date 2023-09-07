@@ -43,17 +43,23 @@ contract scWETHv2RebalanceTest is Test {
         compoundV3Adapter = script.compoundV3Adapter();
     }
 
+    function _investAmount() internal view returns (uint256) {
+        return weth.balanceOf(address(vault)) - vault.minimumFloatAmount();
+    }
+
     function testScriptInvestsFloat() public {
         uint256 amount = 1.5 ether;
         vault.deposit{value: amount}(address(this));
 
-        uint256 investAmount = weth.balanceOf(address(vault)) - vault.minimumFloatAmount();
+        uint256 investAmount = _investAmount();
 
         bytes memory swapData =
             hex"6af479b2000000000000000000000000000000000000000000000000000000000000008000000000000000000000000000000000000000000000000023636b7d513f00000000000000000000000000000000000000000000000000001ecc3994a250ec080000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002bc02aaa39b223fe8d0a0e5c4f27ead9083c756cc20000647f39c581f595b53c5cb19bd0b3f8da6c935e2ca0000000000000000000000000000000000000000000869584cd000000000000000000000000588ebf90cce940403c2d3650519313ed5c414cc200000000000000000000000000000000da5461b1fad9fdc20d00ab71a0fb35b6";
         script.setDemoSwapData(swapData); // setting the demo swap data only for the test since the block number is set for the test but zeroEx api returns swapData for the most recent block
 
         script.run();
+
+        assertEq(vault.totalInvested(), investAmount, "totalInvested not updated");
 
         uint256 totalCollateral = script.priceConverter().wstEthToEth(vault.totalCollateral());
         uint256 totalDebt = vault.totalDebt();
@@ -175,6 +181,7 @@ contract scWETHv2RebalanceTest is Test {
         // invest first
         uint256 amount = 10 ether;
         vault.deposit{value: amount}(address(this));
+        uint256 investAmount = _investAmount();
         script.run();
 
         script = new scWETHv2RebalanceTestHarness(); // reset script state
@@ -190,6 +197,8 @@ contract scWETHv2RebalanceTest is Test {
         uint256 leverage = script.getLeverage();
 
         script.run();
+
+        assertEq(vault.totalInvested(), investAmount, "totalInvested must not change");
 
         assertApproxEqRel(
             script.getLtv(morphoAdapter), updatedMorphoTargetLtv, 0.005e18, "morpho ltv not updated after loss"
@@ -228,6 +237,7 @@ contract scWETHv2RebalanceTest is Test {
         // invest first
         uint256 amount = 10 ether;
         vault.deposit{value: amount}(address(this));
+        uint256 investAmount = _investAmount();
         script.run();
 
         script = new scWETHv2RebalanceTestHarness(); // reset script state
@@ -242,6 +252,8 @@ contract scWETHv2RebalanceTest is Test {
         uint256 assets = vault.totalAssets();
 
         script.run();
+
+        assertEq(vault.totalInvested(), investAmount, "totalInvested must not change");
 
         assertApproxEqRel(script.getLtv(morphoAdapter), updatedMorphoTargetLtv, 0.005e18, "morpho ltv not updated");
 
