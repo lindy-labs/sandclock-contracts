@@ -104,6 +104,7 @@ contract scWETHv2RebalanceTest is Test {
         vault.deposit{value: amount}(address(this));
 
         script.run();
+        script = new scWETHv2RebalanceTestHarness(); // reset script state
 
         uint256 altv = script.getLtv(morphoAdapter);
         uint256 compoundLtv = script.getLtv(compoundV3Adapter);
@@ -139,6 +140,7 @@ contract scWETHv2RebalanceTest is Test {
         script.setDemoSwapData(swapData); // setting the demo swap data only for the test since the block number is set for the test but zeroEx api returns swapData for the most recent block
 
         script.run();
+        script = new scWETHv2RebalanceTestHarness(); // reset state
 
         uint256 altv = script.getLtv(morphoAdapter);
         uint256 compoundLtv = script.getLtv(compoundV3Adapter);
@@ -174,6 +176,8 @@ contract scWETHv2RebalanceTest is Test {
         uint256 amount = 10 ether;
         vault.deposit{value: amount}(address(this));
         script.run();
+
+        script = new scWETHv2RebalanceTestHarness(); // reset script state
 
         uint256 updatedMorphoTargetLtv = script.MORPHO_TARGET_LTV() - 0.02e18;
         uint256 updatedCompoundV3TargetLtv = script.COMPOUNDV3_TARGET_LTV() - 0.02e18;
@@ -225,6 +229,8 @@ contract scWETHv2RebalanceTest is Test {
         uint256 amount = 10 ether;
         vault.deposit{value: amount}(address(this));
         script.run();
+
+        script = new scWETHv2RebalanceTestHarness(); // reset script state
 
         // simulate loss in morpho and profit in compound
         uint256 updatedMorphoTargetLtv = script.MORPHO_TARGET_LTV() - 0.02e18;
@@ -319,3 +325,6 @@ contract scWETHv2RebalanceTestHarness is scWETHv2Rebalance {
         AAVEV3_ALLOCATION_PERCENT = _percent;
     }
 }
+
+// test that the invest amount is updated correctly in all above tests
+// specially in a test where new deposit is added before a (disinvest + invest) & (all disinvests)
