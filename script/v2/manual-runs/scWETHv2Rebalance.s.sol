@@ -102,9 +102,9 @@ contract scWETHv2Rebalance is Script, scWETHv2Helper {
 
     //////////////////////////////// REBALANCE /////////////////////////////////////////////
 
-    IAdapter[] adaptersToInvest;
-    uint256[] allocationPercents;
-    IAdapter[] adaptersToDisinvest;
+    // IAdapter[] adaptersToInvest;
+    // uint256[] allocationPercents;
+    // IAdapter[] adaptersToDisinvest;
 
     mapping(IAdapter => uint256) public adapterAllocationPercent;
 
@@ -205,6 +205,7 @@ contract scWETHv2Rebalance is Script, scWETHv2Helper {
     }
 
     function _rebalance() internal {
+        _updateRebalanceParams();
         (bytes[] memory callData, uint256 totalFlashLoanAmount) = _getRebalanceCallData();
 
         if (totalFlashLoanAmount > minimumInvestAmount.mulWadDown(getLeverage())) {
@@ -220,7 +221,8 @@ contract scWETHv2Rebalance is Script, scWETHv2Helper {
         RebalanceDataParams memory data;
 
         bytes[] memory temp = new bytes[](n);
-        uint256 totalFlashLoanAmount;
+        uint256 investFlashLoanAmount;
+        uint256 disinvestFlashLoanAmount;
 
         bool thereIsAtleastOneInvest;
         bool thereIsAtleastOneDisinvest;
@@ -238,7 +240,16 @@ contract scWETHv2Rebalance is Script, scWETHv2Helper {
                     scWETHv2.supplyAndBorrow.selector, data.adapter.id(), supplyAmount, data.flashLoanAmount
                 );
 
+                // print the data in selector in readable format
+                console2.log(
+                    "supplyAndBorrow:, adapter: %s, supplyAmount: %s, borrowAmount: %s",
+                    data.adapter.id(),
+                    supplyAmount,
+                    data.flashLoanAmount
+                );
+
                 thereIsAtleastOneInvest = true;
+                investFlashLoanAmount += data.flashLoanAmount;
             } else {
                 uint256 withdrawAmount = priceConverter.ethToWstEth(data.flashLoanAmount);
 
@@ -246,12 +257,19 @@ contract scWETHv2Rebalance is Script, scWETHv2Helper {
                     scWETHv2.repayAndWithdraw.selector, data.adapter.id(), data.flashLoanAmount, withdrawAmount
                 );
 
+                // print the data in selector in readable format
+                console2.log(
+                    "repayAndWithdraw:, adapter: %s, repayAmount: %s, withdrawAmount: %s",
+                    data.adapter.id(),
+                    data.flashLoanAmount,
+                    withdrawAmount
+                );
+
                 thereIsAtleastOneDisinvest = true;
 
                 totalWstEthWithdrawn += withdrawAmount;
+                disinvestFlashLoanAmount += data.flashLoanAmount;
             }
-
-            totalFlashLoanAmount += data.flashLoanAmount;
         }
 
         if (thereIsAtleastOneInvest) n += 1;
@@ -259,8 +277,14 @@ contract scWETHv2Rebalance is Script, scWETHv2Helper {
 
         bytes[] memory callData = new bytes[](n);
 
+        // 3 scenarios here
+        // only invest (calldata length = number of protocols + 1)
+        // invest and disinvest (calldata length = number of protocols + 2)
+        // only disinvest (calldata length = number of protocols + 1)
+
         if (thereIsAtleastOneInvest) {
-            uint256 wethSwapAmount = totalFlashLoanAmount + _investAmount();
+            console2.log("setting invest calldata");
+            uint256 wethSwapAmount = investFlashLoanAmount + _investAmount();
             bytes memory swapData = getSwapData(wethSwapAmount, C.WETH, C.WSTETH);
 
             if (swapData.length > 0) {
@@ -273,7 +297,14 @@ contract scWETHv2Rebalance is Script, scWETHv2Helper {
         }
 
         for (uint256 i; i < temp.length; i++) {
-            callData[i + 1] = temp[i];
+            if (!thereIsAtleastOneInvest && thereIsAtleastOneDisinvest) {
+                console2.log("there are only disinvests");
+                // if there are only disinvests
+                callData[i] = temp[i];
+            } else {
+                // if there are both invests and disinvests or only invests
+                callData[i + 1] = temp[i];
+            }
         }
 
         if (thereIsAtleastOneDisinvest) {
@@ -282,8 +313,9 @@ contract scWETHv2Rebalance is Script, scWETHv2Helper {
 
             bytes memory swapData = getSwapData(swapAmount, C.WSTETH, C.WETH);
 
+            console2.log("setting disinvest calldata");
             if (swapData.length > 0) {
-                callData[n] = abi.encodeWithSelector(
+                callData[n - 1] = abi.encodeWithSelector(
                     BaseV2Vault.zeroExSwap.selector,
                     C.WSTETH,
                     C.WETH,
@@ -292,13 +324,13 @@ contract scWETHv2Rebalance is Script, scWETHv2Helper {
                     C.ONE - wstEthToWethSlippageTolerance
                 );
             } else {
-                callData[n] = abi.encodeWithSelector(
+                callData[n - 1] = abi.encodeWithSelector(
                     scWETHv2.swapWstEthToWeth.selector, type(uint256).max, C.ONE - wstEthToWethSlippageTolerance
                 );
             }
         }
 
-        return (callData, totalFlashLoanAmount);
+        return (callData, investFlashLoanAmount + disinvestFlashLoanAmount);
     }
 
     /// @notice returns the amount to flashloan for an adapter
