@@ -241,12 +241,12 @@ contract scWETHv2Rebalance is Script, scWETHv2Helper {
                 );
 
                 // print the data in selector in readable format
-                console2.log(
-                    "supplyAndBorrow:, adapter: %s, supplyAmount: %s, borrowAmount: %s",
-                    data.adapter.id(),
-                    supplyAmount,
-                    data.flashLoanAmount
-                );
+                // console2.log(
+                //     "supplyAndBorrow:, adapter: %s, supplyAmount: %s, borrowAmount: %s",
+                //     data.adapter.id(),
+                //     supplyAmount,
+                //     data.flashLoanAmount
+                // );
 
                 thereIsAtleastOneInvest = true;
                 investFlashLoanAmount += data.flashLoanAmount;
@@ -258,12 +258,12 @@ contract scWETHv2Rebalance is Script, scWETHv2Helper {
                 );
 
                 // print the data in selector in readable format
-                console2.log(
-                    "repayAndWithdraw:, adapter: %s, repayAmount: %s, withdrawAmount: %s",
-                    data.adapter.id(),
-                    data.flashLoanAmount,
-                    withdrawAmount
-                );
+                // console2.log(
+                //     "repayAndWithdraw:, adapter: %s, repayAmount: %s, withdrawAmount: %s",
+                //     data.adapter.id(),
+                //     data.flashLoanAmount,
+                //     withdrawAmount
+                // );
 
                 thereIsAtleastOneDisinvest = true;
 
@@ -283,7 +283,7 @@ contract scWETHv2Rebalance is Script, scWETHv2Helper {
         // only disinvest (calldata length = number of protocols + 1)
 
         if (thereIsAtleastOneInvest) {
-            console2.log("setting invest calldata");
+            // console2.log("setting invest calldata");
             uint256 wethSwapAmount = investFlashLoanAmount + _investAmount();
             bytes memory swapData = getSwapData(wethSwapAmount, C.WETH, C.WSTETH);
 
@@ -298,7 +298,7 @@ contract scWETHv2Rebalance is Script, scWETHv2Helper {
 
         for (uint256 i; i < temp.length; i++) {
             if (!thereIsAtleastOneInvest && thereIsAtleastOneDisinvest) {
-                console2.log("there are only disinvests");
+                // console2.log("there are only disinvests");
                 // if there are only disinvests
                 callData[i] = temp[i];
             } else {
@@ -313,7 +313,7 @@ contract scWETHv2Rebalance is Script, scWETHv2Helper {
 
             bytes memory swapData = getSwapData(swapAmount, C.WSTETH, C.WETH);
 
-            console2.log("setting disinvest calldata");
+            // console2.log("setting disinvest calldata");
             if (swapData.length > 0) {
                 callData[n - 1] = abi.encodeWithSelector(
                     BaseV2Vault.zeroExSwap.selector,
@@ -351,177 +351,6 @@ contract scWETHv2Rebalance is Script, scWETHv2Helper {
         // calculate the flashloan amount needed
         flashLoanAmount = (isSupplyBorrow ? target - debt : debt - target).divWadDown(C.ONE - targetLtv[_adapter]);
     }
-
-    // //////////////////////////////// INVEST /////////////////////////////////////////////
-
-    // /// @notice invest the float lying in the vault to morpho and compoundV3
-    // /// @dev also reinvests profits made,i.e increases the ltv
-    // /// @dev if there is no undelying float in the contract, run this method to just reinvest profits
-    // function _invest() internal {
-    //     uint256 float = weth.balanceOf(address(vault));
-    //     uint256 minimumFloat = vault.minimumFloatAmount();
-
-    //     // investAmount == 0 just reinvests profits
-    //     uint256 investAmount = float > minimumFloat ? float - minimumFloat : 0;
-
-    //     console2.log("\nInvesting %s weth", investAmount);
-
-    //     (bytes[] memory callData, uint256 totalFlashLoanAmount) = _getInvestParams(investAmount);
-
-    //     // invest or reinvest only if it the leveraged amount is greater than a certain threshold
-    //     // to save unecessary gas fees in small rebalances
-    //     if (totalFlashLoanAmount > minimumInvestAmount.mulWadDown(getLeverage())) {
-    //         console2.log("---- Running invest ----");
-    //         vault.rebalance(investAmount, totalFlashLoanAmount, callData);
-    //     }
-    // }
-
-    // // returns callData, totalFlashLoanAmount
-    // /// @notice Returns the required calldata for investing float or reinvesting profits given the adapters to invest to and their respective allocationPercent
-    // /// @dev : NOTE: ASSUMING ZERO BALANCER FLASH LOAN FEES
-    // function _getInvestParams(uint256 _amount) internal returns (bytes[] memory, uint256) {
-    //     uint256 stEthRateTolerance = 0.9995e18;
-    //     uint256 n = adaptersToInvest.length;
-
-    //     uint256[] memory flashLoanAmounts = new uint[](n);
-    //     uint256[] memory supplyAmounts = new uint[](n);
-
-    //     uint256 totalFlashLoanAmount;
-
-    //     for (uint256 i; i < n; i++) {
-    //         uint256 adapterInvestAmount = _amount.mulWadDown(allocationPercents[i]); // amount to be invested in this adapter
-    //         flashLoanAmounts[i] = _calcSupplyBorrowFlashLoanAmount(adaptersToInvest[i], adapterInvestAmount);
-    //         supplyAmounts[i] =
-    //             priceConverter.ethToWstEth(adapterInvestAmount + flashLoanAmounts[i]).mulWadDown(stEthRateTolerance);
-
-    //         totalFlashLoanAmount += flashLoanAmounts[i];
-    //     }
-
-    //     bytes[] memory callData = new bytes[](n+1);
-
-    //     uint256 wethSwapAmount = _amount + totalFlashLoanAmount;
-    //     bytes memory swapData = getSwapData(wethSwapAmount, C.WETH, C.WSTETH);
-
-    //     if (swapData.length > 0) {
-    //         callData[0] =
-    //             abi.encodeWithSelector(BaseV2Vault.zeroExSwap.selector, C.WETH, C.WSTETH, wethSwapAmount, swapData, 0);
-    //     } else {
-    //         callData[0] = abi.encodeWithSelector(scWETHv2.swapWethToWstEth.selector, wethSwapAmount);
-    //     }
-
-    //     for (uint256 i = 1; i < n + 1; i++) {
-    //         callData[i] = abi.encodeWithSelector(
-    //             scWETHv2.supplyAndBorrow.selector,
-    //             adaptersToInvest[i - 1].id(),
-    //             supplyAmounts[i - 1],
-    //             flashLoanAmounts[i - 1]
-    //         );
-    //     }
-
-    //     return (callData, totalFlashLoanAmount);
-    // }
-
-    // function _calcSupplyBorrowFlashLoanAmount(IAdapter _adapter, uint256 _amount)
-    //     internal
-    //     view
-    //     returns (uint256 flashLoanAmount)
-    // {
-    //     uint256 debt = vault.getDebt(_adapter.id());
-    //     uint256 collateral = getCollateralInWeth(_adapter);
-
-    //     uint256 target = targetLtv[_adapter].mulWadDown(_amount + collateral);
-
-    //     // calculate the flashloan amount needed
-    //     flashLoanAmount = (target - debt).divWadDown(C.ONE - targetLtv[_adapter]);
-    // }
-
-    // //////////////////////////////// DISINVEST /////////////////////////////////////////////
-
-    // function _updateAdaptersToDisinvest() internal {
-    //     // for disinvesting check through all the supported adapters everytime
-    //     IAdapter[3] memory allAdapters = [morphoAdapter, compoundV3Adapter, aaveV3Adapter];
-
-    //     for (uint256 i; i < allAdapters.length; i++) {
-    //         uint256 ltv = getLtv(allAdapters[i]);
-    //         if (ltv > targetLtv[allAdapters[i]] + disinvestThreshold) {
-    //             adaptersToDisinvest.push(allAdapters[i]);
-    //         }
-    //     }
-    // }
-
-    // /// @notice reduces the LTV in protocols where the strategy has overshoot the target ltv due to a loss
-    // function _disinvest() internal {
-    //     _updateAdaptersToDisinvest();
-
-    //     if (adaptersToDisinvest.length > 0) {
-    //         (bytes[] memory callData, uint256 totalFlashLoanAmount) = _getDisInvestParams();
-    //         console2.log("\n---- Running Disinvest ----\n");
-    //         vault.rebalance(0, totalFlashLoanAmount, callData);
-    //     }
-    // }
-
-    // function _getDisInvestParams() internal returns (bytes[] memory, uint256) {
-    //     uint256 n = adaptersToDisinvest.length;
-
-    //     uint256[] memory flashLoanAmounts = new uint[](n);
-    //     uint256 totalFlashLoanAmount;
-
-    //     for (uint256 i; i < n; i++) {
-    //         flashLoanAmounts[i] = _calcRepayWithdrawFlashLoanAmount(adaptersToDisinvest[i], 0);
-
-    //         totalFlashLoanAmount += flashLoanAmounts[i];
-    //     }
-
-    //     bytes[] memory callData = new bytes[](n+1);
-
-    //     uint256 totalWstEthWithdrawn;
-    //     for (uint256 i; i < n; i++) {
-    //         uint256 withdrawAmount = priceConverter.ethToWstEth(flashLoanAmounts[i]);
-    //         callData[i] = abi.encodeWithSelector(
-    //             scWETHv2.repayAndWithdraw.selector, adaptersToDisinvest[i].id(), flashLoanAmounts[i], withdrawAmount
-    //         );
-
-    //         totalWstEthWithdrawn += withdrawAmount;
-    //     }
-
-    //     // swap a little extra wstEth to take account of the amount lost in slippage during wstEth to weth swap
-    //     // since even 1 wei less in weth while paying back the flashloan will cause a revert
-    //     uint256 wstEthToWethSlippageTolerance = 0.001e18;
-    //     uint256 swapAmount = totalWstEthWithdrawn.mulWadDown(C.ONE + wstEthToWethSlippageTolerance);
-
-    //     bytes memory swapData = getSwapData(swapAmount, C.WSTETH, C.WETH);
-
-    //     if (swapData.length > 0) {
-    //         callData[n] = abi.encodeWithSelector(
-    //             BaseV2Vault.zeroExSwap.selector,
-    //             C.WSTETH,
-    //             C.WETH,
-    //             swapAmount,
-    //             swapData,
-    //             C.ONE - wstEthToWethSlippageTolerance
-    //         );
-    //     } else {
-    //         callData[n] = abi.encodeWithSelector(
-    //             scWETHv2.swapWstEthToWeth.selector, type(uint256).max, C.ONE - wstEthToWethSlippageTolerance
-    //         );
-    //     }
-
-    //     return (callData, totalFlashLoanAmount);
-    // }
-
-    // function _calcRepayWithdrawFlashLoanAmount(IAdapter adapter, uint256 amount)
-    //     internal
-    //     view
-    //     returns (uint256 flashLoanAmount)
-    // {
-    //     uint256 debt = vault.getDebt(adapter.id());
-    //     uint256 collateral = getCollateralInWeth(adapter);
-
-    //     uint256 target = targetLtv[adapter].mulWadDown(amount + collateral);
-
-    //     // calculate the flashloan amount needed
-    //     flashLoanAmount = (debt - target).divWadDown(C.ONE - targetLtv[adapter]);
-    // }
 
     //////////////////////////////// HELPERS /////////////////////////////////////////////
 
