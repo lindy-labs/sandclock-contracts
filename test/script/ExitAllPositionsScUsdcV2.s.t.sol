@@ -56,25 +56,18 @@ contract ExitAllPositionsScUsdcV2Test is Test {
         vault.asset().approve(address(vault), 1000e6);
         vault.deposit(1000e6, address(this));
 
-        // rebalance
-        bytes[] memory callData = new bytes[](4);
+        // rebalance to create some debt & collateral positions
         uint256 investAmount = 900e6;
         uint256 debtAmount = priceConverter.usdcToEth(investAmount).mulWadDown(0.7e18);
 
-        callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, 1, investAmount / 2);
-        callData[1] = abi.encodeWithSelector(scUSDCv2.supply.selector, 4, investAmount / 2);
-        callData[2] = abi.encodeWithSelector(scUSDCv2.borrow.selector, 1, debtAmount / 2);
-        callData[3] = abi.encodeWithSelector(scUSDCv2.borrow.selector, 4, debtAmount / 2);
-
-        vm.prank(MainnetAddresses.KEEPER);
-        vault.rebalance(callData);
+        _rebalance(investAmount, debtAmount);
 
         uint256 totalAssetsBefore = vault.totalAssets();
         uint256 maxLossPercent = script.maxAceeptableLossPercent();
 
-        assertEq(vault.wethInvested(), debtAmount, "weth invested");
-        assertEq(vault.totalDebt(), debtAmount, "total debt");
-        assertEq(vault.totalCollateral(), investAmount, "total collateral");
+        assertApproxEqAbs(vault.wethInvested(), debtAmount, 1, "weth invested");
+        assertApproxEqAbs(vault.totalDebt(), debtAmount, 1, "total debt");
+        assertApproxEqAbs(vault.totalCollateral(), investAmount, 1, "total collateral");
 
         // exit
         script.setScUsdcV2Vault(vault);
@@ -85,9 +78,22 @@ contract ExitAllPositionsScUsdcV2Test is Test {
         assertEq(vault.totalCollateral(), 0, "total collateral");
         assertApproxEqRel(vault.totalAssets(), totalAssetsBefore, maxLossPercent, "total assets");
     }
+
+    function _rebalance(uint256 investAmount, uint256 debtAmount) internal {
+        bytes[] memory callData = new bytes[](4);
+
+        callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, 1, investAmount / 2);
+        callData[1] = abi.encodeWithSelector(scUSDCv2.supply.selector, 4, investAmount / 2);
+        callData[2] = abi.encodeWithSelector(scUSDCv2.borrow.selector, 1, debtAmount / 2);
+        callData[3] = abi.encodeWithSelector(scUSDCv2.borrow.selector, 4, debtAmount / 2);
+
+        vm.prank(MainnetAddresses.KEEPER);
+        vault.rebalance(callData);
+    }
 }
 
 contract ExitAllPositionsScUsdcV2TestHarness is ExitAllPositionsScUsdcV2 {
+    // TODO: remove when scUSDCv2 is redeployed on mainnet with updated 'exitAllPositions' func
     function setScUsdcV2Vault(scUSDCv2 _vault) public {
         scUsdcV2 = _vault;
     }

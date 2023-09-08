@@ -7,6 +7,7 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 import {WETH} from "solmate/tokens/WETH.sol";
 import {AccessControl} from "openzeppelin-contracts/access/AccessControl.sol";
 
+import {MainnetAddresses} from "./MainnetAddresses.sol";
 import {Constants as C} from "../../src/lib/Constants.sol";
 import {ISwapRouter} from "../../src/interfaces/uniswap/ISwapRouter.sol";
 import {sc4626} from "../../src/sc4626.sol";
@@ -15,9 +16,9 @@ import {sc4626} from "../../src/sc4626.sol";
  * Mainnet base deployment file that handles deployment.
  */
 abstract contract MainnetDeployBase is CREATE3Script {
-    uint256 deployerPrivateKey = uint256(vm.envBytes32("PRIVATE_KEY"));
-    address deployerAddress = vm.addr(deployerPrivateKey);
-    address keeper = vm.envAddress("KEEPER");
+    uint256 deployerPrivateKey = uint256(vm.envOr("PRIVATE_KEY", bytes32(0x0)));
+    address deployerAddress = deployerPrivateKey != 0 ? vm.addr(deployerPrivateKey) : address(this);
+    address keeper = vm.envOr("KEEPER", MainnetAddresses.KEEPER);
 
     WETH weth = WETH(payable(C.WETH));
     ERC20 usdc = ERC20(C.USDC);
