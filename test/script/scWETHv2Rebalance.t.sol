@@ -31,6 +31,7 @@ contract scWETHv2RebalanceTest is Test {
 
     IAdapter morphoAdapter;
     IAdapter compoundV3Adapter;
+    IAdapter aaveV3Adapter;
 
     function setUp() public {
         vm.createFork(vm.envString("RPC_URL_MAINNET"));
@@ -41,10 +42,7 @@ contract scWETHv2RebalanceTest is Test {
 
         morphoAdapter = script.morphoAdapter();
         compoundV3Adapter = script.compoundV3Adapter();
-    }
-
-    function _investAmount() internal view returns (uint256) {
-        return weth.balanceOf(address(vault)) - vault.minimumFloatAmount();
+        aaveV3Adapter = script.aaveV3Adapter();
     }
 
     function testScriptInvestsFloat() public {
@@ -83,19 +81,7 @@ contract scWETHv2RebalanceTest is Test {
             "compound allocation not correct"
         );
 
-        assertApproxEqRel(
-            script.allocationPercent(morphoAdapter),
-            script.MORPHO_ALLOCATION_PERCENT(),
-            0.005e18,
-            "morpho allocationPercent not correct"
-        );
-
-        assertApproxEqRel(
-            script.allocationPercent(compoundV3Adapter),
-            script.COMPOUNDV3_ALLOCATION_PERCENT(),
-            0.005e18,
-            "compound allocationPercent not correct"
-        );
+        _assertAllocations(script.MORPHO_ALLOCATION_PERCENT(), script.COMPOUNDV3_ALLOCATION_PERCENT(), 0);
 
         assertApproxEqRel(
             script.getLtv(morphoAdapter), script.targetLtv(morphoAdapter), 0.005e18, "morpho ltv not correct"
@@ -128,10 +114,7 @@ contract scWETHv2RebalanceTest is Test {
 
         script.run();
 
-        assertApproxEqRel(altv, script.getLtv(morphoAdapter), 0.0015e18, "morpho ltvs not reset after reinvest");
-        assertApproxEqRel(
-            compoundLtv, script.getLtv(compoundV3Adapter), 0.0015e18, "compound ltvs not reset after reinvest"
-        );
+        _assertLtvs(altv, compoundLtv, 0);
         assertApproxEqRel(ltv, script.getLtv(), 0.005e18, "net ltv not reset after reinvest");
 
         assertEq(weth.balanceOf(address(vault)), vault.minimumFloatAmount(), "float not invested");
@@ -155,6 +138,7 @@ contract scWETHv2RebalanceTest is Test {
         _simulate_stEthStakingInterest(365 days, 1.071e18);
 
         assertLt(script.getLtv(), ltv, "ltv must decrease after simulated profits");
+
         assertLt(script.getLtv(morphoAdapter), altv, "morpho ltv must decrease after simulated profits");
 
         assertLt(script.getLtv(compoundV3Adapter), compoundLtv, "compound ltv must decrease after simulated profits");
@@ -168,10 +152,8 @@ contract scWETHv2RebalanceTest is Test {
 
         script.run();
 
-        assertApproxEqRel(altv, script.getLtv(morphoAdapter), 0.0015e18, "morpho ltvs not reset after reinvest");
-        assertApproxEqRel(
-            compoundLtv, script.getLtv(compoundV3Adapter), 0.0015e18, "compound ltvs not reset after reinvest"
-        );
+        _assertLtvs(altv, compoundLtv, 0);
+
         assertApproxEqRel(ltv, script.getLtv(), 0.005e18, "net ltv not reset after reinvest");
 
         // assertEq(weth.balanceOf(address(vault)), vault.minimumFloatAmount(), "float not invested");
@@ -200,37 +182,14 @@ contract scWETHv2RebalanceTest is Test {
 
         assertEq(vault.totalInvested(), investAmount, "totalInvested must not change");
 
-        assertApproxEqRel(
-            script.getLtv(morphoAdapter), updatedMorphoTargetLtv, 0.005e18, "morpho ltv not updated after loss"
-        );
-
-        assertApproxEqRel(
-            script.getLtv(compoundV3Adapter),
-            updatedCompoundV3TargetLtv,
-            0.005e18,
-            "compound ltv not updated after loss"
-        );
-
         assertLt(
             weth.balanceOf(address(vault)), vault.minimumFloatAmount().mulWadDown(1.01e18), "weth dust after disinvest"
         );
         assertApproxEqRel(vault.totalAssets(), assets, 0.001e18, "disinvest must not change total assets");
         assertGe(leverage, script.getLeverage(), "leverage not increased after disinvest");
 
-        // assert allocations must not change
-        assertApproxEqRel(
-            script.allocationPercent(morphoAdapter),
-            script.MORPHO_ALLOCATION_PERCENT(),
-            0.005e18,
-            "morpho allocationPercent not correct"
-        );
-
-        assertApproxEqRel(
-            script.allocationPercent(compoundV3Adapter),
-            script.COMPOUNDV3_ALLOCATION_PERCENT(),
-            0.005e18,
-            "compound allocationPercent not correct"
-        );
+        _assertLtvs(updatedMorphoTargetLtv, updatedCompoundV3TargetLtv, 0);
+        _assertAllocations(script.MORPHO_ALLOCATION_PERCENT(), script.COMPOUNDV3_ALLOCATION_PERCENT(), 0);
     }
 
     function testScriptDisinvestsAndInvests() public {
@@ -255,31 +214,207 @@ contract scWETHv2RebalanceTest is Test {
 
         assertEq(vault.totalInvested(), investAmount, "totalInvested must not change");
 
-        assertApproxEqRel(script.getLtv(morphoAdapter), updatedMorphoTargetLtv, 0.005e18, "morpho ltv not updated");
-
-        assertApproxEqRel(
-            script.getLtv(compoundV3Adapter), updatedCompoundV3TargetLtv, 0.005e18, "compound ltv not updated"
-        );
-
         assertApproxEqRel(vault.totalAssets(), assets, 0.001e18, "must not change total assets");
 
-        // assert allocations must not change
-        assertApproxEqRel(
-            script.allocationPercent(morphoAdapter),
-            script.MORPHO_ALLOCATION_PERCENT(),
-            0.005e18,
-            "morpho allocationPercent not correct"
-        );
+        _assertLtvs(updatedMorphoTargetLtv, updatedCompoundV3TargetLtv, 0);
 
-        assertApproxEqRel(
-            script.allocationPercent(compoundV3Adapter),
-            script.COMPOUNDV3_ALLOCATION_PERCENT(),
-            0.005e18,
-            "compound allocationPercent not correct"
+        _assertAllocations(
+            script.adapterAllocationPercent(morphoAdapter), script.adapterAllocationPercent(compoundV3Adapter), 0
         );
     }
 
+    function testScriptInvestsInThreeAndDisinvestInTwo() public {
+        uint256 amount = 10 ether;
+        vault.deposit{value: amount}(address(this));
+
+        uint256 investAmount = _investAmount();
+
+        uint256 morphoAllocation = 0.2e18;
+        uint256 compoundV3Allocation = 0.5e18;
+        uint256 aaveV3Allocation = 0.3e18;
+
+        // change allocation percents
+        script.updateMorphoAllocationPercent(morphoAllocation);
+        script.updateCompoundV3AllocationPercent(compoundV3Allocation);
+        script.updateAaveV3AllocationPercent(aaveV3Allocation);
+
+        script.run();
+
+        _assertAllocations(morphoAllocation, compoundV3Allocation, aaveV3Allocation);
+        _assertLtvs(0.8e18, 0.8e18, 0.8e18);
+
+        script = new scWETHv2RebalanceTestHarness(); // reset script state
+
+        // change allocation percents
+        script.updateMorphoAllocationPercent(morphoAllocation);
+        script.updateCompoundV3AllocationPercent(compoundV3Allocation);
+        script.updateAaveV3AllocationPercent(aaveV3Allocation);
+
+        // simulate loss in compound and profit in aave and morpho
+        uint256 updatedCompoundV3TargetLtv = script.COMPOUNDV3_TARGET_LTV() - 0.02e18;
+        uint256 updatedMorphoTargetLtv = script.MORPHO_TARGET_LTV() + 0.02e18;
+        uint256 updatedAaveV3TargetLtv = script.AAVEV3_TARGET_LTV() + 0.02e18;
+
+        script.updateMorphoTargetLtv(updatedMorphoTargetLtv);
+        script.updateCompoundV3TargetLtv(updatedCompoundV3TargetLtv);
+        script.updateAaveV3TargetLtv(updatedAaveV3TargetLtv);
+
+        uint256 assets = vault.totalAssets();
+
+        assertEq(vault.totalInvested(), investAmount, "totalInvested must not change");
+
+        // the script must disinvest in compound and reinvest in aave and morpho
+        script.run();
+
+        assertApproxEqRel(vault.totalAssets(), assets, 0.001e18, "must not change total assets");
+
+        _assertLtvs(updatedMorphoTargetLtv, updatedCompoundV3TargetLtv, updatedAaveV3TargetLtv);
+
+        _assertAllocations(morphoAllocation, compoundV3Allocation, aaveV3Allocation);
+    }
+
+    function testScriptInvestDepositDisinvest() public {
+        uint256 amount = 10 ether;
+        vault.deposit{value: amount}(address(this));
+        uint256 investAmount = _investAmount();
+        script.run();
+
+        vault.deposit{value: amount}(address(this));
+        investAmount += amount;
+        uint256 assets = vault.totalAssets();
+
+        script = new scWETHv2RebalanceTestHarness(); // reset script state
+
+        uint256 updatedMorphoTargetLtv = script.MORPHO_TARGET_LTV() - 0.02e18;
+        uint256 updatedCompoundV3TargetLtv = script.COMPOUNDV3_TARGET_LTV() - 0.02e18;
+
+        // now decrease target ltvs to simulate loss
+        script.updateMorphoTargetLtv(updatedMorphoTargetLtv);
+        script.updateCompoundV3TargetLtv(updatedCompoundV3TargetLtv);
+
+        script.run();
+
+        assertEq(vault.totalInvested(), investAmount, "totalInvested must not change");
+
+        assertApproxEqRel(vault.totalAssets(), assets, 0.0015e18, "must not change total assets");
+
+        _assertLtvs(updatedMorphoTargetLtv, updatedCompoundV3TargetLtv, 0);
+        _assertAllocations(
+            script.adapterAllocationPercent(morphoAdapter), script.adapterAllocationPercent(compoundV3Adapter), 0
+        );
+    }
+
+    function testDisinvestsEvenIfProtocolIsNotInNextInvest() public {
+        // invest in aaveV3 and compound
+        // but then increase up aaveV3 allocation to 100% so we only invest in aaveV3 after that.
+        // now simulate loss in aaveV3
+        // assert that the script disinvests in aaveV3 even though aaveV3 has zero allocation for next invest
+        uint256 amount = 10 ether;
+        vault.deposit{value: amount}(address(this));
+
+        uint256 investAmount = _investAmount();
+
+        uint256 compoundV3Allocation = 0.5e18;
+        uint256 aaveV3Allocation = 0.5e18;
+
+        // change allocation percents
+        script.updateMorphoAllocationPercent(0);
+        script.updateCompoundV3AllocationPercent(compoundV3Allocation);
+        script.updateAaveV3AllocationPercent(aaveV3Allocation);
+
+        script.run();
+
+        _assertAllocations(0, compoundV3Allocation, aaveV3Allocation);
+        _assertLtvs(0, 0.8e18, 0.8e18);
+
+        script = new scWETHv2RebalanceTestHarness(); // reset script state
+
+        // change allocation percents
+        script.updateCompoundV3AllocationPercent(100e18);
+        script.updateAaveV3AllocationPercent(0);
+        script.updateMorphoAllocationPercent(0);
+
+        // simulate loss in  aave
+        uint256 updatedAaveV3TargetLtv = script.AAVEV3_TARGET_LTV() - 0.02e18;
+
+        script.updateAaveV3TargetLtv(updatedAaveV3TargetLtv);
+
+        uint256 assets = vault.totalAssets();
+
+        // the script must disinvest in compound and reinvest in aave and morpho
+        script.run();
+
+        assertEq(vault.totalInvested(), investAmount, "totalInvested must not change");
+
+        assertApproxEqRel(vault.totalAssets(), assets, 0.001e18, "must not change total assets");
+
+        _assertLtvs(0, script.COMPOUNDV3_TARGET_LTV(), updatedAaveV3TargetLtv);
+
+        _assertAllocations(0, compoundV3Allocation, aaveV3Allocation);
+    }
+
+    function testDisinvestOnlyIfDisinvestThresholdIsCrossed() public {
+        // invest first
+        uint256 amount = 10 ether;
+        vault.deposit{value: amount}(address(this));
+        script.run();
+
+        uint256 morphoLtv = script.getLtv(morphoAdapter);
+
+        script = new scWETHv2RebalanceTestHarness(); // reset script state
+
+        // simulate loss in morpho but not crossing disinvest threshold
+        uint256 updatedMorphoTargetLtv = morphoLtv - script.disinvestThreshold();
+
+        script.updateMorphoTargetLtv(updatedMorphoTargetLtv);
+
+        script.run();
+
+        // ltv must remain same
+        assertEq(script.getLtv(morphoAdapter), morphoLtv, "MORPHO LTV must remain same");
+    }
+
     //////////////////////////////////// INTERNAL METHODS ///////////////////////////////////////
+
+    function _investAmount() internal view returns (uint256) {
+        return weth.balanceOf(address(vault)) - vault.minimumFloatAmount();
+    }
+
+    function _assertLtvs(uint256 _morphoLtv, uint256 _compoundLtv, uint256 _aaveLtv) internal {
+        assertApproxEqRel(script.getLtv(morphoAdapter), _morphoLtv, 0.005e18, "morpho ltv not correct");
+        assertApproxEqRel(script.getLtv(compoundV3Adapter), _compoundLtv, 0.005e18, "compound ltv not correct");
+        assertApproxEqRel(script.getLtv(aaveV3Adapter), _aaveLtv, 0.005e18, "aave ltv not correct");
+    }
+
+    function _assertAllocations(uint256 _morphoAllocation, uint256 _compoundAllocation, uint256 _aaveAllocation)
+        internal
+    {
+        // assert allocations must not change
+
+        if (_morphoAllocation > 0) {
+            assertApproxEqRel(
+                script.allocationPercent(morphoAdapter),
+                _morphoAllocation,
+                0.005e18,
+                "morpho allocationPercent not correct"
+            );
+        }
+
+        if (_compoundAllocation > 0) {
+            assertApproxEqRel(
+                script.allocationPercent(compoundV3Adapter),
+                _compoundAllocation,
+                0.005e18,
+                "compound allocationPercent not correct"
+            );
+        }
+
+        if (_aaveAllocation > 0) {
+            assertApproxEqRel(
+                script.allocationPercent(aaveV3Adapter), _aaveAllocation, 0.005e18, "aave allocationPercent not correct"
+            );
+        }
+    }
 
     function _simulate_stEthStakingInterest(uint256 timePeriod, uint256 stEthStakingInterest) internal {
         // fast forward time to simulate supply and borrow interests
@@ -326,15 +461,15 @@ contract scWETHv2RebalanceTestHarness is scWETHv2Rebalance {
     }
 
     function updateMorphoAllocationPercent(uint256 _percent) external {
-        MORPHO_ALLOCATION_PERCENT = _percent;
+        adapterAllocationPercent[morphoAdapter] = _percent;
     }
 
     function updateCompoundV3AllocationPercent(uint256 _percent) external {
-        COMPOUNDV3_ALLOCATION_PERCENT = _percent;
+        adapterAllocationPercent[compoundV3Adapter] = _percent;
     }
 
     function updateAaveV3AllocationPercent(uint256 _percent) external {
-        AAVEV3_ALLOCATION_PERCENT = _percent;
+        adapterAllocationPercent[aaveV3Adapter] = _percent;
     }
 }
 
