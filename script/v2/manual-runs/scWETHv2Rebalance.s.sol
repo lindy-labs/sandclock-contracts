@@ -51,6 +51,13 @@ contract scWETHv2Rebalance is Script, scWETHv2Helper {
     using Strings for *;
     using stdJson for string;
 
+    struct RebalanceDataParams {
+        IAdapter adapter;
+        uint256 amount;
+        uint256 flashLoanAmount;
+        bool isSupplyBorrow;
+    }
+
     ////////////////////////// BUTTONS ///////////////////////////////
     uint256 public MORPHO_ALLOCATION_PERCENT = 0.4e18;
     uint256 public MORPHO_TARGET_LTV = 0.8e18;
@@ -79,6 +86,10 @@ contract scWETHv2Rebalance is Script, scWETHv2Helper {
 
     mapping(IAdapter => uint256) public targetLtv;
 
+    RebalanceDataParams[] rebalanceDataParams;
+    bytes[] private callDataStorage;
+    mapping(IAdapter => uint256) public adapterAllocationPercent;
+
     constructor() scWETHv2Helper(scWETHv2(payable(MA.SCWETHV2)), PriceConverter(MA.PRICE_CONVERTER)) {
         _initializeAdapters();
     }
@@ -88,11 +99,6 @@ contract scWETHv2Rebalance is Script, scWETHv2Helper {
 
         vm.startBroadcast(keeper);
 
-        // disinvest if the ltv has overshoot from target on any protocol
-        // _disinvest();
-
-        // _invest();
-
         _rebalance();
 
         // _logs();
@@ -101,12 +107,6 @@ contract scWETHv2Rebalance is Script, scWETHv2Helper {
     }
 
     //////////////////////////////// REBALANCE /////////////////////////////////////////////
-
-    // IAdapter[] adaptersToInvest;
-    // uint256[] allocationPercents;
-    // IAdapter[] adaptersToDisinvest;
-
-    mapping(IAdapter => uint256) public adapterAllocationPercent;
 
     function _initializeAdapters() internal {
         uint256 totalAllocationPercent;
@@ -125,45 +125,6 @@ contract scWETHv2Rebalance is Script, scWETHv2Helper {
 
         require(totalAllocationPercent == 1e18, "totalAllocationPercent != 100%");
     }
-
-    // function _initializeAdapters() internal {
-    //     uint256 totalAllocationPercent;
-
-    //     if (MORPHO_ALLOCATION_PERCENT > 0) {
-    //         adaptersToInvest.push(morphoAdapter);
-    //         allocationPercents.push(MORPHO_ALLOCATION_PERCENT);
-    //         targetLtv[morphoAdapter] = MORPHO_TARGET_LTV;
-
-    //         totalAllocationPercent += MORPHO_ALLOCATION_PERCENT;
-    //     }
-
-    //     if (AAVEV3_ALLOCATION_PERCENT > 0) {
-    //         adaptersToInvest.push(aaveV3Adapter);
-    //         allocationPercents.push(AAVEV3_ALLOCATION_PERCENT);
-    //         targetLtv[aaveV3Adapter] = AAVEV3_TARGET_LTV;
-
-    //         totalAllocationPercent += AAVEV3_ALLOCATION_PERCENT;
-    //     }
-
-    //     if (COMPOUNDV3_ALLOCATION_PERCENT > 0) {
-    //         adaptersToInvest.push(compoundV3Adapter);
-    //         allocationPercents.push(COMPOUNDV3_ALLOCATION_PERCENT);
-    //         targetLtv[compoundV3Adapter] = COMPOUNDV3_TARGET_LTV;
-
-    //         totalAllocationPercent += COMPOUNDV3_ALLOCATION_PERCENT;
-    //     }
-
-    //     require(totalAllocationPercent == 1e18, "totalAllocationPercent != 100%");
-    // }
-
-    struct RebalanceDataParams {
-        IAdapter adapter;
-        uint256 amount;
-        uint256 flashLoanAmount;
-        bool isSupplyBorrow;
-    }
-
-    RebalanceDataParams[] rebalanceDataParams;
 
     function _investAmount() internal view returns (uint256 investAmount) {
         uint256 float = weth.balanceOf(address(vault));
@@ -272,11 +233,6 @@ contract scWETHv2Rebalance is Script, scWETHv2Helper {
             }
         }
 
-        if (thereIsAtleastOneInvest) n += 1;
-        if (thereIsAtleastOneDisinvest) n += 1;
-
-        bytes[] memory callData = new bytes[](n);
-
         // 3 scenarios here
         // only invest (calldata length = number of protocols + 1)
         // invest and disinvest (calldata length = number of protocols + 2)
@@ -288,23 +244,18 @@ contract scWETHv2Rebalance is Script, scWETHv2Helper {
             bytes memory swapData = getSwapData(wethSwapAmount, C.WETH, C.WSTETH);
 
             if (swapData.length > 0) {
-                callData[0] = abi.encodeWithSelector(
-                    BaseV2Vault.zeroExSwap.selector, C.WETH, C.WSTETH, wethSwapAmount, swapData, 0
+                callDataStorage.push(
+                    abi.encodeWithSelector(
+                        BaseV2Vault.zeroExSwap.selector, C.WETH, C.WSTETH, wethSwapAmount, swapData, 0
+                    )
                 );
             } else {
-                callData[0] = abi.encodeWithSelector(scWETHv2.swapWethToWstEth.selector, wethSwapAmount);
+                callDataStorage.push(abi.encodeWithSelector(scWETHv2.swapWethToWstEth.selector, wethSwapAmount));
             }
         }
 
         for (uint256 i; i < temp.length; i++) {
-            if (!thereIsAtleastOneInvest && thereIsAtleastOneDisinvest) {
-                // console2.log("there are only disinvests");
-                // if there are only disinvests
-                callData[i] = temp[i];
-            } else {
-                // if there are both invests and disinvests or only invests
-                callData[i + 1] = temp[i];
-            }
+            callDataStorage.push(temp[i]);
         }
 
         if (thereIsAtleastOneDisinvest) {
@@ -315,22 +266,26 @@ contract scWETHv2Rebalance is Script, scWETHv2Helper {
 
             // console2.log("setting disinvest calldata");
             if (swapData.length > 0) {
-                callData[n - 1] = abi.encodeWithSelector(
-                    BaseV2Vault.zeroExSwap.selector,
-                    C.WSTETH,
-                    C.WETH,
-                    swapAmount,
-                    swapData,
-                    C.ONE - wstEthToWethSlippageTolerance
+                callDataStorage.push(
+                    abi.encodeWithSelector(
+                        BaseV2Vault.zeroExSwap.selector,
+                        C.WSTETH,
+                        C.WETH,
+                        swapAmount,
+                        swapData,
+                        C.ONE - wstEthToWethSlippageTolerance
+                    )
                 );
             } else {
-                callData[n - 1] = abi.encodeWithSelector(
-                    scWETHv2.swapWstEthToWeth.selector, type(uint256).max, C.ONE - wstEthToWethSlippageTolerance
+                callDataStorage.push(
+                    abi.encodeWithSelector(
+                        scWETHv2.swapWstEthToWeth.selector, type(uint256).max, C.ONE - wstEthToWethSlippageTolerance
+                    )
                 );
             }
         }
 
-        return (callData, investFlashLoanAmount + disinvestFlashLoanAmount);
+        return (callDataStorage, investFlashLoanAmount + disinvestFlashLoanAmount);
     }
 
     /// @notice returns the amount to flashloan for an adapter
