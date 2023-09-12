@@ -64,8 +64,7 @@ contract scWETHv2ExitAllPositions is Script, scWETHv2Helper {
             vault.withdrawToVault(collateralInWeth - debt);
         }
 
-        // using zeroExSwap and call data
-        // rebalance method
+        // todo: using zeroExSwap and call data, rebalance method
     }
 
     function _logs(string memory _msg) internal view {
