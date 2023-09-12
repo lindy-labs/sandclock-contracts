@@ -15,7 +15,7 @@ import {Address} from "openzeppelin-contracts/utils/Address.sol";
 import {WETH} from "solmate/tokens/WETH.sol";
 
 import {Constants as C} from "../../src/lib/Constants.sol";
-import {scWETHv2Rebalance} from "../../script/v2/manual-runs/scWETHv2Rebalance.s.sol";
+import {scWETHv2Rebalance} from "../../script/v2/keeper-actions/scWETHv2Rebalance.s.sol";
 import {scWETHv2} from "../../src/steth/scWETHv2.sol";
 import {IAdapter} from "../../src/steth/IAdapter.sol";
 
