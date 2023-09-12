@@ -150,6 +150,8 @@ contract scWETHv2Rebalance is Script, scWETHv2Helper {
             adapter = allAdapters[i];
             allocationPercent = adapterAllocationPercent[adapter];
 
+            require(vault.isSupported(adapter.id()), "Adapter not supported");
+
             if (allocationPercent != 0) {
                 amount = investAmount.mulWadDown(allocationPercent);
                 // first check if allocation Percent is greater than zero
