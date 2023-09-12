@@ -100,13 +100,11 @@ contract scWETHv2Rebalance is Script, scWETHv2Helper {
     function run() external {
         address keeper = keeperPrivateKey != 0 ? vm.addr(keeperPrivateKey) : MA.KEEPER;
 
-        _logs("-----------Before Rebalance----------------\n");
-
         vm.startBroadcast(keeper);
 
         _rebalance();
 
-        _logs("------------After Rebalance------------------\n");
+        // _logs();
 
         vm.stopBroadcast();
     }
@@ -177,7 +175,7 @@ contract scWETHv2Rebalance is Script, scWETHv2Helper {
         (bytes[] memory callData, uint256 totalFlashLoanAmount) = _getRebalanceCallData();
 
         if (totalFlashLoanAmount > minimumInvestAmount.mulWadDown(getLeverage())) {
-            console2.log("---- Running Rebalance ----\n");
+            console2.log("---- Running Rebalance ----");
             vault.rebalance(_investAmount(), totalFlashLoanAmount, callData);
         }
     }
@@ -207,12 +205,13 @@ contract scWETHv2Rebalance is Script, scWETHv2Helper {
                     scWETHv2.supplyAndBorrow.selector, data.adapter.id(), supplyAmount, data.flashLoanAmount
                 );
 
-                console2.log(
-                    "supplyAndBorrow:, adapter: %s, supplyAmount: %s, borrowAmount: %s",
-                    data.adapter.id(),
-                    supplyAmount,
-                    data.flashLoanAmount
-                );
+                // print the data in selector in readable format
+                // console2.log(
+                //     "supplyAndBorrow:, adapter: %s, supplyAmount: %s, borrowAmount: %s",
+                //     data.adapter.id(),
+                //     supplyAmount,
+                //     data.flashLoanAmount
+                // );
 
                 thereIsAtleastOneInvest = true;
                 investFlashLoanAmount += data.flashLoanAmount;
@@ -223,12 +222,13 @@ contract scWETHv2Rebalance is Script, scWETHv2Helper {
                     scWETHv2.repayAndWithdraw.selector, data.adapter.id(), data.flashLoanAmount, withdrawAmount
                 );
 
-                console2.log(
-                    "repayAndWithdraw:, adapter: %s, repayAmount: %s, withdrawAmount: %s",
-                    data.adapter.id(),
-                    data.flashLoanAmount,
-                    withdrawAmount
-                );
+                // print the data in selector in readable format
+                // console2.log(
+                //     "repayAndWithdraw:, adapter: %s, repayAmount: %s, withdrawAmount: %s",
+                //     data.adapter.id(),
+                //     data.flashLoanAmount,
+                //     withdrawAmount
+                // );
 
                 thereIsAtleastOneDisinvest = true;
 
@@ -253,18 +253,8 @@ contract scWETHv2Rebalance is Script, scWETHv2Helper {
                         BaseV2Vault.zeroExSwap.selector, C.WETH, C.WSTETH, wethSwapAmount, swapData, 0
                     )
                 );
-
-                console2.log(
-                    "zeroExSwap:, fromToken: %s, toToken: %s, amount: %s, swapData: %s",
-                    C.WETH,
-                    C.WSTETH,
-                    wethSwapAmount,
-                    swapData
-                );
             } else {
                 callDataStorage.push(abi.encodeWithSelector(scWETHv2.swapWethToWstEth.selector, wethSwapAmount));
-
-                console2.log("swapWethToWstEth:, amount: %s", wethSwapAmount);
             }
         }
 
@@ -290,22 +280,12 @@ contract scWETHv2Rebalance is Script, scWETHv2Helper {
                         C.ONE - wstEthToWethSlippageTolerance
                     )
                 );
-
-                console2.log(
-                    "zeroExSwap:, fromToken: %s, toToken: %s, amount: %s, swapData: %s",
-                    C.WSTETH,
-                    C.WETH,
-                    swapAmount,
-                    swapData
-                );
             } else {
                 callDataStorage.push(
                     abi.encodeWithSelector(
                         scWETHv2.swapWstEthToWeth.selector, type(uint256).max, C.ONE - wstEthToWethSlippageTolerance
                     )
                 );
-
-                console2.log("swapWstEthToWeth:, amount: %s", swapAmount);
             }
         }
 
@@ -357,9 +337,7 @@ contract scWETHv2Rebalance is Script, scWETHv2Helper {
         }
     }
 
-    function _logs(string memory msg) internal view {
-        console2.log(msg);
-
+    function _logs() internal view {
         uint256 collateralInWeth = priceConverter.wstEthToEth(vault.totalCollateral());
         uint256 debt = vault.totalDebt();
         console2.log("\n Total Collateral %s weth", collateralInWeth);
