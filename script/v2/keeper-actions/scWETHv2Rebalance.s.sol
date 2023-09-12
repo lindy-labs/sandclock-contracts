@@ -100,11 +100,13 @@ contract scWETHv2Rebalance is Script, scWETHv2Helper {
     function run() external {
         address keeper = keeperPrivateKey != 0 ? vm.addr(keeperPrivateKey) : MA.KEEPER;
 
+        _logs("-------------------BEFORE REBALANCE-------------------");
+
         vm.startBroadcast(keeper);
 
         _rebalance();
 
-        // _logs();
+        _logs("-------------------AFTER REBALANCE-------------------");
 
         vm.stopBroadcast();
     }
@@ -205,14 +207,6 @@ contract scWETHv2Rebalance is Script, scWETHv2Helper {
                     scWETHv2.supplyAndBorrow.selector, data.adapter.id(), supplyAmount, data.flashLoanAmount
                 );
 
-                // print the data in selector in readable format
-                // console2.log(
-                //     "supplyAndBorrow:, adapter: %s, supplyAmount: %s, borrowAmount: %s",
-                //     data.adapter.id(),
-                //     supplyAmount,
-                //     data.flashLoanAmount
-                // );
-
                 thereIsAtleastOneInvest = true;
                 investFlashLoanAmount += data.flashLoanAmount;
             } else {
@@ -221,14 +215,6 @@ contract scWETHv2Rebalance is Script, scWETHv2Helper {
                 temp[i] = abi.encodeWithSelector(
                     scWETHv2.repayAndWithdraw.selector, data.adapter.id(), data.flashLoanAmount, withdrawAmount
                 );
-
-                // print the data in selector in readable format
-                // console2.log(
-                //     "repayAndWithdraw:, adapter: %s, repayAmount: %s, withdrawAmount: %s",
-                //     data.adapter.id(),
-                //     data.flashLoanAmount,
-                //     withdrawAmount
-                // );
 
                 thereIsAtleastOneDisinvest = true;
 
@@ -337,7 +323,9 @@ contract scWETHv2Rebalance is Script, scWETHv2Helper {
         }
     }
 
-    function _logs() internal view {
+    function _logs(string memory _msg) internal view {
+        console2.log(_msg);
+
         uint256 collateralInWeth = priceConverter.wstEthToEth(vault.totalCollateral());
         uint256 debt = vault.totalDebt();
         console2.log("\n Total Collateral %s weth", collateralInWeth);
@@ -345,7 +333,7 @@ contract scWETHv2Rebalance is Script, scWETHv2Helper {
         console2.log("\n Invested Amount %s weth", collateralInWeth - debt);
         console2.log("\n Total Assets %s weth", vault.totalAssets());
         console2.log("\n Net Leverage", getLeverage());
-        console2.log("\n Net LTV", debt.divWadUp(collateralInWeth));
+        if (collateralInWeth != 0) console2.log("\n Net LTV", debt.divWadUp(collateralInWeth));
         console2.log("\n WstEth Balance", ERC20(C.WSTETH).balanceOf(address(this)));
     }
 }
