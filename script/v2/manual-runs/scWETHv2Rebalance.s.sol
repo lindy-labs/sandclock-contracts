@@ -70,6 +70,13 @@ contract scWETHv2Rebalance is Script, scWETHv2Helper {
     // be it weth gained from profits or float amount lying in the vault
     // the contract rebalance method won't be called if the minimum amount to invest is less than this threshold
     uint256 public minimumInvestAmount = 0.1 ether;
+
+    // this percent of wstEth will only be supplied for each adapter (instead of the whole calculated supply amount)
+    // since while swapping from weth to wstEth we get a little less wstEth than expected due to slippage
+    // so if the contract tries to supply the exact supplyAmount of wstEth calculated, it will revert on the last supply since the contract
+    // wont have enough wstEth funds for the supply
+    uint256 stEthRateTolerance = 0.9995e18;
+
     ///////////////////////////////////////////////////////////////////////
 
     uint256 keeperPrivateKey = uint256(vm.envOr("KEEPER_PRIVATE_KEY", bytes32(0x00)));
@@ -172,7 +179,6 @@ contract scWETHv2Rebalance is Script, scWETHv2Helper {
     }
 
     function _getRebalanceCallData() internal returns (bytes[] memory, uint256) {
-        uint256 stEthRateTolerance = 0.9995e18;
         uint256 n = rebalanceDataParams.length;
 
         RebalanceDataParams memory data;
