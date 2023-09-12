@@ -34,10 +34,13 @@ import {BaseV2Vault} from "../../../src/steth/BaseV2Vault.sol";
 /**
  * @notice Exit all positions and withdraw all funds as WETH to the vault
  */
-contract scWETHv2ExitAllPositions is Script {
+contract scWETHv2ExitAllPositions is Script, scWETHv2Helper {
     using FixedPointMathLib for uint256;
 
     uint256 keeperPrivateKey = uint256(vm.envOr("KEEPER_PRIVATE_KEY", bytes32(0x00)));
+    WETH weth = WETH(payable(C.WETH));
+
+    constructor() scWETHv2Helper(scWETHv2(payable(MA.SCWETHV2)), PriceConverter(MA.PRICE_CONVERTER)) {}
 
     function run() external {
         address keeper = keeperPrivateKey != 0 ? vm.addr(keeperPrivateKey) : MA.KEEPER;
@@ -53,8 +56,20 @@ contract scWETHv2ExitAllPositions is Script {
         vm.stopBroadcast();
     }
 
-    function _logs(string memory msg) internal {
-        console2.log(msg);
+    function _withdrawAll() internal {
+        uint256 collateralInWeth = priceConverter.wstEthToEth(vault.totalCollateral());
+        uint256 debt = vault.totalDebt();
+
+        if (collateralInWeth > debt) {
+            vault.withdrawToVault(collateralInWeth - debt);
+        }
+
+        // using zeroExSwap and call data
+        // rebalance method
+    }
+
+    function _logs(string memory _msg) internal view {
+        console2.log(_msg);
 
         uint256 collateralInWeth = priceConverter.wstEthToEth(vault.totalCollateral());
         uint256 debt = vault.totalDebt();
