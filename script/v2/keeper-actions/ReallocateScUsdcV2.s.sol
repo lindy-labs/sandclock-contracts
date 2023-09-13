@@ -31,7 +31,7 @@ contract ReallocateScUsdcV2 is ScUsdcV2ScriptBase {
     // @dev The following parameters are used to configure the reallocate script. The goal is to move funds from one lending protocol to another without touching the invested WETH.
     // @note: supply and withdraw amounts have to sum up to 0, same for borrow and repay amounts or else the script will revert
     // use adapter - whether or not to use a specific adapter
-    // allocationPercent - the percentage of the total assets used as collateral to be allocated to the protocol adapter 
+    // allocationPercent - the percentage of the total assets used as collateral to be allocated to the protocol adapter
 
     uint256 flashloanFeePercent = 0e18; // currently 0% on balancer
 
