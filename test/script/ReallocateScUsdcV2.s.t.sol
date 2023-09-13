@@ -7,6 +7,7 @@ import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 
 import {scUSDCv2} from "../../src/steth/scUSDCv2.sol";
 import {PriceConverter} from "../../src/steth/PriceConverter.sol";
+import {IAdapter} from "../../src/steth/IAdapter.sol";
 import {AaveV2ScUsdcAdapter} from "../../src/steth/scUsdcV2-adapters/AaveV2ScUsdcAdapter.sol";
 import {AaveV3ScUsdcAdapter} from "../../src/steth/scUsdcV2-adapters/AaveV3ScUsdcAdapter.sol";
 import {MorphoAaveV3ScUsdcAdapter} from "../../src/steth/scUsdcV2-adapters/MorphoAaveV3ScUsdcAdapter.sol";
@@ -46,37 +47,48 @@ contract ReallocateScUsdcV2Test is Test {
         assertTrue(vault.totalDebt() > 0, "vault has no debt");
         assertTrue(vault.totalCollateral() > 0, "vault has no collateral");
 
+        assertEq(_getAllocationPercent(morpho), 0.5e18, "morpho allocation percent");
+        assertEq(_getAllocationPercent(aaveV2), 0.5e18, "aave v2 allocation percent");
+
         uint256 morphoInitialCollateral = vault.getCollateral(morpho.id());
         uint256 morphoInitialDebt = vault.getDebt(morpho.id());
         uint256 aaveV2InitialCollateral = vault.getCollateral(aaveV2.id());
         uint256 aaveV2InitialDebt = vault.getDebt(aaveV2.id());
 
-        uint256 morphoWithdrawAmount = morphoInitialCollateral / 2;
-        uint256 morphoRepayAmount = morphoInitialDebt / 2;
-
         assertTrue(script.useMorpho(), "morpho not used");
         assertTrue(script.useAaveV2(), "aave v2 not used");
-        script.setMorphoWithdrawAmount(morphoWithdrawAmount);
-        script.setMorphoRepayAmount(morphoRepayAmount);
-        script.setAaveV2SupplyAmount(morphoWithdrawAmount);
-        script.setAavveV2BorrowAmount(morphoRepayAmount);
+
+        uint256 morphoAllocationPercent = 0.25e18;
+        uint256 aaveV2AllocationPercent = 0.75e18;
+
+        uint256 expectedMorphoWithdrawAmount = morphoInitialCollateral / 2;
+        uint256 expectedMorphoRepayAmount = morphoInitialDebt / 2;
+
+        script.setMorphoAllocationPercent(morphoAllocationPercent);
+        script.setAaveV2AllocationPercent(aaveV2AllocationPercent);
 
         script.run();
 
         assertApproxEqRel(
             vault.getCollateral(morpho.id()),
-            morphoInitialCollateral - morphoWithdrawAmount,
+            morphoInitialCollateral - expectedMorphoWithdrawAmount,
             0.0001e18,
             "morpho collateral"
         );
         assertApproxEqRel(
             vault.getCollateral(aaveV2.id()),
-            aaveV2InitialCollateral + morphoWithdrawAmount,
+            aaveV2InitialCollateral + expectedMorphoWithdrawAmount,
             0.0001e18,
             "aave v2 collateral"
         );
-        assertApproxEqRel(vault.getDebt(morpho.id()), morphoInitialDebt - morphoRepayAmount, 0.0001e18, "morpho debt");
-        assertApproxEqRel(vault.getDebt(aaveV2.id()), aaveV2InitialDebt + morphoRepayAmount, 0.0001e18, "aave v2 debt");
+        assertApproxEqRel(
+            vault.getDebt(morpho.id()), morphoInitialDebt - expectedMorphoRepayAmount, 0.0001e18, "morpho debt"
+        );
+        assertApproxEqRel(
+            vault.getDebt(aaveV2.id()), aaveV2InitialDebt + expectedMorphoRepayAmount, 0.0001e18, "aave v2 debt"
+        );
+        assertEq(_getAllocationPercent(morpho), morphoAllocationPercent, "morpho allocation percent");
+        assertEq(_getAllocationPercent(aaveV2), aaveV2AllocationPercent, "aave v2 allocation percent");
     }
 
     function test_run_moveWholePositionFromAaveV2ToMorpho() public {
@@ -88,27 +100,33 @@ contract ReallocateScUsdcV2Test is Test {
         uint256 aaveV2InitialCollateral = vault.getCollateral(aaveV2.id());
         uint256 aaveV2InitialDebt = vault.getDebt(aaveV2.id());
 
-        uint256 aaveV2WithdrawAmount = aaveV2InitialCollateral;
-        uint256 aaveV2RepayAmount = aaveV2InitialDebt;
+        uint256 expectedAaveV2WithdrawAmount = aaveV2InitialCollateral;
+        uint256 expectedAaveV2RepayAmount = aaveV2InitialDebt;
 
         assertTrue(script.useAaveV2(), "aave v2 not used");
         assertTrue(script.useMorpho(), "morpho not used");
-        script.setAaveV2WithdrawAmount(aaveV2WithdrawAmount);
-        script.setAaveV2RepayAmount(aaveV2RepayAmount);
-        script.setMorphoSupplyAmount(aaveV2WithdrawAmount);
-        script.setMorphoBorrowAmount(aaveV2RepayAmount);
+
+        uint256 morphoAllocationPercent = 1e18;
+        uint256 aaveV2AllocationPercent = 0;
+
+        script.setMorphoAllocationPercent(morphoAllocationPercent);
+        script.setAaveV2AllocationPercent(aaveV2AllocationPercent);
 
         script.run();
 
         assertApproxEqRel(
             vault.getCollateral(morpho.id()),
-            morphoInitialCollateral + aaveV2WithdrawAmount,
+            morphoInitialCollateral + expectedAaveV2WithdrawAmount,
             0.0001e18,
             "morpho collateral"
         );
         assertApproxEqAbs(vault.getCollateral(aaveV2.id()), 0, 1, "aave v2 collateral");
-        assertApproxEqRel(vault.getDebt(morpho.id()), morphoInitialDebt + aaveV2RepayAmount, 0.0001e18, "morpho debt");
+        assertApproxEqRel(
+            vault.getDebt(morpho.id()), morphoInitialDebt + expectedAaveV2RepayAmount, 0.0001e18, "morpho debt"
+        );
         assertApproxEqAbs(vault.getDebt(aaveV2.id()), 0, 1, "aave v2 debt");
+        assertEq(_getAllocationPercent(morpho), morphoAllocationPercent, "morpho allocation percent");
+        assertEq(_getAllocationPercent(aaveV2), aaveV2AllocationPercent, "aave v2 allocation percent");
     }
 
     function test_run_moveHalfFromAaveV2AndMorphoToAaveV3() public {
@@ -123,80 +141,80 @@ contract ReallocateScUsdcV2Test is Test {
         uint256 aaveV3InitialCollateral = vault.getCollateral(aaveV3.id());
         uint256 aaveV3InitialDebt = vault.getDebt(aaveV3.id());
 
-        uint256 aaveV2WithdrawAmount = aaveV2InitialCollateral / 2;
-        uint256 aaveV2RepayAmount = aaveV2InitialDebt / 2;
-        uint256 morphoWithdrawAmount = morphoInitialCollateral / 2;
-        uint256 morphoRepayAmount = morphoInitialDebt / 2;
-        uint256 aaveV3SupplyAmount = aaveV2WithdrawAmount + morphoWithdrawAmount;
-        uint256 aaveV3BorrowAmount = aaveV2RepayAmount + morphoRepayAmount;
+        uint256 expectedAaveV2WithdrawAmount = aaveV2InitialCollateral / 2;
+        uint256 expectedAaveV2RepayAmount = aaveV2InitialDebt / 2;
+        uint256 expectedMorphoWithdrawAmount = morphoInitialCollateral / 2;
+        uint256 expectedMorphoRepayAmount = morphoInitialDebt / 2;
 
         assertTrue(script.useAaveV2(), "aave v2 not used");
         assertTrue(script.useMorpho(), "morpho not used");
         assertTrue(script.useAaveV3(), "aave v3 not used");
 
-        script.setAaveV2WithdrawAmount(aaveV2WithdrawAmount);
-        script.setAaveV2RepayAmount(aaveV2RepayAmount);
-        script.setMorphoWithdrawAmount(morphoWithdrawAmount);
-        script.setMorphoRepayAmount(morphoRepayAmount);
-        script.setAaveV3SupplyAmount(aaveV3SupplyAmount);
-        script.setAaveV3BorrowAmount(aaveV3BorrowAmount);
+        assertEq(_getAllocationPercent(morpho), 0.5e18, "morpho allocation percent");
+        assertEq(_getAllocationPercent(aaveV2), 0.5e18, "aave v2 allocation percent");
+        assertEq(_getAllocationPercent(aaveV3), 0, "aave v3 allocation percent");
+
+        uint256 morphoAllocationPercent = 0.25e18;
+        uint256 aaveV2AllocationPercent = 0.25e18;
+        uint256 aaveV3AllocationPercent = 0.5e18;
+
+        script.setMorphoAllocationPercent(morphoAllocationPercent);
+        script.setAaveV2AllocationPercent(aaveV2AllocationPercent);
+        script.setAaveV3AllocationPercent(aaveV3AllocationPercent);
 
         script.run();
 
         assertApproxEqRel(
             vault.getCollateral(morpho.id()),
-            morphoInitialCollateral - morphoWithdrawAmount,
+            morphoInitialCollateral - expectedMorphoWithdrawAmount,
             0.0001e18,
             "morpho collateral"
         );
         assertApproxEqRel(
             vault.getCollateral(aaveV2.id()),
-            aaveV2InitialCollateral - aaveV2WithdrawAmount,
+            aaveV2InitialCollateral - expectedAaveV2WithdrawAmount,
             0.0001e18,
             "aave v2 collateral"
         );
         assertApproxEqRel(
             vault.getCollateral(aaveV3.id()),
-            aaveV3InitialCollateral + aaveV2WithdrawAmount + morphoWithdrawAmount,
+            aaveV3InitialCollateral + expectedAaveV2WithdrawAmount + expectedMorphoWithdrawAmount,
             0.0001e18,
             "aave v3 collateral"
         );
 
-        assertApproxEqRel(vault.getDebt(morpho.id()), morphoInitialDebt - morphoRepayAmount, 0.0001e18, "morpho debt");
-        assertApproxEqRel(vault.getDebt(aaveV2.id()), aaveV2InitialDebt - aaveV2RepayAmount, 0.0001e18, "aave v2 debt");
+        assertApproxEqRel(
+            vault.getDebt(morpho.id()), morphoInitialDebt - expectedMorphoRepayAmount, 0.0001e18, "morpho debt"
+        );
+        assertApproxEqRel(
+            vault.getDebt(aaveV2.id()), aaveV2InitialDebt - expectedAaveV2RepayAmount, 0.0001e18, "aave v2 debt"
+        );
         assertApproxEqRel(
             vault.getDebt(aaveV3.id()),
-            aaveV3InitialDebt + aaveV2RepayAmount + morphoRepayAmount,
+            aaveV3InitialDebt + expectedAaveV2RepayAmount + expectedMorphoRepayAmount,
             0.0001e18,
             "aave v3 debt"
         );
+
+        assertApproxEqRel(
+            _getAllocationPercent(morpho), morphoAllocationPercent, 0.0001e18, "morpho allocation percent"
+        );
+        assertApproxEqRel(
+            _getAllocationPercent(aaveV2), aaveV2AllocationPercent, 0.0001e18, "aave v2 allocation percent"
+        );
+        assertApproxEqRel(
+            _getAllocationPercent(aaveV3), aaveV3AllocationPercent, 0.0001e18, "aave v3 allocation percent"
+        );
     }
 
-    function test_run_failsIfWithdrawAndSupplyAmountsSumIsNot0() public {
+    function test_run_failsIfAllocationPercentSumIsNot100() public {
         script.setUseAaveV3(true);
         _addAaveV3Adapter();
 
-        script.setAaveV2WithdrawAmount(5e6);
-        script.setMorphoWithdrawAmount(5e6);
-        script.setAaveV3SupplyAmount(0);
+        script.setAaveV3AllocationPercent(0.5e18);
+        script.setAaveV2AllocationPercent(0.4e18);
 
-        vm.expectRevert("total supply change != 0");
-        script.run();
-    }
-
-    function test_run_failsIfRepayAndBorrowAmountsSumIsNot0() public {
-        script.setUseAaveV3(true);
-        _addAaveV3Adapter();
-
-        script.setAaveV2WithdrawAmount(5e6);
-        script.setMorphoWithdrawAmount(5e6);
-        script.setAaveV3SupplyAmount(10e6);
-
-        script.setMorphoRepayAmount(5e18);
-        script.setAaveV2RepayAmount(10e18);
-        script.setAaveV3BorrowAmount(10e18);
-
-        vm.expectRevert("total debt change != 0");
+        vm.expectRevert("total allocation percent not 100%");
         script.run();
     }
 
@@ -225,6 +243,10 @@ contract ReallocateScUsdcV2Test is Test {
         assertApproxEqAbs(vault.totalCollateral(), investableAmount, 2, "vault total collateral");
     }
 
+    function _getAllocationPercent(IAdapter _adapter) internal view returns (uint256) {
+        return _adapter.getCollateral(address(vault)).divWadDown(vault.totalCollateral());
+    }
+
     function _addAaveV3Adapter() internal {
         if (!vault.isSupported(aaveV3.id())) {
             vm.prank(Constants.MULTISIG);
@@ -240,59 +262,23 @@ contract ReallocateScUsdcV2TestHarness is ReallocateScUsdcV2 {
         useMorpho = _isUsed;
     }
 
-    function setMorphoSupplyAmount(uint256 _amount) public {
-        morphoSupplyAmount = _amount;
-    }
-
-    function setMorphoBorrowAmount(uint256 _amount) public {
-        morphoBorrowAmount = _amount;
-    }
-
-    function setMorphoWithdrawAmount(uint256 _amount) public {
-        morphoWithdrawAmount = _amount;
-    }
-
-    function setMorphoRepayAmount(uint256 _amount) public {
-        morphoRepayAmount = _amount;
+    function setMorphoAllocationPercent(uint256 _percent) public {
+        morphoAllocationPercent = _percent;
     }
 
     function setUseAaveV2(bool _isUsed) public {
         useAaveV2 = _isUsed;
     }
 
-    function setAaveV2SupplyAmount(uint256 _amount) public {
-        aaveV2SupplyAmount = _amount;
-    }
-
-    function setAavveV2BorrowAmount(uint256 _amount) public {
-        aaveV2BorrowAmount = _amount;
-    }
-
-    function setAaveV2WithdrawAmount(uint256 _amount) public {
-        aaveV2WithdrawAmount = _amount;
-    }
-
-    function setAaveV2RepayAmount(uint256 _amount) public {
-        aaveV2RepayAmount = _amount;
+    function setAaveV2AllocationPercent(uint256 _percent) public {
+        aaveV2AllocationPercent = _percent;
     }
 
     function setUseAaveV3(bool _isUsed) public {
         useAaveV3 = _isUsed;
     }
 
-    function setAaveV3SupplyAmount(uint256 _amount) public {
-        aaveV3SupplyAmount = _amount;
-    }
-
-    function setAaveV3BorrowAmount(uint256 _amount) public {
-        aaveV3BorrowAmount = _amount;
-    }
-
-    function setAaveV3RepayAmount(uint256 _amount) public {
-        aaveV3RepayAmount = _amount;
-    }
-
-    function setAaveV3WithdrawAmount(uint256 _amount) public {
-        aaveV3WithdrawAmount = _amount;
+    function setAaveV3AllocationPercent(uint256 _percent) public {
+        aaveV3AllocationPercent = _percent;
     }
 }

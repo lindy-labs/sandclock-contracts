@@ -19,7 +19,7 @@ import {AaveV3ScUsdcAdapter} from "../../../src/steth/scUsdcV2-adapters/AaveV3Sc
 import {IAdapter} from "../../../src/steth/IAdapter.sol";
 
 /**
- * A script for executing rebalance functionality for scUsdcV2 vaults.
+ * A script for executing reallocate functionality for scUsdcV2 vaults.
  */
 contract ReallocateScUsdcV2 is ScUsdcV2ScriptBase {
     using FixedPointMathLib for uint256;
@@ -31,30 +31,18 @@ contract ReallocateScUsdcV2 is ScUsdcV2ScriptBase {
     // @dev The following parameters are used to configure the reallocate script. The goal is to move funds from one lending protocol to another without touching the invested WETH.
     // @note: supply and withdraw amounts have to sum up to 0, same for borrow and repay amounts or else the script will revert
     // use adapter - whether or not to use a specific adapter
-    // supply amount - the amount of USDC that will be supplied to a specific lending protocol
-    // borrow amount - the amount of WETH that will be borrowed from a specific lending protocol
-    // withdraw amount - the amount of USDC that will be withdrawn from a specific lending protocol
-    // repay amount - the amount of WETH that will be repaid to a specific lending protocol
+    // allocationPercent - the percentage of the total assets used as collateral to be allocated to the protocol adapter 
 
     uint256 flashloanFeePercent = 0e18; // currently 0% on balancer
 
     bool public useMorpho = true;
-    uint256 public morphoSupplyAmount = 0;
-    uint256 public morphoBorrowAmount = 0;
-    uint256 public morphoWithdrawAmount = 0;
-    uint256 public morphoRepayAmount = 0;
+    uint256 public morphoAllocationPercent = 0;
 
     bool public useAaveV2 = true;
-    uint256 public aaveV2SupplyAmount = 0;
-    uint256 public aaveV2BorrowAmount = 0;
-    uint256 public aaveV2WithdrawAmount = 0;
-    uint256 public aaveV2RepayAmount = 0;
+    uint256 aaveV2AllocationPercent = 0;
 
     bool public useAaveV3 = false;
-    uint256 public aaveV3SupplyAmount = 0;
-    uint256 public aaveV3BorrowAmount = 0;
-    uint256 public aaveV3WithdrawAmount = 0;
-    uint256 public aaveV3RepayAmount = 0;
+    uint256 public aaveV3AllocationPercent = 0;
 
     /*//////////////////////////////////////////////////////////////*/
 
@@ -70,6 +58,7 @@ contract ReallocateScUsdcV2 is ScUsdcV2ScriptBase {
     ReallocateData[] public reallocateData;
     bytes[] multicallData;
     uint256 flashLoanAmount;
+    uint256 totalAllocationPercent;
 
     function run() external {
         console2.log("--ReallocateScUsdcV2 script running--");
@@ -80,6 +69,8 @@ contract ReallocateScUsdcV2 is ScUsdcV2ScriptBase {
         _createMulticallData();
 
         vm.startBroadcast(keeper);
+
+        console2.log("start execution");
 
         scUsdcV2.reallocate(flashLoanAmount, multicallData);
 
@@ -106,57 +97,61 @@ contract ReallocateScUsdcV2 is ScUsdcV2ScriptBase {
         if (useMorpho) {
             if (!scUsdcV2.isSupported(morphoAdapter.id())) revert("morpho adapter not supported");
 
-            ReallocateData memory data;
+            _createData(morphoAdapter.id(), morphoAllocationPercent);
 
-            data.adapterId = morphoAdapter.id();
-            data.supplyAmount = morphoSupplyAmount;
-            data.borrowAmount = morphoBorrowAmount;
-            data.withdrawAmount = morphoWithdrawAmount;
-            data.repayAmount = morphoRepayAmount;
-
-            reallocateData.push(data);
+            totalAllocationPercent += morphoAllocationPercent;
         }
 
         if (useAaveV2) {
             if (!scUsdcV2.isSupported(aaveV2Adapter.id())) revert("aave v2 adapter not supported");
 
-            ReallocateData memory data;
+            _createData(aaveV2Adapter.id(), aaveV2AllocationPercent);
 
-            data.adapterId = aaveV2Adapter.id();
-            data.supplyAmount = aaveV2SupplyAmount;
-            data.borrowAmount = aaveV2BorrowAmount;
-            data.withdrawAmount = aaveV2WithdrawAmount;
-            data.repayAmount = aaveV2RepayAmount;
-
-            reallocateData.push(data);
+            totalAllocationPercent += aaveV2AllocationPercent;
         }
 
         if (useAaveV3) {
             if (!scUsdcV2.isSupported(aaveV3Adapter.id())) revert("aave v3 adapter not supported");
 
-            ReallocateData memory data;
+            _createData(aaveV3Adapter.id(), aaveV3AllocationPercent);
 
-            data.adapterId = aaveV3Adapter.id();
-            data.supplyAmount = aaveV3SupplyAmount;
-            data.borrowAmount = aaveV3BorrowAmount;
-            data.withdrawAmount = aaveV3WithdrawAmount;
-            data.repayAmount = aaveV3RepayAmount;
+            totalAllocationPercent += aaveV3AllocationPercent;
+        }
 
-            reallocateData.push(data);
+        if (totalAllocationPercent != 1e18) {
+            revert("total allocation percent not 100%");
         }
     }
 
-    function _createMulticallData() internal {
-        int256 totalSupplyChange = 0;
-        int256 totalDebtChange = 0;
+    function _createData(uint256 _adapterId, uint256 _allocationPercent) internal {
+        ReallocateData memory data;
 
+        data.adapterId = _adapterId;
+
+        uint256 currentAllocation = scUsdcV2.getCollateral(_adapterId);
+        uint256 expectedAllocation = scUsdcV2.totalCollateral().mulWadUp(_allocationPercent);
+        uint256 currentDebt = scUsdcV2.getDebt(_adapterId);
+        uint256 expectedDebt = scUsdcV2.totalDebt().mulWadUp(_allocationPercent);
+
+        if (currentAllocation > expectedAllocation) {
+            // we need to withdraw some collateral
+            data.withdrawAmount = currentAllocation - expectedAllocation;
+            data.repayAmount = currentDebt - expectedDebt;
+        } else if (currentAllocation < expectedAllocation) {
+            // we need to supply some collateral
+            data.supplyAmount = expectedAllocation - currentAllocation;
+            data.borrowAmount = expectedDebt - currentDebt;
+        }
+
+        reallocateData.push(data);
+    }
+
+    function _createMulticallData() internal {
         for (uint256 i = 0; i < reallocateData.length; i++) {
             ReallocateData memory data = reallocateData[i];
 
             if (data.withdrawAmount > 0) {
                 flashLoanAmount += data.repayAmount;
-                totalSupplyChange -= int256(data.withdrawAmount);
-                totalDebtChange -= int256(data.repayAmount);
 
                 multicallData.push(abi.encodeWithSelector(scUsdcV2.repay.selector, data.adapterId, data.repayAmount));
                 multicallData.push(
@@ -171,20 +166,9 @@ contract ReallocateScUsdcV2 is ScUsdcV2ScriptBase {
             if (data.supplyAmount > 0) {
                 uint256 borrowAmount = data.borrowAmount.mulWadDown(1e18 - flashloanFeePercent);
 
-                totalSupplyChange += int256(data.supplyAmount);
-                totalDebtChange += int256(data.borrowAmount);
-
                 multicallData.push(abi.encodeWithSelector(scUsdcV2.supply.selector, data.adapterId, data.supplyAmount));
                 multicallData.push(abi.encodeWithSelector(scUsdcV2.borrow.selector, data.adapterId, borrowAmount));
             }
-        }
-
-        if (totalSupplyChange != 0) {
-            revert("total supply change != 0");
-        }
-
-        if (totalDebtChange != 0) {
-            revert("total debt change != 0");
         }
     }
 }
