@@ -33,6 +33,10 @@ import {BaseV2Vault} from "../../../src/steth/BaseV2Vault.sol";
 
 /**
  * @notice Exit all positions and withdraw all funds as WETH to the vault
+ * cmd
+ * first run a local anvil node using " anvil -f YOUR_RPC_URL"
+ * Then run the script using
+ * forge script script/v2/manual-runs/scWETHv2ExitAllPositions.s.sol --rpc-url http://127.0.0.1:8545
  */
 contract scWETHv2ExitAllPositions is Script, scWETHv2Helper {
     using FixedPointMathLib for uint256;
