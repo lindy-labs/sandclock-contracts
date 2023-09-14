@@ -67,6 +67,9 @@ contract ReallocateScUsdcV2Test is Test {
         script.setMorphoAllocationPercent(morphoAllocationPercent);
         script.setAaveV2AllocationPercent(aaveV2AllocationPercent);
 
+        uint256 totalAssetsBefore = vault.totalAssets();
+        uint256 wethInvestedBefore = vault.wethInvested();
+
         script.run();
 
         assertApproxEqRel(
@@ -89,6 +92,8 @@ contract ReallocateScUsdcV2Test is Test {
         );
         assertEq(_getAllocationPercent(morpho), morphoAllocationPercent, "morpho allocation percent");
         assertEq(_getAllocationPercent(aaveV2), aaveV2AllocationPercent, "aave v2 allocation percent");
+        assertEq(vault.totalAssets(), totalAssetsBefore, "total assets");
+        assertEq(vault.wethInvested(), wethInvestedBefore, "weth invested");
     }
 
     function test_run_moveWholePositionFromAaveV2ToMorpho() public {
@@ -105,6 +110,9 @@ contract ReallocateScUsdcV2Test is Test {
 
         assertTrue(script.useAaveV2(), "aave v2 not used");
         assertTrue(script.useMorpho(), "morpho not used");
+
+        uint256 totalAssetsBefore = vault.totalAssets();
+        uint256 wethInvestedBefore = vault.wethInvested();
 
         uint256 morphoAllocationPercent = 1e18;
         uint256 aaveV2AllocationPercent = 0;
@@ -127,24 +135,29 @@ contract ReallocateScUsdcV2Test is Test {
         assertApproxEqAbs(vault.getDebt(aaveV2.id()), 0, 1, "aave v2 debt");
         assertEq(_getAllocationPercent(morpho), morphoAllocationPercent, "morpho allocation percent");
         assertEq(_getAllocationPercent(aaveV2), aaveV2AllocationPercent, "aave v2 allocation percent");
+        assertEq(vault.totalAssets(), totalAssetsBefore, "total assets");
+        assertEq(vault.wethInvested(), wethInvestedBefore, "weth invested");
     }
 
     function test_run_moveHalfFromAaveV2AndMorphoToAaveV3() public {
         assertTrue(vault.totalDebt() > 0, "vault has no debt");
         assertTrue(vault.totalCollateral() > 0, "vault has no collateral");
         _addAaveV3Adapter();
+        assertEq(vault.getCollateral(aaveV3.id()), 0, "aave v3 collateral");
+        assertEq(vault.getDebt(aaveV3.id()), 0, "aave v3 debt");
 
         uint256 morphoInitialCollateral = vault.getCollateral(morpho.id());
         uint256 morphoInitialDebt = vault.getDebt(morpho.id());
         uint256 aaveV2InitialCollateral = vault.getCollateral(aaveV2.id());
         uint256 aaveV2InitialDebt = vault.getDebt(aaveV2.id());
-        uint256 aaveV3InitialCollateral = vault.getCollateral(aaveV3.id());
-        uint256 aaveV3InitialDebt = vault.getDebt(aaveV3.id());
 
         uint256 expectedAaveV2WithdrawAmount = aaveV2InitialCollateral / 2;
         uint256 expectedAaveV2RepayAmount = aaveV2InitialDebt / 2;
         uint256 expectedMorphoWithdrawAmount = morphoInitialCollateral / 2;
         uint256 expectedMorphoRepayAmount = morphoInitialDebt / 2;
+
+        uint256 totalAssetsBefore = vault.totalAssets();
+        uint256 wethInvestedBefore = vault.wethInvested();
 
         assertTrue(script.useAaveV2(), "aave v2 not used");
         assertTrue(script.useMorpho(), "morpho not used");
@@ -178,7 +191,7 @@ contract ReallocateScUsdcV2Test is Test {
         );
         assertApproxEqRel(
             vault.getCollateral(aaveV3.id()),
-            aaveV3InitialCollateral + expectedAaveV2WithdrawAmount + expectedMorphoWithdrawAmount,
+            expectedAaveV2WithdrawAmount + expectedMorphoWithdrawAmount,
             0.0001e18,
             "aave v3 collateral"
         );
@@ -190,10 +203,7 @@ contract ReallocateScUsdcV2Test is Test {
             vault.getDebt(aaveV2.id()), aaveV2InitialDebt - expectedAaveV2RepayAmount, 0.0001e18, "aave v2 debt"
         );
         assertApproxEqRel(
-            vault.getDebt(aaveV3.id()),
-            aaveV3InitialDebt + expectedAaveV2RepayAmount + expectedMorphoRepayAmount,
-            0.0001e18,
-            "aave v3 debt"
+            vault.getDebt(aaveV3.id()), expectedAaveV2RepayAmount + expectedMorphoRepayAmount, 0.0001e18, "aave v3 debt"
         );
 
         assertApproxEqRel(
@@ -205,6 +215,9 @@ contract ReallocateScUsdcV2Test is Test {
         assertApproxEqRel(
             _getAllocationPercent(aaveV3), aaveV3AllocationPercent, 0.0001e18, "aave v3 allocation percent"
         );
+
+        assertApproxEqAbs(vault.totalAssets(), totalAssetsBefore, 1, "total assets");
+        assertApproxEqAbs(vault.wethInvested(), wethInvestedBefore, 1, "weth invested");
     }
 
     function test_run_failsIfAllocationPercentSumIsNot100() public {
