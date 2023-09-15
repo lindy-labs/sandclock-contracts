@@ -80,6 +80,7 @@ contract scWETHv2Rebalance is Script, scWETHv2Helper {
     ///////////////////////////////////////////////////////////////////////
 
     uint256 keeperPrivateKey = uint256(vm.envOr("KEEPER_PRIVATE_KEY", bytes32(0x00)));
+    address keeper = keeperPrivateKey != 0 ? vm.addr(keeperPrivateKey) : MA.KEEPER;
 
     WETH weth = WETH(payable(C.WETH));
 
@@ -90,32 +91,35 @@ contract scWETHv2Rebalance is Script, scWETHv2Helper {
     mapping(IAdapter => uint256) public targetLtv;
 
     RebalanceDataParams[] rebalanceDataParams;
-    bytes[] private callDataStorage;
+    bytes[] private multicallData;
     mapping(IAdapter => uint256) public adapterAllocationPercent;
 
     uint256 investFlashLoanAmount;
     uint256 disinvestFlashLoanAmount;
     uint256 totalWstEthWithdrawn;
+    uint256 totalFlashLoanAmount;
 
     constructor() scWETHv2Helper(scWETHv2(payable(MA.SCWETHV2)), PriceConverter(MA.PRICE_CONVERTER)) {
         _initializeAdapters();
     }
 
     function run() external {
-        address keeper = keeperPrivateKey != 0 ? vm.addr(keeperPrivateKey) : MA.KEEPER;
-
         _logs("-------------------BEFORE REBALANCE-------------------");
 
-        vm.startBroadcast(keeper);
+        uint256 investAmount = _calcInvestAmount();
+        _createRebalanceParams(investAmount);
+        _createRebalanceMulticallData(investAmount);
 
-        _rebalance();
+        if (totalFlashLoanAmount > minimumInvestAmount.mulWadDown(getLeverage())) {
+            vm.startBroadcast(keeper);
+
+            vault.rebalance(investAmount, totalFlashLoanAmount, multicallData);
+
+            vm.stopBroadcast();
+        }
 
         _logs("-------------------AFTER REBALANCE-------------------");
-
-        vm.stopBroadcast();
     }
-
-    //////////////////////////////// REBALANCE /////////////////////////////////////////////
 
     function _initializeAdapters() internal {
         uint256 totalAllocationPercent;
@@ -135,16 +139,15 @@ contract scWETHv2Rebalance is Script, scWETHv2Helper {
         require(totalAllocationPercent == 1e18, "totalAllocationPercent != 100%");
     }
 
-    function _investAmount() internal view returns (uint256 investAmount) {
+    function _calcInvestAmount() internal view returns (uint256 investAmount) {
         uint256 float = weth.balanceOf(address(vault));
         uint256 minimumFloat = vault.minimumFloatAmount();
+
         // investAmount == 0 just reinvests profits
         investAmount = float > minimumFloat ? float - minimumFloat : 0;
     }
 
-    function _updateRebalanceParams() internal {
-        uint256 investAmount = _investAmount();
-
+    function _createRebalanceParams(uint256 _investAmount) internal {
         IAdapter[3] memory allAdapters = [morphoAdapter, compoundV3Adapter, aaveV3Adapter];
 
         IAdapter adapter;
@@ -158,46 +161,36 @@ contract scWETHv2Rebalance is Script, scWETHv2Helper {
 
             // first check if allocation Percent is greater than zero
             if (allocationPercent != 0) {
-                _calcRebalanceFlashLoanAmount(adapter, investAmount.mulWadDown(allocationPercent));
+                _createRebalanceDataFor(adapter, _investAmount.mulWadDown(allocationPercent));
             } else {
                 // even if there is no allocation here, we still want to check if a disinvest is needed in this protocol
                 uint256 ltv = getLtv(adapter);
 
                 if (ltv > targetLtv[adapter] + disinvestThreshold) {
-                    _calcRebalanceFlashLoanAmount(adapter, 0);
+                    _createRebalanceDataFor(adapter, 0);
                 }
             }
         }
     }
 
-    function _rebalance() internal {
-        _updateRebalanceParams();
-        (bytes[] memory callData, uint256 totalFlashLoanAmount) = _getRebalanceCallData();
-
-        if (totalFlashLoanAmount > minimumInvestAmount.mulWadDown(getLeverage())) {
-            console2.log("---- Running Rebalance ----");
-            vault.rebalance(_investAmount(), totalFlashLoanAmount, callData);
-        }
-    }
-
-    function _getRebalanceCallData() internal returns (bytes[] memory, uint256) {
+    function _createRebalanceMulticallData(uint256 _investAmount) internal {
         // 3 scenarios here
         // only invest (calldata length = number of protocols + 1)
         // invest and disinvest (calldata length = number of protocols + 2)
         // only disinvest (calldata length = number of protocols + 1)
 
         if (investFlashLoanAmount > 0) {
-            uint256 wethSwapAmount = investFlashLoanAmount + _investAmount();
+            uint256 wethSwapAmount = investFlashLoanAmount + _investAmount;
             bytes memory swapData = getSwapData(wethSwapAmount, C.WETH, C.WSTETH);
 
             if (swapData.length > 0) {
-                callDataStorage.push(
+                multicallData.push(
                     abi.encodeWithSelector(
                         BaseV2Vault.zeroExSwap.selector, C.WETH, C.WSTETH, wethSwapAmount, swapData, 0
                     )
                 );
             } else {
-                callDataStorage.push(abi.encodeWithSelector(scWETHv2.swapWethToWstEth.selector, wethSwapAmount));
+                multicallData.push(abi.encodeWithSelector(scWETHv2.swapWethToWstEth.selector, wethSwapAmount));
             }
         }
 
@@ -205,13 +198,13 @@ contract scWETHv2Rebalance is Script, scWETHv2Helper {
             RebalanceDataParams memory data = rebalanceDataParams[i];
 
             if (data.supplyAmount > 0) {
-                callDataStorage.push(
+                multicallData.push(
                     abi.encodeWithSelector(
                         scWETHv2.supplyAndBorrow.selector, data.adapter.id(), data.supplyAmount, data.flashLoanAmount
                     )
                 );
             } else {
-                callDataStorage.push(
+                multicallData.push(
                     abi.encodeWithSelector(
                         scWETHv2.repayAndWithdraw.selector, data.adapter.id(), data.flashLoanAmount, data.withdrawAmount
                     )
@@ -226,7 +219,7 @@ contract scWETHv2Rebalance is Script, scWETHv2Helper {
             bytes memory swapData = getSwapData(swapAmount, C.WSTETH, C.WETH);
 
             if (swapData.length > 0) {
-                callDataStorage.push(
+                multicallData.push(
                     abi.encodeWithSelector(
                         BaseV2Vault.zeroExSwap.selector,
                         C.WSTETH,
@@ -237,7 +230,7 @@ contract scWETHv2Rebalance is Script, scWETHv2Helper {
                     )
                 );
             } else {
-                callDataStorage.push(
+                multicallData.push(
                     abi.encodeWithSelector(
                         scWETHv2.swapWstEthToWeth.selector, type(uint256).max, C.ONE - wstEthToWethSlippageTolerance
                     )
@@ -245,22 +238,17 @@ contract scWETHv2Rebalance is Script, scWETHv2Helper {
             }
         }
 
-        return (callDataStorage, investFlashLoanAmount + disinvestFlashLoanAmount);
+        totalFlashLoanAmount = investFlashLoanAmount + disinvestFlashLoanAmount;
     }
 
-    /// @notice returns the amount to flashloan for an adapter
     /// @dev doesn't matter if the vault has to supply/borrow or repay/withdraw
     /// @dev this supports both scenarios
-    function _calcRebalanceFlashLoanAmount(IAdapter _adapter, uint256 _amount)
-        internal
-        returns (uint256 flashLoanAmount)
-    {
+    function _createRebalanceDataFor(IAdapter _adapter, uint256 _amount) internal {
+        uint256 flashLoanAmount;
         uint256 debt = vault.getDebt(_adapter.id());
         uint256 collateral = getCollateralInWeth(_adapter);
-
         uint256 target = targetLtv[_adapter].mulWadDown(_amount + collateral);
 
-        // calculate the flashloan amount needed
         if (target > debt) {
             flashLoanAmount = (target - debt).divWadDown(C.ONE - targetLtv[_adapter]);
             uint256 supplyAmount = priceConverter.ethToWstEth(_amount + flashLoanAmount).mulWadDown(stEthRateTolerance);
@@ -310,12 +298,14 @@ contract scWETHv2Rebalance is Script, scWETHv2Helper {
 
         uint256 collateralInWeth = priceConverter.wstEthToEth(vault.totalCollateral());
         uint256 debt = vault.totalDebt();
-        console2.log("\n Total Collateral %s weth", collateralInWeth);
-        console2.log("\n Total Debt %s weth", debt);
-        console2.log("\n Invested Amount %s weth", collateralInWeth - debt);
-        console2.log("\n Total Assets %s weth", vault.totalAssets());
-        console2.log("\n Net Leverage", getLeverage());
-        if (collateralInWeth != 0) console2.log("\n Net LTV", debt.divWadUp(collateralInWeth));
-        console2.log("\n WstEth Balance", ERC20(C.WSTETH).balanceOf(address(this)));
+
+        console2.log("total collateral (in WETH)\t", collateralInWeth);
+        console2.log("total debt\t\t\t", debt);
+        console2.log("invested amount\t\t", collateralInWeth - debt);
+        console2.log("total assets\t\t\t", vault.totalAssets());
+        console2.log("net leverage\t\t\t", getLeverage());
+
+        if (collateralInWeth != 0) console2.log("net LTV\t\t\t", debt.divWadUp(collateralInWeth));
+        console2.log("wstEth balance\t\t", ERC20(C.WSTETH).balanceOf(address(this)));
     }
 }
