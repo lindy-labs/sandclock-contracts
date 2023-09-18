@@ -96,6 +96,9 @@ contract scUSDCv2Rebalance is MainnetDeployBase, Test {
         _invest();
         _assertLtvsAreAtTarget();
         _logVaultInfo();
+
+        _fundWethToSimulateProfit(address(scWethV2), 10 ether);
+        _logVaultInfo();
     }
 
     function _fork(uint256 _blockNumber) internal {
@@ -214,5 +217,14 @@ contract scUSDCv2Rebalance is MainnetDeployBase, Test {
         console2.log("total collateral\t", scUsdcV2.totalCollateral());
         console2.log("total debt\t\t", scUsdcV2.totalDebt());
         console2.log("weth invested\t\t", scUsdcV2.wethInvested());
+    }
+
+    function _fundWethToSimulateProfit(address _to, uint256 amount) internal {
+        vm.startBroadcast(deployerPrivateKey);
+
+        weth.deposit{value: amount}();
+        weth.transfer(_to, amount);
+
+        vm.stopBroadcast();
     }
 }
