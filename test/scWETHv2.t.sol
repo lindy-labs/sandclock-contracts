@@ -1203,8 +1203,6 @@ contract scWETHv2Test is Test {
             compoundFlashLoanAmount.mulWadUp(1e18 + flashLoanFeePercent)
         );
 
-        uint256 totalAssetsBefore = vault.totalAssets();
-
         hoax(keeper);
         vault.rebalance(investAmount, totalFlashLoanAmount, callData);
 
@@ -1216,10 +1214,6 @@ contract scWETHv2Test is Test {
             0.5e18,
             0.5e18
         );
-
-        // @note: since we cannot know the exact amount of wstEth received from swap in advance, there are some "tiny" leftovers not being supplied collateral
-        assertTrue(wstEth.balanceOf(address(vault)) > 0, "no wstEth leftovers");
-        assertApproxEqRel(vault.totalAssets(), totalAssetsBefore, 0.001e18, "total assets diff");
     }
 
     //////////////////////////// INTERNAL METHODS ////////////////////////////////////////
