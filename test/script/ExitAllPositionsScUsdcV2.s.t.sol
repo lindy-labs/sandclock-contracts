@@ -11,12 +11,12 @@ import {PriceConverter} from "../../src/steth/PriceConverter.sol";
 import {AaveV2ScUsdcAdapter} from "../../src/steth/scUsdcV2-adapters/AaveV2ScUsdcAdapter.sol";
 import {AaveV3ScUsdcAdapter} from "../../src/steth/scUsdcV2-adapters/AaveV3ScUsdcAdapter.sol";
 import {MorphoAaveV3ScUsdcAdapter} from "../../src/steth/scUsdcV2-adapters/MorphoAaveV3ScUsdcAdapter.sol";
-import {RebalanceScUsdcV2} from "../../script/v2/actions/RebalanceScUsdcV2.s.sol";
+import {RebalanceScUsdcV2} from "../../script/v2/keeper-actions/RebalanceScUsdcV2.s.sol";
 import {MainnetAddresses} from "../../script/base/MainnetAddresses.sol";
 import {Constants} from "../../src/lib/Constants.sol";
 
 import {RedeployScript} from "../../script/v2/RedeployScUsdcV2EthMainnet.s.sol";
-import {ExitAllPositionsScUsdcV2} from "../../script/v2/actions/ExitAllPositionsScUsdcV2.s.sol";
+import {ExitAllPositionsScUsdcV2} from "../../script/v2/keeper-actions/ExitAllPositionsScUsdcV2.s.sol";
 
 contract ExitAllPositionsScUsdcV2Test is Test {
     using FixedPointMathLib for uint256;
