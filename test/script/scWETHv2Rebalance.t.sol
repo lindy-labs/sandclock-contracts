@@ -374,6 +374,16 @@ contract scWETHv2RebalanceTest is Test {
         assertEq(script.getLtv(morphoAdapter), morphoLtv, "MORPHO LTV must remain same");
     }
 
+    function testUnSupportedAdapter() public {
+        // the script must revert in case of an unsupported adapter
+        uint256 id = morphoAdapter.id();
+        hoax(C.MULTISIG);
+        vault.removeAdapter(id, true);
+
+        vm.expectRevert("Adapter not supported");
+        script.run();
+    }
+
     //////////////////////////////////// INTERNAL METHODS ///////////////////////////////////////
 
     function _investAmount() internal view returns (uint256) {
