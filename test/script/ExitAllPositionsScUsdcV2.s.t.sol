@@ -39,7 +39,6 @@ contract ExitAllPositionsScUsdcV2Test is Test {
         RedeployScriptTestHarness redeployScript = new RedeployScriptTestHarness();
         redeployScript.setDeployerAddress(address(this));
         vault = redeployScript.run();
-        console2.log("depolyed");
         priceConverter = PriceConverter(MainnetAddresses.PRICE_CONVERTER);
 
         script = new ExitAllPositionsScUsdcV2TestHarness();
@@ -100,6 +99,12 @@ contract ExitAllPositionsScUsdcV2TestHarness is ExitAllPositionsScUsdcV2 {
 }
 
 contract RedeployScriptTestHarness is RedeployScript {
+    function _init() internal override {
+        deployerPrivateKey = uint256(0);
+        deployerAddress = address(this);
+        keeper = MainnetAddresses.KEEPER;
+    }
+
     function setDeployerAddress(address _deployerAddress) public {
         deployerAddress = _deployerAddress;
     }

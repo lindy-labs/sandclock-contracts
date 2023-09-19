@@ -10,6 +10,7 @@ import {WETH} from "solmate/tokens/WETH.sol";
 import {AccessControl} from "openzeppelin-contracts/access/AccessControl.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 
+import {ScUsdcV2ScriptBase} from "../../base/ScUsdcV2ScriptBase.sol";
 import {MainnetAddresses} from "../../base/MainnetAddresses.sol";
 import {PriceConverter} from "../../../src/steth/PriceConverter.sol";
 import {scUSDCv2} from "../../../src/steth/scUSDCv2.sol";
@@ -22,7 +23,7 @@ import {IAdapter} from "../../../src/steth/IAdapter.sol";
  * A script for executing "exitAllPositions" function on the scUsdcV2 vault.
  * This results in withdrawing all WETH invested into  leveraged staking (scWETH vault), repaying all WETH debt (using a flashloan if necessary) and withdrawing all USDC collateral to the vault.
  */
-contract ExitAllPositionsScUsdcV2 is Script {
+contract ExitAllPositionsScUsdcV2 is ScUsdcV2ScriptBase {
     using FixedPointMathLib for uint256;
 
     /*//////////////////////////////////////////////////////////////
@@ -35,17 +36,12 @@ contract ExitAllPositionsScUsdcV2 is Script {
 
     /*//////////////////////////////////////////////////////////////*/
 
-    uint256 keeperPrivateKey = uint256(vm.envOr("KEEPER_PRIVATE_KEY", bytes32(0x0)));
-    address keeper = keeperPrivateKey != 0 ? vm.addr(keeperPrivateKey) : MainnetAddresses.KEEPER;
-    scUSDCv2 public scUsdcV2 = scUSDCv2(MainnetAddresses.SCUSDCV2);
-    MorphoAaveV3ScUsdcAdapter public morphoAdapter = MorphoAaveV3ScUsdcAdapter(MainnetAddresses.SCUSDCV2_MORPHO_ADAPTER);
-    AaveV2ScUsdcAdapter public aaveV2Adapter = AaveV2ScUsdcAdapter(MainnetAddresses.SCUSDCV2_AAVEV2_ADAPTER);
-    AaveV3ScUsdcAdapter public aaveV3Adapter = AaveV3ScUsdcAdapter(MainnetAddresses.SCUSDCV2_AAVEV3_ADAPTER);
-
     function run() external {
         console2.log("--ExitAllPositions script running--");
 
         require(scUsdcV2.hasRole(scUsdcV2.KEEPER_ROLE(), address(keeper)), "invalid keeper");
+
+        _logScriptParams();
 
         uint256 totalAssets = scUsdcV2.totalAssets();
         uint256 minEndTotalAssets = totalAssets.mulWadDown(1e18 - maxAceeptableLossPercent);

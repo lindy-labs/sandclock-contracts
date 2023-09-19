@@ -78,6 +78,8 @@ contract RebalanceScUsdcV2 is ScUsdcV2ScriptBase {
 
         require(scUsdcV2.hasRole(scUsdcV2.KEEPER_ROLE(), address(keeper)), "invalid keeper");
 
+        _logScriptParams();
+
         _initializeAdapterSettings();
 
         uint256 minUsdcFromProfitSelling = _sellWethProfitIfAboveDefinedMin();

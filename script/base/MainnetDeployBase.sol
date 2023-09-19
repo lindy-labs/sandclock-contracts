@@ -16,14 +16,22 @@ import {sc4626} from "../../src/sc4626.sol";
  * Mainnet base deployment file that handles deployment.
  */
 abstract contract MainnetDeployBase is CREATE3Script {
-    uint256 deployerPrivateKey = uint256(vm.envOr("PRIVATE_KEY", bytes32(0x0)));
-    address deployerAddress = deployerPrivateKey != 0 ? vm.addr(deployerPrivateKey) : address(this);
-    address keeper = vm.envOr("KEEPER", MainnetAddresses.KEEPER);
+    uint256 deployerPrivateKey;
+    address deployerAddress;
+    address keeper;
 
     WETH weth = WETH(payable(C.WETH));
     ERC20 usdc = ERC20(C.USDC);
 
-    constructor() CREATE3Script(vm.envString("VERSION")) {}
+    constructor() CREATE3Script(vm.envOr("VERSION", string("0.0.0"))) {
+        _init();
+    }
+
+    function _init() internal virtual {
+        deployerPrivateKey = uint256(vm.envBytes32("PRIVATE_KEY"));
+        deployerAddress = vm.addr(deployerPrivateKey);
+        keeper = vm.envAddress("KEEPER");
+    }
 
     function _transferAdminRoleToMultisig(AccessControl _contract, address _currentAdmin) internal {
         _contract.grantRole(_contract.DEFAULT_ADMIN_ROLE(), C.MULTISIG);

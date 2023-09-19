@@ -23,7 +23,19 @@ contract RedeployScript is MainnetDeployBase {
     AaveV3ScUsdcAdapter aaveV3Adapter = AaveV3ScUsdcAdapter(MainnetAddresses.SCUSDCV2_AAVEV3_ADAPTER);
 
     function run() external returns (scUSDCv2 scUsdcV2) {
+        console2.log("--Redeploy ScUsdcV2 script running--");
+
         require(address(scWethV2) != address(0), "invalid address for ScWethV2 contract");
+
+        console2.log("\t script params");
+        console2.log("deployer\t\t", address(deployerAddress));
+        console2.log("keeper\t\t", address(keeper));
+        console2.log("scWethV2\t\t", address(scWethV2));
+        console2.log("swapper\t\t", address(swapper));
+        console2.log("priceConverter\t", address(priceConverter));
+        console2.log("morphoAdapter\t\t", address(morphoAdapter));
+        console2.log("aaveV2Adapter\t\t", address(aaveV2Adapter));
+        console2.log("aaveV3Adapter\t\t", address(aaveV3Adapter));
 
         vm.startBroadcast(deployerAddress);
 
@@ -33,17 +45,17 @@ contract RedeployScript is MainnetDeployBase {
         // add adapters
         if (address(morphoAdapter) != address(0)) {
             scUsdcV2.addAdapter(morphoAdapter);
-            console2.log("added MorphoAaveV3ScUsdcAdapter:", address(morphoAdapter));
+            console2.log("morphoAaveV3ScUsdcAdapter added");
         }
 
         if (address(aaveV2Adapter) != address(0)) {
             scUsdcV2.addAdapter(aaveV2Adapter);
-            console2.log("added AaveV2ScUsdcAdapter:", address(aaveV2Adapter));
+            console2.log("aaveV2ScUsdcAdapter added");
         }
 
         if (address(aaveV3Adapter) != address(0)) {
             scUsdcV2.addAdapter(aaveV3Adapter);
-            console2.log("added AaveV3ScUsdcAdapter:", address(aaveV3Adapter));
+            console2.log("aaveV3ScUsdcAdapter added");
         }
 
         // initial deposit
@@ -53,5 +65,7 @@ contract RedeployScript is MainnetDeployBase {
         _transferAdminRoleToMultisig(scUsdcV2, deployerAddress);
 
         vm.stopBroadcast();
+
+        console2.log("--Redeploy ScUsdcV2 script done--");
     }
 }
