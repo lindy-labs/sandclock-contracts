@@ -374,6 +374,68 @@ contract scWETHv2RebalanceTest is Test {
         assertEq(script.getLtv(morphoAdapter), morphoLtv, "MORPHO LTV must remain same");
     }
 
+    function testInvestOneAdapter() public {
+        uint256 amount = 10 ether;
+        vault.deposit{value: amount}(address(this));
+
+        uint256 investAmount = _investAmount();
+
+        // change allocation percents
+        script.updateMorphoAllocationPercent(0);
+        script.updateCompoundV3AllocationPercent(0);
+        script.updateAaveV3AllocationPercent(1e18);
+
+        script.run();
+
+        assertEq(vault.totalInvested(), investAmount, "totalInvested not updated");
+
+        uint256 totalCollateral = script.priceConverter().wstEthToEth(vault.totalCollateral());
+        uint256 totalDebt = vault.totalDebt();
+        assertApproxEqRel(totalCollateral - totalDebt, investAmount, 0.01e18, "totalAssets not equal amount");
+        assertEq(vault.totalInvested(), investAmount, "totalInvested not updated");
+
+        uint256 aaveDeposited = script.getCollateralInWeth(aaveV3Adapter) - vault.getDebt(aaveV3Adapter.id());
+
+        assertApproxEqRel(aaveDeposited, investAmount, 0.006e18, "aaveV3 allocation not correct");
+
+        _assertAllocations(0, 0, 1e18);
+
+        assertApproxEqRel(
+            script.getLtv(aaveV3Adapter), script.targetLtv(aaveV3Adapter), 0.005e18, "aavev3 ltv not correct"
+        );
+    }
+
+    function testDisinvestOneAdapter() public {
+        uint256 amount = 10 ether;
+        vault.deposit{value: amount}(address(this));
+        uint256 investAmount = _investAmount();
+
+        // change allocation percents
+        script.updateMorphoAllocationPercent(0);
+        script.updateCompoundV3AllocationPercent(0);
+        script.updateAaveV3AllocationPercent(1e18);
+
+        script.run();
+
+        uint256 assets = vault.totalAssets();
+
+        script = new scWETHv2RebalanceTestHarness(); // reset script state
+
+        uint256 updatedAaveTargetLtv = script.AAVEV3_TARGET_LTV() - 0.02e18;
+
+        // now decrease target ltvs to simulate loss
+        script.updateAaveV3TargetLtv(updatedAaveTargetLtv);
+
+        script.run();
+
+        assertEq(vault.totalInvested(), investAmount, "totalInvested must not change");
+
+        assertApproxEqRel(vault.totalAssets(), assets, 0.0015e18, "must not change total assets");
+
+        _assertLtvs(0, 0, updatedAaveTargetLtv);
+        _assertAllocations(0, 0, 1e18);
+    }
+
     function testUnSupportedAdapter() public {
         // the script must revert in case of an unsupported adapter
         uint256 id = morphoAdapter.id();

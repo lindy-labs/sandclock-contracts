@@ -203,11 +203,27 @@ contract scWETHv2Rebalance is Script, scWETHv2Helper {
                         scWETHv2.supplyAndBorrow.selector, data.adapter.id(), data.supplyAmount, data.flashLoanAmount
                     )
                 );
+
+                // console log
+                console2.log(
+                    "supplying and borrowing from adapter\t",
+                    data.adapter.id().toString(),
+                    "\tamount\t",
+                    data.supplyAmount.toString()
+                );
             } else {
                 multicallData.push(
                     abi.encodeWithSelector(
                         scWETHv2.repayAndWithdraw.selector, data.adapter.id(), data.flashLoanAmount, data.withdrawAmount
                     )
+                );
+
+                // console log
+                console2.log(
+                    "repaying and withdrawing from adapter\t",
+                    data.adapter.id().toString(),
+                    "\tamount\t",
+                    data.flashLoanAmount.toString()
                 );
             }
         }
@@ -251,19 +267,26 @@ contract scWETHv2Rebalance is Script, scWETHv2Helper {
 
         if (target > debt) {
             flashLoanAmount = (target - debt).divWadDown(C.ONE - targetLtv[_adapter]);
-            uint256 supplyAmount = priceConverter.ethToWstEth(_amount + flashLoanAmount).mulWadDown(stEthRateTolerance);
 
-            rebalanceDataParams.push(RebalanceDataParams(_adapter, flashLoanAmount, supplyAmount, 0));
+            if (flashLoanAmount > 0) {
+                uint256 supplyAmount =
+                    priceConverter.ethToWstEth(_amount + flashLoanAmount).mulWadDown(stEthRateTolerance);
 
-            investFlashLoanAmount += flashLoanAmount;
+                rebalanceDataParams.push(RebalanceDataParams(_adapter, flashLoanAmount, supplyAmount, 0));
+
+                investFlashLoanAmount += flashLoanAmount;
+            }
         } else {
             flashLoanAmount = (debt - target).divWadDown(C.ONE - targetLtv[_adapter]);
-            uint256 withdrawAmount = priceConverter.ethToWstEth(flashLoanAmount);
 
-            rebalanceDataParams.push(RebalanceDataParams(_adapter, flashLoanAmount, 0, withdrawAmount));
+            if (flashLoanAmount > 0) {
+                uint256 withdrawAmount = priceConverter.ethToWstEth(flashLoanAmount);
 
-            totalWstEthWithdrawn += withdrawAmount;
-            disinvestFlashLoanAmount += flashLoanAmount;
+                rebalanceDataParams.push(RebalanceDataParams(_adapter, flashLoanAmount, 0, withdrawAmount));
+
+                totalWstEthWithdrawn += withdrawAmount;
+                disinvestFlashLoanAmount += flashLoanAmount;
+            }
         }
     }
 
