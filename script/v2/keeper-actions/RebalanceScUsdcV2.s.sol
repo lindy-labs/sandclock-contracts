@@ -145,7 +145,10 @@ contract RebalanceScUsdcV2 is ScUsdcV2ScriptBase {
         for (uint256 i = 0; i < adapterSettings.length; i++) {
             AdapterSettings memory settings = adapterSettings[i];
 
-            if (!scUsdcV2.isSupported(settings.adapterId) && settings.targetLtv > 0) {
+            if (
+                !scUsdcV2.isSupported(settings.adapterId)
+                    && (settings.targetLtv > 0 || settings.investableAmountPercent > 0)
+            ) {
                 revert ScriptCannotUseUnsupportedAdapter(settings.adapterId);
             }
 
