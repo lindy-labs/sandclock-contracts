@@ -47,13 +47,6 @@ contract scWETHv2Rebalance is Script, scWETHv2Helper {
     using Strings for *;
     using stdJson for string;
 
-    struct RebalanceDataParams {
-        IAdapter adapter;
-        uint256 flashLoanAmount;
-        uint256 supplyAmount;
-        uint256 withdrawAmount;
-    }
-
     ////////////////////////// BUTTONS ///////////////////////////////
     uint256 public morphoInvestableAmountPercent = 0.4e18;
     uint256 public morphoTargetLtv = 0.8e18;
@@ -79,6 +72,15 @@ contract scWETHv2Rebalance is Script, scWETHv2Helper {
 
     ///////////////////////////////////////////////////////////////////////
 
+    struct RebalanceDataParams {
+        IAdapter adapter;
+        uint256 flashLoanAmount;
+        uint256 supplyAmount;
+        uint256 withdrawAmount;
+    }
+
+    error ScriptAdapterNotSupported(uint256 adapterId);
+
     uint256 keeperPrivateKey = uint256(vm.envOr("KEEPER_PRIVATE_KEY", bytes32(0x00)));
     address keeper = keeperPrivateKey != 0 ? vm.addr(keeperPrivateKey) : MA.KEEPER;
 
@@ -99,12 +101,12 @@ contract scWETHv2Rebalance is Script, scWETHv2Helper {
     uint256 totalWstEthWithdrawn;
     uint256 totalFlashLoanAmount;
 
-    constructor() scWETHv2Helper(scWETHv2(payable(MA.SCWETHV2)), PriceConverter(MA.PRICE_CONVERTER)) {
-        _initializeAdapters();
-    }
+    constructor() scWETHv2Helper(scWETHv2(payable(MA.SCWETHV2)), PriceConverter(MA.PRICE_CONVERTER)) {}
 
     function run() external {
         _logs("-------------------BEFORE REBALANCE-------------------");
+
+        _initializeAdapterSettings();
 
         uint256 investAmount = _calcInvestAmount();
         _createRebalanceParams(investAmount);
@@ -121,7 +123,7 @@ contract scWETHv2Rebalance is Script, scWETHv2Helper {
         _logs("-------------------AFTER REBALANCE-------------------");
     }
 
-    function _initializeAdapters() internal {
+    function _initializeAdapterSettings() internal {
         uint256 totalAllocationPercent;
 
         adapterAllocationPercent[morphoAdapter] = morphoInvestableAmountPercent;
@@ -157,8 +159,9 @@ contract scWETHv2Rebalance is Script, scWETHv2Helper {
             adapter = allAdapters[i];
             allocationPercent = adapterAllocationPercent[adapter];
 
-            require(vault.isSupported(adapter.id()), "Adapter not supported");
-
+            if (!vault.isSupported(adapter.id()) && (targetLtv[adapter] > 0 || allocationPercent > 0)) {
+                revert ScriptAdapterNotSupported(adapter.id());
+            }
             // first check if allocation Percent is greater than zero
             if (allocationPercent != 0) {
                 _createRebalanceDataFor(adapter, _investAmount.mulWadDown(allocationPercent));

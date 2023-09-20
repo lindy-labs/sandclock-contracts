@@ -234,9 +234,9 @@ contract scWETHv2RebalanceTest is Test {
         uint256 aaveV3Allocation = 0.3e18;
 
         // change allocation percents
-        script.updateMorphoAllocationPercent(morphoAllocation);
-        script.updateCompoundV3AllocationPercent(compoundV3Allocation);
-        script.updateAaveV3AllocationPercent(aaveV3Allocation);
+        script.setMorphoInvestableAmountPercent(morphoAllocation);
+        script.setCompoundV3InvestableAmountPercent(compoundV3Allocation);
+        script.setAaveV3InvestableAmountPercent(aaveV3Allocation);
 
         script.run();
 
@@ -246,9 +246,9 @@ contract scWETHv2RebalanceTest is Test {
         script = new scWETHv2RebalanceTestHarness(); // reset script state
 
         // change allocation percents
-        script.updateMorphoAllocationPercent(morphoAllocation);
-        script.updateCompoundV3AllocationPercent(compoundV3Allocation);
-        script.updateAaveV3AllocationPercent(aaveV3Allocation);
+        script.setMorphoInvestableAmountPercent(morphoAllocation);
+        script.setCompoundV3InvestableAmountPercent(compoundV3Allocation);
+        script.setAaveV3InvestableAmountPercent(aaveV3Allocation);
 
         // simulate loss in compound and profit in aave and morpho
         uint256 updatedCompoundV3TargetLtv = script.compoundV3TargetLtv() - 0.02e18;
@@ -318,9 +318,9 @@ contract scWETHv2RebalanceTest is Test {
         uint256 aaveV3Allocation = 0.5e18;
 
         // change allocation percents
-        script.updateMorphoAllocationPercent(0);
-        script.updateCompoundV3AllocationPercent(compoundV3Allocation);
-        script.updateAaveV3AllocationPercent(aaveV3Allocation);
+        script.setMorphoInvestableAmountPercent(0);
+        script.setCompoundV3InvestableAmountPercent(compoundV3Allocation);
+        script.setAaveV3InvestableAmountPercent(aaveV3Allocation);
 
         script.run();
 
@@ -330,9 +330,9 @@ contract scWETHv2RebalanceTest is Test {
         script = new scWETHv2RebalanceTestHarness(); // reset script state
 
         // change allocation percents
-        script.updateCompoundV3AllocationPercent(100e18);
-        script.updateAaveV3AllocationPercent(0);
-        script.updateMorphoAllocationPercent(0);
+        script.setCompoundV3InvestableAmountPercent(1e18);
+        script.setAaveV3InvestableAmountPercent(0);
+        script.setMorphoInvestableAmountPercent(0);
 
         // simulate loss in  aave
         uint256 updatedAaveV3TargetLtv = script.aaveV3TargetLtv() - 0.02e18;
@@ -381,9 +381,9 @@ contract scWETHv2RebalanceTest is Test {
         uint256 investAmount = _investAmount();
 
         // change allocation percents
-        script.updateMorphoAllocationPercent(0);
-        script.updateCompoundV3AllocationPercent(0);
-        script.updateAaveV3AllocationPercent(1e18);
+        script.setMorphoInvestableAmountPercent(0);
+        script.setCompoundV3InvestableAmountPercent(0);
+        script.setAaveV3InvestableAmountPercent(1e18);
 
         script.run();
 
@@ -411,9 +411,9 @@ contract scWETHv2RebalanceTest is Test {
         uint256 investAmount = _investAmount();
 
         // change allocation percents
-        script.updateMorphoAllocationPercent(0);
-        script.updateCompoundV3AllocationPercent(0);
-        script.updateAaveV3AllocationPercent(1e18);
+        script.setMorphoInvestableAmountPercent(0);
+        script.setCompoundV3InvestableAmountPercent(0);
+        script.setAaveV3InvestableAmountPercent(1e18);
 
         script.run();
 
@@ -436,14 +436,55 @@ contract scWETHv2RebalanceTest is Test {
         _assertAllocations(0, 0, 1e18);
     }
 
-    function testUnSupportedAdapter() public {
+    function testRevertsIfLtvForUnsupportedAdapterNot0() public {
         // the script must revert in case of an unsupported adapter
         uint256 id = morphoAdapter.id();
         hoax(C.MULTISIG);
         vault.removeAdapter(id, true);
 
-        vm.expectRevert("Adapter not supported");
+        script.updateMorphoTargetLtv(0.8e18);
+        script.setMorphoInvestableAmountPercent(0);
+        script.setCompoundV3InvestableAmountPercent(0.4e18);
+        script.setAaveV3InvestableAmountPercent(0.6e18);
+
+        vm.expectRevert(abi.encodePacked(scWETHv2Rebalance.ScriptAdapterNotSupported.selector, id));
         script.run();
+    }
+
+    function testRevertsIfAllocationPercentForUnsupportedAdapterNot0() public {
+        // the script must revert in case of an unsupported adapter
+        uint256 id = morphoAdapter.id();
+        hoax(C.MULTISIG);
+        vault.removeAdapter(id, true);
+
+        script.updateMorphoTargetLtv(0);
+        script.setMorphoInvestableAmountPercent(0.1e18);
+        script.setCompoundV3InvestableAmountPercent(0.3e18);
+        script.setAaveV3InvestableAmountPercent(0.6e18);
+
+        vm.expectRevert(abi.encodePacked(scWETHv2Rebalance.ScriptAdapterNotSupported.selector, id));
+        script.run();
+    }
+
+    function testWorksIfLtvAndAllocationPercentForUnsupportedAdapterIs0() public {
+        uint256 amount = 10 ether;
+        vault.deposit{value: amount}(address(this));
+        uint256 investAmount = _investAmount();
+
+        uint256 id = morphoAdapter.id();
+        hoax(C.MULTISIG);
+        vault.removeAdapter(id, true);
+
+        script.updateMorphoTargetLtv(0);
+        script.setMorphoInvestableAmountPercent(0);
+        script.setCompoundV3InvestableAmountPercent(0.4e18);
+        script.setAaveV3InvestableAmountPercent(0.6e18);
+
+        script.run();
+
+        assertEq(vault.totalInvested(), investAmount, "totalInvested must not change");
+        _assertAllocations(0, 0.4e18, 0.6e18);
+        _assertLtvs(0, script.compoundV3TargetLtv(), script.aaveV3TargetLtv());
     }
 
     //////////////////////////////////// INTERNAL METHODS ///////////////////////////////////////
@@ -504,11 +545,6 @@ contract scWETHv2RebalanceTest is Test {
     }
 }
 
-// TODO
-// Add tests f
-// investing when there is no underlying float in the contract (just reinvesting profits)
-// For other variations of allocation Percents
-
 contract scWETHv2RebalanceTestHarness is scWETHv2Rebalance {
     bytes testSwapData;
 
@@ -521,27 +557,27 @@ contract scWETHv2RebalanceTestHarness is scWETHv2Rebalance {
     }
 
     function updateMorphoTargetLtv(uint256 _ltv) external {
-        targetLtv[morphoAdapter] = _ltv;
+        morphoTargetLtv = _ltv;
     }
 
     function updateCompoundV3TargetLtv(uint256 _ltv) external {
-        targetLtv[compoundV3Adapter] = _ltv;
+        compoundV3TargetLtv = _ltv;
     }
 
     function updateAaveV3TargetLtv(uint256 _ltv) external {
-        targetLtv[aaveV3Adapter] = _ltv;
+        aaveV3TargetLtv = _ltv;
     }
 
-    function updateMorphoAllocationPercent(uint256 _percent) external {
-        adapterAllocationPercent[morphoAdapter] = _percent;
+    function setMorphoInvestableAmountPercent(uint256 _percent) external {
+        morphoInvestableAmountPercent = _percent;
     }
 
-    function updateCompoundV3AllocationPercent(uint256 _percent) external {
-        adapterAllocationPercent[compoundV3Adapter] = _percent;
+    function setCompoundV3InvestableAmountPercent(uint256 _percent) external {
+        compoundV3InvestableAmountPercent = _percent;
     }
 
-    function updateAaveV3AllocationPercent(uint256 _percent) external {
-        adapterAllocationPercent[aaveV3Adapter] = _percent;
+    function setAaveV3InvestableAmountPercent(uint256 _percent) external {
+        aaveV3InvestableAmountPercent = _percent;
     }
 }
 
