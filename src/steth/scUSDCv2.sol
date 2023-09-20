@@ -58,7 +58,7 @@ contract scUSDCv2 is BaseV2Vault {
     event Disinvested(uint256 wethAmount);
 
     constructor(address _admin, address _keeper, ERC4626 _scWETH, PriceConverter _priceConverter, Swapper _swapper)
-        BaseV2Vault(_admin, _keeper, ERC20(C.USDC), _priceConverter, _swapper, "Sandclock USDC Vault v2", "scUSDC")
+        BaseV2Vault(_admin, _keeper, ERC20(C.USDC), _priceConverter, _swapper, "Sandclock Yield USDC", "scUSDC")
     {
         _zeroAddressCheck(address(_scWETH));
 
