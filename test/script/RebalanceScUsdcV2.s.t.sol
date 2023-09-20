@@ -59,6 +59,15 @@ contract RebalanceScUsdcV2Test is Test {
         assertApproxEqRel(vault.usdcBalance(), expectedFloat, 0.001e18, "usdc balance");
     }
 
+    function test_run_failsIfTotalInvestableAmountPercentNot100() public {
+        script.setMorphoInvestableAmountPercent(0.5e18);
+        script.setAaveV2InvestableAmountPercent(0.5e18);
+        script.setAaveV3InvestableAmountPercent(0.5e18);
+
+        vm.expectRevert("investable amount percent not 100%");
+        script.run();
+    }
+
     function test_run_twoAdaptersInitialRebalance() public {
         uint256 morphoInvestableAmountPercent = 0.4e18;
         uint256 aaveV2InvestableAmountPercent = 0.6e18;
@@ -150,7 +159,9 @@ contract RebalanceScUsdcV2Test is Test {
         uint256 newMorphoTargetLtv = script.morphoTargetLtv() - 0.1e18;
         uint256 newAaveV2TargetLtv = script.aaveV2TargetLtv() + 0.1e18;
         script.setMorphoTargetLtv(newMorphoTargetLtv);
+        script.setMorphoInvestableAmountPercent(0);
         script.setAaveV2TargetLtv(newAaveV2TargetLtv);
+        script.setAaveV2InvestableAmountPercent(1e18);
 
         uint256 morphoExpectedCollateral = vault.getCollateral(morpho.id());
         uint256 moprhoExpectedDebt = priceConverter.usdcToEth(morphoExpectedCollateral).mulWadDown(newMorphoTargetLtv);

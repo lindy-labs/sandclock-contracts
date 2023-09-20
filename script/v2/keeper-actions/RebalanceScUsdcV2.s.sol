@@ -33,7 +33,7 @@ contract RebalanceScUsdcV2 is ScUsdcV2ScriptBase {
     // minUsdcProfitToReinvest - the minimum amount of weth profit (converted to USDC) that needs to be made for reinvesting to make sense (ie gas costs < profit made)
     // maxProfitSellSlippage - the maximum amount of slippage allowed when selling weth profit for usdc
     // investable amount percent - the percentage of the available funds that can be invested for a specific adapter (all have to sum up to 100% or 1e18)
-    // target ltv - the target loan to value ratio for a specific adapter
+    // target ltv - the target loan to value ratio for a specific adapter. Set to 0 for unused or unsupported adapters!
 
     uint256 public minUsdcProfitToReinvest = 10e6; // 10 USDC (set to a more realistic value ~100 USDC)
     uint256 public maxProfitSellSlippage = 0.01e18; // 1%
@@ -119,6 +119,11 @@ contract RebalanceScUsdcV2 is ScUsdcV2ScriptBase {
                 investableAmountPercent: aaveV3InvestableAmountPercent,
                 targetLtv: aaveV3TargetLtv
             })
+        );
+
+        require(
+            morphoInvestableAmountPercent + aaveV2InvestableAmountPercent + aaveV3InvestableAmountPercent == 1e18,
+            "investable amount percent not 100%"
         );
     }
 
