@@ -55,14 +55,14 @@ contract scWETHv2Rebalance is Script, scWETHv2Helper {
     }
 
     ////////////////////////// BUTTONS ///////////////////////////////
-    uint256 public MORPHO_ALLOCATION_PERCENT = 0.4e18;
-    uint256 public MORPHO_TARGET_LTV = 0.8e18;
+    uint256 public morphoInvestableAmountPercent = 0.4e18;
+    uint256 public morphoTargetLtv = 0.8e18;
 
-    uint256 public COMPOUNDV3_ALLOCATION_PERCENT = 0.6e18;
-    uint256 public COMPOUNDV3_TARGET_LTV = 0.8e18;
+    uint256 public compoundV3InvestableAmountPercent = 0.6e18;
+    uint256 public compoundV3TargetLtv = 0.8e18;
 
-    uint256 public AAVEV3_ALLOCATION_PERCENT = 0;
-    uint256 public AAVEV3_TARGET_LTV = 0.8e18;
+    uint256 public aaveV3InvestableAmountPercent = 0;
+    uint256 public aaveV3TargetLtv = 0.8e18;
 
     // if the ltv overshoots the target ltv by this threshold, disinvest
     uint256 public disinvestThreshold = 0.005e18; // 0.5 %
@@ -124,17 +124,17 @@ contract scWETHv2Rebalance is Script, scWETHv2Helper {
     function _initializeAdapters() internal {
         uint256 totalAllocationPercent;
 
-        adapterAllocationPercent[morphoAdapter] = MORPHO_ALLOCATION_PERCENT;
-        targetLtv[morphoAdapter] = MORPHO_TARGET_LTV;
-        totalAllocationPercent += MORPHO_ALLOCATION_PERCENT;
+        adapterAllocationPercent[morphoAdapter] = morphoInvestableAmountPercent;
+        targetLtv[morphoAdapter] = morphoTargetLtv;
+        totalAllocationPercent += morphoInvestableAmountPercent;
 
-        adapterAllocationPercent[aaveV3Adapter] = AAVEV3_ALLOCATION_PERCENT;
-        targetLtv[aaveV3Adapter] = AAVEV3_TARGET_LTV;
-        totalAllocationPercent += AAVEV3_ALLOCATION_PERCENT;
+        adapterAllocationPercent[aaveV3Adapter] = aaveV3InvestableAmountPercent;
+        targetLtv[aaveV3Adapter] = aaveV3TargetLtv;
+        totalAllocationPercent += aaveV3InvestableAmountPercent;
 
-        adapterAllocationPercent[compoundV3Adapter] = COMPOUNDV3_ALLOCATION_PERCENT;
-        targetLtv[compoundV3Adapter] = COMPOUNDV3_TARGET_LTV;
-        totalAllocationPercent += COMPOUNDV3_ALLOCATION_PERCENT;
+        adapterAllocationPercent[compoundV3Adapter] = compoundV3InvestableAmountPercent;
+        targetLtv[compoundV3Adapter] = compoundV3TargetLtv;
+        totalAllocationPercent += compoundV3InvestableAmountPercent;
 
         require(totalAllocationPercent == 1e18, "totalAllocationPercent != 100%");
     }

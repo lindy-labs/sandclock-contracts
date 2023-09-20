@@ -70,18 +70,18 @@ contract scWETHv2RebalanceTest is Test {
 
         assertApproxEqRel(
             morphoDeposited,
-            investAmount.mulWadDown(script.MORPHO_ALLOCATION_PERCENT()),
+            investAmount.mulWadDown(script.morphoInvestableAmountPercent()),
             0.006e18,
             "morpho allocation not correct"
         );
         assertApproxEqRel(
             compoundDeposited,
-            investAmount.mulWadDown(script.COMPOUNDV3_ALLOCATION_PERCENT()),
+            investAmount.mulWadDown(script.compoundV3InvestableAmountPercent()),
             0.006e18,
             "compound allocation not correct"
         );
 
-        _assertAllocations(script.MORPHO_ALLOCATION_PERCENT(), script.COMPOUNDV3_ALLOCATION_PERCENT(), 0);
+        _assertAllocations(script.morphoInvestableAmountPercent(), script.compoundV3InvestableAmountPercent(), 0);
 
         assertApproxEqRel(
             script.getLtv(morphoAdapter), script.targetLtv(morphoAdapter), 0.005e18, "morpho ltv not correct"
@@ -168,8 +168,8 @@ contract scWETHv2RebalanceTest is Test {
 
         script = new scWETHv2RebalanceTestHarness(); // reset script state
 
-        uint256 updatedMorphoTargetLtv = script.MORPHO_TARGET_LTV() - 0.02e18;
-        uint256 updatedCompoundV3TargetLtv = script.COMPOUNDV3_TARGET_LTV() - 0.02e18;
+        uint256 updatedMorphoTargetLtv = script.morphoTargetLtv() - 0.02e18;
+        uint256 updatedCompoundV3TargetLtv = script.compoundV3TargetLtv() - 0.02e18;
 
         // now decrease target ltvs to simulate loss
         script.updateMorphoTargetLtv(updatedMorphoTargetLtv);
@@ -189,7 +189,7 @@ contract scWETHv2RebalanceTest is Test {
         assertGe(leverage, script.getLeverage(), "leverage not increased after disinvest");
 
         _assertLtvs(updatedMorphoTargetLtv, updatedCompoundV3TargetLtv, 0);
-        _assertAllocations(script.MORPHO_ALLOCATION_PERCENT(), script.COMPOUNDV3_ALLOCATION_PERCENT(), 0);
+        _assertAllocations(script.morphoInvestableAmountPercent(), script.compoundV3InvestableAmountPercent(), 0);
     }
 
     function testScriptDisinvestsAndInvests() public {
@@ -202,8 +202,8 @@ contract scWETHv2RebalanceTest is Test {
         script = new scWETHv2RebalanceTestHarness(); // reset script state
 
         // simulate loss in morpho and profit in compound
-        uint256 updatedMorphoTargetLtv = script.MORPHO_TARGET_LTV() - 0.02e18;
-        uint256 updatedCompoundV3TargetLtv = script.COMPOUNDV3_TARGET_LTV() + 0.02e18;
+        uint256 updatedMorphoTargetLtv = script.morphoTargetLtv() - 0.02e18;
+        uint256 updatedCompoundV3TargetLtv = script.compoundV3TargetLtv() + 0.02e18;
 
         script.updateMorphoTargetLtv(updatedMorphoTargetLtv);
         script.updateCompoundV3TargetLtv(updatedCompoundV3TargetLtv);
@@ -251,9 +251,9 @@ contract scWETHv2RebalanceTest is Test {
         script.updateAaveV3AllocationPercent(aaveV3Allocation);
 
         // simulate loss in compound and profit in aave and morpho
-        uint256 updatedCompoundV3TargetLtv = script.COMPOUNDV3_TARGET_LTV() - 0.02e18;
-        uint256 updatedMorphoTargetLtv = script.MORPHO_TARGET_LTV() + 0.02e18;
-        uint256 updatedAaveV3TargetLtv = script.AAVEV3_TARGET_LTV() + 0.02e18;
+        uint256 updatedCompoundV3TargetLtv = script.compoundV3TargetLtv() - 0.02e18;
+        uint256 updatedMorphoTargetLtv = script.morphoTargetLtv() + 0.02e18;
+        uint256 updatedAaveV3TargetLtv = script.aaveV3TargetLtv() + 0.02e18;
 
         script.updateMorphoTargetLtv(updatedMorphoTargetLtv);
         script.updateCompoundV3TargetLtv(updatedCompoundV3TargetLtv);
@@ -285,8 +285,8 @@ contract scWETHv2RebalanceTest is Test {
 
         script = new scWETHv2RebalanceTestHarness(); // reset script state
 
-        uint256 updatedMorphoTargetLtv = script.MORPHO_TARGET_LTV() - 0.02e18;
-        uint256 updatedCompoundV3TargetLtv = script.COMPOUNDV3_TARGET_LTV() - 0.02e18;
+        uint256 updatedMorphoTargetLtv = script.morphoTargetLtv() - 0.02e18;
+        uint256 updatedCompoundV3TargetLtv = script.compoundV3TargetLtv() - 0.02e18;
 
         // now decrease target ltvs to simulate loss
         script.updateMorphoTargetLtv(updatedMorphoTargetLtv);
@@ -335,7 +335,7 @@ contract scWETHv2RebalanceTest is Test {
         script.updateMorphoAllocationPercent(0);
 
         // simulate loss in  aave
-        uint256 updatedAaveV3TargetLtv = script.AAVEV3_TARGET_LTV() - 0.02e18;
+        uint256 updatedAaveV3TargetLtv = script.aaveV3TargetLtv() - 0.02e18;
 
         script.updateAaveV3TargetLtv(updatedAaveV3TargetLtv);
 
@@ -348,7 +348,7 @@ contract scWETHv2RebalanceTest is Test {
 
         assertApproxEqRel(vault.totalAssets(), assets, 0.001e18, "must not change total assets");
 
-        _assertLtvs(0, script.COMPOUNDV3_TARGET_LTV(), updatedAaveV3TargetLtv);
+        _assertLtvs(0, script.compoundV3TargetLtv(), updatedAaveV3TargetLtv);
 
         _assertAllocations(0, compoundV3Allocation, aaveV3Allocation);
     }
@@ -421,7 +421,7 @@ contract scWETHv2RebalanceTest is Test {
 
         script = new scWETHv2RebalanceTestHarness(); // reset script state
 
-        uint256 updatedAaveTargetLtv = script.AAVEV3_TARGET_LTV() - 0.02e18;
+        uint256 updatedAaveTargetLtv = script.aaveV3TargetLtv() - 0.02e18;
 
         // now decrease target ltvs to simulate loss
         script.updateAaveV3TargetLtv(updatedAaveTargetLtv);
