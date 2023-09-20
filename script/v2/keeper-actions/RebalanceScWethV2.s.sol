@@ -41,7 +41,7 @@ import {BaseV2Vault} from "../../../src/steth/BaseV2Vault.sol";
  * Then run the script using
  * forge script script/v2/manual-runs/scWETHv2Rebalance.s.sol --rpc-url http://127.0.0.1:8545 --ffi
  */
-contract scWETHv2Rebalance is Script, scWETHv2Helper {
+contract RebalanceScWethV2 is Script, scWETHv2Helper {
     using FixedPointMathLib for uint256;
     using Surl for *;
     using Strings for *;

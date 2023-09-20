@@ -15,17 +15,17 @@ import {Address} from "openzeppelin-contracts/utils/Address.sol";
 import {WETH} from "solmate/tokens/WETH.sol";
 
 import {Constants as C} from "../../src/lib/Constants.sol";
-import {scWETHv2Rebalance} from "../../script/v2/keeper-actions/scWETHv2Rebalance.s.sol";
+import {RebalanceScWethV2} from "../../script/v2/keeper-actions/RebalanceScWethV2.s.sol";
 import {scWETHv2} from "../../src/steth/scWETHv2.sol";
 import {IAdapter} from "../../src/steth/IAdapter.sol";
 
-contract scWETHv2RebalanceTest is Test {
+contract RebalanceScWethV2Test is Test {
     using FixedPointMathLib for uint256;
     using Address for address;
 
     uint256 mainnetFork;
 
-    scWETHv2RebalanceTestHarness script;
+    RebalanceScWethV2TestHarness script;
     scWETHv2 vault;
     WETH weth = WETH(payable(C.WETH));
 
@@ -37,7 +37,7 @@ contract scWETHv2RebalanceTest is Test {
         vm.createFork(vm.envString("RPC_URL_MAINNET"));
         vm.selectFork(mainnetFork);
         vm.rollFork(18018649);
-        script = new scWETHv2RebalanceTestHarness();
+        script = new RebalanceScWethV2TestHarness();
         vault = script.vault();
 
         morphoAdapter = script.morphoAdapter();
@@ -96,7 +96,7 @@ contract scWETHv2RebalanceTest is Test {
         vault.deposit{value: amount}(address(this));
 
         script.run();
-        script = new scWETHv2RebalanceTestHarness(); // reset script state
+        script = new RebalanceScWethV2TestHarness(); // reset script state
 
         uint256 altv = script.getLtv(morphoAdapter);
         uint256 compoundLtv = script.getLtv(compoundV3Adapter);
@@ -129,7 +129,7 @@ contract scWETHv2RebalanceTest is Test {
         script.setDemoSwapData(swapData); // setting the demo swap data only for the test since the block number is set for the test but zeroEx api returns swapData for the most recent block
 
         script.run();
-        script = new scWETHv2RebalanceTestHarness(); // reset state
+        script = new RebalanceScWethV2TestHarness(); // reset state
 
         uint256 altv = script.getLtv(morphoAdapter);
         uint256 compoundLtv = script.getLtv(compoundV3Adapter);
@@ -166,7 +166,7 @@ contract scWETHv2RebalanceTest is Test {
         uint256 investAmount = _investAmount();
         script.run();
 
-        script = new scWETHv2RebalanceTestHarness(); // reset script state
+        script = new RebalanceScWethV2TestHarness(); // reset script state
 
         uint256 updatedMorphoTargetLtv = script.morphoTargetLtv() - 0.02e18;
         uint256 updatedCompoundV3TargetLtv = script.compoundV3TargetLtv() - 0.02e18;
@@ -199,7 +199,7 @@ contract scWETHv2RebalanceTest is Test {
         uint256 investAmount = _investAmount();
         script.run();
 
-        script = new scWETHv2RebalanceTestHarness(); // reset script state
+        script = new RebalanceScWethV2TestHarness(); // reset script state
 
         // simulate loss in morpho and profit in compound
         uint256 updatedMorphoTargetLtv = script.morphoTargetLtv() - 0.02e18;
@@ -243,7 +243,7 @@ contract scWETHv2RebalanceTest is Test {
         _assertAllocations(morphoAllocation, compoundV3Allocation, aaveV3Allocation);
         _assertLtvs(0.8e18, 0.8e18, 0.8e18);
 
-        script = new scWETHv2RebalanceTestHarness(); // reset script state
+        script = new RebalanceScWethV2TestHarness(); // reset script state
 
         // change allocation percents
         script.setMorphoInvestableAmountPercent(morphoAllocation);
@@ -283,7 +283,7 @@ contract scWETHv2RebalanceTest is Test {
         investAmount += amount;
         uint256 assets = vault.totalAssets();
 
-        script = new scWETHv2RebalanceTestHarness(); // reset script state
+        script = new RebalanceScWethV2TestHarness(); // reset script state
 
         uint256 updatedMorphoTargetLtv = script.morphoTargetLtv() - 0.02e18;
         uint256 updatedCompoundV3TargetLtv = script.compoundV3TargetLtv() - 0.02e18;
@@ -327,7 +327,7 @@ contract scWETHv2RebalanceTest is Test {
         _assertAllocations(0, compoundV3Allocation, aaveV3Allocation);
         _assertLtvs(0, 0.8e18, 0.8e18);
 
-        script = new scWETHv2RebalanceTestHarness(); // reset script state
+        script = new RebalanceScWethV2TestHarness(); // reset script state
 
         // change allocation percents
         script.setCompoundV3InvestableAmountPercent(1e18);
@@ -361,7 +361,7 @@ contract scWETHv2RebalanceTest is Test {
 
         uint256 morphoLtv = script.getLtv(morphoAdapter);
 
-        script = new scWETHv2RebalanceTestHarness(); // reset script state
+        script = new RebalanceScWethV2TestHarness(); // reset script state
 
         // simulate loss in morpho but not crossing disinvest threshold
         uint256 updatedMorphoTargetLtv = morphoLtv - script.disinvestThreshold();
@@ -419,7 +419,7 @@ contract scWETHv2RebalanceTest is Test {
 
         uint256 assets = vault.totalAssets();
 
-        script = new scWETHv2RebalanceTestHarness(); // reset script state
+        script = new RebalanceScWethV2TestHarness(); // reset script state
 
         uint256 updatedAaveTargetLtv = script.aaveV3TargetLtv() - 0.02e18;
 
@@ -447,7 +447,7 @@ contract scWETHv2RebalanceTest is Test {
         script.setCompoundV3InvestableAmountPercent(0.4e18);
         script.setAaveV3InvestableAmountPercent(0.6e18);
 
-        vm.expectRevert(abi.encodePacked(scWETHv2Rebalance.ScriptAdapterNotSupported.selector, id));
+        vm.expectRevert(abi.encodePacked(RebalanceScWethV2.ScriptAdapterNotSupported.selector, id));
         script.run();
     }
 
@@ -462,7 +462,7 @@ contract scWETHv2RebalanceTest is Test {
         script.setCompoundV3InvestableAmountPercent(0.3e18);
         script.setAaveV3InvestableAmountPercent(0.6e18);
 
-        vm.expectRevert(abi.encodePacked(scWETHv2Rebalance.ScriptAdapterNotSupported.selector, id));
+        vm.expectRevert(abi.encodePacked(RebalanceScWethV2.ScriptAdapterNotSupported.selector, id));
         script.run();
     }
 
@@ -545,7 +545,7 @@ contract scWETHv2RebalanceTest is Test {
     }
 }
 
-contract scWETHv2RebalanceTestHarness is scWETHv2Rebalance {
+contract RebalanceScWethV2TestHarness is RebalanceScWethV2 {
     bytes testSwapData;
 
     function getSwapData(uint256, address, address) public view override returns (bytes memory swapData) {
