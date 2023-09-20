@@ -86,7 +86,7 @@ contract RebalanceScUsdcV2 is ScUsdcV2ScriptBase {
 
         _createRebalanceMulticallDataForAllAdapters(investableAmount, missingFloat);
 
-        _logVaultInfo("state before state");
+        _logVaultInfo("state before rebalance");
 
         vm.startBroadcast(keeper);
         scUsdcV2.rebalance(multicallData);
