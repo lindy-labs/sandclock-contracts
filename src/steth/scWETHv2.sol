@@ -59,7 +59,7 @@ contract scWETHv2 is BaseV2Vault {
     IwstETH constant wstETH = IwstETH(C.WSTETH);
 
     constructor(address _admin, address _keeper, WETH _weth, Swapper _swapper, PriceConverter _priceConverter)
-        BaseV2Vault(_admin, _keeper, _weth, _priceConverter, _swapper, "Sandclock WETH Vault v2", "scETH")
+        BaseV2Vault(_admin, _keeper, _weth, _priceConverter, _swapper, "Sandclock Yield ETH", "scETH")
     {
         zeroExSwapWhitelist[ERC20(C.WSTETH)] = true;
     }
