@@ -11,8 +11,8 @@ import {IAdapter} from "../../src/steth/IAdapter.sol";
 contract scWETHv2Helper {
     using FixedPointMathLib for uint256;
 
-    scWETHv2 vault;
-    PriceConverter priceConverter;
+    scWETHv2 public vault;
+    PriceConverter public priceConverter;
 
     constructor(scWETHv2 _vault, PriceConverter _priceConverter) {
         vault = _vault;

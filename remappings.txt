@@ -4,3 +4,4 @@ forge-std/=lib/forge-std/src/
 solmate/=lib/solmate/src/
 openzeppelin-contracts/=lib/openzeppelin-contracts/contracts
 aave-v3/=lib/aave-v3-core/contracts/
+surl/=lib/surl/src
