@@ -41,8 +41,8 @@ contract scWETHv2ExitAllPositionsTest is Test {
         vault = exitScript.vault();
     }
 
-    function testScriptExitsAllPositions() public {
-        uint256 amount = 15 ether;
+    function testScriptExitsAllPositions(uint256 amount) public {
+        amount = bound(amount, 15 ether, 100 ether);
         vault.deposit{value: amount}(address(this));
 
         // run rebalance script to invest
@@ -53,6 +53,9 @@ contract scWETHv2ExitAllPositionsTest is Test {
         assertApproxEqRel(
             vault.totalAssets() - float, amount - vault.minimumFloatAmount(), 0.005e18, "Investment failure"
         );
+
+        assertGe(vault.totalCollateral(), amount, "totalCollateral error");
+        assertGe(vault.totalDebt(), amount, "totalDebt error");
 
         // exit all positions
         exitScript.run();
