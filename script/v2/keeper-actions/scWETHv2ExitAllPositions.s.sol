@@ -5,31 +5,14 @@ import "forge-std/console2.sol";
 import "forge-std/Test.sol";
 import "forge-std/Script.sol";
 
-import {ERC20} from "solmate/tokens/ERC20.sol";
 import {WETH} from "solmate/tokens/WETH.sol";
-import {AccessControl} from "openzeppelin-contracts/access/AccessControl.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
-import {Surl} from "surl/Surl.sol";
-import {Strings} from "openzeppelin-contracts/utils/Strings.sol";
-import {stdJson} from "forge-std/StdJson.sol";
 
 import {Constants as C} from "../../../src/lib/Constants.sol";
 import {MainnetAddresses as MA} from "../../base/MainnetAddresses.sol";
-import {ISwapRouter} from "../../../src/interfaces/uniswap/ISwapRouter.sol";
-import {sc4626} from "../../../src/sc4626.sol";
 import {scWETHv2} from "../../../src/steth/scWETHv2.sol";
-import {scUSDCv2} from "../../../src/steth/scUSDCv2.sol";
-import {Swapper} from "../../../src/steth/Swapper.sol";
 import {PriceConverter} from "../../../src/steth/PriceConverter.sol";
-import {AaveV3ScWethAdapter as scWethAaveV3Adapter} from "../../../src/steth/scWethV2-adapters/AaveV3ScWethAdapter.sol";
-import {CompoundV3ScWethAdapter as scWethCompoundV3Adapter} from
-    "../../../src/steth/scWethV2-adapters/CompoundV3ScWethAdapter.sol";
-import {AaveV3ScUsdcAdapter as scUsdcAaveV3Adapter} from "../../../src/steth/scUsdcV2-adapters/AaveV3ScUsdcAdapter.sol";
-import {AaveV2ScUsdcAdapter as scUsdcAaveV2Adapter} from "../../../src/steth/scUsdcV2-adapters/AaveV2ScUsdcAdapter.sol";
-import {MainnetDeployBase} from "../../base/MainnetDeployBase.sol";
-import {IAdapter} from "../../../src/steth/IAdapter.sol";
 import {scWETHv2Helper} from "../../../test/helpers/scWETHv2Helper.sol";
-import {BaseV2Vault} from "../../../src/steth/BaseV2Vault.sol";
 
 /**
  * @notice Exit all positions and withdraw all funds as WETH to the vault
