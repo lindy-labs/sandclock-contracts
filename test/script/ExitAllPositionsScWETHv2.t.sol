@@ -15,20 +15,20 @@ import {Address} from "openzeppelin-contracts/utils/Address.sol";
 import {WETH} from "solmate/tokens/WETH.sol";
 
 import {Constants as C} from "../../src/lib/Constants.sol";
-import {scWETHv2Rebalance} from "../../script/v2/keeper-actions/scWETHv2Rebalance.s.sol";
-import {scWETHv2ExitAllPositions} from "../../script/v2/keeper-actions/scWETHv2ExitAllPositions.s.sol";
+import {RebalanceScWethV2} from "../../script/v2/keeper-actions/RebalanceScWethV2.s.sol";
+import {ExitAllPositionsScWethV2} from "../../script/v2/keeper-actions/ExitAllPositionsScWethV2.s.sol";
 
 import {scWETHv2} from "../../src/steth/scWETHv2.sol";
 import {IAdapter} from "../../src/steth/IAdapter.sol";
 
-contract scWETHv2ExitAllPositionsTest is Test {
+contract ExitAllPositionsScWETHv2Test is Test {
     using FixedPointMathLib for uint256;
     using Address for address;
 
     uint256 mainnetFork;
 
-    scWETHv2RebalanceTestHarness rebalanceScript;
-    scWETHv2ExitAllPositions exitScript;
+    RebalanceScWethV2TestHarness rebalanceScript;
+    ExitAllPositionsScWethV2 exitScript;
     scWETHv2 vault;
     WETH weth = WETH(payable(C.WETH));
 
@@ -36,8 +36,8 @@ contract scWETHv2ExitAllPositionsTest is Test {
         vm.createFork(vm.envString("RPC_URL_MAINNET"));
         vm.selectFork(mainnetFork);
         vm.rollFork(18018649);
-        rebalanceScript = new scWETHv2RebalanceTestHarness();
-        exitScript = new scWETHv2ExitAllPositions();
+        rebalanceScript = new RebalanceScWethV2TestHarness();
+        exitScript = new ExitAllPositionsScWethV2();
         vault = exitScript.vault();
     }
 
@@ -66,7 +66,7 @@ contract scWETHv2ExitAllPositionsTest is Test {
     }
 }
 
-contract scWETHv2RebalanceTestHarness is scWETHv2Rebalance {
+contract RebalanceScWethV2TestHarness is RebalanceScWethV2 {
     bytes testSwapData;
 
     function getSwapData(uint256, address, address) public view override returns (bytes memory swapData) {

@@ -21,7 +21,7 @@ import {scWETHv2Helper} from "../../../test/helpers/scWETHv2Helper.sol";
  * Then run the script using
  * forge script script/v2/manual-runs/scWETHv2ExitAllPositions.s.sol --rpc-url http://127.0.0.1:8545
  */
-contract scWETHv2ExitAllPositions is Script, scWETHv2Helper {
+contract ExitAllPositionsScWethV2 is Script, scWETHv2Helper {
     using FixedPointMathLib for uint256;
 
     uint256 keeperPrivateKey = uint256(vm.envOr("KEEPER_PRIVATE_KEY", bytes32(0x00)));
