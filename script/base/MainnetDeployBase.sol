@@ -23,7 +23,7 @@ abstract contract MainnetDeployBase is CREATE3Script {
     WETH weth = WETH(payable(C.WETH));
     ERC20 usdc = ERC20(C.USDC);
 
-    constructor() CREATE3Script(vm.envOr("VERSION", string("0.0.0"))) {
+    constructor() {
         _init();
     }
 

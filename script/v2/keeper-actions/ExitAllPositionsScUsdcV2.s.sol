@@ -37,7 +37,7 @@ contract ExitAllPositionsScUsdcV2 is ScUsdcV2ScriptBase {
     /*//////////////////////////////////////////////////////////////*/
 
     function run() external {
-        console2.log("--ExitAllPositions script running--");
+        console2.log("--Exit all positions ScUsdcV2 script running--");
 
         require(scUsdcV2.hasRole(scUsdcV2.KEEPER_ROLE(), address(keeper)), "invalid keeper");
 
@@ -53,7 +53,7 @@ contract ExitAllPositionsScUsdcV2 is ScUsdcV2ScriptBase {
         vm.stopBroadcast();
 
         _logVaultInfo("state after");
-        console2.log("--ExitAllPositions script done--");
+        console2.log("--Exit all positions ScUsdcV2 script done--");
     }
 
     function _logVaultInfo(string memory message) internal view {

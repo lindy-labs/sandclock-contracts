@@ -7,6 +7,7 @@ import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 import {WETH} from "solmate/tokens/WETH.sol";
 
 import {scUSDCv2} from "../../src/steth/scUSDCv2.sol";
+import {scWETHv2} from "../../src/steth/scWETHv2.sol";
 import {PriceConverter} from "../../src/steth/PriceConverter.sol";
 import {AaveV2ScUsdcAdapter} from "../../src/steth/scUsdcV2-adapters/AaveV2ScUsdcAdapter.sol";
 import {AaveV3ScUsdcAdapter} from "../../src/steth/scUsdcV2-adapters/AaveV3ScUsdcAdapter.sol";
@@ -33,9 +34,9 @@ contract ExitAllPositionsScUsdcV2Test is Test {
     function setUp() public {
         mainnetFork = vm.createFork(vm.envString("RPC_URL_MAINNET"));
         vm.selectFork(mainnetFork);
-        vm.rollFork(17987643);
+        vm.rollFork(18018649);
 
-        // TODO: use a mainnet (instead of redeploying) address for the vault when scUSDCv2 is deployed on mainnet
+        // TODO: use a mainnet (instead of redeploying) address for the vault when scUSDCv2 is redeployed on mainnet with updated exitAllPositions func
         RedeployScriptTestHarness redeployScript = new RedeployScriptTestHarness();
         redeployScript.setDeployerAddress(address(this));
         vault = redeployScript.run();
@@ -99,13 +100,12 @@ contract ExitAllPositionsScUsdcV2TestHarness is ExitAllPositionsScUsdcV2 {
 }
 
 contract RedeployScriptTestHarness is RedeployScript {
-    function _init() internal override {
-        deployerPrivateKey = uint256(0);
-        deployerAddress = address(this);
-        keeper = MainnetAddresses.KEEPER;
-    }
-
     function setDeployerAddress(address _deployerAddress) public {
         deployerAddress = _deployerAddress;
+    }
+
+    function _init() internal override {
+        keeper = MainnetAddresses.KEEPER;
+        scWethV2 = scWETHv2(payable(MainnetAddresses.SCWETHV2));
     }
 }
