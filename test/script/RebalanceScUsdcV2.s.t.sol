@@ -59,6 +59,15 @@ contract RebalanceScUsdcV2Test is Test {
         assertApproxEqRel(vault.usdcBalance(), expectedFloat, 0.001e18, "usdc balance");
     }
 
+    function test_run_failsIfTotalInvestableAmountPercentNot100() public {
+        script.setMorphoInvestableAmountPercent(0.5e18);
+        script.setAaveV2InvestableAmountPercent(0.5e18);
+        script.setAaveV3InvestableAmountPercent(0.5e18);
+
+        vm.expectRevert("investable amount percent not 100%");
+        script.run();
+    }
+
     function test_run_twoAdaptersInitialRebalance() public {
         uint256 morphoInvestableAmountPercent = 0.4e18;
         uint256 aaveV2InvestableAmountPercent = 0.6e18;
@@ -150,7 +159,9 @@ contract RebalanceScUsdcV2Test is Test {
         uint256 newMorphoTargetLtv = script.morphoTargetLtv() - 0.1e18;
         uint256 newAaveV2TargetLtv = script.aaveV2TargetLtv() + 0.1e18;
         script.setMorphoTargetLtv(newMorphoTargetLtv);
+        script.setMorphoInvestableAmountPercent(0);
         script.setAaveV2TargetLtv(newAaveV2TargetLtv);
+        script.setAaveV2InvestableAmountPercent(1e18);
 
         uint256 morphoExpectedCollateral = vault.getCollateral(morpho.id());
         uint256 moprhoExpectedDebt = priceConverter.usdcToEth(morphoExpectedCollateral).mulWadDown(newMorphoTargetLtv);
@@ -333,7 +344,6 @@ contract RebalanceScUsdcV2Test is Test {
         script.setAaveV3InvestableAmountPercent(1e18); // 100%
         uint256 newAaveV3TargetLtv = 0.5e18;
         script.setAaveV3TargetLtv(newAaveV3TargetLtv); // 50%
-        script.setUseAaveV3(true);
 
         uint256 expectedFloat = vault.totalAssets().mulWadDown(vault.floatPercentage());
         uint256 investableAmount = vault.usdcBalance() - expectedFloat;
@@ -343,6 +353,63 @@ contract RebalanceScUsdcV2Test is Test {
 
         assertApproxEqRel(vault.getCollateral(aaveV3.id()), investableAmount, 0.001e18, "aave v3 collateral");
         assertApproxEqRel(vault.getDebt(aaveV3.id()), expectedAaveV3Debt, 0.001e18, "aave v3 debt");
+    }
+
+    function test_run_failsIfInvestablePercentForUnsupportedAdapterNot0() public {
+        deal(address(vault.asset()), address(this), 100e6);
+        vault.asset().approve(address(vault), 100e6);
+        vault.deposit(100e6, address(this));
+
+        assertTrue(!vault.isSupported(aaveV3.id()), "aave v3 shouldn't be supported");
+
+        script.setMorphoInvestableAmountPercent(0.4e18);
+        script.setAaveV2InvestableAmountPercent(0.4e18);
+        script.setAaveV3InvestableAmountPercent(0.2e18); // 100%
+        script.setAaveV3TargetLtv(0);
+
+        vm.expectRevert(abi.encodePacked(RebalanceScUsdcV2.ScriptCannotUseUnsupportedAdapter.selector, aaveV3.id()));
+        script.run();
+    }
+
+    function test_run_failsIfLtvForUnsupportedAdapterNot0() public {
+        deal(address(vault.asset()), address(this), 100e6);
+        vault.asset().approve(address(vault), 100e6);
+        vault.deposit(100e6, address(this));
+
+        assertTrue(!vault.isSupported(aaveV3.id()), "aave v3 shouldn't be supported");
+
+        script.setMorphoInvestableAmountPercent(0.5e18);
+        script.setAaveV2InvestableAmountPercent(0.5e18);
+        script.setAaveV3InvestableAmountPercent(0);
+        script.setAaveV3TargetLtv(0.5e18); // 50%
+
+        vm.expectRevert(abi.encodePacked(RebalanceScUsdcV2.ScriptCannotUseUnsupportedAdapter.selector, aaveV3.id()));
+        script.run();
+    }
+
+    function test_run_worksIfInvestablePercentAndLtvForUnsupportedAdapterAre0() public {
+        deal(address(vault.asset()), address(this), 100e6);
+        vault.asset().approve(address(vault), 100e6);
+        vault.deposit(100e6, address(this));
+
+        assertTrue(!vault.isSupported(aaveV3.id()), "aave v3 shouldn't be supported");
+
+        script.setMorphoInvestableAmountPercent(0.5e18);
+        script.setAaveV2InvestableAmountPercent(0.5e18);
+        script.setAaveV3InvestableAmountPercent(0);
+        script.setAaveV3TargetLtv(0);
+
+        script.run();
+
+        uint256 totalCollateral = vault.totalCollateral();
+        uint256 totalDebt = vault.totalDebt();
+
+        assertApproxEqAbs(morpho.getCollateral(address(vault)), totalCollateral / 2, 1, "morpho collateral");
+        assertApproxEqAbs(morpho.getDebt(address(vault)), totalDebt / 2, 1, "morpho debt");
+        assertApproxEqAbs(aaveV2.getCollateral(address(vault)), totalCollateral / 2, 1, "aave v2 collateral");
+        assertApproxEqAbs(aaveV2.getDebt(address(vault)), totalDebt / 2, 1, "aave v2 debt");
+        assertEq(aaveV3.getCollateral(address(vault)), 0, "aave v3 collateral");
+        assertEq(aaveV3.getDebt(address(vault)), 0, "aave v3 debt");
     }
 
     function test_run_sellsProfitsAndReinvests() public {
@@ -474,7 +541,6 @@ contract RebalanceScUsdcV2Test is Test {
             vm.prank(Constants.MULTISIG);
             vault.addAdapter(aaveV3);
             assertTrue(vault.isSupported(aaveV3.id()), "aave v3 not supported");
-            script.setUseAaveV3(true);
         }
     }
 
@@ -495,10 +561,6 @@ contract RebalanceScUsdcV2TestHarness is RebalanceScUsdcV2 {
         maxProfitSellSlippage = _maxProfitSellSlippage;
     }
 
-    function setUseMorpho(bool _isUsed) public {
-        useMorpho = _isUsed;
-    }
-
     function setMorphoTargetLtv(uint256 _newTargetLtv) public {
         morphoTargetLtv = _newTargetLtv;
     }
@@ -507,20 +569,12 @@ contract RebalanceScUsdcV2TestHarness is RebalanceScUsdcV2 {
         morphoInvestableAmountPercent = _newInvestableAmountPercent;
     }
 
-    function setUseAaveV2(bool _isUsed) public {
-        useAaveV2 = _isUsed;
-    }
-
     function setAaveV2TargetLtv(uint256 _newTargetLtv) public {
         aaveV2TargetLtv = _newTargetLtv;
     }
 
     function setAaveV2InvestableAmountPercent(uint256 _newInvestableAmountPercent) public {
         aaveV2InvestableAmountPercent = _newInvestableAmountPercent;
-    }
-
-    function setUseAaveV3(bool _isUsed) public {
-        useAaveV3 = _isUsed;
     }
 
     function setAaveV3TargetLtv(uint256 _newTargetLtv) public {
