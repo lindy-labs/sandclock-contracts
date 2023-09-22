@@ -1114,7 +1114,7 @@ contract scWETHv2Test is Test {
         uint256 investAmount = amount - minimumFloatAmount;
 
         // note: simulating profits testing only for aave and compound and not for euler due to the shitty interest rates of euler after getting rekt
-        (bytes[] memory callData,, uint256 totalFlashLoanAmount) = _getInvestParams(investAmount, 0.8e18, 0, 0.2e18);
+        (bytes[] memory callData,, uint256 totalFlashLoanAmount) = _getInvestParams(investAmount, 0.8e18, 0.2e18);
 
         hoax(keeper);
         vault.rebalance(investAmount, totalFlashLoanAmount, callData);
@@ -1132,32 +1132,14 @@ contract scWETHv2Test is Test {
             vaultHelper.getLtv(compoundV3Adapter), compoundLtv, "compound ltv must decrease after simulated profits"
         );
 
-        uint256 aaveV3FlashLoanAmount = _calcSupplyBorrowFlashLoanAmount(aaveV3Adapter, 0);
-        uint256 compoundFlashLoanAmount = _calcSupplyBorrowFlashLoanAmount(compoundV3Adapter, 0);
-
-        uint256 stEthRateTolerance = 0.999e18;
-        uint256 aaveV3SupplyAmount = priceConverter.ethToWstEth(aaveV3FlashLoanAmount).mulWadDown(stEthRateTolerance);
-        uint256 compoundSupplyAmount =
-            priceConverter.ethToWstEth(compoundFlashLoanAmount).mulWadDown(stEthRateTolerance);
-
-        bytes[] memory callDataAfterProfits = new bytes[](3);
-
-        callDataAfterProfits[0] =
-            abi.encodeWithSelector(scWETHv2.swapWethToWstEth.selector, aaveV3FlashLoanAmount + compoundFlashLoanAmount);
-
-        callDataAfterProfits[1] = abi.encodeWithSelector(
-            scWETHv2.supplyAndBorrow.selector, aaveV3AdapterId, aaveV3SupplyAmount, aaveV3FlashLoanAmount
-        );
-
-        callDataAfterProfits[2] = abi.encodeWithSelector(
-            scWETHv2.supplyAndBorrow.selector, compoundV3AdapterId, compoundSupplyAmount, compoundFlashLoanAmount
-        );
+        (bytes[] memory callDataAfterProfits,, uint256 totalFlashLoanAmountAfterProfits) =
+            _getInvestParams(0, 0.8e18, 0.2e18);
 
         vm.expectEmit(true, true, false, false);
         emit Harvested(0, 0); // just testing for the event emission and not the actual numbers since the actual profit is a  little tedious to simulate
 
         hoax(keeper);
-        vault.rebalance(0, aaveV3FlashLoanAmount + compoundFlashLoanAmount, callDataAfterProfits);
+        vault.rebalance(0, totalFlashLoanAmountAfterProfits, callDataAfterProfits);
 
         _floatCheck();
 
@@ -1439,6 +1421,50 @@ contract scWETHv2Test is Test {
         );
 
         return (callData, repayAmount);
+    }
+
+    function _getInvestParams(uint256 amount, uint256 aaveV3Allocation, uint256 compoundAllocation)
+        internal
+        view
+        returns (bytes[] memory, uint256, uint256)
+    {
+        uint256 investAmount = amount;
+        uint256 stEthRateTolerance = 0.999e18;
+
+        uint256 aaveV3Amount = investAmount.mulWadDown(aaveV3Allocation);
+        uint256 compoundAmount = investAmount.mulWadDown(compoundAllocation);
+
+        uint256 aaveV3FlashLoanAmount = _calcSupplyBorrowFlashLoanAmount(aaveV3Adapter, aaveV3Amount);
+        uint256 compoundFlashLoanAmount = _calcSupplyBorrowFlashLoanAmount(compoundV3Adapter, compoundAmount);
+
+        uint256 aaveV3SupplyAmount =
+            priceConverter.ethToWstEth(aaveV3Amount + aaveV3FlashLoanAmount).mulWadDown(stEthRateTolerance);
+        uint256 compoundSupplyAmount =
+            priceConverter.ethToWstEth(compoundAmount + compoundFlashLoanAmount).mulWadDown(stEthRateTolerance);
+
+        uint256 totalFlashLoanAmount = aaveV3FlashLoanAmount + compoundFlashLoanAmount;
+
+        // if there are flash loan fees then the below code borrows the required flashloan amount plus the flashloan fees
+        // but this actually increases our LTV to a little more than the target ltv (which might not be desired)
+
+        bytes[] memory callData = new bytes[](4);
+
+        callData[0] = abi.encodeWithSelector(scWETHv2.swapWethToWstEth.selector, investAmount + totalFlashLoanAmount);
+
+        callData[1] = abi.encodeWithSelector(
+            scWETHv2.supplyAndBorrow.selector,
+            aaveV3AdapterId,
+            aaveV3SupplyAmount,
+            aaveV3FlashLoanAmount.mulWadUp(1e18 + flashLoanFeePercent)
+        );
+        callData[2] = abi.encodeWithSelector(
+            scWETHv2.supplyAndBorrow.selector,
+            compoundV3AdapterId,
+            compoundSupplyAmount,
+            compoundFlashLoanAmount.mulWadUp(1e18 + flashLoanFeePercent)
+        );
+
+        return (callData, aaveV3SupplyAmount + compoundSupplyAmount, totalFlashLoanAmount);
     }
 
     /// @return : supplyBorrowParams, totalSupplyAmount, totalDebtTaken

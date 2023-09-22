@@ -32,24 +32,20 @@ contract RebalanceScUsdcV2 is ScUsdcV2ScriptBase {
     // @dev The following parameters are used to configure the rebalance script.
     // minUsdcProfitToReinvest - the minimum amount of weth profit (converted to USDC) that needs to be made for reinvesting to make sense (ie gas costs < profit made)
     // maxProfitSellSlippage - the maximum amount of slippage allowed when selling weth profit for usdc
-    // use adapter - whether or not to use a specific adapter
     // investable amount percent - the percentage of the available funds that can be invested for a specific adapter (all have to sum up to 100% or 1e18)
-    // target ltv - the target loan to value ratio for a specific adapter
+    // target ltv - the target loan to value ratio for a specific adapter. Set to 0 for unused or unsupported adapters!
 
     uint256 public minUsdcProfitToReinvest = 10e6; // 10 USDC (set to a more realistic value ~100 USDC)
     uint256 public maxProfitSellSlippage = 0.01e18; // 1%
 
-    bool public useMorpho = true;
     uint256 public morphoInvestableAmountPercent = 1e18; // 100%
     uint256 public morphoTargetLtv = 0.7e18; // 70%
 
-    bool public useAaveV2 = true;
     uint256 public aaveV2InvestableAmountPercent = 0e18; // 0%
     uint256 public aaveV2TargetLtv = 0.7e18; // 70%
 
-    bool public useAaveV3 = false;
     uint256 public aaveV3InvestableAmountPercent = 0e18; // 0%
-    uint256 public aaveV3TargetLtv = 0.7e18; // 70%
+    uint256 public aaveV3TargetLtv = 0.0e18; // 0%
 
     /*//////////////////////////////////////////////////////////////*/
 
@@ -62,13 +58,15 @@ contract RebalanceScUsdcV2 is ScUsdcV2ScriptBase {
     }
 
     struct AdapterSettings {
-        bool isUsed;
+        uint256 adapterId;
         uint256 investableAmountPercent;
         uint256 targetLtv;
     }
 
+    error ScriptCannotUseUnsupportedAdapter(uint256 id);
+
     // script state
-    mapping(uint256 => AdapterSettings) adapterSettings;
+    AdapterSettings[] adapterSettings;
     RebalanceData[] rebalanceDatas;
     uint256 disinvestAmount = 0;
     bytes[] multicallData;
@@ -90,7 +88,7 @@ contract RebalanceScUsdcV2 is ScUsdcV2ScriptBase {
 
         _createRebalanceMulticallDataForAllAdapters(investableAmount, missingFloat);
 
-        _logVaultInfo("state before state");
+        _logVaultInfo("state before rebalance");
 
         vm.startBroadcast(keeper);
         scUsdcV2.rebalance(multicallData);
@@ -101,41 +99,33 @@ contract RebalanceScUsdcV2 is ScUsdcV2ScriptBase {
     }
 
     function _initializeAdapterSettings() internal {
-        uint256 totalInvestableAmountPercent = 0;
-
-        if (useMorpho) {
-            totalInvestableAmountPercent += morphoInvestableAmountPercent;
-
-            adapterSettings[morphoAdapter.id()] = AdapterSettings({
-                isUsed: useMorpho,
+        adapterSettings.push(
+            AdapterSettings({
+                adapterId: morphoAdapter.id(),
                 investableAmountPercent: morphoInvestableAmountPercent,
                 targetLtv: morphoTargetLtv
-            });
-        }
+            })
+        );
 
-        if (useAaveV2) {
-            totalInvestableAmountPercent += aaveV2InvestableAmountPercent;
-
-            adapterSettings[aaveV2Adapter.id()] = AdapterSettings({
-                isUsed: useAaveV2,
+        adapterSettings.push(
+            AdapterSettings({
+                adapterId: aaveV2Adapter.id(),
                 investableAmountPercent: aaveV2InvestableAmountPercent,
                 targetLtv: aaveV2TargetLtv
-            });
-        }
+            })
+        );
 
-        if (useAaveV3) {
-            totalInvestableAmountPercent += aaveV3InvestableAmountPercent;
-
-            adapterSettings[aaveV3Adapter.id()] = AdapterSettings({
-                isUsed: useAaveV3,
+        adapterSettings.push(
+            AdapterSettings({
+                adapterId: aaveV3Adapter.id(),
                 investableAmountPercent: aaveV3InvestableAmountPercent,
                 targetLtv: aaveV3TargetLtv
-            });
-        }
+            })
+        );
 
         require(
             morphoInvestableAmountPercent + aaveV2InvestableAmountPercent + aaveV3InvestableAmountPercent == 1e18,
-            "total investable amount percent must be 100%"
+            "investable amount percent not 100%"
         );
     }
 
@@ -154,15 +144,21 @@ contract RebalanceScUsdcV2 is ScUsdcV2ScriptBase {
     }
 
     function _createRebalanceMulticallDataForAllAdapters(uint256 _investableAmount, uint256 _missingFloat) internal {
-        // note: update upper limit if more adapters are added since "i" is used as the adapterId
-        for (uint256 i = 1; i <= 4; i++) {
-            if (!scUsdcV2.isSupported(i)) continue;
+        for (uint256 i = 0; i < adapterSettings.length; i++) {
+            AdapterSettings memory settings = adapterSettings[i];
+
+            if (
+                !scUsdcV2.isSupported(settings.adapterId)
+                    && (settings.targetLtv > 0 || settings.investableAmountPercent > 0)
+            ) {
+                revert ScriptCannotUseUnsupportedAdapter(settings.adapterId);
+            }
 
             _createAdapterRebalanceData(
-                i, // adapterId
-                adapterSettings[i].targetLtv,
-                _investableAmount.mulWadDown(adapterSettings[i].investableAmountPercent),
-                _missingFloat.mulWadDown(adapterSettings[i].investableAmountPercent)
+                settings.adapterId,
+                settings.targetLtv,
+                _investableAmount.mulWadDown(settings.investableAmountPercent),
+                _missingFloat.mulWadDown(settings.investableAmountPercent)
             );
         }
 
