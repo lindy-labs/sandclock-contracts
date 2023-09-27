@@ -11,7 +11,6 @@ import {IPoolDataProvider} from "aave-v3/interfaces/IPoolDataProvider.sol";
 import {IPool} from "aave-v3/interfaces/IPool.sol";
 
 import {Constants as C} from "../../src/lib/Constants.sol";
-import {DeploymentConstants as DC} from "../../src/lib/DeploymentConstants.sol";
 import {ICurvePool} from "../../src/interfaces/curve/ICurvePool.sol";
 import {ILido} from "../../src/interfaces/lido/ILido.sol";
 import {IwstETH} from "../../src/interfaces/lido/IwstETH.sol";
@@ -34,9 +33,6 @@ abstract contract DeployLeveragedEth is MainnetDeployBase {
 
     scWETH scWeth;
     scUSDC scUsdc;
-
-    address alice = DC.ALICE;
-    address bob = DC.BOB;
 
     function _deploy() internal {
         vm.startBroadcast(deployerPrivateKey);

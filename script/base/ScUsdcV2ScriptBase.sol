@@ -30,4 +30,13 @@ abstract contract ScUsdcV2ScriptBase is Script {
     MorphoAaveV3ScUsdcAdapter public morphoAdapter = MorphoAaveV3ScUsdcAdapter(MainnetAddresses.SCUSDCV2_MORPHO_ADAPTER);
     AaveV2ScUsdcAdapter public aaveV2Adapter = AaveV2ScUsdcAdapter(MainnetAddresses.SCUSDCV2_AAVEV2_ADAPTER);
     AaveV3ScUsdcAdapter public aaveV3Adapter = AaveV3ScUsdcAdapter(MainnetAddresses.SCUSDCV2_AAVEV3_ADAPTER);
+
+    function setKeeperPrivateKey(uint256 _privateKey) public {
+        keeperPrivateKey = _privateKey;
+        keeper = vm.addr(keeperPrivateKey);
+    }
+
+    function setVault(scUSDCv2 _scUsdcV2) public {
+        scUsdcV2 = _scUsdcV2;
+    }
 }
