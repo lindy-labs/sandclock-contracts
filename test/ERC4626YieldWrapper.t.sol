@@ -162,6 +162,43 @@ contract ERC4626YieldWrapperTest is Test {
         assertEq(wrapper.principalFor(address(this)), principal, "principal != deposit");
     }
 
+    function test_transferFrom_() public {
+        uint256 principal = 1000e6;
+        deal(address(C.USDC), address(this), principal);
+        ERC20(C.USDC).approve(address(wrapper), principal);
+
+        uint256 shares = wrapper.deposit(principal, alice);
+
+        assertEq(wrapper.balanceOf(alice), shares, "alice shares");
+        assertEq(wrapper.yieldFor(alice), 0, "receiver yield not 0");
+        assertEq(wrapper.principalFor(address(this)), principal, "principal != deposit");
+
+        // double the assets in the vault to simulate profit
+        deal(address(C.USDC), address(vault), ERC20(C.USDC).balanceOf(address(vault)) * 2);
+
+        uint256 expectedYield = principal; // since yield is 100% of principal
+        vm.prank(alice);
+        wrapper.approve(bob, shares);
+
+        vm.prank(bob);
+        wrapper.transferFrom(alice, bob, shares);
+
+        assertEq(wrapper.balanceOf(alice), 0, "alice shares");
+        assertEq(wrapper.balanceOf(bob), shares, "bob shares");
+
+        assertEq(wrapper.yieldFor(alice), 0, "depositor yield not 0");
+        assertEq(wrapper.yieldFor(bob), expectedYield, "receiver yield 0");
+
+        vm.prank(bob);
+        wrapper.claimYield();
+
+        assertEq(usdc.balanceOf(bob), expectedYield, "bob balance not correct");
+        assertEq(wrapper.yieldFor(alice), 0, "depositor yield not 0");
+        assertEq(wrapper.yieldFor(bob), 0, "depositor yield not 0");
+        assertEq(wrapper.yieldFor(address(this)), 0, "depositor yield not 0");
+        assertEq(wrapper.principalFor(address(this)), principal, "principal != deposit");
+    }
+
     function test_claimYield_depositorWithdrawsBeforeYieldClaimed() public {
         uint256 principal = 1000e6;
         deal(address(C.USDC), address(this), principal);
@@ -307,16 +344,16 @@ contract ERC4626YieldWrapper is ERC20 {
         return success;
     }
 
-    function transferFrom(address, address, uint256) public pure override returns (bool) {
-        revert("not supportd");
-    }
+    function transferFrom(address _from, address _to, uint256 _amount) public override returns (bool) {
+        bool success = super.transferFrom(_from, _to, _amount);
 
-    function approve(address, uint256) public pure override returns (bool) {
-        revert("not supportd");
-    }
+        if (success) {
+            address depositor = receiverToDepositor[_from];
+            receiverToDepositor[_from] = address(0);
+            receiverToDepositor[_to] = depositor;
+        }
 
-    function permit(address, address, uint256, uint256, uint8, bytes32, bytes32) public pure override {
-        revert("not supportd");
+        return success;
     }
 
     function deposit(uint256 _amount, address _yieldReceiver) public returns (uint256) {
