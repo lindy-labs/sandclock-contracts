@@ -89,6 +89,9 @@ contract ReallocateScWethV2Test is Test {
     {
         uint256 investAmount = _rebalance();
 
+        // assert init Allocations
+        _assertAllocations(morphoInitPercent, compoundInitPercent, aaveV3InitPercent);
+
         uint256 assets = vault.totalAssets();
         uint256 float = weth.balanceOf(address(vault));
 
