@@ -4,6 +4,7 @@ pragma solidity ^0.8.19;
 import "forge-std/console2.sol";
 import "forge-std/Test.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
+import {ERC4626} from "solmate/mixins/ERC4626.sol";
 import {WETH} from "solmate/tokens/WETH.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 import {IPool} from "aave-v3/interfaces/IPool.sol";
@@ -313,9 +314,7 @@ contract ERC4626YieldWrapper is ERC20 {
 
     struct DepositReceipt {
         uint256 principal;
-        address owner;
-        uint256 pps;
-        uint256 shares;
+        uint256 pricePerShare;
         address yieldReceiver;
     }
 
@@ -323,13 +322,41 @@ contract ERC4626YieldWrapper is ERC20 {
         return depositReceitps[_account];
     }
 
-    scUSDCv2 vault;
+    ERC4626 vault;
     mapping(address => DepositReceipt) public depositReceitps;
     mapping(address => address) public receiverToDepositor;
 
-    constructor(scUSDCv2 _vault) ERC20("Yield Wrapper", "YIELD", 18) {
+    constructor(ERC4626 _vault) ERC20("Yield Wrapper", "YIELD", 18) {
         vault = _vault;
-        ERC20(C.USDC).approve(address(vault), type(uint256).max);
+        vault.asset().approve(address(vault), type(uint256).max);
+    }
+
+    function deposit(uint256 _amount, address _yieldReceiver) public returns (uint256) {
+        vault.asset().transferFrom(msg.sender, address(this), _amount);
+        uint256 shares = vault.deposit(_amount, address(this));
+        uint256 pps = currentPricePerShare();
+
+        DepositReceipt storage receipt = depositReceitps[msg.sender];
+        receipt.principal += _amount;
+        receipt.pricePerShare = pps;
+        receipt.yieldReceiver = _yieldReceiver;
+
+        receiverToDepositor[_yieldReceiver] = msg.sender;
+
+        _mint(_yieldReceiver, shares);
+
+        return shares;
+    }
+
+    function withdraw(uint256 _principalAmount) public {
+        uint256 shares = vault.withdraw(_principalAmount, address(this), address(this));
+
+        vault.asset().transfer(msg.sender, _principalAmount);
+
+        DepositReceipt storage receipt = depositReceitps[msg.sender];
+        receipt.principal -= _principalAmount;
+
+        _burn(receipt.yieldReceiver, shares);
     }
 
     function transfer(address _to, uint256 _amount) public override returns (bool) {
@@ -356,69 +383,48 @@ contract ERC4626YieldWrapper is ERC20 {
         return success;
     }
 
-    function deposit(uint256 _amount, address _yieldReceiver) public returns (uint256) {
-        ERC20(C.USDC).transferFrom(msg.sender, address(this), _amount);
-        uint256 shares = vault.deposit(_amount, address(this));
-        uint256 pps = currentPps();
+    function claimYield() public returns (uint256) {
+        uint256 pps = currentPricePerShare();
+        uint256 principal = depositReceitps[receiverToDepositor[msg.sender]].principal;
+        uint256 yield = _yieldFor(msg.sender, pps, principal);
 
-        DepositReceipt memory receipt = DepositReceipt({
-            principal: _amount,
-            owner: msg.sender,
-            pps: pps,
-            shares: shares,
-            yieldReceiver: _yieldReceiver
-        });
+        // update the pps
+        depositReceitps[receiverToDepositor[msg.sender]].pricePerShare = pps;
 
-        depositReceitps[msg.sender] = receipt;
-        receiverToDepositor[_yieldReceiver] = msg.sender;
+        uint256 shares = vault.withdraw(yield, address(this), address(this));
+        vault.asset().transfer(msg.sender, yield);
 
-        _mint(_yieldReceiver, shares);
+        _burn(msg.sender, shares);
 
-        return shares;
-    }
-
-    function withdraw(uint256 _principalAmount) public {
-        DepositReceipt storage receipt = depositReceitps[msg.sender];
-        uint256 shares = vault.withdraw(_principalAmount, address(this), address(this));
-        ERC20(C.USDC).transfer(msg.sender, _principalAmount);
-        receipt.principal -= _principalAmount;
-        _burn(receipt.yieldReceiver, shares);
+        return yield;
     }
 
     function yieldFor(address _account) public view returns (uint256 yield) {
-        uint256 pps = currentPps();
+        uint256 pps = currentPricePerShare();
         if (pps == 0) return 0;
 
-        uint256 wrapperShares = this.balanceOf(_account);
+        uint256 principal = depositReceitps[receiverToDepositor[_account]].principal;
 
-        if (wrapperShares == 0) return 0;
-
-        DepositReceipt memory receipt = depositReceitps[receiverToDepositor[_account]];
-
-        yield = wrapperShares.mulWadDown(pps) - receipt.principal;
+        return _yieldFor(_account, pps, principal);
     }
 
     function principalFor(address _account) public view returns (uint256) {
         return depositReceitps[_account].principal;
     }
 
-    function currentPps() public view returns (uint256) {
+    function currentPricePerShare() public view returns (uint256) {
         if (vault.totalSupply() == 0) return 0;
 
         return vault.totalAssets().divWadDown(vault.totalSupply());
     }
 
-    function claimYield() public returns (uint256) {
-        uint256 pps = currentPps();
-        uint256 yield = yieldFor(msg.sender);
-        DepositReceipt storage receipt = depositReceitps[receiverToDepositor[msg.sender]];
+    function _yieldFor(address _account, uint256 _pps, uint256 _principal) internal view returns (uint256) {
+        if (_pps == 0) return 0;
 
-        uint256 shares = vault.withdraw(yield, address(this), address(this));
-        receipt.pps = pps;
+        uint256 shares = this.balanceOf(_account);
 
-        _burn(msg.sender, shares);
-        ERC20(C.USDC).transfer(msg.sender, yield);
+        if (shares == 0) return 0;
 
-        return yield;
+        return shares.mulWadDown(_pps) - _principal;
     }
 }
