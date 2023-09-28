@@ -42,6 +42,7 @@ contract ERC4626YieldWrapperTest is Test {
 
     address constant keeper = address(0x05);
     address constant alice = address(0x06);
+    address constant bob = address(0x07);
 
     WETH weth;
     ERC20 usdc;
@@ -123,6 +124,40 @@ contract ERC4626YieldWrapperTest is Test {
 
         assertEq(usdc.balanceOf(alice), expectedYield, "alice balance not correct");
         assertEq(wrapper.yieldFor(alice), 0, "depositor yield not 0");
+        assertEq(wrapper.yieldFor(address(this)), 0, "depositor yield not 0");
+        assertEq(wrapper.principalFor(address(this)), principal, "principal != deposit");
+    }
+
+    function test_claimYield_receiverTransfersSharesToAnotherAccount() public {
+        uint256 principal = 1000e6;
+        deal(address(C.USDC), address(this), principal);
+        ERC20(C.USDC).approve(address(wrapper), principal);
+
+        uint256 shares = wrapper.deposit(principal, alice);
+
+        assertEq(wrapper.balanceOf(alice), shares, "alice shares");
+        assertEq(wrapper.yieldFor(alice), 0, "receiver yield not 0");
+        assertEq(wrapper.principalFor(address(this)), principal, "principal != deposit");
+
+        // double the assets in the vault to simulate profit
+        deal(address(C.USDC), address(vault), ERC20(C.USDC).balanceOf(address(vault)) * 2);
+
+        uint256 expectedYield = principal; // since yield is 100% of principal
+        vm.prank(alice);
+        wrapper.transfer(bob, shares);
+
+        assertEq(wrapper.balanceOf(alice), 0, "alice shares");
+        assertEq(wrapper.balanceOf(bob), shares, "bob shares");
+
+        assertEq(wrapper.yieldFor(alice), 0, "depositor yield not 0");
+        assertEq(wrapper.yieldFor(bob), expectedYield, "receiver yield 0");
+
+        vm.prank(bob);
+        wrapper.claimYield();
+
+        assertEq(usdc.balanceOf(bob), expectedYield, "bob balance not correct");
+        assertEq(wrapper.yieldFor(alice), 0, "depositor yield not 0");
+        assertEq(wrapper.yieldFor(bob), 0, "depositor yield not 0");
         assertEq(wrapper.yieldFor(address(this)), 0, "depositor yield not 0");
         assertEq(wrapper.principalFor(address(this)), principal, "principal != deposit");
     }
@@ -260,7 +295,31 @@ contract ERC4626YieldWrapper is ERC20 {
         ERC20(C.USDC).approve(address(vault), type(uint256).max);
     }
 
-    function deposit(uint256 _amount, address _yieldReceiver) public {
+    function transfer(address _to, uint256 _amount) public override returns (bool) {
+        bool success = super.transfer(_to, _amount);
+
+        if (success) {
+            address depositor = receiverToDepositor[msg.sender];
+            receiverToDepositor[msg.sender] = address(0);
+            receiverToDepositor[_to] = depositor;
+        }
+
+        return success;
+    }
+
+    function transferFrom(address, address, uint256) public pure override returns (bool) {
+        revert("not supportd");
+    }
+
+    function approve(address, uint256) public pure override returns (bool) {
+        revert("not supportd");
+    }
+
+    function permit(address, address, uint256, uint256, uint8, bytes32, bytes32) public pure override {
+        revert("not supportd");
+    }
+
+    function deposit(uint256 _amount, address _yieldReceiver) public returns (uint256) {
         ERC20(C.USDC).transferFrom(msg.sender, address(this), _amount);
         uint256 shares = vault.deposit(_amount, address(this));
         uint256 pps = currentPps();
@@ -277,6 +336,8 @@ contract ERC4626YieldWrapper is ERC20 {
         receiverToDepositor[_yieldReceiver] = msg.sender;
 
         _mint(_yieldReceiver, shares);
+
+        return shares;
     }
 
     function withdraw(uint256 _principalAmount) public {
