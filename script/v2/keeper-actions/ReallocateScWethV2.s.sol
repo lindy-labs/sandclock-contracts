@@ -39,14 +39,19 @@ import {BaseV2Vault} from "../../../src/steth/BaseV2Vault.sol";
  * cmd
  * first run a local anvil node using " anvil -f YOUR_RPC_URL"
  * Then run the script using
- * forge script script/v2/manual-runs/ReallocateScWethV2.s.sol --rpc-url http://127.0.0.1:8545 --ffi
+ * forge script script/v2/manual-runs/ReallocateScWethV2.s.sol --rpc-url http://127.0.0.1:8545
  */
 contract ReallocateScWethV2 is Script, scWETHv2Helper {
     using FixedPointMathLib for uint256;
 
-    uint256 morphoExpectedAllocationPercent;
-    uint256 aaveV3ExpectedAllocationPercent;
-    uint256 compoundExpectedAllocationPercent;
+    ///////////////////////////////// BUTTONS ////////////////////////////////////////
+
+    // 1e18 = 100%
+    uint256 morphoExpectedAllocationPercent = 0e18;
+    uint256 aaveV3ExpectedAllocationPercent = 0e18;
+    uint256 compoundExpectedAllocationPercent = 0e18;
+
+    //////////////////////////////////////////////////////////////////////////////////
 
     mapping(IAdapter => uint256) public expectedAllocationPercent;
 
