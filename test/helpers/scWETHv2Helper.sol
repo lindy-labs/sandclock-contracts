@@ -54,7 +54,7 @@ contract scWETHv2Helper {
 
     /// @notice returns the asset allocation (in percent) in a particular protocol (1e18 = 100%)
     /// @param adapter the address of the adapter contract of the protocol
-    function allocationPercent(IAdapter adapter) external view returns (uint256) {
+    function allocationPercent(IAdapter adapter) public view returns (uint256) {
         return (getCollateralInWeth(adapter) - vault.getDebt(adapter.id())).divWadDown(
             priceConverter.wstEthToEth(vault.totalCollateral()) - vault.totalDebt()
         );
