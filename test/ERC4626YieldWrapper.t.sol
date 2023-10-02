@@ -44,6 +44,7 @@ contract ERC4626YieldWrapperTest is Test {
     address constant keeper = address(0x05);
     address constant alice = address(0x06);
     address constant bob = address(0x07);
+    address constant carol = address(0x08);
 
     WETH weth;
     ERC20 usdc;
@@ -231,7 +232,7 @@ contract ERC4626YieldWrapperTest is Test {
         wrapper.claimYield();
 
         assertEq(usdc.balanceOf(alice), expectedYield, "alice balance not correct");
-        assertEq(wrapper.yieldFor(alice), 0, "depositor yield not 0");
+        assertEq(wrapper.yieldFor(alice), 0, "alice yield not 0");
     }
 
     function test_claimYield_depositorPartiallyWithdrawsBeforeYieldClaimed() public {
@@ -266,10 +267,44 @@ contract ERC4626YieldWrapperTest is Test {
         wrapper.claimYield();
 
         assertEq(usdc.balanceOf(alice), expectedYield, "alice balance not correct");
-        assertEq(wrapper.yieldFor(alice), 0, "depositor yield not 0");
+        assertEq(wrapper.yieldFor(alice), 0, "alice yield not 0");
     }
 
-    /// internal helper functions ///
+    function test_claimYield_oneReceiverTwoDepositors() public {
+        uint256 principal = 1000e6;
+
+        vm.startPrank(alice);
+        deal(address(C.USDC), alice, principal);
+        ERC20(C.USDC).approve(address(wrapper), principal);
+        wrapper.deposit(principal, carol);
+        vm.stopPrank();
+
+        vm.startPrank(bob);
+        deal(address(C.USDC), bob, principal);
+        ERC20(C.USDC).approve(address(wrapper), principal);
+        wrapper.deposit(principal, carol);
+        vm.stopPrank();
+
+        assertEq(wrapper.yieldFor(alice), 0, "alice yield not 0");
+        assertEq(wrapper.yieldFor(bob), 0, "bob yield not 0");
+        assertEq(wrapper.yieldFor(carol), 0, "carol yield not 0");
+
+        // double the assets in the vault to simulate profit
+        deal(address(C.USDC), address(vault), ERC20(C.USDC).balanceOf(address(vault)) * 2);
+
+        uint256 expectedYield = principal * 2; // since yield is 100% of principal
+
+        assertEq(wrapper.yieldFor(alice), 0, "alice yield not 0");
+        assertEq(wrapper.yieldFor(bob), 0, "bob yield not 0");
+        assertEq(wrapper.yieldFor(carol), expectedYield, "carol yield");
+
+        vm.prank(carol);
+        wrapper.claimYield();
+
+        assertEq(usdc.balanceOf(carol), expectedYield, "carol balance not correct");
+        assertEq(wrapper.yieldFor(alice), 0, "alice yield not 0");
+        assertEq(wrapper.yieldFor(bob), 0, "bob yield not 0");
+    }
 
     function _deployScWeth() internal {
         scWETH.ConstructorParams memory scWethParams = scWETH.ConstructorParams({
@@ -324,7 +359,7 @@ contract ERC4626YieldWrapper is ERC20 {
 
     ERC4626 vault;
     mapping(address => DepositReceipt) public depositReceitps;
-    mapping(address => address) public receiverToDepositor;
+    mapping(address => address[]) public receiverToDepositors;
 
     constructor(ERC4626 _vault) ERC20("Yield Wrapper", "YIELD", 18) {
         vault = _vault;
@@ -341,7 +376,7 @@ contract ERC4626YieldWrapper is ERC20 {
         receipt.pricePerShare = pps;
         receipt.yieldReceiver = _yieldReceiver;
 
-        receiverToDepositor[_yieldReceiver] = msg.sender;
+        receiverToDepositors[_yieldReceiver].push(msg.sender);
 
         _mint(_yieldReceiver, shares);
 
@@ -363,9 +398,9 @@ contract ERC4626YieldWrapper is ERC20 {
         bool success = super.transfer(_to, _amount);
 
         if (success) {
-            address depositor = receiverToDepositor[msg.sender];
-            receiverToDepositor[msg.sender] = address(0);
-            receiverToDepositor[_to] = depositor;
+            address depositor = receiverToDepositors[msg.sender][0];
+            receiverToDepositors[msg.sender][0] = address(0);
+            receiverToDepositors[_to].push(depositor);
         }
 
         return success;
@@ -375,21 +410,24 @@ contract ERC4626YieldWrapper is ERC20 {
         bool success = super.transferFrom(_from, _to, _amount);
 
         if (success) {
-            address depositor = receiverToDepositor[_from];
-            receiverToDepositor[_from] = address(0);
-            receiverToDepositor[_to] = depositor;
+            address depositor = receiverToDepositors[_from][0];
+            receiverToDepositors[_from][0] = address(0);
+            receiverToDepositors[_to].push(depositor);
         }
 
         return success;
     }
 
     function claimYield() public returns (uint256) {
+        if (receiverToDepositors[msg.sender].length == 0) revert("no yield to claim");
+
         uint256 pps = currentPricePerShare();
-        uint256 principal = depositReceitps[receiverToDepositor[msg.sender]].principal;
-        uint256 yield = _yieldFor(msg.sender, pps, principal);
+        uint256 yield = _yieldFor(msg.sender, pps);
+
+        if (yield == 0) revert("no yield to claim");
 
         // update the pps
-        depositReceitps[receiverToDepositor[msg.sender]].pricePerShare = pps;
+        depositReceitps[receiverToDepositors[msg.sender][0]].pricePerShare = pps;
 
         uint256 shares = vault.withdraw(yield, address(this), address(this));
         vault.asset().transfer(msg.sender, yield);
@@ -403,9 +441,11 @@ contract ERC4626YieldWrapper is ERC20 {
         uint256 pps = currentPricePerShare();
         if (pps == 0) return 0;
 
-        uint256 principal = depositReceitps[receiverToDepositor[_account]].principal;
+        if (receiverToDepositors[_account].length == 0) {
+            return 0;
+        }
 
-        return _yieldFor(_account, pps, principal);
+        return _yieldFor(_account, pps);
     }
 
     function principalFor(address _account) public view returns (uint256) {
@@ -418,13 +458,18 @@ contract ERC4626YieldWrapper is ERC20 {
         return vault.totalAssets().divWadDown(vault.totalSupply());
     }
 
-    function _yieldFor(address _account, uint256 _pps, uint256 _principal) internal view returns (uint256) {
+    function _yieldFor(address _account, uint256 _pps) internal view returns (uint256) {
         if (_pps == 0) return 0;
+
+        uint256 principal;
+        for (uint8 i = 0; i < receiverToDepositors[_account].length; i++) {
+            principal += depositReceitps[receiverToDepositors[_account][i]].principal;
+        }
 
         uint256 shares = this.balanceOf(_account);
 
         if (shares == 0) return 0;
 
-        return shares.mulWadDown(_pps) - _principal;
+        return shares.mulWadDown(_pps) - principal;
     }
 }
