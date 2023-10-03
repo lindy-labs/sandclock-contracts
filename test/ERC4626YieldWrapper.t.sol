@@ -357,13 +357,12 @@ contract ERC4626YieldWrapperTest is Test {
         vm.startPrank(alice);
         deal(address(C.USDC), alice, principal);
         ERC20(C.USDC).approve(address(wrapper), principal);
-        address[] memory claimers = new address[](2);
-        claimers[0] = bob;
-        claimers[1] = carol;
-        uint256[] memory percentages = new uint256[](2);
-        percentages[0] = 0.5e18;
-        percentages[1] = 0.5e18;
-        wrapper.deposit(principal, claimers, percentages);
+
+        ERC4626YieldWrapper.YieldClaimer[] memory yieldClaimers = new ERC4626YieldWrapper.YieldClaimer[](2);
+        yieldClaimers[0] = ERC4626YieldWrapper.YieldClaimer({account: bob, percent: 0.5e18});
+        yieldClaimers[1] = ERC4626YieldWrapper.YieldClaimer({account: carol, percent: 0.5e18});
+
+        wrapper.deposit(principal, yieldClaimers);
         vm.stopPrank();
 
         assertEq(wrapper.yieldFor(alice), 0, "alice yield not 0");
@@ -436,11 +435,11 @@ contract ERC4626YieldWrapper is ERC20 {
 
     struct DepositReceipt {
         uint256 principal;
-        Yield[] yields;
+        YieldClaimer[] yieldClaimers;
     }
 
-    struct Yield {
-        address claimer;
+    struct YieldClaimer {
+        address account;
         uint256 percent;
     }
 
@@ -467,26 +466,23 @@ contract ERC4626YieldWrapper is ERC20 {
         receiverToDepositors[_yieldReceiver].push(msg.sender);
 
         // TODO: consider top-ups
-        receipt.yields.push(Yield({claimer: _yieldReceiver, percent: 1e18}));
+        receipt.yieldClaimers.push(YieldClaimer({account: _yieldReceiver, percent: 1e18}));
 
         _mint(_yieldReceiver, shares);
 
         return shares;
     }
 
-    function deposit(uint256 _amount, address[] calldata _yieldReceivers, uint256[] calldata _percent)
-        public
-        returns (uint256)
-    {
+    function deposit(uint256 _amount, YieldClaimer[] calldata _claimers) public returns (uint256) {
         vault.asset().transferFrom(msg.sender, address(this), _amount);
         uint256 shares = vault.deposit(_amount, address(this));
 
         DepositReceipt storage receipt = depositReceipts[msg.sender];
         receipt.principal += _amount;
-        for (uint8 i = 0; i < _yieldReceivers.length; i++) {
-            _mint(_yieldReceivers[i], shares.mulWadDown(_percent[i]));
-            receiverToDepositors[_yieldReceivers[i]].push(msg.sender);
-            receipt.yields.push(Yield({claimer: _yieldReceivers[i], percent: _percent[i]}));
+        for (uint8 i = 0; i < _claimers.length; i++) {
+            _mint(_claimers[i].account, shares.mulWadDown(_claimers[i].percent));
+            receiverToDepositors[_claimers[i].account].push(msg.sender);
+            receipt.yieldClaimers.push(_claimers[i]);
         }
 
         return shares;
@@ -500,8 +496,8 @@ contract ERC4626YieldWrapper is ERC20 {
         DepositReceipt storage receipt = depositReceipts[msg.sender];
         receipt.principal -= _principalAmount;
 
-        for (uint8 i = 0; i < receipt.yields.length; i++) {
-            _burn(receipt.yields[i].claimer, shares.mulWadDown(receipt.yields[i].percent));
+        for (uint8 i = 0; i < receipt.yieldClaimers.length; i++) {
+            _burn(receipt.yieldClaimers[i].account, shares.mulWadDown(receipt.yieldClaimers[i].percent));
         }
     }
 
@@ -517,9 +513,9 @@ contract ERC4626YieldWrapper is ERC20 {
                 receiverToDepositors[_to].push(depositor);
 
                 DepositReceipt storage receipt = depositReceipts[depositor];
-                for (uint8 j = 0; j < receipt.yields.length; j++) {
-                    if (receipt.yields[j].claimer == msg.sender) {
-                        receipt.yields[j].claimer = _to;
+                for (uint8 j = 0; j < receipt.yieldClaimers.length; j++) {
+                    if (receipt.yieldClaimers[j].account == msg.sender) {
+                        receipt.yieldClaimers[j].account = _to;
                         break;
                     }
                 }
@@ -541,9 +537,9 @@ contract ERC4626YieldWrapper is ERC20 {
                 receiverToDepositors[_to].push(depositor);
 
                 DepositReceipt storage receipt = depositReceipts[depositor];
-                for (uint8 j = 0; j < receipt.yields.length; j++) {
-                    if (receipt.yields[j].claimer == _from) {
-                        receipt.yields[j].claimer = _to;
+                for (uint8 j = 0; j < receipt.yieldClaimers.length; j++) {
+                    if (receipt.yieldClaimers[j].account == _from) {
+                        receipt.yieldClaimers[j].account = _to;
                         break;
                     }
                 }
@@ -603,9 +599,9 @@ contract ERC4626YieldWrapper is ERC20 {
 
             DepositReceipt memory receipt = depositReceipts[receiverToDepositors[_account][i]];
 
-            for (uint8 j = 0; j < receipt.yields.length; j++) {
-                if (receipt.yields[j].claimer == _account) {
-                    principal += receipt.principal.mulWadDown(receipt.yields[j].percent);
+            for (uint8 j = 0; j < receipt.yieldClaimers.length; j++) {
+                if (receipt.yieldClaimers[j].account == _account) {
+                    principal += receipt.principal.mulWadDown(receipt.yieldClaimers[j].percent);
                     break;
                 }
             }
