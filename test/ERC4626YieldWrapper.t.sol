@@ -9,14 +9,8 @@ import {WETH} from "solmate/tokens/WETH.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 import {IPool} from "aave-v3/interfaces/IPool.sol";
 import {IAToken} from "aave-v3/interfaces/IAToken.sol";
-import {IVariableDebtToken} from "aave-v3/interfaces/IVariableDebtToken.sol";
-import {IPoolDataProvider} from "aave-v3/interfaces/IPoolDataProvider.sol";
-import {IEulerMarkets, IEulerEToken, IEulerDToken} from "lib/euler-interfaces/contracts/IEuler.sol";
 
 import {Constants as C} from "../src/lib/Constants.sol";
-import {ILendingPool} from "../src/interfaces/aave-v2/ILendingPool.sol";
-import {IProtocolDataProvider} from "../src/interfaces/aave-v2/IProtocolDataProvider.sol";
-import {IAdapter} from "../src/steth/IAdapter.sol";
 import {scUSDCv2} from "../src/steth/scUSDCv2.sol";
 import {AaveV2ScUsdcAdapter} from "../src/steth/scUsdcV2-adapters/AaveV2ScUsdcAdapter.sol";
 import {AaveV3ScUsdcAdapter} from "../src/steth/scUsdcV2-adapters/AaveV3ScUsdcAdapter.sol";
@@ -32,9 +26,6 @@ import {IVault} from "../src/interfaces/balancer/IVault.sol";
 import {ICurvePool} from "../src/interfaces/curve/ICurvePool.sol";
 import {ILido} from "../src/interfaces/lido/ILido.sol";
 import {IwstETH} from "../src/interfaces/lido/IwstETH.sol";
-import {IProtocolFeesCollector} from "../src/interfaces/balancer/IProtocolFeesCollector.sol";
-import "../src/errors/scErrors.sol";
-import {FaultyAdapter} from "./mocks/adapters/FaultyAdapter.sol";
 
 contract ERC4626YieldWrapperTest is Test {
     using FixedPointMathLib for uint256;
@@ -67,10 +58,6 @@ contract ERC4626YieldWrapperTest is Test {
 
         usdc = ERC20(C.USDC);
         weth = WETH(payable(C.WETH));
-        aaveV3 = new AaveV3ScUsdcAdapter();
-        aaveV2 = new AaveV2ScUsdcAdapter();
-        euler = new EulerScUsdcAdapter();
-        morpho = new MorphoAaveV3ScUsdcAdapter();
 
         _deployScWeth();
         _deployAndSetUpVault();
@@ -418,6 +405,11 @@ contract ERC4626YieldWrapperTest is Test {
 
         vault = new scUSDCv2(address(this), keeper, wethVault, priceConverter, swapper);
 
+        aaveV3 = new AaveV3ScUsdcAdapter();
+        aaveV2 = new AaveV2ScUsdcAdapter();
+        morpho = new MorphoAaveV3ScUsdcAdapter();
+
+        vault.addAdapter(morpho);
         vault.addAdapter(aaveV3);
         vault.addAdapter(aaveV2);
 
@@ -443,13 +435,9 @@ contract ERC4626YieldWrapper is ERC20 {
         uint256 percent;
     }
 
-    function getReceipt(address _account) public view returns (DepositReceipt memory) {
-        return depositReceipts[_account];
-    }
-
     ERC4626 vault;
     mapping(address => DepositReceipt) public depositReceipts;
-    mapping(address => address[]) public receiverToDepositors;
+    mapping(address => address[]) public claimerToDepositors;
 
     constructor(ERC4626 _vault) ERC20("Yield Wrapper", "YIELD", 18) {
         vault = _vault;
@@ -463,9 +451,9 @@ contract ERC4626YieldWrapper is ERC20 {
         DepositReceipt storage receipt = depositReceipts[msg.sender];
         receipt.principal += _amount;
 
-        receiverToDepositors[_yieldReceiver].push(msg.sender);
+        claimerToDepositors[_yieldReceiver].push(msg.sender);
 
-        // TODO: consider top-ups
+        // TODO: consider top-ups (revert if receipt already exists?)
         receipt.yieldClaimers.push(YieldClaimer({account: _yieldReceiver, percent: 1e18}));
 
         _mint(_yieldReceiver, shares);
@@ -481,7 +469,7 @@ contract ERC4626YieldWrapper is ERC20 {
         receipt.principal += _amount;
         for (uint8 i = 0; i < _claimers.length; i++) {
             _mint(_claimers[i].account, shares.mulWadDown(_claimers[i].percent));
-            receiverToDepositors[_claimers[i].account].push(msg.sender);
+            claimerToDepositors[_claimers[i].account].push(msg.sender);
             receipt.yieldClaimers.push(_claimers[i]);
         }
 
@@ -506,11 +494,11 @@ contract ERC4626YieldWrapper is ERC20 {
 
         // assume all shares are being transfered
         if (success) {
-            address[] storage depositors = receiverToDepositors[msg.sender];
+            address[] storage depositors = claimerToDepositors[msg.sender];
             for (uint8 i = 0; i < depositors.length; i++) {
                 address depositor = depositors[i];
                 depositors[i] = address(0);
-                receiverToDepositors[_to].push(depositor);
+                claimerToDepositors[_to].push(depositor);
 
                 DepositReceipt storage receipt = depositReceipts[depositor];
                 for (uint8 j = 0; j < receipt.yieldClaimers.length; j++) {
@@ -530,11 +518,11 @@ contract ERC4626YieldWrapper is ERC20 {
 
         // assume all shares are being transfered
         if (success) {
-            address[] storage depositors = receiverToDepositors[_from];
+            address[] storage depositors = claimerToDepositors[_from];
             for (uint8 i = 0; i < depositors.length; i++) {
                 address depositor = depositors[i];
                 depositors[i] = address(0);
-                receiverToDepositors[_to].push(depositor);
+                claimerToDepositors[_to].push(depositor);
 
                 DepositReceipt storage receipt = depositReceipts[depositor];
                 for (uint8 j = 0; j < receipt.yieldClaimers.length; j++) {
@@ -550,7 +538,7 @@ contract ERC4626YieldWrapper is ERC20 {
     }
 
     function claimYield() public returns (uint256) {
-        if (receiverToDepositors[msg.sender].length == 0) revert("no yield to claim");
+        if (claimerToDepositors[msg.sender].length == 0) revert("no yield to claim");
 
         uint256 pps = currentPricePerShare();
         uint256 yield = _yieldFor(msg.sender, pps);
@@ -565,11 +553,15 @@ contract ERC4626YieldWrapper is ERC20 {
         return yield;
     }
 
+    function getReceipt(address _account) public view returns (DepositReceipt memory) {
+        return depositReceipts[_account];
+    }
+
     function yieldFor(address _account) public view returns (uint256 yield) {
         uint256 pps = currentPricePerShare();
         if (pps == 0) return 0;
 
-        if (receiverToDepositors[_account].length == 0) {
+        if (claimerToDepositors[_account].length == 0) {
             return 0;
         }
 
@@ -594,10 +586,10 @@ contract ERC4626YieldWrapper is ERC20 {
         if (shares == 0) return 0;
 
         uint256 principal;
-        for (uint8 i = 0; i < receiverToDepositors[_account].length; i++) {
-            if (receiverToDepositors[_account][i] == address(0)) continue;
+        for (uint8 i = 0; i < claimerToDepositors[_account].length; i++) {
+            if (claimerToDepositors[_account][i] == address(0)) continue;
 
-            DepositReceipt memory receipt = depositReceipts[receiverToDepositors[_account][i]];
+            DepositReceipt memory receipt = depositReceipts[claimerToDepositors[_account][i]];
 
             for (uint8 j = 0; j < receipt.yieldClaimers.length; j++) {
                 if (receipt.yieldClaimers[j].account == _account) {
