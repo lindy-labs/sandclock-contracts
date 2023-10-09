@@ -167,6 +167,33 @@ contract ERC4626YieldWrapperTest is Test {
         assertEq(wrapper.principalFor(address(this)), principal, "principal != deposit");
     }
 
+    function test_claimYield_whenInLoss() public {
+        uint256 principal = 1000e6;
+        deal(address(C.USDC), address(this), principal);
+        ERC20(C.USDC).approve(address(wrapper), principal);
+
+        ERC4626YieldWrapper.Claimer[] memory yieldClaimers = new ERC4626YieldWrapper.Claimer[](1);
+        yieldClaimers[0] = ERC4626YieldWrapper.Claimer({account: address(this), percent: 1e18});
+        wrapper.deposit(principal, yieldClaimers);
+
+        assertEq(wrapper.yieldFor(address(this)), 0, "yield not 0 after deposit");
+        assertEq(wrapper.principalFor(address(this)), principal, "principal != deposit");
+
+        deal(address(C.USDC), address(vault), ERC20(C.USDC).balanceOf(address(vault)) / 2);
+
+        assertEq(wrapper.yieldFor(address(this)), 0, "yield not correct");
+        assertEq(wrapper.principalFor(address(this)), principal / 2, "principal");
+
+        vm.expectRevert();
+        wrapper.claimYield();
+
+        wrapper.withdraw(principal / 2);
+
+        assertEq(usdc.balanceOf(address(this)), principal / 2, "balance not correct");
+        assertEq(wrapper.yieldFor(address(this)), 0, "yield not 0 after claim");
+        assertEq(wrapper.principalFor(address(this)), 0, "principal");
+    }
+
     function test_claimYield_receiverTransfersSharesToAnotherAccount() public {
         uint256 principal = 1000e6;
         deal(address(C.USDC), address(this), principal);
@@ -475,6 +502,7 @@ contract ERC4626YieldWrapper is ERC20 {
 
     struct DepositReceipt {
         uint256 principal;
+        uint256 shares;
         Claimer[] yieldClaimers;
     }
 
@@ -500,6 +528,7 @@ contract ERC4626YieldWrapper is ERC20 {
 
         DepositReceipt storage receipt = depositReceipts[msg.sender];
         receipt.principal += _amount;
+        receipt.shares += shares;
 
         if (receipt.yieldClaimers.length > 0) revert("already has yield claimers");
 
@@ -537,6 +566,7 @@ contract ERC4626YieldWrapper is ERC20 {
 
         DepositReceipt storage receipt = depositReceipts[msg.sender];
         receipt.principal -= _principalAmount;
+        receipt.shares -= shares;
 
         for (uint8 i = 0; i < receipt.yieldClaimers.length; i++) {
             Claimer memory claimer = receipt.yieldClaimers[i];
@@ -635,7 +665,12 @@ contract ERC4626YieldWrapper is ERC20 {
     }
 
     function principalFor(address _account) public view returns (uint256) {
-        return depositReceipts[_account].principal;
+        DepositReceipt memory receipt = depositReceipts[_account];
+
+        uint256 value = vault.convertToAssets(receipt.shares);
+
+        // could be less if yield is negative
+        return value < receipt.principal ? value : receipt.principal;
     }
 
     function _yieldFor(address _account) internal view returns (uint256) {
@@ -650,6 +685,9 @@ contract ERC4626YieldWrapper is ERC20 {
         if (pps == 0) return 0;
 
         uint256 principal = claimerToPrincipal[_account];
+
+        // check if yield is negative
+        if (shares.mulWadDown(pps) < principal) return 0;
 
         return shares.mulWadDown(pps) - principal;
     }
