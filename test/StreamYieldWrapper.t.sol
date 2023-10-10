@@ -8,6 +8,7 @@ import {ERC4626} from "solmate/mixins/ERC4626.sol";
 import {WETH} from "solmate/tokens/WETH.sol";
 import {EnumerableSet} from "openzeppelin-contracts/utils/structs/EnumerableSet.sol";
 import {EnumerableMap} from "openzeppelin-contracts/utils/structs/EnumerableMap.sol";
+import {Strings} from "openzeppelin-contracts/utils/Strings.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 import {IPool} from "aave-v3/interfaces/IPool.sol";
 import {IAToken} from "aave-v3/interfaces/IAToken.sol";
@@ -31,6 +32,7 @@ import {IwstETH} from "../src/interfaces/lido/IwstETH.sol";
 
 contract StreamYieldWrapperTest is Test {
     using FixedPointMathLib for uint256;
+    using Strings for string;
 
     uint256 mainnetFork;
 
@@ -433,6 +435,7 @@ contract StreamYieldWrapper is ERC20 {
         vault.asset().approve(address(vault), type(uint256).max);
     }
 
+    // TODO: batch open?
     function open(uint256 _amount, address _yieldReceiver) public returns (uint256) {
         vault.asset().transferFrom(msg.sender, address(this), _amount);
         uint256 shares = vault.deposit(_amount, address(this));
@@ -447,6 +450,7 @@ contract StreamYieldWrapper is ERC20 {
         return shares;
     }
 
+    // TODO: batch close?
     function close(address _yieldReceiver) public returns (uint256) {
         uint256 assets = deposited[_yieldReceiver][msg.sender];
 
@@ -481,10 +485,10 @@ contract StreamYieldWrapper is ERC20 {
         bool success = super.transfer(_to, _amount);
         uint256 assets = vault.convertToAssets(_amount);
 
+        // TODO: to transfer shares we need to find the link to depositor(s)
+
         receiverPrincipal[msg.sender] -= assets;
         receiverPrincipal[_to] += assets;
-
-        // deposited[]
 
         return success;
     }
