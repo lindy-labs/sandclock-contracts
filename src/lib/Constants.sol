@@ -3,7 +3,7 @@ pragma solidity ^0.8.13;
 
 library Constants {
     // address of the multisig. meant to have default admin role
-    address public constant MULTISIG = 0x035F210e5d14054E8AE5A6CFA76d643aA200D56E;
+    address public constant MULTISIG = 0x6cF38285FdFAf8D67205ca444A899025b5B18e83;
 
     uint256 public constant ONE = 1e18;
     // decimals difference between WETH and USDC (18 - 6)
