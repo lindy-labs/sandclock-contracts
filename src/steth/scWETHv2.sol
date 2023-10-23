@@ -84,20 +84,22 @@ contract scWETHv2 is BaseV2Vault {
     /// @notice the primary method to be used by backend to invest, disinvest or reallocate funds among supported adapters
     /// @dev _totalInvestAmount must be zero in case of disinvest, reallocation or reinvesting profits
     /// @dev also mints performance fee tokens to the treasury based on the profits (if any) made by the vault
-    /// @param _totalInvestAmount total amount of float in the strategy to invest in the lending markets in case of a invest
     /// @param _flashLoanAmount the amount to be flashloaned from balancer
     /// @param _multicallData array of bytes containing the series of encoded functions to be called (the functions being one of supplyAndBorrow, repayAndWithdraw, swapWstEthToWeth, swapWethToWstEth, zeroExSwap)
-    function rebalance(uint256 _totalInvestAmount, uint256 _flashLoanAmount, bytes[] calldata _multicallData)
-        external
-    {
+    function rebalance(uint256 _flashLoanAmount, bytes[] calldata _multicallData) external {
         _onlyKeeper();
 
-        if (_totalInvestAmount > _wethBalance()) revert InsufficientDepositBalance();
-
-        // needed otherwise counted as profit during harvest
-        totalInvested += _totalInvestAmount;
+        uint256 wethBefore = _wethBalance();
 
         _flashLoan(_flashLoanAmount, _multicallData);
+
+        uint256 wethAfter = _wethBalance();
+
+        if (totalInvested + wethBefore < wethAfter) {
+            totalInvested = 0;
+        } else {
+            totalInvested = totalInvested + wethBefore - wethAfter;
+        }
 
         _harvest();
 
@@ -336,7 +338,7 @@ contract scWETHv2 is BaseV2Vault {
     function _withdrawToVault(uint256 _amount) internal {
         uint256 n = protocolAdapters.length();
         uint256 flashLoanAmount;
-        uint256 totalInvested_ = _totalCollateralInWeth() - totalDebt();
+        uint256 totalInvested_ = _totalCollateralInWeth() - totalDebt(); // omit wstEth balance here since we cannot "withdraw" it from the lending markets
         bytes[] memory callData = new bytes[](n + 1); // +1 for the last call to swap wstEth to weth
 
         // limit the amount to withdraw to the total invested amount
@@ -370,7 +372,12 @@ contract scWETHv2 is BaseV2Vault {
         }
 
         // needed otherwise counted as loss during harvest
-        totalInvested -= _amount;
+        if (_amount > totalInvested) {
+            // since we are withdrawing everything, we need to reset the totalInvested
+            totalInvested = 0;
+        } else {
+            totalInvested -= _amount;
+        }
 
         callData[n] = abi.encodeWithSelector(scWETHv2.swapWstEthToWeth.selector, type(uint256).max, slippageTolerance);
 

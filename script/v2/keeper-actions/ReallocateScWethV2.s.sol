@@ -90,7 +90,7 @@ contract ReallocateScWethV2 is Script, scWETHv2Helper {
 
         console2.log("start execution");
 
-        vault.rebalance(0, flashLoanAmount, multiCallData);
+        vault.rebalance(flashLoanAmount, multiCallData);
 
         vm.stopBroadcast();
     }

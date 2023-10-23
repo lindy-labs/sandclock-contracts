@@ -210,7 +210,7 @@ contract scWETHv2Test is Test {
         (bytes[] memory callData,, uint256 totalFlashLoanAmount) =
             _getInvestParams(investAmount, aaveV3AllocationPercent, eulerAllocationPercent, compoundAllocationPercent);
         vm.startPrank(keeper);
-        vault.rebalance(investAmount, totalFlashLoanAmount, callData);
+        vault.rebalance(totalFlashLoanAmount, callData);
         vm.stopPrank();
 
         vm.expectRevert(abi.encodeWithSelector(ProtocolInUse.selector, id));
@@ -415,7 +415,7 @@ contract scWETHv2Test is Test {
         // deposit into strategy
         vm.startPrank(keeper);
         vm.expectRevert(abi.encodeWithSelector(FloatBalanceTooLow.selector, minimumFloatAmount - 1, minimumFloatAmount));
-        vault.rebalance(investAmount, totalFlashLoanAmount, callData);
+        vault.rebalance(totalFlashLoanAmount, callData);
     }
 
     function test_invest_TooMuch(uint256 amount) public {
@@ -431,8 +431,8 @@ contract scWETHv2Test is Test {
 
         // deposit into strategy
         vm.startPrank(keeper);
-        vm.expectRevert(InsufficientDepositBalance.selector);
-        vault.rebalance(investAmount, totalFlashLoanAmount, callData);
+        vm.expectRevert();
+        vault.rebalance(totalFlashLoanAmount, callData);
     }
 
     function test_deposit_eth(uint256 amount) public {
@@ -561,7 +561,7 @@ contract scWETHv2Test is Test {
         );
 
         vm.prank(keeper);
-        vault.rebalance(investAmount, flashLoanAmount, callData);
+        vault.rebalance(flashLoanAmount, callData);
 
         // withdraw more than what is already in the vault as float
         vault.withdraw(weth.balanceOf(address(vault)) + 1, address(this), address(this));
@@ -598,7 +598,7 @@ contract scWETHv2Test is Test {
         vm.expectEmit(true, true, true, false);
         emit Rebalanced(totalSupplyAmount, totalFlashLoanAmount, minimumFloatAmount);
 
-        vault.rebalance(investAmount, totalFlashLoanAmount, callData);
+        vault.rebalance(totalFlashLoanAmount, callData);
     }
 
     function test_invest_basic(uint256 amount) public {
@@ -615,7 +615,7 @@ contract scWETHv2Test is Test {
 
         // deposit into strategy
         hoax(keeper);
-        vault.rebalance(investAmount, totalFlashLoanAmount, callData);
+        vault.rebalance(totalFlashLoanAmount, callData);
 
         _floatCheck();
 
@@ -644,7 +644,7 @@ contract scWETHv2Test is Test {
 
         // must not revert (would have reverted if scWETHv2 was not paying fees)
         hoax(keeper);
-        vault.rebalance(investAmount, totalFlashLoanAmount, callData);
+        vault.rebalance(totalFlashLoanAmount, callData);
 
         // assert fees has been paid
         uint256 expectedFees = totalFlashLoanAmount.mulWadUp(flashLoanFeePercent);
@@ -674,7 +674,7 @@ contract scWETHv2Test is Test {
 
         // deposit into strategy
         hoax(keeper);
-        vault.rebalance(investAmount, compoundV3FlashLoanAmount, callData);
+        vault.rebalance(compoundV3FlashLoanAmount, callData);
 
         assertLt(weth.balanceOf(address(vault)), minimumDust, "weth dust after invest");
         assertLt(wstEth.balanceOf(address(vault)), minimumDust, "wstEth dust after invest");
@@ -700,7 +700,7 @@ contract scWETHv2Test is Test {
         );
 
         hoax(keeper);
-        vault.rebalance(0, expectedWethAmountAfterSwap, callData);
+        vault.rebalance(expectedWethAmountAfterSwap, callData);
 
         _floatCheck();
 
@@ -708,6 +708,41 @@ contract scWETHv2Test is Test {
         assertLt(wstEth.balanceOf(address(vault)), minimumDust, "wstEth dust after disinvest");
         assertApproxEqRel(vault.totalAssets(), assets, 0.001e18, "disinvest must not change total assets");
         assertGe(leverage, vaultHelper.getLeverage(), "leverage not decreased after disinvest");
+    }
+
+    function test_disinvest_decreasesTotalInvestedAmount() public {
+        _setUp(BLOCK_BEFORE_EULER_EXPLOIT);
+
+        uint256 amount = 100 ether;
+        _depositToVault(address(this), amount);
+
+        uint256 investAmount = amount - minimumFloatAmount;
+
+        (bytes[] memory callData,, uint256 totalFlashLoanAmount) =
+            _getInvestParams(investAmount, aaveV3AllocationPercent, eulerAllocationPercent, compoundAllocationPercent);
+
+        // deposit into strategy
+        hoax(keeper);
+        vault.rebalance(totalFlashLoanAmount, callData);
+
+        // withdraw all from aavev3
+        uint256 aaveV3Collateral = vault.getCollateral(aaveV3AdapterId);
+        uint256 aaveV3Debt = vault.getDebt(aaveV3AdapterId);
+        uint256 totalInvested = vault.totalInvested();
+
+        callData = new bytes[](2);
+        callData[0] =
+            abi.encodeWithSelector(scWETHv2.repayAndWithdraw.selector, aaveV3AdapterId, aaveV3Debt, aaveV3Collateral);
+        callData[1] =
+            abi.encodeWithSelector(scWETHv2.swapWstEthToWeth.selector, type(uint256).max, vault.slippageTolerance());
+
+        hoax(keeper);
+        // disinvest trhu rebalance call
+        vault.rebalance(aaveV3Debt, callData);
+
+        assertApproxEqRel(
+            vault.totalInvested(), totalInvested - totalInvested.mulWadUp(aaveV3AllocationPercent), 0.01e18
+        );
     }
 
     function test_deposit_invest_withdraw(uint256 amount) public {
@@ -724,7 +759,7 @@ contract scWETHv2Test is Test {
 
         // deposit into strategy
         hoax(keeper);
-        vault.rebalance(investAmount, totalFlashLoanAmount, callData);
+        vault.rebalance(totalFlashLoanAmount, callData);
 
         uint256 userBalance = vault.convertToAssets(shares);
 
@@ -750,7 +785,7 @@ contract scWETHv2Test is Test {
 
         // deposit into strategy
         hoax(keeper);
-        vault.rebalance(investAmount, totalFlashLoanAmount, callData);
+        vault.rebalance(totalFlashLoanAmount, callData);
 
         assertApproxEqRel(vault.totalAssets(), amount, 0.01e18, "totalAssets error");
         assertEq(vault.balanceOf(address(this)), shares, "shares error");
@@ -762,6 +797,32 @@ contract scWETHv2Test is Test {
         assertEq(vault.balanceOf(address(this)), 0, "shares after redeem error");
         assertEq(vault.convertToAssets(vault.balanceOf(address(this))), 0, "convertToAssets after redeem error");
         assertApproxEqRel(weth.balanceOf(address(this)), amount, 0.015e18, "weth balance after redeem error");
+    }
+
+    function test_withdrawToVault_resetsTotalInvestedIfEverythingIsWithdrawn() public {
+        _setUp(BLOCK_BEFORE_EULER_EXPLOIT);
+
+        uint256 amount = 100 ether;
+        _depositToVault(address(this), amount);
+
+        uint256 investAmount = amount - minimumFloatAmount;
+
+        (bytes[] memory callData,, uint256 totalFlashLoanAmount) =
+            _getInvestParams(investAmount, aaveV3AllocationPercent, eulerAllocationPercent, compoundAllocationPercent);
+
+        // deposit into strategy
+        hoax(keeper);
+        vault.rebalance(totalFlashLoanAmount, callData);
+
+        // add profit
+        _simulate_stEthStakingInterest(365 days, 1.071e18);
+
+        hoax(keeper);
+        vault.withdrawToVault(type(uint256).max);
+
+        assertEq(vault.totalInvested(), 0, "total invested not 0");
+        assertEq(vault.totalDebt(), 0, "totalDebt not 0");
+        assertApproxEqAbs(vault.totalCollateral(), 0, 10, "totalCollateral not 0"); // some leftovers
     }
 
     function test_withdrawToVault(uint256 amount) public {
@@ -779,7 +840,7 @@ contract scWETHv2Test is Test {
 
         // deposit into strategy
         hoax(keeper);
-        vault.rebalance(investAmount, totalFlashLoanAmount, callData);
+        vault.rebalance(totalFlashLoanAmount, callData);
 
         uint256 assets = priceConverter.wstEthToEth(vault.totalCollateral()) - vault.totalDebt();
         uint256 floatBalance = amount - investAmount;
@@ -804,7 +865,7 @@ contract scWETHv2Test is Test {
         assertApproxEqRel(
             weth.balanceOf(address(vault)) - floatBalance, assets / 2, maxAssetsDelta, "assets not withdrawn"
         );
-        assertApproxEqRel(vault.totalInvested(), investAmount - (assets / 2), 0.001e18, "totalInvested not reduced");
+        assertApproxEqRel(vault.totalInvested(), investAmount - (assets / 2), 0.01e18, "totalInvested not reduced");
 
         // withdraw the remaining assets
         hoax(keeper);
@@ -818,10 +879,12 @@ contract scWETHv2Test is Test {
         assertApproxEqRel(
             weth.balanceOf(address(vault)) - floatBalance, assets, maxAssetsDelta, "test_withdrawToVault asset balance"
         );
-        assertApproxEqRel(vault.totalInvested(), investAmount - assets, 0.001e18, "totalInvested not reduced");
+        assertApproxEqAbs(
+            vault.totalInvested(), investAmount - assets, assets.mulWadDown(0.01e18), "totalInvested not reduced"
+        );
     }
 
-    // // we decrease ltv in case of a loss, since the ltv goes higher than the target ltv in such a scenario
+    // we decrease ltv in case of a loss, since the ltv goes higher than the target ltv in such a scenario
     function test_disinvest(uint256 amount) public {
         _setUp(BLOCK_BEFORE_EULER_EXPLOIT);
 
@@ -836,7 +899,7 @@ contract scWETHv2Test is Test {
             _getInvestParams(investAmount, aaveV3AllocationPercent, eulerAllocationPercent, compoundAllocationPercent);
 
         hoax(keeper);
-        vault.rebalance(investAmount, totalFlashLoanAmount, callData);
+        vault.rebalance(totalFlashLoanAmount, callData);
 
         assertLt(weth.balanceOf(address(vault)), minimumDust, "weth dust after invest");
         assertLt(wstEth.balanceOf(address(vault)), minimumDust, "wstEth dust after invest");
@@ -860,7 +923,7 @@ contract scWETHv2Test is Test {
         uint256 ltv = vaultHelper.getLtv();
 
         hoax(keeper);
-        vault.rebalance(0, totalFlashLoanAmount, callData);
+        vault.rebalance(totalFlashLoanAmount, callData);
 
         _floatCheck();
 
@@ -913,7 +976,7 @@ contract scWETHv2Test is Test {
             _getInvestParams(investAmount, aaveV3Allocation, eulerAllocation, 0);
 
         hoax(keeper);
-        vault.rebalance(investAmount, totalFlashLoanAmount, callData);
+        vault.rebalance(totalFlashLoanAmount, callData);
 
         uint256 aaveV3Assets = vaultHelper.getAssets(aaveV3Adapter);
         uint256 eulerAssets = vaultHelper.getAssets(eulerAdapter);
@@ -929,7 +992,7 @@ contract scWETHv2Test is Test {
 
         // so after reallocation aaveV3 must have 60% and euler must have 40% funds respectively
         hoax(keeper);
-        vault.rebalance(0, totalFlashLoanAmount, callData);
+        vault.rebalance(totalFlashLoanAmount, callData);
 
         _floatCheck();
 
@@ -961,7 +1024,7 @@ contract scWETHv2Test is Test {
             _getInvestParams(investAmount, aaveV3Allocation, eulerAllocation, 0);
 
         hoax(keeper);
-        vault.rebalance(investAmount, totalFlashLoanAmount, callData);
+        vault.rebalance(totalFlashLoanAmount, callData);
 
         uint256 aaveV3Assets = vaultHelper.getAssets(aaveV3Adapter);
         uint256 eulerAssets = vaultHelper.getAssets(eulerAdapter);
@@ -977,7 +1040,7 @@ contract scWETHv2Test is Test {
 
         // so after reallocation aaveV3 must have 80% and euler must have 20% funds respectively
         hoax(keeper);
-        vault.rebalance(0, totalFlashLoanAmount, callData);
+        vault.rebalance(totalFlashLoanAmount, callData);
 
         _floatCheck();
 
@@ -999,7 +1062,7 @@ contract scWETHv2Test is Test {
             _getInvestParams(investAmount, aaveV3AllocationPercent, eulerAllocationPercent, compoundAllocationPercent);
 
         hoax(keeper);
-        vault.rebalance(investAmount, totalFlashLoanAmount, callData);
+        vault.rebalance(totalFlashLoanAmount, callData);
 
         uint256 aaveV3Assets = vaultHelper.getAssets(aaveV3Adapter);
         uint256 eulerAssets = vaultHelper.getAssets(eulerAdapter);
@@ -1014,7 +1077,7 @@ contract scWETHv2Test is Test {
         (callData, totalFlashLoanAmount) = _getReallocationParamsFromOneMarketToTwoMarkets(reallocationAmount);
 
         hoax(keeper);
-        vault.rebalance(0, totalFlashLoanAmount, callData);
+        vault.rebalance(totalFlashLoanAmount, callData);
 
         _reallocationChecksFromOneMarketToTwoMarkets(
             totalAssets, aaveV3Assets, eulerAssets, compoundAssets, aaveV3Ltv, eulerLtv, compoundLtv, reallocationAmount
@@ -1041,7 +1104,7 @@ contract scWETHv2Test is Test {
 
         // deposit into strategy
         hoax(keeper);
-        vault.rebalance(investAmount, aaveV3FlashLoanAmount, callData);
+        vault.rebalance(aaveV3FlashLoanAmount, callData);
 
         // move half position from aave v3 to compound v3
         uint256 totalCollateral = vault.totalCollateral();
@@ -1057,7 +1120,7 @@ contract scWETHv2Test is Test {
 
         uint256 flashLoanAmount = debtToMove;
         hoax(keeper);
-        vault.rebalance(0, flashLoanAmount, callData);
+        vault.rebalance(flashLoanAmount, callData);
 
         assertApproxEqAbs(vault.totalCollateral(), totalCollateral, 2, "total collateral changed");
         assertApproxEqAbs(
@@ -1082,7 +1145,7 @@ contract scWETHv2Test is Test {
             _getInvestParams(investAmount, aaveV3AllocationPercent, eulerAllocationPercent, compoundAllocationPercent);
 
         hoax(keeper);
-        vault.rebalance(investAmount, totalFlashLoanAmount, callData);
+        vault.rebalance(totalFlashLoanAmount, callData);
 
         uint256 aaveV3Assets = vaultHelper.getAssets(aaveV3Adapter);
         uint256 eulerAssets = vaultHelper.getAssets(eulerAdapter);
@@ -1097,7 +1160,7 @@ contract scWETHv2Test is Test {
         (callData, totalFlashLoanAmount) = _getReallocationParamsFromTwoMarketsToOneMarket(reallocationAmount);
 
         hoax(keeper);
-        vault.rebalance(0, totalFlashLoanAmount, callData);
+        vault.rebalance(totalFlashLoanAmount, callData);
 
         _reallocationChecksFromTwoMarkets_TwoOneMarket(
             totalAssets, aaveV3Assets, eulerAssets, compoundAssets, aaveV3Ltv, eulerLtv, compoundLtv, reallocationAmount
@@ -1117,7 +1180,7 @@ contract scWETHv2Test is Test {
         (bytes[] memory callData,, uint256 totalFlashLoanAmount) = _getInvestParams(investAmount, 0.8e18, 0.2e18);
 
         hoax(keeper);
-        vault.rebalance(investAmount, totalFlashLoanAmount, callData);
+        vault.rebalance(totalFlashLoanAmount, callData);
 
         uint256 altv = vaultHelper.getLtv(aaveV3Adapter);
         uint256 compoundLtv = vaultHelper.getLtv(compoundV3Adapter);
@@ -1139,7 +1202,7 @@ contract scWETHv2Test is Test {
         emit Harvested(0, 0); // just testing for the event emission and not the actual numbers since the actual profit is a  little tedious to simulate
 
         hoax(keeper);
-        vault.rebalance(0, totalFlashLoanAmountAfterProfits, callDataAfterProfits);
+        vault.rebalance(totalFlashLoanAmountAfterProfits, callDataAfterProfits);
 
         _floatCheck();
 
@@ -1206,7 +1269,7 @@ contract scWETHv2Test is Test {
         uint256 totalAssetsBefore = vault.totalAssets();
 
         hoax(keeper);
-        vault.rebalance(investAmount, totalFlashLoanAmount, callData);
+        vault.rebalance(totalFlashLoanAmount, callData);
 
         _floatCheck();
         _investChecksWithoutEuler(
