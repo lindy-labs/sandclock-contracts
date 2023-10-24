@@ -51,13 +51,19 @@ contract RebalanceScWethV2Test is Test {
 
         uint256 investAmount = _investAmount();
 
+        console2.log("totalAssets before", vault.totalAssets());
+
         bytes memory swapData =
             hex"6af479b20000000000000000000000000000000000000000000000000000000000000080000000000000000000000000000000000000000000000002a1537c41aaf9b5810000000000000000000000000000000000000000000000024713824e5bc233540000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002bc02aaa39b223fe8d0a0e5c4f27ead9083c756cc20000647f39c581f595b53c5cb19bd0b3f8da6c935e2ca0000000000000000000000000000000000000000000869584cd0000000000000000000000001000000000000000000000000000000000000011000000000000000000000000000000006c488231b3a828e2bda0c19542b303e8";
         script.setDemoSwapData(swapData); // setting the demo swap data only for the test since the block number is set for the test but zeroEx api returns swapData for the most recent block
 
         script.run();
 
-        assertEq(vault.totalInvested(), investAmount, "totalInvested not updated");
+        console2.log("totalAssets after", vault.totalAssets());
+
+        console2.log("investAmount test", investAmount);
+
+        assertEq(vault.totalInvested(), investAmount, "totalInvested not updated correctly");
 
         uint256 totalCollateral = script.priceConverter().wstEthToEth(vault.totalCollateral());
         uint256 totalDebt = vault.totalDebt();
