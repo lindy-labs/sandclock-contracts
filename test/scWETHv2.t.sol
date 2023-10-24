@@ -710,7 +710,7 @@ contract scWETHv2Test is Test {
         assertGe(leverage, vaultHelper.getLeverage(), "leverage not decreased after disinvest");
     }
 
-    function test_disinvest_decreasesTotalInvestedAmount() public {
+    function test_disinvestThruRebalance_decreasesTotalInvestedAmount() public {
         _setUp(BLOCK_BEFORE_EULER_EXPLOIT);
 
         uint256 amount = 100 ether;
@@ -743,6 +743,54 @@ contract scWETHv2Test is Test {
         assertApproxEqRel(
             vault.totalInvested(), totalInvested - totalInvested.mulWadUp(aaveV3AllocationPercent), 0.01e18
         );
+    }
+
+    function test_disinvestThruRebalance_resetsTotalInvestedWhenDisinvestingEverythingWhileInProfit() public {
+        _setUp(BLOCK_BEFORE_EULER_EXPLOIT);
+
+        uint256 amount = 100 ether;
+        _depositToVault(address(this), amount);
+
+        uint256 investAmount = amount - minimumFloatAmount;
+
+        (bytes[] memory callData,, uint256 totalFlashLoanAmount) =
+            _getInvestParams(investAmount, aaveV3AllocationPercent, eulerAllocationPercent, compoundAllocationPercent);
+
+        // deposit into strategy
+        hoax(keeper);
+        vault.rebalance(totalFlashLoanAmount, callData);
+
+        _simulate_stEthStakingInterest(365 days, 1.071e18);
+
+        // withdraw all from aavev3
+        uint256 aaveV3Collateral = vault.getCollateral(aaveV3AdapterId);
+        uint256 aaveV3Debt = vault.getDebt(aaveV3AdapterId);
+        uint256 compoundCollateral = vault.getCollateral(compoundV3AdapterId);
+        uint256 compoundDebt = vault.getDebt(compoundV3AdapterId);
+        uint256 eulerCollateral = vault.getCollateral(eulerAdapterId);
+        uint256 eulerDebt = vault.getDebt(eulerAdapterId);
+
+        uint256 totalInvested = vault.totalInvested();
+        assertTrue(totalInvested > 0, "totalInvested must be > 0");
+
+        callData = new bytes[](4);
+        callData[0] =
+            abi.encodeWithSelector(scWETHv2.repayAndWithdraw.selector, aaveV3AdapterId, aaveV3Debt, aaveV3Collateral);
+        callData[1] = abi.encodeWithSelector(
+            scWETHv2.repayAndWithdraw.selector, compoundV3AdapterId, compoundDebt, compoundCollateral
+        );
+        callData[2] =
+            abi.encodeWithSelector(scWETHv2.repayAndWithdraw.selector, eulerAdapterId, eulerDebt, eulerCollateral);
+        callData[3] =
+            abi.encodeWithSelector(scWETHv2.swapWstEthToWeth.selector, type(uint256).max, vault.slippageTolerance());
+
+        hoax(keeper);
+        // disinvest trhu rebalance call
+        vault.rebalance(aaveV3Debt + compoundDebt + eulerDebt, callData);
+
+        assertEq(vault.totalDebt(), 0, "total debt not 0");
+        assertEq(vault.totalCollateral(), 0, "total collateral not 0");
+        assertEq(vault.totalInvested(), 0, "total invested not 0");
     }
 
     function test_deposit_invest_withdraw(uint256 amount) public {
