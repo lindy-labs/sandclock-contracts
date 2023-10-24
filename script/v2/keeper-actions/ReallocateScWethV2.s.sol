@@ -76,7 +76,7 @@ contract ReallocateScWethV2 is Script, scWETHv2Helper {
     bytes[] private multiCallData;
     uint256 flashLoanAmount;
 
-    constructor() scWETHv2Helper(scWETHv2(payable(MA.SCWETHV2)), PriceConverter(MA.PRICE_CONVERTER)) {
+    constructor(scWETHv2 _vault) scWETHv2Helper(_vault, PriceConverter(MA.PRICE_CONVERTER)) {
         expectedAllocationPercent[morphoAdapter] = morphoExpectedAllocationPercent;
         expectedAllocationPercent[compoundV3Adapter] = compoundExpectedAllocationPercent;
         expectedAllocationPercent[aaveV3Adapter] = aaveV3ExpectedAllocationPercent;

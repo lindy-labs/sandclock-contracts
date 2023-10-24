@@ -20,6 +20,9 @@ import {ExitAllPositionsScWethV2} from "../../script/v2/keeper-actions/ExitAllPo
 
 import {scWETHv2} from "../../src/steth/scWETHv2.sol";
 import {IAdapter} from "../../src/steth/IAdapter.sol";
+import {Swapper} from "../../src/steth/Swapper.sol";
+import {PriceConverter} from "../../src/steth/PriceConverter.sol";
+import {MainnetAddresses as MA} from "../../script/base/MainnetAddresses.sol";
 
 contract ExitAllPositionsScWETHv2Test is Test {
     using FixedPointMathLib for uint256;
@@ -36,9 +39,23 @@ contract ExitAllPositionsScWETHv2Test is Test {
         vm.createFork(vm.envString("RPC_URL_MAINNET"));
         vm.selectFork(mainnetFork);
         vm.rollFork(18018649);
-        rebalanceScript = new RebalanceScWethV2TestHarness();
-        exitScript = new ExitAllPositionsScWethV2();
+
+        scWETHv2 _vault = _redeployScWethV2();
+
+        rebalanceScript = new RebalanceScWethV2TestHarness(_vault);
+        exitScript = new ExitAllPositionsScWethV2(_vault);
         vault = exitScript.vault();
+    }
+
+    function _redeployScWethV2() internal returns (scWETHv2 _vault) {
+        _vault =
+        new scWETHv2(C.MULTISIG, MA.KEEPER, WETH(payable(C.WETH)), Swapper(MA.SWAPPER), PriceConverter(MA.PRICE_CONVERTER));
+
+        vm.startPrank(C.MULTISIG);
+        _vault.addAdapter(IAdapter(MA.SCWETHV2_MORPHO_ADAPTER));
+        _vault.addAdapter(IAdapter(MA.SCWETHV2_COMPOUND_ADAPTER));
+        _vault.addAdapter(IAdapter(MA.SCWETHV2_AAVEV3_ADAPTER));
+        vm.stopPrank();
     }
 
     function testScriptExitsAllPositions(uint256 amount) public {
@@ -68,6 +85,8 @@ contract ExitAllPositionsScWETHv2Test is Test {
 
 contract RebalanceScWethV2TestHarness is RebalanceScWethV2 {
     bytes testSwapData;
+
+    constructor(scWETHv2 _vault) RebalanceScWethV2(_vault) {}
 
     function getSwapData(uint256, address, address) public view override returns (bytes memory swapData) {
         return testSwapData;

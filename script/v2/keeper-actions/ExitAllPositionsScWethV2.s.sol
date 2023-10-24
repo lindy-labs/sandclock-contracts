@@ -27,7 +27,7 @@ contract ExitAllPositionsScWethV2 is Script, scWETHv2Helper {
     uint256 keeperPrivateKey = uint256(vm.envOr("KEEPER_PRIVATE_KEY", bytes32(0x00)));
     WETH weth = WETH(payable(C.WETH));
 
-    constructor() scWETHv2Helper(scWETHv2(payable(MA.SCWETHV2)), PriceConverter(MA.PRICE_CONVERTER)) {}
+    constructor(scWETHv2 _vault) scWETHv2Helper(_vault, PriceConverter(MA.PRICE_CONVERTER)) {}
 
     function run() external {
         address keeper = keeperPrivateKey != 0 ? vm.addr(keeperPrivateKey) : MA.KEEPER;

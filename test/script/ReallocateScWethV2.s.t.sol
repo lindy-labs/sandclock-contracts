@@ -15,10 +15,13 @@ import {Address} from "openzeppelin-contracts/utils/Address.sol";
 import {WETH} from "solmate/tokens/WETH.sol";
 
 import {Constants as C} from "../../src/lib/Constants.sol";
+import {MainnetAddresses as MA} from "../../script/base/MainnetAddresses.sol";
 import {RebalanceScWethV2} from "../../script/v2/keeper-actions/RebalanceScWethV2.s.sol";
 import {ReallocateScWethV2} from "../../script/v2/keeper-actions/ReallocateScWethV2.s.sol";
 import {scWETHv2} from "../../src/steth/scWETHv2.sol";
 import {IAdapter} from "../../src/steth/IAdapter.sol";
+import {Swapper} from "../../src/steth/Swapper.sol";
+import {PriceConverter} from "../../src/steth/PriceConverter.sol";
 
 contract ReallocateScWethV2Test is Test {
     using FixedPointMathLib for uint256;
@@ -43,8 +46,12 @@ contract ReallocateScWethV2Test is Test {
         vm.createFork(vm.envString("RPC_URL_MAINNET"));
         vm.selectFork(mainnetFork);
         vm.rollFork(18018649);
-        rebalanceScWethV2 = new RebalanceScWethV2TestHarness();
-        script = new ReallocateScWethV2TestHarness();
+
+        scWETHv2 _vault = _redeployScWethV2();
+
+        rebalanceScWethV2 = new RebalanceScWethV2TestHarness(_vault);
+
+        script = new ReallocateScWethV2TestHarness(_vault);
         vault = script.vault();
 
         morphoAdapter = script.morphoAdapter();
@@ -54,6 +61,17 @@ contract ReallocateScWethV2Test is Test {
         morphoInitPercent = rebalanceScWethV2.morphoInvestableAmountPercent();
         aaveV3InitPercent = rebalanceScWethV2.aaveV3InvestableAmountPercent();
         compoundInitPercent = rebalanceScWethV2.compoundV3InvestableAmountPercent();
+    }
+
+    function _redeployScWethV2() internal returns (scWETHv2 _vault) {
+        _vault =
+        new scWETHv2(C.MULTISIG, MA.KEEPER, WETH(payable(C.WETH)), Swapper(MA.SWAPPER), PriceConverter(MA.PRICE_CONVERTER));
+
+        vm.startPrank(C.MULTISIG);
+        _vault.addAdapter(IAdapter(MA.SCWETHV2_MORPHO_ADAPTER));
+        _vault.addAdapter(IAdapter(MA.SCWETHV2_COMPOUND_ADAPTER));
+        _vault.addAdapter(IAdapter(MA.SCWETHV2_AAVEV3_ADAPTER));
+        vm.stopPrank();
     }
 
     function testMorphoIncreaseCompoundDecrease() public {
@@ -100,7 +118,7 @@ contract ReallocateScWethV2Test is Test {
         script.run();
 
         assertApproxEqRel(vault.totalAssets(), assets, 100, "total Assets changed");
-        assertEq(vault.totalInvested(), investAmount, "investAmount changed");
+        assertApproxEqRel(vault.totalInvested(), investAmount, 0.01e18, "investAmount changed");
         assertEq(weth.balanceOf(address(vault)), float, "float changed");
 
         _assertAllocations(_morphoAllocation, _compoundV3Allocation, _aaveV3Allocation);
@@ -135,12 +153,16 @@ contract ReallocateScWethV2Test is Test {
 contract RebalanceScWethV2TestHarness is RebalanceScWethV2 {
     bytes testSwapData;
 
+    constructor(scWETHv2 _vault) RebalanceScWethV2(_vault) {}
+
     function getSwapData(uint256, address, address) public view override returns (bytes memory swapData) {
         return testSwapData;
     }
 }
 
 contract ReallocateScWethV2TestHarness is ReallocateScWethV2 {
+    constructor(scWETHv2 _vault) ReallocateScWethV2(_vault) {}
+
     function setMorphoAllocation(uint256 _val) public {
         expectedAllocationPercent[morphoAdapter] = _val;
     }

@@ -101,7 +101,7 @@ contract RebalanceScWethV2 is Script, scWETHv2Helper {
     uint256 totalWstEthWithdrawn;
     uint256 totalFlashLoanAmount;
 
-    constructor() scWETHv2Helper(scWETHv2(payable(MA.SCWETHV2)), PriceConverter(MA.PRICE_CONVERTER)) {}
+    constructor(scWETHv2 _vault) scWETHv2Helper(_vault, PriceConverter(MA.PRICE_CONVERTER)) {}
 
     function run() external {
         _logs("-------------------BEFORE REBALANCE-------------------");

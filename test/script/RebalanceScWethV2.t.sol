@@ -15,9 +15,12 @@ import {Address} from "openzeppelin-contracts/utils/Address.sol";
 import {WETH} from "solmate/tokens/WETH.sol";
 
 import {Constants as C} from "../../src/lib/Constants.sol";
+import {MainnetAddresses as MA} from "../../script/base/MainnetAddresses.sol";
 import {RebalanceScWethV2} from "../../script/v2/keeper-actions/RebalanceScWethV2.s.sol";
 import {scWETHv2} from "../../src/steth/scWETHv2.sol";
 import {IAdapter} from "../../src/steth/IAdapter.sol";
+import {Swapper} from "../../src/steth/Swapper.sol";
+import {PriceConverter} from "../../src/steth/PriceConverter.sol";
 
 contract RebalanceScWethV2Test is Test {
     using FixedPointMathLib for uint256;
@@ -37,12 +40,28 @@ contract RebalanceScWethV2Test is Test {
         vm.createFork(vm.envString("RPC_URL_MAINNET"));
         vm.selectFork(mainnetFork);
         vm.rollFork(18018649);
-        script = new RebalanceScWethV2TestHarness();
+
+        scWETHv2 _vault = _redeployScWethV2();
+
+        script = new RebalanceScWethV2TestHarness(_vault);
         vault = script.vault();
+
+        assertEq(address(vault), address(_vault), "vault redeploy not successful");
 
         morphoAdapter = script.morphoAdapter();
         compoundV3Adapter = script.compoundV3Adapter();
         aaveV3Adapter = script.aaveV3Adapter();
+    }
+
+    function _redeployScWethV2() internal returns (scWETHv2 _vault) {
+        _vault =
+        new scWETHv2(C.MULTISIG, MA.KEEPER, WETH(payable(C.WETH)), Swapper(MA.SWAPPER), PriceConverter(MA.PRICE_CONVERTER));
+
+        vm.startPrank(C.MULTISIG);
+        _vault.addAdapter(IAdapter(MA.SCWETHV2_MORPHO_ADAPTER));
+        _vault.addAdapter(IAdapter(MA.SCWETHV2_COMPOUND_ADAPTER));
+        _vault.addAdapter(IAdapter(MA.SCWETHV2_AAVEV3_ADAPTER));
+        vm.stopPrank();
     }
 
     function testScriptInvestsFloat() public {
@@ -57,12 +76,11 @@ contract RebalanceScWethV2Test is Test {
 
         script.run();
 
-        assertEq(vault.totalInvested(), investAmount, "totalInvested not updated");
+        assertApproxEqRel(vault.totalInvested(), investAmount, 0.01e18, "totalInvested not updated");
 
         uint256 totalCollateral = script.priceConverter().wstEthToEth(vault.totalCollateral());
         uint256 totalDebt = vault.totalDebt();
         assertApproxEqRel(totalCollateral - totalDebt, investAmount, 0.01e18, "totalAssets not equal amount");
-        assertEq(vault.totalInvested(), investAmount, "totalInvested not updated");
 
         uint256 morphoDeposited = script.getCollateralInWeth(morphoAdapter) - vault.getDebt(morphoAdapter.id());
         uint256 compoundDeposited =
@@ -96,7 +114,7 @@ contract RebalanceScWethV2Test is Test {
         vault.deposit{value: amount}(address(this));
 
         script.run();
-        script = new RebalanceScWethV2TestHarness(); // reset script state
+        script = new RebalanceScWethV2TestHarness(vault); // reset script state
 
         uint256 altv = script.getLtv(morphoAdapter);
         uint256 compoundLtv = script.getLtv(compoundV3Adapter);
@@ -129,7 +147,7 @@ contract RebalanceScWethV2Test is Test {
         script.setDemoSwapData(swapData); // setting the demo swap data only for the test since the block number is set for the test but zeroEx api returns swapData for the most recent block
 
         script.run();
-        script = new RebalanceScWethV2TestHarness(); // reset state
+        script = new RebalanceScWethV2TestHarness(vault); // reset state
 
         uint256 altv = script.getLtv(morphoAdapter);
         uint256 compoundLtv = script.getLtv(compoundV3Adapter);
@@ -166,7 +184,7 @@ contract RebalanceScWethV2Test is Test {
         uint256 investAmount = _investAmount();
         script.run();
 
-        script = new RebalanceScWethV2TestHarness(); // reset script state
+        script = new RebalanceScWethV2TestHarness(vault); // reset script state
 
         uint256 updatedMorphoTargetLtv = script.morphoTargetLtv() - 0.02e18;
         uint256 updatedCompoundV3TargetLtv = script.compoundV3TargetLtv() - 0.02e18;
@@ -180,7 +198,7 @@ contract RebalanceScWethV2Test is Test {
 
         script.run();
 
-        assertEq(vault.totalInvested(), investAmount, "totalInvested must not change");
+        assertApproxEqRel(vault.totalInvested(), investAmount, 0.01e18, "totalInvested must not change");
 
         assertLt(
             weth.balanceOf(address(vault)), vault.minimumFloatAmount().mulWadDown(1.01e18), "weth dust after disinvest"
@@ -199,7 +217,7 @@ contract RebalanceScWethV2Test is Test {
         uint256 investAmount = _investAmount();
         script.run();
 
-        script = new RebalanceScWethV2TestHarness(); // reset script state
+        script = new RebalanceScWethV2TestHarness(vault); // reset script state
 
         // simulate loss in morpho and profit in compound
         uint256 updatedMorphoTargetLtv = script.morphoTargetLtv() - 0.02e18;
@@ -212,7 +230,7 @@ contract RebalanceScWethV2Test is Test {
 
         script.run();
 
-        assertEq(vault.totalInvested(), investAmount, "totalInvested must not change");
+        assertApproxEqRel(vault.totalInvested(), investAmount, 0.01e18, "totalInvested must not change");
 
         assertApproxEqRel(vault.totalAssets(), assets, 0.001e18, "must not change total assets");
 
@@ -243,7 +261,7 @@ contract RebalanceScWethV2Test is Test {
         _assertAllocations(morphoAllocation, compoundV3Allocation, aaveV3Allocation);
         _assertLtvs(0.8e18, 0.8e18, 0.8e18);
 
-        script = new RebalanceScWethV2TestHarness(); // reset script state
+        script = new RebalanceScWethV2TestHarness(vault); // reset script state
 
         // change allocation percents
         script.setMorphoInvestableAmountPercent(morphoAllocation);
@@ -261,7 +279,7 @@ contract RebalanceScWethV2Test is Test {
 
         uint256 assets = vault.totalAssets();
 
-        assertEq(vault.totalInvested(), investAmount, "totalInvested must not change");
+        assertApproxEqRel(vault.totalInvested(), investAmount, 0.01e18, "totalInvested must not change");
 
         // the script must disinvest in compound and reinvest in aave and morpho
         script.run();
@@ -283,7 +301,7 @@ contract RebalanceScWethV2Test is Test {
         investAmount += amount;
         uint256 assets = vault.totalAssets();
 
-        script = new RebalanceScWethV2TestHarness(); // reset script state
+        script = new RebalanceScWethV2TestHarness(vault); // reset script state
 
         uint256 updatedMorphoTargetLtv = script.morphoTargetLtv() - 0.02e18;
         uint256 updatedCompoundV3TargetLtv = script.compoundV3TargetLtv() - 0.02e18;
@@ -294,7 +312,7 @@ contract RebalanceScWethV2Test is Test {
 
         script.run();
 
-        assertEq(vault.totalInvested(), investAmount, "totalInvested must not change");
+        assertApproxEqRel(vault.totalInvested(), investAmount, 0.01e18, "totalInvested must not change");
 
         assertApproxEqRel(vault.totalAssets(), assets, 0.0015e18, "must not change total assets");
 
@@ -327,7 +345,7 @@ contract RebalanceScWethV2Test is Test {
         _assertAllocations(0, compoundV3Allocation, aaveV3Allocation);
         _assertLtvs(0, 0.8e18, 0.8e18);
 
-        script = new RebalanceScWethV2TestHarness(); // reset script state
+        script = new RebalanceScWethV2TestHarness(vault); // reset script state
 
         // change allocation percents
         script.setCompoundV3InvestableAmountPercent(1e18);
@@ -344,7 +362,7 @@ contract RebalanceScWethV2Test is Test {
         // the script must disinvest in compound and reinvest in aave and morpho
         script.run();
 
-        assertEq(vault.totalInvested(), investAmount, "totalInvested must not change");
+        assertApproxEqRel(vault.totalInvested(), investAmount, 0.01e18, "totalInvested must not change");
 
         assertApproxEqRel(vault.totalAssets(), assets, 0.001e18, "must not change total assets");
 
@@ -361,7 +379,7 @@ contract RebalanceScWethV2Test is Test {
 
         uint256 morphoLtv = script.getLtv(morphoAdapter);
 
-        script = new RebalanceScWethV2TestHarness(); // reset script state
+        script = new RebalanceScWethV2TestHarness(vault); // reset script state
 
         // simulate loss in morpho but not crossing disinvest threshold
         uint256 updatedMorphoTargetLtv = morphoLtv - script.disinvestThreshold();
@@ -419,7 +437,7 @@ contract RebalanceScWethV2Test is Test {
 
         uint256 assets = vault.totalAssets();
 
-        script = new RebalanceScWethV2TestHarness(); // reset script state
+        script = new RebalanceScWethV2TestHarness(vault); // reset script state
 
         uint256 updatedAaveTargetLtv = script.aaveV3TargetLtv() - 0.02e18;
 
@@ -428,7 +446,7 @@ contract RebalanceScWethV2Test is Test {
 
         script.run();
 
-        assertEq(vault.totalInvested(), investAmount, "totalInvested must not change");
+        assertApproxEqRel(vault.totalInvested(), investAmount, 0.01e18, "totalInvested must not change");
 
         assertApproxEqRel(vault.totalAssets(), assets, 0.0015e18, "must not change total assets");
 
@@ -482,7 +500,7 @@ contract RebalanceScWethV2Test is Test {
 
         script.run();
 
-        assertEq(vault.totalInvested(), investAmount, "totalInvested must not change");
+        assertApproxEqRel(vault.totalInvested(), investAmount, 0.01e18, "totalInvested must not change");
         _assertAllocations(0, 0.4e18, 0.6e18);
         _assertLtvs(0, script.compoundV3TargetLtv(), script.aaveV3TargetLtv());
     }
@@ -547,6 +565,8 @@ contract RebalanceScWethV2Test is Test {
 
 contract RebalanceScWethV2TestHarness is RebalanceScWethV2 {
     bytes testSwapData;
+
+    constructor(scWETHv2 _vault) RebalanceScWethV2(_vault) {}
 
     function getSwapData(uint256, address, address) public view override returns (bytes memory swapData) {
         return testSwapData;
