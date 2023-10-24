@@ -62,6 +62,9 @@ contract RebalanceScWethV2Test is Test {
         _vault.addAdapter(IAdapter(MA.SCWETHV2_COMPOUND_ADAPTER));
         _vault.addAdapter(IAdapter(MA.SCWETHV2_AAVEV3_ADAPTER));
         vm.stopPrank();
+
+        // since fork test were initially written for a vault which had 0.01 ether deposited
+        _vault.deposit{value: 0.01 ether}(address(this));
     }
 
     function testScriptInvestsFloat() public {
