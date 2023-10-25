@@ -932,7 +932,90 @@ contract scWETHv2Test is Test {
         );
     }
 
-    // we decrease ltv in case of a loss, since the ltv goes higher than the target ltv in such a scenario
+    function test_withdrawAll_withdrawsAllFundsFromLendingMarkets() public {
+        _setUp(BLOCK_BEFORE_EULER_EXPLOIT);
+
+        uint256 amount = 10000 ether;
+        _depositToVault(address(this), amount);
+        _depositChecks(amount, amount);
+
+        uint256 investAmount = amount - minimumFloatAmount;
+
+        (bytes[] memory callData,, uint256 totalFlashLoanAmount) =
+            _getInvestParams(investAmount, aaveV3AllocationPercent, eulerAllocationPercent, compoundAllocationPercent);
+
+        hoax(keeper);
+        vault.rebalance(totalFlashLoanAmount, callData);
+
+        assertTrue(vault.totalDebt() > 0, "total debt 0");
+        assertTrue(vault.totalCollateral() > 0, "total collateral 0");
+        assertTrue(vault.totalInvested() > 0, "total invested 0");
+
+        uint256 totalAssets = vault.totalAssets();
+
+        vm.expectEmit(true, true, true, false);
+        emit WithdrawnToVault(0);
+
+        hoax(keeper);
+        vault.withdrawAll();
+
+        assertEq(vault.totalCollateral(), 0, "total collateral");
+        assertEq(vault.totalDebt(), 0, "total debt");
+        assertApproxEqRel(weth.balanceOf(address(vault)), totalAssets, 0.005e18, "weth balance");
+        assertEq(vault.totalInvested(), 0, "total invested");
+    }
+
+    function test_withdrawAll_worksIfNotAllLendingMarketsAreInUse() public {
+        _setUp(BLOCK_BEFORE_EULER_EXPLOIT);
+
+        uint256 amount = 10000 ether;
+        _depositToVault(address(this), amount);
+        _depositChecks(amount, amount);
+
+        uint256 investAmount = amount - minimumFloatAmount;
+
+        (bytes[] memory callData,, uint256 totalFlashLoanAmount) = _getInvestParams(investAmount, 1e18, 0, 0);
+
+        hoax(keeper);
+        vault.rebalance(totalFlashLoanAmount, callData);
+
+        assertTrue(vault.totalDebt() > 0, "total debt 0");
+        assertTrue(vault.getDebt(aaveV3AdapterId) > 0, "aaveV3 debt 0");
+        assertEq(vault.getDebt(eulerAdapterId), 0, "euler debt not 0");
+        assertEq(vault.getDebt(compoundV3AdapterId), 0, "compound debt not 0");
+
+        uint256 totalAssets = vault.totalAssets();
+
+        hoax(keeper);
+        vault.withdrawAll();
+
+        assertEq(vault.totalCollateral(), 0, "total collateral");
+        assertEq(vault.totalDebt(), 0, "total debt");
+        assertApproxEqRel(weth.balanceOf(address(vault)), totalAssets, 0.01e18, "weth balance");
+        assertEq(vault.totalInvested(), 0, "total invested");
+    }
+
+    function test_withdrawAll_failsIfCallerNotKeeper() public {
+        _setUp(BLOCK_BEFORE_EULER_EXPLOIT);
+
+        uint256 amount = 10000 ether;
+        _depositToVault(address(this), amount);
+        _depositChecks(amount, amount);
+
+        uint256 investAmount = amount - minimumFloatAmount;
+
+        (bytes[] memory callData,, uint256 totalFlashLoanAmount) =
+            _getInvestParams(investAmount, aaveV3AllocationPercent, eulerAllocationPercent, compoundAllocationPercent);
+
+        // deposit into strategy
+        hoax(keeper);
+        vault.rebalance(totalFlashLoanAmount, callData);
+
+        vm.expectRevert(CallerNotKeeper.selector);
+        vault.withdrawAll();
+    }
+
+    // // we decrease ltv in case of a loss, since the ltv goes higher than the target ltv in such a scenario
     function test_disinvest(uint256 amount) public {
         _setUp(BLOCK_BEFORE_EULER_EXPLOIT);
 
@@ -1331,6 +1414,7 @@ contract scWETHv2Test is Test {
         // @note: since we cannot know the exact amount of wstEth received from swap in advance, there are some "tiny" leftovers not being supplied collateral
         assertTrue(wstEth.balanceOf(address(vault)) > 0, "no wstEth leftovers");
         assertApproxEqRel(vault.totalAssets(), totalAssetsBefore, 0.001e18, "total assets diff");
+        assertEq(vault.totalProfit(), 0, "profit not 0");
     }
 
     //////////////////////////// INTERNAL METHODS ////////////////////////////////////////

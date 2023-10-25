@@ -331,6 +331,44 @@ contract scWETHv2 is BaseV2Vault {
         asset.safeTransfer(receiver, assets);
     }
 
+    /// @notice withdraws all invested funds from the lending markets to the vault
+    function withdrawAll() external {
+        _onlyKeeper();
+
+        uint256 n = protocolAdapters.length();
+        uint256 flashLoanAmount;
+        bytes[] memory callData = new bytes[](n + 1); // +1 for the last call to swap wstEth to weth
+
+        uint256 id;
+        address adapter;
+        uint256 collateral;
+        uint256 debt;
+        for (uint256 i; i < n; i++) {
+            (id, adapter) = protocolAdapters.at(i);
+            collateral = IAdapter(adapter).getCollateral(address(this));
+
+            // skip if there is no position on this protocol
+            if (collateral == 0) continue;
+
+            debt = IAdapter(adapter).getDebt(address(this));
+
+            flashLoanAmount += debt;
+
+            callData[i] = abi.encodeWithSelector(this.repayAndWithdraw.selector, id, debt, collateral);
+        }
+
+        callData[n] = abi.encodeWithSelector(scWETHv2.swapWstEthToWeth.selector, type(uint256).max, slippageTolerance);
+
+        uint256 float = _wethBalance();
+
+        _flashLoan(flashLoanAmount, callData);
+
+        // reset total invested
+        totalInvested = 0;
+
+        emit WithdrawnToVault(_wethBalance() - float);
+    }
+
     /*//////////////////////////////////////////////////////////////
                             INTERNAL API
     //////////////////////////////////////////////////////////////*/
