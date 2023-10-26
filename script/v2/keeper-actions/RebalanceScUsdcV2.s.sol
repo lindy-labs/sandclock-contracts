@@ -30,12 +30,14 @@ contract RebalanceScUsdcV2 is ScUsdcV2ScriptBase {
     //////////////////////////////////////////////////////////////*/
 
     // @dev The following parameters are used to configure the rebalance script.
+    // ltvDiffTolerance - the maximum difference between the target ltv and the actual ltv that is allowed for any adapter
     // minUsdcProfitToReinvest - the minimum amount of weth profit (converted to USDC) that needs to be made for reinvesting to make sense (ie gas costs < profit made)
     // maxProfitSellSlippage - the maximum amount of slippage allowed when selling weth profit for usdc
     // investable amount percent - the percentage of the available funds that can be invested for a specific adapter (all have to sum up to 100% or 1e18)
     // target ltv - the target loan to value ratio for a specific adapter. Set to 0 for unused or unsupported adapters!
 
-    uint256 public minUsdcProfitToReinvest = 10e6; // 10 USDC (set to a more realistic value ~100 USDC)
+    uint256 public ltvDiffTolerance = 0.05e18; // 5%
+    uint256 public minUsdcProfitToReinvest = 100e6; // 100 USDC
     uint256 public maxProfitSellSlippage = 0.01e18; // 1%
 
     uint256 public morphoInvestableAmountPercent = 1e18; // 100%
@@ -180,24 +182,19 @@ contract RebalanceScUsdcV2 is ScUsdcV2ScriptBase {
 
         if (targetCollateral > collateral) {
             rebalanceData.supplyAmount = targetCollateral - collateral;
+        } else if (targetCollateral < collateral) {
+            rebalanceData.withdrawAmount = collateral - targetCollateral;
+        }
 
-            if (targetDebt > debt) rebalanceData.borrowAmount = targetDebt - debt;
+        uint256 debtUpperBound = targetDebt.mulWadUp(1e18 + ltvDiffTolerance);
+        uint256 debtLowerBound = targetDebt.mulWadDown(1e18 - ltvDiffTolerance);
 
-            if (targetDebt < debt) {
-                uint256 repayAmount = debt - targetDebt;
-                rebalanceData.repayAmount = repayAmount;
-                disinvestAmount += repayAmount;
-            }
-        } else {
-            if (targetDebt < debt) {
-                uint256 repayAmount = debt - targetDebt;
-                rebalanceData.repayAmount = repayAmount;
-                disinvestAmount += repayAmount;
-            }
-            if (targetDebt > debt) rebalanceData.borrowAmount = targetDebt - debt;
-
-            // if collateral == targetCollateral, no need to withdraw
-            if (targetCollateral != collateral) rebalanceData.withdrawAmount = collateral - targetCollateral;
+        if (debt < debtLowerBound) {
+            rebalanceData.borrowAmount = targetDebt - debt;
+        } else if (debt > debtUpperBound) {
+            uint256 repayAmount = debt - targetDebt;
+            rebalanceData.repayAmount = repayAmount;
+            disinvestAmount += repayAmount;
         }
 
         rebalanceDatas.push(rebalanceData);

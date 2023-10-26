@@ -269,11 +269,12 @@ contract RebalanceScUsdcV2Test is Test {
 
         uint256 expectedFloat = vault.totalAssets().mulWadDown(vault.floatPercentage());
         uint256 expectedCollateral = vault.totalAssets() - expectedFloat;
-        uint256 expectedDebt = priceConverter.usdcToEth(expectedCollateral).mulWadDown(script.morphoTargetLtv());
+        uint256 expectedDebt = vault.totalDebt();
+        uint256 wethInvested = vault.wethInvested();
 
         script.run();
 
-        assertApproxEqRel(vault.wethInvested(), expectedDebt, 0.001e18, "weth invested");
+        assertApproxEqRel(vault.wethInvested(), wethInvested, 0.001e18, "weth invested");
         assertApproxEqRel(vault.totalDebt(), expectedDebt, 0.001e18, "total debt");
         assertApproxEqRel(vault.totalCollateral(), expectedCollateral, 0.001e18, "total collateral");
     }
@@ -436,6 +437,7 @@ contract RebalanceScUsdcV2Test is Test {
         uint256 initialCollateral = vault.totalCollateral();
         uint256 initialDebt = vault.totalDebt();
 
+        script.setMinUsdcProfitToReinvest(10e6); // 10 usdc
         script.run();
 
         assertEq(vault.getProfit(), 0, "profit not sold entirely");
@@ -475,7 +477,7 @@ contract RebalanceScUsdcV2Test is Test {
         assertEq(vault.getProfit(), wethProfit, "profit");
         assertTrue(vault.usdcBalance() >= expectedFloat, "float balance");
         assertApproxEqRel(vault.totalCollateral(), initialCollateral - missingFloat, 0.005e18, "total collateral");
-        assertApproxEqRel(vault.totalDebt(), initialDebt - wethDisinvested, 0.005e18, "total debt");
+        assertApproxEqRel(vault.totalDebt(), initialDebt, 0.005e18, "total debt");
         assertApproxEqRel(vault.wethInvested(), wethInvested - wethDisinvested, 0.005e18, "weth invested");
     }
 
@@ -523,6 +525,7 @@ contract RebalanceScUsdcV2Test is Test {
         uint256 expectedCollateral = vault.totalAssets() - expectedFloat;
         uint256 expectedDebt = priceConverter.usdcToEth(expectedCollateral).mulWadDown(targetLtv);
 
+        script.setMinUsdcProfitToReinvest(10e6); // 10 usdc
         script.run();
 
         assertApproxEqAbs(vault.getProfit(), 0, 1, "profit not sold entirely");
