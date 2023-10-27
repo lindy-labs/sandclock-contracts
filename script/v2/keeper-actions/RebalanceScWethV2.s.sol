@@ -35,6 +35,7 @@ import {BaseV2Vault} from "../../../src/steth/BaseV2Vault.sol";
  * invest float if there is any
  * reinvest profits/ increase back the ltv of the protocol to the target ltv
  * disinvest/ decrease the ltv of any protocol if it has overshoot by a threshold (disinvestThreshold)
+ * also if the vault has float less than minimumFloat amount, withdraw the required float to the vault
  *
  * cmd
  * first run a local anvil node using " anvil -f YOUR_RPC_URL"
@@ -80,6 +81,7 @@ contract RebalanceScWethV2 is Script, scWETHv2Helper {
     }
 
     error ScriptAdapterNotSupported(uint256 adapterId);
+    error FloatRequiredIsMoreThanTotalInvested();
 
     uint256 keeperPrivateKey = uint256(vm.envOr("KEEPER_PRIVATE_KEY", bytes32(0x00)));
     address keeper = keeperPrivateKey != 0 ? vm.addr(keeperPrivateKey) : MA.KEEPER;
@@ -103,10 +105,28 @@ contract RebalanceScWethV2 is Script, scWETHv2Helper {
 
     constructor() scWETHv2Helper(scWETHv2(payable(MA.SCWETHV2)), PriceConverter(MA.PRICE_CONVERTER)) {}
 
+    function _updateVaultFloat() internal {
+        uint256 float = weth.balanceOf(address(vault));
+        uint256 minimumFloatAmount = vault.minimumFloatAmount();
+        if (float < minimumFloatAmount) {
+            uint256 floatRequired = (minimumFloatAmount - float).mulWadDown(C.ONE + 0.05e18); // plus extra 5% to account for slippage errors
+            if (vault.totalInvested() > floatRequired) {
+                vm.startBroadcast(keeper);
+                vault.withdrawToVault(floatRequired);
+                vm.stopBroadcast();
+            } else {
+                revert FloatRequiredIsMoreThanTotalInvested();
+            }
+        }
+    }
+
     function run() external {
         _logs("-------------------BEFORE REBALANCE-------------------");
 
         _initializeAdapterSettings();
+
+        // if the vault has float less than minimumFloat amount, withdraw it to the vault
+        _updateVaultFloat();
 
         uint256 investAmount = _calcInvestAmount();
         _createRebalanceParams(investAmount);

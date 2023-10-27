@@ -438,6 +438,7 @@ contract RebalanceScWethV2Test is Test {
 
     function testRevertsIfLtvForUnsupportedAdapterNot0() public {
         // the script must revert in case of an unsupported adapter
+        vault.deposit{value: 10 ether}(address(this));
         uint256 id = morphoAdapter.id();
         hoax(C.MULTISIG);
         vault.removeAdapter(id, true);
@@ -453,6 +454,7 @@ contract RebalanceScWethV2Test is Test {
 
     function testRevertsIfAllocationPercentForUnsupportedAdapterNot0() public {
         // the script must revert in case of an unsupported adapter
+        vault.deposit{value: 10 ether}(address(this));
         uint256 id = morphoAdapter.id();
         hoax(C.MULTISIG);
         vault.removeAdapter(id, true);
@@ -485,6 +487,44 @@ contract RebalanceScWethV2Test is Test {
         assertEq(vault.totalInvested(), investAmount, "totalInvested must not change");
         _assertAllocations(0, 0.4e18, 0.6e18);
         _assertLtvs(0, script.compoundV3TargetLtv(), script.aaveV3TargetLtv());
+    }
+
+    function testFloatResetsOnRebalance() public {
+        uint256 amount = 10 ether;
+        vault.deposit{value: amount}(address(this));
+        uint256 investAmount = _investAmount();
+        script.run();
+
+        _simulate_stEthStakingInterest(365 days, 1.071e18);
+
+        vault.withdraw(0.5 ether, address(this), address(this));
+
+        uint256 assets = vault.totalAssets();
+
+        assertLt(weth.balanceOf(address(vault)), vault.minimumFloatAmount(), "float not less than minimumFloat");
+
+        script = new RebalanceScWethV2TestHarness(); // reset script state
+        script.run();
+
+        assertApproxEqRel(
+            weth.balanceOf(address(vault)), vault.minimumFloatAmount(), 0.005e18, "float not reset after rebalance"
+        );
+
+        assertGe(weth.balanceOf(address(vault)), vault.minimumFloatAmount());
+
+        assertApproxEqRel(vault.totalAssets(), assets, 0.001e18, "must not change total assets");
+    }
+
+    function testRevertsIfVaultDoesNotHaveEnoughAssetsForFloat() public {
+        uint256 amount = 1.5 ether;
+        vault.deposit{value: amount}(address(this));
+        uint256 investAmount = _investAmount();
+        script.run();
+
+        vault.withdraw(0.8 ether, address(this), address(this));
+
+        vm.expectRevert(abi.encodePacked(RebalanceScWethV2.FloatRequiredIsMoreThanTotalInvested.selector));
+        script.run();
     }
 
     //////////////////////////////////// INTERNAL METHODS ///////////////////////////////////////
