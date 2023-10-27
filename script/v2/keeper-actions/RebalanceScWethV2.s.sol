@@ -105,21 +105,6 @@ contract RebalanceScWethV2 is Script, scWETHv2Helper {
 
     constructor() scWETHv2Helper(scWETHv2(payable(MA.SCWETHV2)), PriceConverter(MA.PRICE_CONVERTER)) {}
 
-    function _updateVaultFloat() internal {
-        uint256 float = weth.balanceOf(address(vault));
-        uint256 minimumFloatAmount = vault.minimumFloatAmount();
-        if (float < minimumFloatAmount) {
-            uint256 floatRequired = (minimumFloatAmount - float).mulWadDown(C.ONE + 0.05e18); // plus extra 5% to account for slippage errors
-            if (vault.totalInvested() > floatRequired) {
-                vm.startBroadcast(keeper);
-                vault.withdrawToVault(floatRequired);
-                vm.stopBroadcast();
-            } else {
-                revert FloatRequiredIsMoreThanTotalInvested();
-            }
-        }
-    }
-
     function run() external {
         _logs("-------------------BEFORE REBALANCE-------------------");
 
@@ -309,6 +294,21 @@ contract RebalanceScWethV2 is Script, scWETHv2Helper {
 
                 totalWstEthWithdrawn += withdrawAmount;
                 disinvestFlashLoanAmount += flashLoanAmount;
+            }
+        }
+    }
+
+    function _updateVaultFloat() internal {
+        uint256 float = weth.balanceOf(address(vault));
+        uint256 minimumFloatAmount = vault.minimumFloatAmount();
+        if (float < minimumFloatAmount) {
+            uint256 floatRequired = (minimumFloatAmount - float).mulWadDown(C.ONE + 0.05e18); // plus extra 5% to account for slippage errors
+            if (vault.totalInvested() > floatRequired) {
+                vm.startBroadcast(keeper);
+                vault.withdrawToVault(floatRequired);
+                vm.stopBroadcast();
+            } else {
+                revert FloatRequiredIsMoreThanTotalInvested();
             }
         }
     }
