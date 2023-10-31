@@ -35,7 +35,9 @@ import {BaseV2Vault} from "../../../src/steth/BaseV2Vault.sol";
  * invest float if there is any
  * reinvest profits/ increase back the ltv of the protocol to the target ltv
  * disinvest/ decrease the ltv of any protocol if it has overshoot by a threshold (disinvestThreshold)
- * also if the vault has float less than minimumFloat amount, withdraw the required float to the vault
+ *
+ * if the vault has float less than minimumFloat amount, withdraw the required float to the vault
+ * invest any floating wstETH from last rebalance in the vault to the protocols proportionally
  *
  * cmd
  * first run a local anvil node using " anvil -f YOUR_RPC_URL"
@@ -59,7 +61,7 @@ contract RebalanceScWethV2 is Script, scWETHv2Helper {
     uint256 public aaveV3TargetLtv = 0.8e18;
 
     // if the ltv overshoots the target ltv by this threshold, disinvest
-    uint256 public disinvestThreshold = 0.005e18; // 0.5 %
+    uint256 public disinvestThreshold = 0.03e18; // 3 %
 
     // be it weth gained from profits or float amount lying in the vault
     // the contract rebalance method won't be called if the minimum amount to invest is less than this threshold
@@ -106,7 +108,7 @@ contract RebalanceScWethV2 is Script, scWETHv2Helper {
     constructor() scWETHv2Helper(scWETHv2(payable(MA.SCWETHV2)), PriceConverter(MA.PRICE_CONVERTER)) {}
 
     function run() external {
-        _logs("-------------------BEFORE REBALANCE-------------------");
+        // _logs("-------------------BEFORE REBALANCE-------------------");
 
         _initializeAdapterSettings();
 
@@ -125,7 +127,7 @@ contract RebalanceScWethV2 is Script, scWETHv2Helper {
             vm.stopBroadcast();
         }
 
-        _logs("-------------------AFTER REBALANCE-------------------");
+        // _logs("-------------------AFTER REBALANCE-------------------");
     }
 
     function _initializeAdapterSettings() internal {
@@ -273,12 +275,19 @@ contract RebalanceScWethV2 is Script, scWETHv2Helper {
         uint256 collateral = getCollateralInWeth(_adapter);
         uint256 target = targetLtv[_adapter].mulWadDown(_amount + collateral);
 
+        uint256 wstEthDust = ERC20(C.WSTETH).balanceOf(address(vault));
+
         if (target > debt) {
             flashLoanAmount = (target - debt).divWadDown(C.ONE - targetLtv[_adapter]);
 
             if (flashLoanAmount > 0) {
-                uint256 supplyAmount =
-                    priceConverter.ethToWstEth(_amount + flashLoanAmount).mulWadDown(stEthRateTolerance);
+                // supply the wstEthDust from last rebalance proportionally to each adapter
+                uint256 wstEthDustToSupply = wstEthDust > 0 ? wstEthDust.mulWadDown(allocationPercent(_adapter)) : 0;
+                console2.log("wstEthDust from lat rebaalnce", wstEthDustToSupply);
+
+                uint256 supplyAmount = priceConverter.ethToWstEth(_amount + flashLoanAmount).mulWadDown(
+                    stEthRateTolerance
+                ) + wstEthDustToSupply;
 
                 rebalanceDataParams.push(RebalanceDataParams(_adapter, flashLoanAmount, supplyAmount, 0));
 
@@ -352,6 +361,6 @@ contract RebalanceScWethV2 is Script, scWETHv2Helper {
         console2.log("net leverage\t\t\t", getLeverage());
 
         if (collateralInWeth != 0) console2.log("net LTV\t\t\t", debt.divWadUp(collateralInWeth));
-        console2.log("wstEth balance\t\t", ERC20(C.WSTETH).balanceOf(address(this)));
+        console2.log("wstEth balance\t\t", ERC20(C.WSTETH).balanceOf(address(vault)));
     }
 }

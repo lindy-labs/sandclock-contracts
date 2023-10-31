@@ -129,6 +129,7 @@ contract RebalanceScWethV2Test is Test {
         script.setDemoSwapData(swapData); // setting the demo swap data only for the test since the block number is set for the test but zeroEx api returns swapData for the most recent block
 
         script.run();
+
         script = new RebalanceScWethV2TestHarness(); // reset state
 
         uint256 altv = script.getLtv(morphoAdapter);
@@ -492,7 +493,6 @@ contract RebalanceScWethV2Test is Test {
     function testFloatResetsOnRebalance() public {
         uint256 amount = 10 ether;
         vault.deposit{value: amount}(address(this));
-        uint256 investAmount = _investAmount();
         script.run();
 
         _simulate_stEthStakingInterest(365 days, 1.071e18);
@@ -518,7 +518,6 @@ contract RebalanceScWethV2Test is Test {
     function testRevertsIfVaultDoesNotHaveEnoughAssetsForFloat() public {
         uint256 amount = 1.5 ether;
         vault.deposit{value: amount}(address(this));
-        uint256 investAmount = _investAmount();
         script.run();
 
         vault.withdraw(0.8 ether, address(this), address(this));
