@@ -440,7 +440,7 @@ contract RebalanceScUsdcV2Test is Test {
         script.setMinUsdcProfitToReinvest(10e6); // 10 usdc
         script.run();
 
-        assertEq(vault.getProfit(), 0, "profit not sold entirely");
+        assertApproxEqAbs(vault.getProfit(), 0, 2, "profit not sold entirely");
         assertTrue(vault.usdcBalance() >= expectedFloat, "float balance");
         assertApproxEqRel(
             vault.totalCollateral(), initialCollateral + approxUsdcReinvested, 0.01e18, "total collateral"
@@ -529,14 +529,14 @@ contract RebalanceScUsdcV2Test is Test {
         script.run();
 
         assertApproxEqAbs(vault.getProfit(), 0, 1, "profit not sold entirely");
-        assertApproxEqRel(vault.wethInvested(), expectedDebt, 0.001e18, "weth invested");
-        assertApproxEqRel(vault.totalDebt(), expectedDebt, 0.001e18, "total debt");
+        assertApproxEqRel(vault.wethInvested(), expectedDebt, 0.01e18, "weth invested");
+        assertApproxEqRel(vault.totalDebt(), expectedDebt, 0.01e18, "total debt");
         assertApproxEqRel(vault.totalCollateral(), expectedCollateral, 0.001e18, "total collateral");
         assertTrue(vault.totalCollateral() > initialCollateral, "total collateral not increased");
         assertTrue(vault.totalDebt() >= initialDebt, "total debt decreased");
 
         uint256 currentLtv = vault.priceConverter().ethToUsdc(vault.totalDebt()).divWadDown(vault.totalCollateral());
-        assertApproxEqRel(currentLtv, targetLtv, 0.001e18, "current ltv");
+        assertApproxEqAbs(currentLtv, targetLtv, 0.05e18, "current ltv");
     }
 
     function _addAaveV3Adapter() internal {

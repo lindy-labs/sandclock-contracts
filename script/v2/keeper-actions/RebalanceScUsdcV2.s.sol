@@ -41,13 +41,13 @@ contract RebalanceScUsdcV2 is ScUsdcV2ScriptBase {
     uint256 public maxProfitSellSlippage = 0.01e18; // 1%
 
     uint256 public morphoInvestableAmountPercent = 1e18; // 100%
-    uint256 public morphoTargetLtv = 0.7e18; // 70%
+    uint256 public morphoTargetLtv = 0.65e18; // 65%
 
     uint256 public aaveV2InvestableAmountPercent = 0e18; // 0%
-    uint256 public aaveV2TargetLtv = 0.7e18; // 70%
+    uint256 public aaveV2TargetLtv = 0.65e18; // 65%
 
     uint256 public aaveV3InvestableAmountPercent = 0e18; // 0%
-    uint256 public aaveV3TargetLtv = 0.0e18; // 0%
+    uint256 public aaveV3TargetLtv = 0.0e18;
 
     /*//////////////////////////////////////////////////////////////*/
 
