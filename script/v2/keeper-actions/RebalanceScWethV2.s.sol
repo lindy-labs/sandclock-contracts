@@ -283,7 +283,6 @@ contract RebalanceScWethV2 is Script, scWETHv2Helper {
             if (flashLoanAmount > 0) {
                 // supply the wstEthDust from last rebalance proportionally to each adapter
                 uint256 wstEthDustToSupply = wstEthDust > 0 ? wstEthDust.mulWadDown(allocationPercent(_adapter)) : 0;
-                console2.log("wstEthDust from lat rebaalnce", wstEthDustToSupply);
 
                 uint256 supplyAmount = priceConverter.ethToWstEth(_amount + flashLoanAmount).mulWadDown(
                     stEthRateTolerance
