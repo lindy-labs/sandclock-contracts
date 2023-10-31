@@ -108,7 +108,7 @@ contract RebalanceScWethV2 is Script, scWETHv2Helper {
     constructor() scWETHv2Helper(scWETHv2(payable(MA.SCWETHV2)), PriceConverter(MA.PRICE_CONVERTER)) {}
 
     function run() external {
-        // _logs("-------------------BEFORE REBALANCE-------------------");
+        _logs("-------------------BEFORE REBALANCE-------------------");
 
         _initializeAdapterSettings();
 
@@ -127,7 +127,7 @@ contract RebalanceScWethV2 is Script, scWETHv2Helper {
             vm.stopBroadcast();
         }
 
-        // _logs("-------------------AFTER REBALANCE-------------------");
+        _logs("-------------------AFTER REBALANCE-------------------");
     }
 
     function _initializeAdapterSettings() internal {
