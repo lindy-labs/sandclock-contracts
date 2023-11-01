@@ -19,6 +19,7 @@ abstract contract MainnetDeployBase is CREATE3Script {
     uint256 deployerPrivateKey;
     address deployerAddress;
     address keeper;
+    address multisig;
 
     WETH weth = WETH(payable(C.WETH));
     ERC20 usdc = ERC20(C.USDC);
@@ -31,10 +32,11 @@ abstract contract MainnetDeployBase is CREATE3Script {
         deployerPrivateKey = uint256(vm.envBytes32("PRIVATE_KEY"));
         deployerAddress = vm.addr(deployerPrivateKey);
         keeper = vm.envAddress("KEEPER");
+        multisig = vm.envAddress("MULTISIG");
     }
 
     function _transferAdminRoleToMultisig(AccessControl _contract, address _currentAdmin) internal {
-        _contract.grantRole(_contract.DEFAULT_ADMIN_ROLE(), C.MULTISIG);
+        _contract.grantRole(_contract.DEFAULT_ADMIN_ROLE(), multisig);
         _contract.revokeRole(_contract.DEFAULT_ADMIN_ROLE(), _currentAdmin);
     }
 
