@@ -64,6 +64,8 @@ contract ReallocateScUsdcV2 is ScUsdcV2ScriptBase {
         console2.log("--ReallocateScUsdcV2 script running--");
         require(scUsdcV2.hasRole(scUsdcV2.KEEPER_ROLE(), address(keeper)), "invalid keeper");
 
+        _logScriptParams();
+
         _logPositions("\tbefore reallocate");
         _initReallocateData();
         _createMulticallData();
