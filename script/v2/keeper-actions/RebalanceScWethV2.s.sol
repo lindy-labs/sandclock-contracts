@@ -61,7 +61,7 @@ contract RebalanceScWethV2 is Script, scWETHv2Helper {
     uint256 public aaveV3TargetLtv = 0.8e18;
 
     // if the ltv overshoots the target ltv by this threshold, disinvest
-    uint256 public disinvestThreshold = 0.03e18; // 3 %
+    uint256 public disinvestThreshold = 0.025e18; // 2.5 %
 
     // be it weth gained from profits or float amount lying in the vault
     // the contract rebalance method won't be called if the minimum amount to invest is less than this threshold
@@ -169,17 +169,9 @@ contract RebalanceScWethV2 is Script, scWETHv2Helper {
             if (!vault.isSupported(adapter.id()) && (targetLtv[adapter] > 0 || allocationPercent > 0)) {
                 revert ScriptAdapterNotSupported(adapter.id());
             }
-            // first check if allocation Percent is greater than zero
-            if (allocationPercent != 0) {
-                _createRebalanceDataFor(adapter, _investAmount.mulWadDown(allocationPercent));
-            } else {
-                // even if there is no allocation here, we still want to check if a disinvest is needed in this protocol
-                uint256 ltv = getLtv(adapter);
-
-                if (ltv > targetLtv[adapter] + disinvestThreshold) {
-                    _createRebalanceDataFor(adapter, 0);
-                }
-            }
+            // go through all adapters even if allocationPercent is zero
+            // because we need to disinvest from any adapter if the ltv overshoots the target ltv
+            _createRebalanceDataFor(adapter, _investAmount.mulWadDown(allocationPercent));
         }
     }
 
@@ -293,15 +285,18 @@ contract RebalanceScWethV2 is Script, scWETHv2Helper {
                 investFlashLoanAmount += flashLoanAmount;
             }
         } else {
-            flashLoanAmount = (debt - target).divWadDown(C.ONE - targetLtv[_adapter]);
+            // disinvest only if the ltv overshoots the target ltv by disinvest threshold
+            if (debt - target > debt.mulWadDown(disinvestThreshold)) {
+                flashLoanAmount = (debt - target).divWadDown(C.ONE - targetLtv[_adapter]);
 
-            if (flashLoanAmount > 0) {
-                uint256 withdrawAmount = priceConverter.ethToWstEth(flashLoanAmount);
+                if (flashLoanAmount > 0) {
+                    uint256 withdrawAmount = priceConverter.ethToWstEth(flashLoanAmount);
 
-                rebalanceDataParams.push(RebalanceDataParams(_adapter, flashLoanAmount, 0, withdrawAmount));
+                    rebalanceDataParams.push(RebalanceDataParams(_adapter, flashLoanAmount, 0, withdrawAmount));
 
-                totalWstEthWithdrawn += withdrawAmount;
-                disinvestFlashLoanAmount += flashLoanAmount;
+                    totalWstEthWithdrawn += withdrawAmount;
+                    disinvestFlashLoanAmount += flashLoanAmount;
+                }
             }
         }
     }

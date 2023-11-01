@@ -336,7 +336,7 @@ contract RebalanceScWethV2Test is Test {
         script.setMorphoInvestableAmountPercent(0);
 
         // simulate loss in  aave
-        uint256 updatedAaveV3TargetLtv = script.aaveV3TargetLtv() - 0.02e18;
+        uint256 updatedAaveV3TargetLtv = script.aaveV3TargetLtv() - 0.04e18;
 
         script.updateAaveV3TargetLtv(updatedAaveV3TargetLtv);
 
@@ -365,7 +365,7 @@ contract RebalanceScWethV2Test is Test {
         script = new RebalanceScWethV2TestHarness(); // reset script state
 
         // simulate loss in morpho but not crossing disinvest threshold
-        uint256 updatedMorphoTargetLtv = morphoLtv - script.disinvestThreshold();
+        uint256 updatedMorphoTargetLtv = morphoLtv - script.disinvestThreshold() + 0.005e18;
 
         script.updateMorphoTargetLtv(updatedMorphoTargetLtv);
 
@@ -422,7 +422,7 @@ contract RebalanceScWethV2Test is Test {
 
         script = new RebalanceScWethV2TestHarness(); // reset script state
 
-        uint256 updatedAaveTargetLtv = script.aaveV3TargetLtv() - 0.02e18;
+        uint256 updatedAaveTargetLtv = script.aaveV3TargetLtv() - 0.04e18;
 
         // now decrease target ltvs to simulate loss
         script.updateAaveV3TargetLtv(updatedAaveTargetLtv);
