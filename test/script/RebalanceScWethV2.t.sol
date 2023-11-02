@@ -526,6 +526,32 @@ contract RebalanceScWethV2Test is Test {
         script.run();
     }
 
+    function testWstEthFloatRebalance() public {
+        uint256 amount = 1.5 ether;
+        vault.deposit{value: amount}(address(this));
+
+        script.run();
+
+        uint256 simulatedWstEthDust = 1e18;
+
+        // put some wstEthFloat in the vault
+        hoax(0x0B925eD163218f6662a35e0f0371Ac234f9E9371);
+        ERC20(C.WSTETH).transfer(address(vault), simulatedWstEthDust);
+
+        vault.deposit{value: amount}(address(this));
+
+        assertGe(ERC20(C.WSTETH).balanceOf(address(vault)), simulatedWstEthDust, "wsTETH dust transfer error");
+
+        script = new RebalanceScWethV2TestHarness(); // reset script state
+        script.run();
+
+        assertLt(
+            ERC20(C.WSTETH).balanceOf(address(vault)),
+            simulatedWstEthDust.mulWadDown(0.0002e18),
+            "wstETH dust not being rebalanced"
+        );
+    }
+
     //////////////////////////////////// INTERNAL METHODS ///////////////////////////////////////
 
     function _investAmount() internal view returns (uint256) {
