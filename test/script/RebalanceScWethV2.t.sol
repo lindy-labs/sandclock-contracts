@@ -493,6 +493,7 @@ contract RebalanceScWethV2Test is Test {
     function testFloatResetsOnRebalance() public {
         uint256 amount = 10 ether;
         vault.deposit{value: amount}(address(this));
+
         script.run();
 
         _simulate_stEthStakingInterest(365 days, 1.071e18);
@@ -518,6 +519,7 @@ contract RebalanceScWethV2Test is Test {
     function testRevertsIfVaultDoesNotHaveEnoughAssetsForFloat() public {
         uint256 amount = 1.5 ether;
         vault.deposit{value: amount}(address(this));
+
         script.run();
 
         vault.withdraw(0.8 ether, address(this), address(this));
