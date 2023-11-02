@@ -129,6 +129,7 @@ contract RebalanceScWethV2Test is Test {
         script.setDemoSwapData(swapData); // setting the demo swap data only for the test since the block number is set for the test but zeroEx api returns swapData for the most recent block
 
         script.run();
+
         script = new RebalanceScWethV2TestHarness(); // reset state
 
         uint256 altv = script.getLtv(morphoAdapter);
@@ -335,7 +336,7 @@ contract RebalanceScWethV2Test is Test {
         script.setMorphoInvestableAmountPercent(0);
 
         // simulate loss in  aave
-        uint256 updatedAaveV3TargetLtv = script.aaveV3TargetLtv() - 0.02e18;
+        uint256 updatedAaveV3TargetLtv = script.aaveV3TargetLtv() - 0.04e18;
 
         script.updateAaveV3TargetLtv(updatedAaveV3TargetLtv);
 
@@ -364,7 +365,7 @@ contract RebalanceScWethV2Test is Test {
         script = new RebalanceScWethV2TestHarness(); // reset script state
 
         // simulate loss in morpho but not crossing disinvest threshold
-        uint256 updatedMorphoTargetLtv = morphoLtv - script.disinvestThreshold();
+        uint256 updatedMorphoTargetLtv = morphoLtv - script.disinvestThreshold() + 0.005e18;
 
         script.updateMorphoTargetLtv(updatedMorphoTargetLtv);
 
@@ -421,7 +422,7 @@ contract RebalanceScWethV2Test is Test {
 
         script = new RebalanceScWethV2TestHarness(); // reset script state
 
-        uint256 updatedAaveTargetLtv = script.aaveV3TargetLtv() - 0.02e18;
+        uint256 updatedAaveTargetLtv = script.aaveV3TargetLtv() - 0.04e18;
 
         // now decrease target ltvs to simulate loss
         script.updateAaveV3TargetLtv(updatedAaveTargetLtv);
@@ -525,6 +526,32 @@ contract RebalanceScWethV2Test is Test {
 
         vm.expectRevert(abi.encodePacked(RebalanceScWethV2.FloatRequiredIsMoreThanTotalInvested.selector));
         script.run();
+    }
+
+    function testWstEthFloatRebalance() public {
+        uint256 amount = 1.5 ether;
+        vault.deposit{value: amount}(address(this));
+
+        script.run();
+
+        uint256 simulatedWstEthDust = 1e18;
+
+        // put some wstEthFloat in the vault
+        hoax(0x0B925eD163218f6662a35e0f0371Ac234f9E9371);
+        ERC20(C.WSTETH).transfer(address(vault), simulatedWstEthDust);
+
+        vault.deposit{value: amount}(address(this));
+
+        assertGe(ERC20(C.WSTETH).balanceOf(address(vault)), simulatedWstEthDust, "wsTETH dust transfer error");
+
+        script = new RebalanceScWethV2TestHarness(); // reset script state
+        script.run();
+
+        assertLt(
+            ERC20(C.WSTETH).balanceOf(address(vault)),
+            simulatedWstEthDust.mulWadDown(0.0002e18),
+            "wstETH dust not being rebalanced"
+        );
     }
 
     //////////////////////////////////// INTERNAL METHODS ///////////////////////////////////////
