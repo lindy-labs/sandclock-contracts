@@ -56,6 +56,11 @@ contract ExitAllPositionsScUsdcV2 is ScUsdcV2ScriptBase {
         console2.log("--Exit all positions ScUsdcV2 script done--");
     }
 
+    function _logScriptParams() internal view override {
+        super._logScriptParams();
+        console2.log("maxAceeptableLossPercent\t", maxAceeptableLossPercent);
+    }
+
     function _logVaultInfo(string memory message) internal view {
         console2.log("\t", message);
         console2.log("total assets\t\t", scUsdcV2.totalAssets());

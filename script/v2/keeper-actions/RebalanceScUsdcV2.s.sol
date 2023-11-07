@@ -238,6 +238,19 @@ contract RebalanceScUsdcV2 is ScUsdcV2ScriptBase {
         }
     }
 
+    function _logScriptParams() internal view override {
+        super._logScriptParams();
+        console2.log("ltv diff tolerance\t", ltvDiffTolerance);
+        console2.log("min usdc profit\t\t", minUsdcProfitToReinvest);
+        console2.log("max profit sell slippage\t", maxProfitSellSlippage);
+        console2.log("morpho investable amount percent\t", morphoInvestableAmountPercent);
+        console2.log("morpho target ltv\t", morphoTargetLtv);
+        console2.log("aave v2 investable amount percent\t", aaveV2InvestableAmountPercent);
+        console2.log("aave v2 target ltv\t", aaveV2TargetLtv);
+        console2.log("aave v3 investable amount percent\t", aaveV3InvestableAmountPercent);
+        console2.log("aave v3 target ltv\t", aaveV3TargetLtv);
+    }
+
     function _logVaultInfo(string memory message) internal view {
         console2.log("\t", message);
         console2.log("total assets\t\t", scUsdcV2.totalAssets());

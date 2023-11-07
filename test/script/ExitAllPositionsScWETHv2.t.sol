@@ -15,6 +15,7 @@ import {Address} from "openzeppelin-contracts/utils/Address.sol";
 import {WETH} from "solmate/tokens/WETH.sol";
 
 import {Constants as C} from "../../src/lib/Constants.sol";
+import {MainnetAddresses} from "../../script/base/MainnetAddresses.sol";
 import {RebalanceScWethV2} from "../../script/v2/keeper-actions/RebalanceScWethV2.s.sol";
 import {ExitAllPositionsScWethV2} from "../../script/v2/keeper-actions/ExitAllPositionsScWethV2.s.sol";
 
@@ -39,6 +40,12 @@ contract ExitAllPositionsScWETHv2Test is Test {
         rebalanceScript = new RebalanceScWethV2TestHarness();
         exitScript = new ExitAllPositionsScWethV2();
         vault = exitScript.vault();
+
+        // update roles to latest accounts
+        vm.startPrank(MainnetAddresses.OLD_MULTISIG);
+        vault.grantRole(vault.DEFAULT_ADMIN_ROLE(), MainnetAddresses.MULTISIG);
+        vault.grantRole(vault.KEEPER_ROLE(), MainnetAddresses.KEEPER);
+        vm.stopPrank();
     }
 
     function testScriptExitsAllPositions(uint256 amount) public {

@@ -35,9 +35,5 @@ abstract contract ScUsdcV2ScriptBase is Script {
         console2.log("\t script params");
         console2.log("keeper\t\t", address(keeper));
         console2.log("scUsdcV2\t\t", address(scUsdcV2));
-        console2.log("priceConverter\t", address(priceConverter));
-        console2.log("morphoAdapter\t\t", address(morphoAdapter));
-        console2.log("aaveV2Adapter\t\t", address(aaveV2Adapter));
-        console2.log("aaveV3Adapter\t\t", address(aaveV3Adapter));
     }
 }

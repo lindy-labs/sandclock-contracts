@@ -15,6 +15,7 @@ import {Address} from "openzeppelin-contracts/utils/Address.sol";
 import {WETH} from "solmate/tokens/WETH.sol";
 
 import {Constants as C} from "../../src/lib/Constants.sol";
+import {MainnetAddresses} from "../../script/base/MainnetAddresses.sol";
 import {RebalanceScWethV2} from "../../script/v2/keeper-actions/RebalanceScWethV2.s.sol";
 import {ReallocateScWethV2} from "../../script/v2/keeper-actions/ReallocateScWethV2.s.sol";
 import {scWETHv2} from "../../src/steth/scWETHv2.sol";
@@ -46,6 +47,12 @@ contract ReallocateScWethV2Test is Test {
         rebalanceScWethV2 = new RebalanceScWethV2TestHarness();
         script = new ReallocateScWethV2TestHarness();
         vault = script.vault();
+
+        // update roles to latest accounts
+        vm.startPrank(MainnetAddresses.OLD_MULTISIG);
+        vault.grantRole(vault.DEFAULT_ADMIN_ROLE(), MainnetAddresses.MULTISIG);
+        vault.grantRole(vault.KEEPER_ROLE(), MainnetAddresses.KEEPER);
+        vm.stopPrank();
 
         morphoAdapter = script.morphoAdapter();
         compoundV3Adapter = script.compoundV3Adapter();
