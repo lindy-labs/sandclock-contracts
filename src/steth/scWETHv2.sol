@@ -148,12 +148,6 @@ contract scWETHv2 is BaseV2Vault {
         _withdrawToVault(_amount);
     }
 
-    /// @notice returns the adapter address given the adapterId (only if the adaapterId is supported else returns zero address)
-    /// @param _adapterId the id of the adapter to check
-    function getAdapter(uint256 _adapterId) external view returns (address adapter) {
-        (, adapter) = protocolAdapters.tryGet(_adapterId);
-    }
-
     /// @notice returns the total assets (in WETH) held by the strategy
     function totalAssets() public view override returns (uint256 assets) {
         // value of the supplied collateral in eth terms using chainlink oracle
