@@ -65,8 +65,6 @@ contract InProfitFixture is CREATE3Script, Test {
 
     /*//////////////////////////////////////////////////////////////*/
 
-    constructor() CREATE3Script("0.0.0") {}
-
     scWETHv2 scWethV2;
     scUSDCv2 scUsdcV2;
 

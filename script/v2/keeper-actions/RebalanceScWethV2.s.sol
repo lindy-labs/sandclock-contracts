@@ -36,6 +36,9 @@ import {BaseV2Vault} from "../../../src/steth/BaseV2Vault.sol";
  * reinvest profits/ increase back the ltv of the protocol to the target ltv
  * disinvest/ decrease the ltv of any protocol if it has overshoot by a threshold (disinvestThreshold)
  *
+ * if the vault has float less than minimumFloat amount, withdraw the required float to the vault
+ * invest any floating wstETH from last rebalance in the vault to the protocols proportionally
+ *
  * cmd
  * first run a local anvil node using " anvil -f YOUR_RPC_URL"
  * Then run the script using
@@ -58,7 +61,7 @@ contract RebalanceScWethV2 is Script, scWETHv2Helper {
     uint256 public aaveV3TargetLtv = 0.8e18;
 
     // if the ltv overshoots the target ltv by this threshold, disinvest
-    uint256 public disinvestThreshold = 0.005e18; // 0.5 %
+    uint256 public disinvestThreshold = 0.025e18; // 2.5 %
 
     // be it weth gained from profits or float amount lying in the vault
     // the contract rebalance method won't be called if the minimum amount to invest is less than this threshold
@@ -80,6 +83,7 @@ contract RebalanceScWethV2 is Script, scWETHv2Helper {
     }
 
     error ScriptAdapterNotSupported(uint256 adapterId);
+    error FloatRequiredIsMoreThanTotalInvested();
 
     uint256 keeperPrivateKey = uint256(vm.envOr("KEEPER_PRIVATE_KEY", bytes32(0x00)));
     address keeper = keeperPrivateKey != 0 ? vm.addr(keeperPrivateKey) : MA.KEEPER;
@@ -108,6 +112,9 @@ contract RebalanceScWethV2 is Script, scWETHv2Helper {
         _logs("-------------------BEFORE REBALANCE-------------------");
 
         _initializeAdapterSettings();
+
+        // if the vault has float less than minimumFloat amount, withdraw it to the vault
+        _updateVaultFloat();
 
         uint256 investAmount = _calcInvestAmount();
         _createRebalanceParams(investAmount);
@@ -164,17 +171,9 @@ contract RebalanceScWethV2 is Script, scWETHv2Helper {
             if (!vault.isSupported(adapter.id()) && (targetLtv[adapter] > 0 || allocationPercent > 0)) {
                 revert ScriptAdapterNotSupported(adapter.id());
             }
-            // first check if allocation Percent is greater than zero
-            if (allocationPercent != 0) {
-                _createRebalanceDataFor(adapter, _investAmount.mulWadDown(allocationPercent));
-            } else {
-                // even if there is no allocation here, we still want to check if a disinvest is needed in this protocol
-                uint256 ltv = getLtv(adapter);
-
-                if (ltv > targetLtv[adapter] + disinvestThreshold) {
-                    _createRebalanceDataFor(adapter, 0);
-                }
-            }
+            // go through all adapters even if allocationPercent is zero
+            // because we need to disinvest from any adapter if the ltv overshoots the target ltv
+            _createRebalanceDataFor(adapter, _investAmount.mulWadDown(allocationPercent));
         }
     }
 
@@ -270,27 +269,51 @@ contract RebalanceScWethV2 is Script, scWETHv2Helper {
         uint256 collateral = getCollateralInWeth(_adapter);
         uint256 target = targetLtv[_adapter].mulWadDown(_amount + collateral);
 
+        uint256 wstEthDust = ERC20(C.WSTETH).balanceOf(address(vault));
+
         if (target > debt) {
             flashLoanAmount = (target - debt).divWadDown(C.ONE - targetLtv[_adapter]);
 
             if (flashLoanAmount > 0) {
-                uint256 supplyAmount =
-                    priceConverter.ethToWstEth(_amount + flashLoanAmount).mulWadDown(stEthRateTolerance);
+                // supply the wstEthDust from last rebalance proportionally to each adapter
+                uint256 wstEthDustToSupply = wstEthDust > 0 ? wstEthDust.mulWadDown(allocationPercent(_adapter)) : 0;
+
+                uint256 supplyAmount = priceConverter.ethToWstEth(_amount + flashLoanAmount).mulWadDown(
+                    stEthRateTolerance
+                ) + wstEthDustToSupply;
 
                 rebalanceDataParams.push(RebalanceDataParams(_adapter, flashLoanAmount, supplyAmount, 0));
 
                 investFlashLoanAmount += flashLoanAmount;
             }
         } else {
-            flashLoanAmount = (debt - target).divWadDown(C.ONE - targetLtv[_adapter]);
+            // disinvest only if the ltv overshoots the target ltv by disinvest threshold
+            if (debt - target > debt.mulWadDown(disinvestThreshold)) {
+                flashLoanAmount = (debt - target).divWadDown(C.ONE - targetLtv[_adapter]);
 
-            if (flashLoanAmount > 0) {
-                uint256 withdrawAmount = priceConverter.ethToWstEth(flashLoanAmount);
+                if (flashLoanAmount > 0) {
+                    uint256 withdrawAmount = priceConverter.ethToWstEth(flashLoanAmount);
 
-                rebalanceDataParams.push(RebalanceDataParams(_adapter, flashLoanAmount, 0, withdrawAmount));
+                    rebalanceDataParams.push(RebalanceDataParams(_adapter, flashLoanAmount, 0, withdrawAmount));
 
-                totalWstEthWithdrawn += withdrawAmount;
-                disinvestFlashLoanAmount += flashLoanAmount;
+                    totalWstEthWithdrawn += withdrawAmount;
+                    disinvestFlashLoanAmount += flashLoanAmount;
+                }
+            }
+        }
+    }
+
+    function _updateVaultFloat() internal {
+        uint256 float = weth.balanceOf(address(vault));
+        uint256 minimumFloatAmount = vault.minimumFloatAmount();
+        if (float < minimumFloatAmount) {
+            uint256 floatRequired = (minimumFloatAmount - float).mulWadDown(C.ONE + 0.05e18); // plus extra 5% to account for slippage errors
+            if (vault.totalInvested() > floatRequired) {
+                vm.startBroadcast(keeper);
+                vault.withdrawToVault(floatRequired);
+                vm.stopBroadcast();
+            } else {
+                revert FloatRequiredIsMoreThanTotalInvested();
             }
         }
     }
@@ -341,7 +364,7 @@ contract RebalanceScWethV2 is Script, scWETHv2Helper {
         console2.log("net leverage\t\t\t", getLeverage());
 
         if (collateralInWeth != 0) console2.log("net LTV\t\t\t", debt.divWadUp(collateralInWeth));
-        console2.log("wstEth balance\t\t", ERC20(C.WSTETH).balanceOf(address(this)));
+        console2.log("wstEth balance\t\t", ERC20(C.WSTETH).balanceOf(address(vault)));
     }
 
     function setKeeperPrivateKey(uint256 _keeperPrivateKey) public {

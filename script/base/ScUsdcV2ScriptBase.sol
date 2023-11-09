@@ -31,6 +31,12 @@ abstract contract ScUsdcV2ScriptBase is Script {
     AaveV2ScUsdcAdapter public aaveV2Adapter = AaveV2ScUsdcAdapter(MainnetAddresses.SCUSDCV2_AAVEV2_ADAPTER);
     AaveV3ScUsdcAdapter public aaveV3Adapter = AaveV3ScUsdcAdapter(MainnetAddresses.SCUSDCV2_AAVEV3_ADAPTER);
 
+    function _logScriptParams() internal view virtual {
+        console2.log("\t script params");
+        console2.log("keeper\t\t", address(keeper));
+        console2.log("scUsdcV2\t\t", address(scUsdcV2));
+    }
+
     function setKeeperPrivateKey(uint256 _privateKey) public {
         keeperPrivateKey = _privateKey;
         keeper = vm.addr(keeperPrivateKey);

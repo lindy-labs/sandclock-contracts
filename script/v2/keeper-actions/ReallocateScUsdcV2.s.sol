@@ -64,6 +64,8 @@ contract ReallocateScUsdcV2 is ScUsdcV2ScriptBase {
         console2.log("--ReallocateScUsdcV2 script running--");
         require(scUsdcV2.hasRole(scUsdcV2.KEEPER_ROLE(), address(keeper)), "invalid keeper");
 
+        _logScriptParams();
+
         _logPositions("\tbefore reallocate");
         _initReallocateData();
         _createMulticallData();
@@ -170,5 +172,16 @@ contract ReallocateScUsdcV2 is ScUsdcV2ScriptBase {
                 multicallData.push(abi.encodeWithSelector(scUsdcV2.borrow.selector, data.adapterId, borrowAmount));
             }
         }
+    }
+
+    function _logScriptParams() internal view override {
+        super._logScriptParams();
+        console2.log("flashloanFeePercent\t", flashloanFeePercent);
+        console2.log("useMorpho\t\t", useMorpho);
+        console2.log("morphoAllocationPercent\t", morphoAllocationPercent);
+        console2.log("useAaveV2\t\t", useAaveV2);
+        console2.log("aaveV2AllocationPercent\t", aaveV2AllocationPercent);
+        console2.log("useAaveV3\t\t", useAaveV3);
+        console2.log("aaveV3AllocationPercent\t", aaveV3AllocationPercent);
     }
 }

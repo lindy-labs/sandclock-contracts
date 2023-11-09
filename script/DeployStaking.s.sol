@@ -9,8 +9,6 @@ contract DeployStaking is CREATE3Script {
     bytes32 public constant DISTRIBUTOR = keccak256("DISTRIBUTOR");
     bytes32 public constant DEFAULT_ADMIN_ROLE = 0x00;
 
-    constructor() CREATE3Script(vm.envString("VERSION")) {}
-
     function run() external returns (RewardTracker sQuartz) {
         uint256 deployerPrivateKey = uint256(vm.envBytes32("PRIVATE_KEY"));
 
