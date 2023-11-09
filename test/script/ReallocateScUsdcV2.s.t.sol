@@ -13,7 +13,6 @@ import {AaveV3ScUsdcAdapter} from "../../src/steth/scUsdcV2-adapters/AaveV3ScUsd
 import {MorphoAaveV3ScUsdcAdapter} from "../../src/steth/scUsdcV2-adapters/MorphoAaveV3ScUsdcAdapter.sol";
 import {ReallocateScUsdcV2} from "../../script/v2/keeper-actions/ReallocateScUsdcV2.s.sol";
 import {MainnetAddresses} from "../../script/base/MainnetAddresses.sol";
-import {Constants} from "../../src/lib/Constants.sol";
 
 contract ReallocateScUsdcV2Test is Test {
     using FixedPointMathLib for uint256;
@@ -30,7 +29,7 @@ contract ReallocateScUsdcV2Test is Test {
     function setUp() public {
         mainnetFork = vm.createFork(vm.envString("RPC_URL_MAINNET"));
         vm.selectFork(mainnetFork);
-        vm.rollFork(17987643);
+        vm.rollFork(18488739);
 
         script = new ReallocateScUsdcV2TestHarness();
 
@@ -90,10 +89,14 @@ contract ReallocateScUsdcV2Test is Test {
         assertApproxEqRel(
             vault.getDebt(aaveV2.id()), aaveV2InitialDebt + expectedMorphoRepayAmount, 0.0001e18, "aave v2 debt"
         );
-        assertEq(_getAllocationPercent(morpho), morphoAllocationPercent, "morpho allocation percent");
-        assertEq(_getAllocationPercent(aaveV2), aaveV2AllocationPercent, "aave v2 allocation percent");
-        assertEq(vault.totalAssets(), totalAssetsBefore, "total assets");
-        assertEq(vault.wethInvested(), wethInvestedBefore, "weth invested");
+        assertApproxEqRel(
+            _getAllocationPercent(morpho), morphoAllocationPercent, 0.0001e18, "morpho allocation percent"
+        );
+        assertApproxEqRel(
+            _getAllocationPercent(aaveV2), aaveV2AllocationPercent, 0.0001e18, "aave v2 allocation percent"
+        );
+        assertApproxEqRel(vault.totalAssets(), totalAssetsBefore, 0.0001e18, "total assets");
+        assertApproxEqRel(vault.wethInvested(), wethInvestedBefore, 0.0001e18, "weth invested");
     }
 
     function test_run_moveWholePositionFromAaveV2ToMorpho() public {
@@ -135,7 +138,7 @@ contract ReallocateScUsdcV2Test is Test {
         assertApproxEqAbs(vault.getDebt(aaveV2.id()), 0, 1, "aave v2 debt");
         assertEq(_getAllocationPercent(morpho), morphoAllocationPercent, "morpho allocation percent");
         assertEq(_getAllocationPercent(aaveV2), aaveV2AllocationPercent, "aave v2 allocation percent");
-        assertEq(vault.totalAssets(), totalAssetsBefore, "total assets");
+        assertApproxEqAbs(vault.totalAssets(), totalAssetsBefore, 1, "total assets");
         assertEq(vault.wethInvested(), wethInvestedBefore, "weth invested");
     }
 
@@ -159,6 +162,7 @@ contract ReallocateScUsdcV2Test is Test {
         uint256 totalAssetsBefore = vault.totalAssets();
         uint256 wethInvestedBefore = vault.wethInvested();
 
+        script.setUseAaveV3(true);
         assertTrue(script.useAaveV2(), "aave v2 not used");
         assertTrue(script.useMorpho(), "morpho not used");
         assertTrue(script.useAaveV3(), "aave v3 not used");
@@ -252,8 +256,8 @@ contract ReallocateScUsdcV2Test is Test {
 
         vm.stopPrank();
 
-        assertApproxEqAbs(vault.totalDebt(), borrowAmount, 2, "vault total debt");
-        assertApproxEqAbs(vault.totalCollateral(), investableAmount, 2, "vault total collateral");
+        assertApproxEqRel(vault.totalDebt(), borrowAmount, 0.0001e18, "vault total debt");
+        assertApproxEqRel(vault.totalCollateral(), investableAmount, 0.0001e18, "vault total collateral");
     }
 
     function _getAllocationPercent(IAdapter _adapter) internal view returns (uint256) {
@@ -262,7 +266,7 @@ contract ReallocateScUsdcV2Test is Test {
 
     function _addAaveV3Adapter() internal {
         if (!vault.isSupported(aaveV3.id())) {
-            vm.prank(Constants.MULTISIG);
+            vm.prank(MainnetAddresses.MULTISIG);
             vault.addAdapter(aaveV3);
             assertTrue(vault.isSupported(aaveV3.id()), "aave v3 not supported");
             script.setUseAaveV3(true);

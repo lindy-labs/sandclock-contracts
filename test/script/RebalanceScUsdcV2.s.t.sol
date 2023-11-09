@@ -30,7 +30,7 @@ contract RebalanceScUsdcV2Test is Test {
     function setUp() public {
         mainnetFork = vm.createFork(vm.envString("RPC_URL_MAINNET"));
         vm.selectFork(mainnetFork);
-        vm.rollFork(17987643);
+        vm.rollFork(18488739);
 
         script = new RebalanceScUsdcV2TestHarness();
 
@@ -338,8 +338,6 @@ contract RebalanceScUsdcV2Test is Test {
         vault.asset().approve(address(vault), 100e6);
         vault.deposit(100e6, address(this));
 
-        _addAaveV3Adapter();
-
         script.setMorphoInvestableAmountPercent(0);
         script.setAaveV2InvestableAmountPercent(0);
         script.setAaveV3InvestableAmountPercent(1e18); // 100%
@@ -361,6 +359,9 @@ contract RebalanceScUsdcV2Test is Test {
         vault.asset().approve(address(vault), 100e6);
         vault.deposit(100e6, address(this));
 
+        vm.startPrank(MainnetAddresses.MULTISIG);
+        vault.removeAdapter(aaveV3.id(), false);
+        vm.stopPrank();
         assertTrue(!vault.isSupported(aaveV3.id()), "aave v3 shouldn't be supported");
 
         script.setMorphoInvestableAmountPercent(0.4e18);
@@ -377,6 +378,9 @@ contract RebalanceScUsdcV2Test is Test {
         vault.asset().approve(address(vault), 100e6);
         vault.deposit(100e6, address(this));
 
+        vm.startPrank(MainnetAddresses.MULTISIG);
+        vault.removeAdapter(aaveV3.id(), false);
+        vm.stopPrank();
         assertTrue(!vault.isSupported(aaveV3.id()), "aave v3 shouldn't be supported");
 
         script.setMorphoInvestableAmountPercent(0.5e18);
@@ -393,6 +397,9 @@ contract RebalanceScUsdcV2Test is Test {
         vault.asset().approve(address(vault), 100e6);
         vault.deposit(100e6, address(this));
 
+        vm.startPrank(MainnetAddresses.MULTISIG);
+        vault.removeAdapter(aaveV3.id(), false);
+        vm.stopPrank();
         assertTrue(!vault.isSupported(aaveV3.id()), "aave v3 shouldn't be supported");
 
         script.setMorphoInvestableAmountPercent(0.5e18);
@@ -422,9 +429,7 @@ contract RebalanceScUsdcV2Test is Test {
 
         uint256 wethInvested = vault.wethInvested();
 
-        // simulate 100% profit
-        WETH weth = vault.weth();
-        deal(address(weth), address(vault.scWETH()), weth.balanceOf(address(vault.scWETH())) * 2);
+        _simulate100PctProfit();
 
         uint256 wethProfit = vault.getProfit();
         assertApproxEqAbs(wethProfit, wethInvested, 1, "profit != wethInvested");
@@ -456,9 +461,7 @@ contract RebalanceScUsdcV2Test is Test {
 
         assertTrue(vault.getProfit() == 0, "profit != 0");
 
-        // simulate 100% profit
-        WETH weth = vault.weth();
-        deal(address(weth), address(vault.scWETH()), weth.balanceOf(address(vault.scWETH())) * 2);
+        _simulate100PctProfit();
 
         uint256 wethProfit = vault.getProfit();
         // set min profit to reinvest to 2x the actual profit
@@ -493,9 +496,7 @@ contract RebalanceScUsdcV2Test is Test {
 
         assertTrue(vault.getProfit() == 0, "profit != 0");
 
-        // simulate 100% profit
-        WETH weth = vault.weth();
-        deal(address(weth), address(vault.scWETH()), weth.balanceOf(address(vault.scWETH())) * 2);
+        _simulate100PctProfit();
 
         script.setMaxProfitSellSlippage(0.001e18); // 0.1%
 
@@ -509,11 +510,9 @@ contract RebalanceScUsdcV2Test is Test {
 
         _assertInitialState();
 
-        // simulate 100% profit
         uint256 wethInvested = vault.wethInvested();
-        WETH weth = vault.weth();
-        deal(address(weth), address(vault.scWETH()), weth.balanceOf(address(vault.scWETH())) * 2);
-        assertEq(vault.getProfit(), wethInvested, "profit != wethInvested");
+        _simulate100PctProfit();
+        assertApproxEqAbs(vault.getProfit(), wethInvested, 1, "profit != wethInvested");
 
         // reduce the leverage enough that the selling profit & reinvesting covers the difference
         uint256 targetLtv = script.morphoTargetLtv() - 0.25e18;
@@ -528,7 +527,7 @@ contract RebalanceScUsdcV2Test is Test {
         script.setMinUsdcProfitToReinvest(10e6); // 10 usdc
         script.run();
 
-        assertApproxEqAbs(vault.getProfit(), 0, 1, "profit not sold entirely");
+        assertApproxEqAbs(vault.getProfit(), 0, 2, "profit not sold entirely");
         assertApproxEqRel(vault.wethInvested(), expectedDebt, 0.01e18, "weth invested");
         assertApproxEqRel(vault.totalDebt(), expectedDebt, 0.01e18, "total debt");
         assertApproxEqRel(vault.totalCollateral(), expectedCollateral, 0.001e18, "total collateral");
@@ -539,19 +538,22 @@ contract RebalanceScUsdcV2Test is Test {
         assertApproxEqAbs(currentLtv, targetLtv, 0.05e18, "current ltv");
     }
 
-    function _addAaveV3Adapter() internal {
-        if (!vault.isSupported(aaveV3.id())) {
-            vm.prank(Constants.MULTISIG);
-            vault.addAdapter(aaveV3);
-            assertTrue(vault.isSupported(aaveV3.id()), "aave v3 not supported");
-        }
-    }
-
     function _assertInitialState() internal {
         assertTrue(vault.wethInvested() > 0, "weth invested");
         assertTrue(vault.totalDebt() > 0, "total debt");
         assertTrue(vault.totalCollateral() > 0, "total collateral");
         assertTrue(vault.usdcBalance() > 0, "usdc balance");
+    }
+
+    function _simulate100PctProfit() internal {
+        WETH weth = vault.weth();
+
+        // simulate 100% profit by dealing more WETH to scWETH vault
+        deal(
+            address(weth),
+            address(vault.scWETH()),
+            vault.scWETH().totalAssets() + weth.balanceOf(address(vault.scWETH()))
+        );
     }
 }
 

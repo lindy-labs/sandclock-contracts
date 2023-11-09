@@ -173,4 +173,15 @@ contract ReallocateScUsdcV2 is ScUsdcV2ScriptBase {
             }
         }
     }
+
+    function _logScriptParams() internal view override {
+        super._logScriptParams();
+        console2.log("flashloanFeePercent\t", flashloanFeePercent);
+        console2.log("useMorpho\t\t", useMorpho);
+        console2.log("morphoAllocationPercent\t", morphoAllocationPercent);
+        console2.log("useAaveV2\t\t", useAaveV2);
+        console2.log("aaveV2AllocationPercent\t", aaveV2AllocationPercent);
+        console2.log("useAaveV3\t\t", useAaveV3);
+        console2.log("aaveV3AllocationPercent\t", aaveV3AllocationPercent);
+    }
 }

@@ -15,6 +15,7 @@ import {Address} from "openzeppelin-contracts/utils/Address.sol";
 import {WETH} from "solmate/tokens/WETH.sol";
 
 import {Constants as C} from "../../src/lib/Constants.sol";
+import {MainnetAddresses} from "../../script/base/MainnetAddresses.sol";
 import {RebalanceScWethV2} from "../../script/v2/keeper-actions/RebalanceScWethV2.s.sol";
 import {scWETHv2} from "../../src/steth/scWETHv2.sol";
 import {IAdapter} from "../../src/steth/IAdapter.sol";
@@ -39,6 +40,12 @@ contract RebalanceScWethV2Test is Test {
         vm.rollFork(18018649);
         script = new RebalanceScWethV2TestHarness();
         vault = script.vault();
+
+        // update roles to latest accounts
+        vm.startPrank(MainnetAddresses.OLD_MULTISIG);
+        vault.grantRole(vault.DEFAULT_ADMIN_ROLE(), MainnetAddresses.MULTISIG);
+        vault.grantRole(vault.KEEPER_ROLE(), MainnetAddresses.KEEPER);
+        vm.stopPrank();
 
         morphoAdapter = script.morphoAdapter();
         compoundV3Adapter = script.compoundV3Adapter();
@@ -441,7 +448,7 @@ contract RebalanceScWethV2Test is Test {
         // the script must revert in case of an unsupported adapter
         vault.deposit{value: 10 ether}(address(this));
         uint256 id = morphoAdapter.id();
-        hoax(C.MULTISIG);
+        hoax(MainnetAddresses.MULTISIG);
         vault.removeAdapter(id, true);
 
         script.updateMorphoTargetLtv(0.8e18);
@@ -457,7 +464,7 @@ contract RebalanceScWethV2Test is Test {
         // the script must revert in case of an unsupported adapter
         vault.deposit{value: 10 ether}(address(this));
         uint256 id = morphoAdapter.id();
-        hoax(C.MULTISIG);
+        hoax(MainnetAddresses.MULTISIG);
         vault.removeAdapter(id, true);
 
         script.updateMorphoTargetLtv(0);
@@ -475,7 +482,7 @@ contract RebalanceScWethV2Test is Test {
         uint256 investAmount = _investAmount();
 
         uint256 id = morphoAdapter.id();
-        hoax(C.MULTISIG);
+        hoax(MainnetAddresses.MULTISIG);
         vault.removeAdapter(id, true);
 
         script.updateMorphoTargetLtv(0);

@@ -29,20 +29,17 @@ contract ExitAllPositionsScUsdcV2Test is Test {
     AaveV2ScUsdcAdapter aaveV2;
     MorphoAaveV3ScUsdcAdapter morpho;
     PriceConverter priceConverter;
-    ExitAllPositionsScUsdcV2TestHarness script;
+    ExitAllPositionsScUsdcV2 script;
 
     function setUp() public {
         mainnetFork = vm.createFork(vm.envString("RPC_URL_MAINNET"));
         vm.selectFork(mainnetFork);
-        vm.rollFork(18018649);
+        vm.rollFork(18488739);
 
-        // TODO: use a mainnet (instead of redeploying) address for the vault when scUSDCv2 is redeployed on mainnet with updated exitAllPositions func
-        RedeployScriptTestHarness redeployScript = new RedeployScriptTestHarness();
-        redeployScript.setDeployerAddress(address(this));
-        vault = redeployScript.run();
+        vault = scUSDCv2(MainnetAddresses.SCUSDCV2);
         priceConverter = PriceConverter(MainnetAddresses.PRICE_CONVERTER);
 
-        script = new ExitAllPositionsScUsdcV2TestHarness();
+        script = new ExitAllPositionsScUsdcV2();
     }
 
     function test_run_exitsAllPositions() public {
@@ -70,7 +67,6 @@ contract ExitAllPositionsScUsdcV2Test is Test {
         assertApproxEqAbs(vault.totalCollateral(), investAmount, 1, "total collateral");
 
         // exit
-        script.setScUsdcV2Vault(vault);
         script.run();
 
         assertEq(vault.wethInvested(), 0, "weth invested");
@@ -89,23 +85,5 @@ contract ExitAllPositionsScUsdcV2Test is Test {
 
         vm.prank(MainnetAddresses.KEEPER);
         vault.rebalance(callData);
-    }
-}
-
-contract ExitAllPositionsScUsdcV2TestHarness is ExitAllPositionsScUsdcV2 {
-    // TODO: remove when scUSDCv2 is redeployed on mainnet with updated 'exitAllPositions' func
-    function setScUsdcV2Vault(scUSDCv2 _vault) public {
-        scUsdcV2 = _vault;
-    }
-}
-
-contract RedeployScriptTestHarness is RedeployScript {
-    function setDeployerAddress(address _deployerAddress) public {
-        deployerAddress = _deployerAddress;
-    }
-
-    function _init() internal override {
-        keeper = MainnetAddresses.KEEPER;
-        scWethV2 = scWETHv2(payable(MainnetAddresses.SCWETHV2));
     }
 }
