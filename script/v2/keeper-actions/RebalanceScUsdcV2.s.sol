@@ -259,5 +259,11 @@ contract RebalanceScUsdcV2 is ScUsdcV2ScriptBase {
         console2.log("total collateral\t", scUsdcV2.totalCollateral());
         console2.log("total debt\t\t", scUsdcV2.totalDebt());
         console2.log("weth invested\t\t", scUsdcV2.wethInvested());
+        console2.log("aave v3 collateral\t", scUsdcV2.getCollateral(aaveV3Adapter.id()));
+        console2.log("aave v3 debt\t\t", scUsdcV2.getDebt(aaveV3Adapter.id()));
+        console2.log("aave v2 collateral\t", scUsdcV2.getCollateral(aaveV2Adapter.id()));
+        console2.log("aave v2 debt\t\t", scUsdcV2.getDebt(aaveV2Adapter.id()));
+        console2.log("morpho collateral\t", scUsdcV2.getCollateral(morphoAdapter.id()));
+        console2.log("morpho debt\t\t", scUsdcV2.getDebt(morphoAdapter.id()));
     }
 }
