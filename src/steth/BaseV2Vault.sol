@@ -140,6 +140,12 @@ abstract contract BaseV2Vault is sc4626, IFlashLoanRecipient {
         return protocolAdapters.contains(_adapterId);
     }
 
+    /// @notice returns the adapter address given the adapterId (only if the adaapterId is supported else returns zero address)
+    /// @param _adapterId the id of the adapter to check
+    function getAdapter(uint256 _adapterId) external view returns (address adapter) {
+        (, adapter) = protocolAdapters.tryGet(_adapterId);
+    }
+
     /**
      * @notice returns whether a token is whitelisted to be swapped out using zeroExSwap or not
      */
