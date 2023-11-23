@@ -5,7 +5,8 @@ import {
     ZeroAddress,
     InvalidSlippageTolerance,
     InsufficientDepositBalance,
-    FloatBalanceTooLow
+    FloatBalanceTooLow,
+    InvalidDepositFee
 } from "../errors/scErrors.sol";
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
@@ -37,6 +38,7 @@ contract scWETHv2 is BaseV2Vault {
     using Address for address;
     using EnumerableMap for EnumerableMap.UintToAddressMap;
 
+    event DepositFeeUpdated(address indexed admin, uint256 newDepositFee);
     event Harvested(uint256 profitSinceLastHarvest, uint256 performanceFee);
     event MinFloatAmountUpdated(address indexed user, uint256 newMinFloatAmount);
     event Rebalanced(uint256 totalCollateral, uint256 totalDebt, uint256 floatBalance);
@@ -58,7 +60,9 @@ contract scWETHv2 is BaseV2Vault {
 
     // percentage of the deposit amount used for covering the cost of creating a leveraged staking position on lido (ETH -> wstETH swap)
     // the actual cost is realized on the vault's next rebalance
-    uint256 public stakingPositionCost = 0.001e18; // 0.1%
+    uint256 public depositFee = 0.001e18; // 0.1%
+
+    uint256 public constant maxDepositFee = 0.005e18; // 0.5%
 
     IwstETH constant wstETH = IwstETH(C.WSTETH);
 
@@ -83,6 +87,18 @@ contract scWETHv2 is BaseV2Vault {
         minimumFloatAmount = _newMinFloatAmount;
 
         emit MinFloatAmountUpdated(msg.sender, _newMinFloatAmount);
+    }
+
+    /// @notice Set the deposit fee percentage
+    /// @param _newDepositFee The new deposit fee percentage
+    function setDepositFee(uint256 _newDepositFee) external {
+        _onlyAdmin();
+
+        if (_newDepositFee > maxDepositFee) revert InvalidDepositFee();
+
+        depositFee = _newDepositFee;
+
+        emit DepositFeeUpdated(msg.sender, _newDepositFee);
     }
 
     /// @notice the primary method to be used by backend to invest, disinvest or reallocate funds among supported adapters
@@ -334,13 +350,13 @@ contract scWETHv2 is BaseV2Vault {
     }
 
     function previewDeposit(uint256 assets) public view override returns (uint256) {
-        return convertToShares(assets).mulWadUp(C.ONE - stakingPositionCost);
+        return convertToShares(assets).mulWadUp(C.ONE - depositFee);
     }
 
     function previewMint(uint256 shares) public view override returns (uint256) {
         uint256 supply = totalSupply; // Saves an extra SLOAD if totalSupply is non-zero.
 
-        return supply == 0 ? shares : shares.mulDivUp(totalAssets(), supply).mulWadUp(C.ONE + stakingPositionCost);
+        return (supply == 0 ? shares : shares.mulDivUp(totalAssets(), supply)).divWadUp(C.ONE - depositFee);
     }
 
     /*//////////////////////////////////////////////////////////////

@@ -39,6 +39,7 @@ contract scWETHv2Test is Test {
     using FixedPointMathLib for uint256;
     using Address for address;
 
+    event DepositFeeUpdated(address indexed admin, uint256 newDepositFee);
     event Harvested(uint256 profitSinceLastHarvest, uint256 performanceFee);
     event MinFloatAmountUpdated(address indexed user, uint256 newMinFloatAmount);
     event Rebalanced(uint256 totalCollateral, uint256 totalDebt, uint256 floatBalance);
@@ -54,6 +55,7 @@ contract scWETHv2Test is Test {
     address constant keeper = address(0x05);
     address constant alice = address(0x06);
     address constant treasury = address(0x07);
+    address constant bob = address(0x08);
     uint256 boundMinimum = 1.5 ether; // below this amount, aave doesn't count it as collateral
 
     address admin = address(this);
@@ -279,6 +281,28 @@ contract scWETHv2Test is Test {
         vault.setSlippageTolerance(1.1e18);
     }
 
+    function test_setDepositFee() public {
+        _setUp(BLOCK_AFTER_EULER_EXPLOIT);
+
+        uint256 newDepositFee = 0.004e18;
+        assertTrue(vault.depositFee() != newDepositFee, "new deposit fee equals current");
+
+        vm.expectEmit(true, true, true, true);
+        emit DepositFeeUpdated(address(this), newDepositFee);
+
+        vault.setDepositFee(newDepositFee);
+        assertEq(vault.depositFee(), newDepositFee, "deposit fee not set");
+
+        vm.expectRevert(CallerNotAdmin.selector);
+        vm.prank(alice);
+        vault.setDepositFee(0.002e18);
+
+        uint256 invalidFee = vault.maxDepositFee() + 1;
+
+        vm.expectRevert(InvalidDepositFee.selector);
+        vault.setDepositFee(invalidFee);
+    }
+
     function test_setMinimumFloatAmount() public {
         _setUp(BLOCK_AFTER_EULER_EXPLOIT);
 
@@ -447,13 +471,109 @@ contract scWETHv2Test is Test {
         vault.deposit{value: amount}(address(this));
 
         assertEq(address(this).balance, 0, "eth not transferred from user");
-        assertEq(
-            vault.balanceOf(address(this)), amount.mulWadUp(1e18 - vault.stakingPositionCost()), "shares not minted"
-        );
+        assertEq(vault.balanceOf(address(this)), amount.mulWadUp(1e18 - vault.depositFee()), "shares not minted");
         assertEq(weth.balanceOf(address(vault)), amount, "weth not transferred to vault");
 
         vm.expectRevert("ZERO_SHARES");
         vault.deposit{value: 0}(address(this));
+    }
+
+    function test_mint(uint256 shares) public {
+        _setUp(BLOCK_AFTER_EULER_EXPLOIT);
+
+        assertEq(vault.convertToShares(1), 1, "initial pps not 1");
+
+        shares = bound(shares, 1000, 1e21);
+        uint256 initialWethBalance = vault.convertToAssets(shares) * 2;
+        deal(address(weth), address(this), initialWethBalance);
+
+        weth.approve(address(vault), initialWethBalance);
+        uint256 wethSpent = vault.mint(shares, address(this));
+
+        console2.log("wethSpent", wethSpent);
+        console2.log("shares", shares);
+
+        assertEq(vault.balanceOf(address(this)), shares, "not enough shares minted");
+        assertEq(vault.convertToAssets(shares), wethSpent, "weth spent not equal to assets minted");
+        assertEq(shares, wethSpent.mulWadDown(1e18 - vault.depositFee()), "deposit fee not accounted for");
+    }
+
+    function test_deposit_accountsForDepositFee() public {
+        _setUp(BLOCK_AFTER_EULER_EXPLOIT);
+
+        uint256 initialWethBalance = 10 ether;
+        deal(address(weth), address(this), initialWethBalance);
+
+        weth.approve(address(vault), initialWethBalance);
+        uint256 firstDeposit = 1 ether;
+        vault.deposit(firstDeposit, address(this));
+
+        // double the price per share
+        uint256 ppsBefore = vault.convertToAssets(1 ether).divWadDown(1 ether);
+        weth.transfer(address(vault), firstDeposit);
+        uint256 ppsAfter = vault.convertToAssets(1 ether).divWadDown(1 ether);
+
+        assertEq(ppsAfter, ppsBefore * 2, "expected pps to double");
+
+        uint256 secondDeposit = 2 ether;
+        uint256 estimatedShares = vault.convertToShares(secondDeposit);
+        uint256 actualShares = vault.deposit(secondDeposit, address(this));
+        uint256 totalUsersAssets = firstDeposit * 2 + secondDeposit;
+
+        // user get's less shares but the vault's total assets are the same as before
+        assertEq(actualShares, estimatedShares.mulWadDown(1e18 - vault.depositFee()), "deposit fee not accounted for");
+        assertEq(
+            vault.convertToAssets(vault.balanceOf(address(this))), totalUsersAssets, "shares value doesn't match assets"
+        );
+    }
+
+    function test_deposit_oldUsersDontPayForInvestingNewUsersFunds() public {
+        _setUp(BLOCK_AFTER_EULER_EXPLOIT);
+
+        // 1. alice deposits
+        uint256 alicesDeposit = 100 ether;
+        uint256 alicesShares = _depositToVault(alice, alicesDeposit);
+
+        // 2. we invest idle funds and alice takes a loos of 0.1%
+        deal(address(weth), address(vault), vault.totalAssets() - alicesDeposit.mulWadDown(vault.depositFee()));
+
+        uint256 alicesAssetsBeforeBobsDeposit = vault.convertToAssets(alicesShares);
+        assertEq(
+            alicesAssetsBeforeBobsDeposit,
+            alicesDeposit.mulWadDown(1e18 - vault.depositFee()),
+            "alice's assets not decreased after invest"
+        );
+
+        // 3. bob deposits => alice gets a small increase in assets equal to the bob's deposit fee multiplied by the alice's share of total assets
+        uint256 bobsDeposit = 10 ether;
+        uint256 bobsShares = _depositToVault(bob, bobsDeposit);
+        uint256 bobsDepositFee = bobsDeposit.mulWadDown(vault.depositFee());
+        uint256 alicesAssetsAfterBobsDeposit = vault.convertToAssets(alicesShares);
+
+        assertEq(
+            vault.convertToAssets(bobsShares),
+            bobsDeposit - bobsDepositFee + bobsDepositFee.mulDivDown(bobsShares, vault.totalSupply()),
+            "bob's assets not decreased after deposit"
+        );
+        assertEq(
+            alicesAssetsAfterBobsDeposit,
+            alicesAssetsBeforeBobsDeposit + bobsDepositFee.mulDivDown(alicesShares, vault.totalSupply()),
+            "alice's assets not increased after bob's deposit"
+        );
+
+        // 4. we invest new idle funds and both alice & bob take a loos of 0.1%, but alice's assets are not less than before bob's deposit
+        deal(address(weth), address(vault), vault.totalAssets() - bobsDeposit.mulWadDown(vault.depositFee()));
+
+        assertEq(
+            vault.convertToAssets(bobsShares),
+            bobsDeposit.mulWadDown(1e18 - vault.depositFee()),
+            "bob's assets not decreased after second invest"
+        );
+        assertEq(
+            vault.convertToAssets(alicesShares),
+            alicesAssetsBeforeBobsDeposit,
+            "alices's assets not same after second invest"
+        );
     }
 
     function test_maxLtv() public {

@@ -6,6 +6,7 @@ error InvalidMaxLtv();
 error InvalidFlashLoanCaller();
 error InvalidSlippageTolerance();
 error InvalidFloatPercentage();
+error InvalidDepositFee();
 error ZeroAddress();
 error PleaseUseRedeemMethod();
 error FeesTooHigh();
