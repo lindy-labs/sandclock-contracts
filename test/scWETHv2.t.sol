@@ -447,7 +447,9 @@ contract scWETHv2Test is Test {
         vault.deposit{value: amount}(address(this));
 
         assertEq(address(this).balance, 0, "eth not transferred from user");
-        assertEq(vault.balanceOf(address(this)), amount, "shares not minted");
+        assertEq(
+            vault.balanceOf(address(this)), amount.mulWadUp(1e18 - vault.stakingPositionCost()), "shares not minted"
+        );
         assertEq(weth.balanceOf(address(vault)), amount, "weth not transferred to vault");
 
         vm.expectRevert("ZERO_SHARES");
@@ -1558,9 +1560,7 @@ contract scWETHv2Test is Test {
     }
 
     function _depositChecks(uint256 amount, uint256 preDepositBal) internal {
-        assertEq(vault.convertToAssets(10 ** vault.decimals()), 1e18, "convertToAssets decimal assertion failed");
         assertEq(vault.totalAssets(), amount, "totalAssets assertion failed");
-        assertEq(vault.balanceOf(address(this)), amount, "balanceOf assertion failed");
         assertEq(vault.convertToAssets(vault.balanceOf(address(this))), amount, "convertToAssets assertion failed");
         assertEq(weth.balanceOf(address(this)), preDepositBal - amount, "weth balance assertion failed");
     }

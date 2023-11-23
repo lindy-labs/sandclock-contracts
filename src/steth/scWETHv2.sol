@@ -56,6 +56,10 @@ contract scWETHv2 is BaseV2Vault {
     // a simple solution to that is just using minimumFloatAmount instead of a percentage float
     uint256 public minimumFloatAmount = 1 ether;
 
+    // percentage of the deposit amount used for covering the cost of creating a leveraged staking position on lido (ETH -> wstETH swap)
+    // the actual cost is realized on the vault's next rebalance
+    uint256 public stakingPositionCost = 0.001e18; // 0.1%
+
     IwstETH constant wstETH = IwstETH(C.WSTETH);
 
     constructor(address _admin, address _keeper, WETH _weth, Swapper _swapper, PriceConverter _priceConverter)
@@ -92,7 +96,7 @@ contract scWETHv2 is BaseV2Vault {
     {
         _onlyKeeper();
 
-        if (_totalInvestAmount > asset.balanceOf(address(this))) revert InsufficientDepositBalance();
+        if (_totalInvestAmount > _wethBalance()) revert InsufficientDepositBalance();
 
         // needed otherwise counted as profit during harvest
         totalInvested += _totalInvestAmount;
@@ -101,7 +105,7 @@ contract scWETHv2 is BaseV2Vault {
 
         _harvest();
 
-        emit Rebalanced(totalCollateral(), totalDebt(), asset.balanceOf(address(this)));
+        emit Rebalanced(totalCollateral(), totalDebt(), _wethBalance());
     }
 
     /// @notice swap weth to wstEth
@@ -163,7 +167,7 @@ contract scWETHv2 is BaseV2Vault {
         assets -= totalDebt();
 
         // add float
-        assets += asset.balanceOf(address(this));
+        assets += _wethBalance();
     }
 
     /// @notice returns the wstEth deposited of the vault in a particular protocol
@@ -287,7 +291,7 @@ contract scWETHv2 is BaseV2Vault {
 
         _burn(owner, shares);
 
-        uint256 balance = asset.balanceOf(address(this));
+        uint256 balance = _wethBalance();
 
         // since during withdrawing everything,
         // actual withdrawn amount might be less than totalAsssets
@@ -315,7 +319,7 @@ contract scWETHv2 is BaseV2Vault {
 
         _burn(owner, shares);
 
-        uint256 balance = asset.balanceOf(address(this));
+        uint256 balance = _wethBalance();
 
         // since during withdrawing everything,
         // actual withdrawn amount might be less than totalAsssets
@@ -327,6 +331,16 @@ contract scWETHv2 is BaseV2Vault {
         emit Withdraw(msg.sender, receiver, owner, assets, shares);
 
         asset.safeTransfer(receiver, assets);
+    }
+
+    function previewDeposit(uint256 assets) public view override returns (uint256) {
+        return convertToShares(assets).mulWadUp(C.ONE - stakingPositionCost);
+    }
+
+    function previewMint(uint256 shares) public view override returns (uint256) {
+        uint256 supply = totalSupply; // Saves an extra SLOAD if totalSupply is non-zero.
+
+        return supply == 0 ? shares : shares.mulDivUp(totalAssets(), supply).mulWadUp(C.ONE + stakingPositionCost);
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -374,23 +388,23 @@ contract scWETHv2 is BaseV2Vault {
 
         callData[n] = abi.encodeWithSelector(scWETHv2.swapWstEthToWeth.selector, type(uint256).max, slippageTolerance);
 
-        uint256 float = asset.balanceOf(address(this));
+        uint256 float = _wethBalance();
 
         _flashLoan(flashLoanAmount, callData);
 
-        emit WithdrawnToVault(asset.balanceOf(address(this)) - float);
+        emit WithdrawnToVault(_wethBalance() - float);
     }
 
     /// @notice reverts if float in the vault is not above the minimum required
     function _enforceFloat() internal view {
-        uint256 float = asset.balanceOf(address(this));
+        uint256 float = _wethBalance();
         uint256 floatRequired = minimumFloatAmount;
 
         if (float < floatRequired) revert FloatBalanceTooLow(float, floatRequired);
     }
 
     function beforeWithdraw(uint256 assets, uint256) internal override {
-        uint256 float = asset.balanceOf(address(this));
+        uint256 float = _wethBalance();
 
         if (assets <= float) return;
 
@@ -433,5 +447,9 @@ contract scWETHv2 is BaseV2Vault {
 
     function _totalCollateralInWeth() internal view returns (uint256) {
         return priceConverter.wstEthToEth(totalCollateral());
+    }
+
+    function _wethBalance() internal view returns (uint256) {
+        return asset.balanceOf(address(this));
     }
 }
