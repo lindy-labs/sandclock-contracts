@@ -33,14 +33,8 @@ contract RewardTrackerTest is Test {
         stakeToken = new MockERC20("Mock Quartz", "QUARTZ", 18);
         rewardToken = new MockERC20("Mock WETH", "WETH", 18);
         vault = new MockERC4626(ERC20(rewardToken), "Vault", "scWETH");
-        stakingPool = new RewardTracker(
-            treasury,
-            address(stakeToken),
-            "Staked Quartz",
-            "sQuartz",
-            address(rewardToken),
-            DURATION
-        );
+        stakingPool =
+            new RewardTracker(treasury, address(stakeToken), "Staked Quartz", "sQuartz", address(rewardToken), DURATION);
 
         rewardToken.mint(address(this), 1000 ether);
         stakeToken.mint(address(this), 1000 ether);
