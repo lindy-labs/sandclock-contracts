@@ -1338,6 +1338,110 @@ contract scWETHv2Test is Test {
         );
     }
 
+    function test_invest_withCurveWethToWstEthSwap() public {
+        _setUp(17934941);
+        vault.setTreasury(treasury);
+
+        uint256 amount = 100 ether;
+        _depositToVault(address(this), amount);
+
+        uint256 investAmount = amount - minimumFloatAmount;
+        uint256 stEthRateTolerance = 0.999e18;
+
+        uint256 aaveV3Amount = investAmount.mulWadDown(0.8e18);
+        uint256 compoundAmount = investAmount.mulWadDown(0.2e18);
+
+        uint256 aaveV3FlashLoanAmount = _calcSupplyBorrowFlashLoanAmount(aaveV3Adapter, aaveV3Amount);
+        uint256 compoundFlashLoanAmount = _calcSupplyBorrowFlashLoanAmount(compoundV3Adapter, compoundAmount);
+
+        uint256 aaveV3SupplyAmount =
+            priceConverter.ethToWstEth(aaveV3Amount + aaveV3FlashLoanAmount).mulWadDown(stEthRateTolerance);
+        uint256 compoundSupplyAmount =
+            priceConverter.ethToWstEth(compoundAmount + compoundFlashLoanAmount).mulWadDown(stEthRateTolerance);
+
+        uint256 totalFlashLoanAmount = aaveV3FlashLoanAmount + compoundFlashLoanAmount;
+
+        bytes[] memory callData = new bytes[](3);
+
+        callData[0] = abi.encodeWithSelector(
+            scWETHv2.curveSwapWethToWstEth.selector, investAmount + totalFlashLoanAmount, stEthRateTolerance
+        );
+
+        callData[1] = abi.encodeWithSelector(
+            scWETHv2.supplyAndBorrow.selector, aaveV3AdapterId, aaveV3SupplyAmount, aaveV3FlashLoanAmount
+        );
+
+        callData[2] = abi.encodeWithSelector(
+            scWETHv2.supplyAndBorrow.selector, compoundV3AdapterId, compoundSupplyAmount, compoundFlashLoanAmount
+        );
+
+        hoax(keeper);
+        vault.rebalance(investAmount, totalFlashLoanAmount, callData);
+
+        _floatCheck();
+        _investChecksWithoutEuler(
+            investAmount,
+            priceConverter.wstEthToEth(aaveV3SupplyAmount + compoundSupplyAmount),
+            totalFlashLoanAmount,
+            0.8e18,
+            0.2e18
+        );
+    }
+
+    function test_invest_withCurveWethToWstEthSwap_failsIfAmountReceivedFromSwapIsBelowMin() public {
+        _setUp(17934941);
+
+        // will force the swap on curve to fail
+        uint256 stEthRateTolerance = 1e18;
+
+        uint256 amount = 100 ether;
+        _depositToVault(address(this), amount);
+
+        uint256 investAmount = amount - minimumFloatAmount;
+        uint256 flashLoanAmount = _calcSupplyBorrowFlashLoanAmount(aaveV3Adapter, investAmount);
+        uint256 supplyAmount = priceConverter.ethToWstEth(investAmount + flashLoanAmount).mulWadDown(stEthRateTolerance);
+
+        bytes[] memory callData = new bytes[](2);
+
+        callData[0] = abi.encodeWithSelector(
+            scWETHv2.curveSwapWethToWstEth.selector, investAmount + flashLoanAmount, stEthRateTolerance
+        );
+
+        callData[1] =
+            abi.encodeWithSelector(scWETHv2.supplyAndBorrow.selector, aaveV3AdapterId, supplyAmount, flashLoanAmount);
+
+        hoax(keeper);
+        vm.expectRevert(AmountReceivedBelowMin.selector);
+        vault.rebalance(investAmount, flashLoanAmount, callData);
+    }
+
+    function test_invest_withCurveWethToWstEthSwap_failsIfSlippageToleranceIsAbove1e18() public {
+        _setUp(17934941);
+
+        // will force the slippage check to fail
+        uint256 stEthRateTolerance = 1e18 + 1;
+
+        uint256 amount = 100 ether;
+        _depositToVault(address(this), amount);
+
+        uint256 investAmount = amount - minimumFloatAmount;
+        uint256 flashLoanAmount = _calcSupplyBorrowFlashLoanAmount(aaveV3Adapter, investAmount);
+        uint256 supplyAmount = priceConverter.ethToWstEth(investAmount + flashLoanAmount).mulWadDown(stEthRateTolerance);
+
+        bytes[] memory callData = new bytes[](2);
+
+        callData[0] = abi.encodeWithSelector(
+            scWETHv2.curveSwapWethToWstEth.selector, investAmount + flashLoanAmount, stEthRateTolerance
+        );
+
+        callData[1] =
+            abi.encodeWithSelector(scWETHv2.supplyAndBorrow.selector, aaveV3AdapterId, supplyAmount, flashLoanAmount);
+
+        hoax(keeper);
+        vm.expectRevert(InvalidSlippageTolerance.selector);
+        vault.rebalance(investAmount, flashLoanAmount, callData);
+    }
+
     //////////////////////////// INTERNAL METHODS ////////////////////////////////////////
 
     function _calcSupplyBorrowFlashLoanAmount(IAdapter adapter, uint256 amount)

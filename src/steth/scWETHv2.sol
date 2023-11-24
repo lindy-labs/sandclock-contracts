@@ -124,9 +124,7 @@ contract scWETHv2 is BaseV2Vault {
         emit Rebalanced(totalCollateral(), totalDebt(), _wethBalance());
     }
 
-    /// @notice swap weth to wstEth
-    /// @dev the keeper will mostly use 0x (zeroExSwap method) for swapping weth to wstEth between rebalancing
-    /// @dev this method is just a precaution and to be only used by the keeper in case zeroEx API goes down
+    /// @notice swap weth to wstEth on lido
     /// @param _wethAmount amount of weth to be swapped to wstEth
     function swapWethToWstEth(uint256 _wethAmount) external {
         _onlyKeeperOrFlashLoan();
@@ -136,7 +134,22 @@ contract scWETHv2 is BaseV2Vault {
         );
     }
 
-    /// @notice swap wstEth to weth
+    /// @notice swap weth to wstEth on curve
+    /// @param _wethAmount amount of weth to be swapped to wstEth
+    /// @param _slippageTolerance the max slippage during eth to stEth swap (1e18 meaning 0 slippage tolerance)
+    function curveSwapWethToWstEth(uint256 _wethAmount, uint256 _slippageTolerance) external {
+        _onlyKeeperOrFlashLoan();
+
+        if (_slippageTolerance > C.ONE) revert InvalidSlippageTolerance();
+
+        uint256 wstEthAmountOutMin = priceConverter.ethToWstEth(_wethAmount).mulWadDown(_slippageTolerance);
+
+        address(swapper).functionDelegateCall(
+            abi.encodeWithSelector(Swapper.curveSwapWethToWstEth.selector, _wethAmount, wstEthAmountOutMin)
+        );
+    }
+
+    /// @notice swap wstEth to weth on curve
     /// @dev mainly to be used in the multicall to swap withdrawn wstEth to weth to payback the flashloan
     /// @param _wstEthAmount amount of wstEth to be swapped to weth
     /// @param _slippageTolerance the max slippage during steth to eth swap (1e18 meaning 0 slippage tolerance)
