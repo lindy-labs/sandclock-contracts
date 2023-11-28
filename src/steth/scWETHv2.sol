@@ -349,14 +349,16 @@ contract scWETHv2 is BaseV2Vault {
         asset.safeTransfer(receiver, assets);
     }
 
+    /// @notice returns amount of shares to be minted for a given amount of assets (including the deposit fee)
     function previewDeposit(uint256 assets) public view override returns (uint256) {
-        return convertToShares(assets).mulWadUp(C.ONE - depositFee);
+        uint256 fee = assets.mulWadUp(depositFee);
+
+        return super.previewDeposit(assets - fee);
     }
 
+    /// @notice returns amount of assets needed (including the deposit fee) to mint a given amount of shares
     function previewMint(uint256 shares) public view override returns (uint256) {
-        uint256 supply = totalSupply; // Saves an extra SLOAD if totalSupply is non-zero.
-
-        return (supply == 0 ? shares : shares.mulDivUp(totalAssets(), supply)).divWadUp(C.ONE - depositFee);
+        return super.previewMint(shares).divWadUp(C.ONE - depositFee);
     }
 
     /*//////////////////////////////////////////////////////////////

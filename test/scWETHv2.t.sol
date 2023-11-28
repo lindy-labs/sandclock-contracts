@@ -471,7 +471,7 @@ contract scWETHv2Test is Test {
         vault.deposit{value: amount}(address(this));
 
         assertEq(address(this).balance, 0, "eth not transferred from user");
-        assertEq(vault.balanceOf(address(this)), amount.mulWadUp(1e18 - vault.depositFee()), "shares not minted");
+        assertEq(vault.balanceOf(address(this)), amount.mulWadDown(1e18 - vault.depositFee()), "shares not minted");
         assertEq(weth.balanceOf(address(vault)), amount, "weth not transferred to vault");
 
         vm.expectRevert("ZERO_SHARES");
@@ -525,6 +525,30 @@ contract scWETHv2Test is Test {
         assertEq(
             vault.convertToAssets(vault.balanceOf(address(this))), totalUsersAssets, "shares value doesn't match assets"
         );
+    }
+
+    function test_previewMint_returnsAmountThatMatchesPreviewDepositCalcuation() public {
+        _setUp(BLOCK_AFTER_EULER_EXPLOIT);
+
+        uint256 depositAmount = 1 ether;
+
+        uint256 previewDepositShares = vault.previewDeposit(depositAmount);
+
+        uint256 previewMintAmount = vault.previewMint(previewDepositShares);
+
+        assertEq(previewMintAmount, depositAmount, "previewMint doesn't match depositAmount");
+    }
+
+    function test_previewDeposit_returnsSharesThatMatchesPreviewMintCalcuation() public {
+        _setUp(BLOCK_AFTER_EULER_EXPLOIT);
+
+        uint256 sharesToMint = 1 ether;
+
+        uint256 previewMintAmount = vault.previewMint(sharesToMint);
+
+        uint256 previewDepositShares = vault.previewDeposit(previewMintAmount);
+
+        assertEq(previewDepositShares, sharesToMint, "previewDeposit doesn't match sharesToMint");
     }
 
     function test_deposit_oldUsersDontPayForInvestingNewUsersFunds() public {
