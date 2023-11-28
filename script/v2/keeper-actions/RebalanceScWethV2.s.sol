@@ -52,13 +52,13 @@ contract RebalanceScWethV2 is Script, scWETHv2Helper {
 
     ////////////////////////// BUTTONS ///////////////////////////////
     uint256 public morphoInvestableAmountPercent = 0.4e18;
-    uint256 public morphoTargetLtv = 0.8e18;
+    uint256 public morphoTargetLtv = 0.85e18;
 
     uint256 public compoundV3InvestableAmountPercent = 0.6e18;
-    uint256 public compoundV3TargetLtv = 0.8e18;
+    uint256 public compoundV3TargetLtv = 0.85e18;
 
     uint256 public aaveV3InvestableAmountPercent = 0;
-    uint256 public aaveV3TargetLtv = 0.8e18;
+    uint256 public aaveV3TargetLtv = 0.85e18;
 
     // if the ltv overshoots the target ltv by this threshold, disinvest
     uint256 public disinvestThreshold = 0.025e18; // 2.5 %
@@ -110,7 +110,7 @@ contract RebalanceScWethV2 is Script, scWETHv2Helper {
     constructor() scWETHv2Helper(scWETHv2(payable(MA.SCWETHV2)), PriceConverter(MA.PRICE_CONVERTER)) {}
 
     function run() external {
-        _logs("-------------------BEFORE REBALANCE-------------------");
+        // _logs("-------------------BEFORE REBALANCE-------------------");
 
         _initializeAdapterSettings();
 
@@ -129,7 +129,7 @@ contract RebalanceScWethV2 is Script, scWETHv2Helper {
             vm.stopBroadcast();
         }
 
-        _logs("-------------------AFTER REBALANCE-------------------");
+        // _logs("-------------------AFTER REBALANCE-------------------");
     }
 
     function _initializeAdapterSettings() internal {

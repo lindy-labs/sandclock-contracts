@@ -561,6 +561,23 @@ contract RebalanceScWethV2Test is Test {
         );
     }
 
+    function testDepositLoss() public {
+        vault.deposit{value: 10 ether}(address(this));
+
+        script.run();
+
+        // log balance of address(this)
+        console2.log("My BALANCE BEFORE", vault.convertToAssets(vault.balanceOf(address(this))));
+
+        hoax(0xBE0eB53F46cd790Cd13851d5EFf43D12404d33E8);
+        vault.deposit{value: 100 ether}(0xBE0eB53F46cd790Cd13851d5EFf43D12404d33E8);
+
+        script = new RebalanceScWethV2TestHarness(); // reset script state
+        script.run();
+
+        console2.log("My BALANCE AFTER", vault.convertToAssets(vault.balanceOf(address(this))));
+    }
+
     //////////////////////////////////// INTERNAL METHODS ///////////////////////////////////////
 
     function _investAmount() internal view returns (uint256) {
