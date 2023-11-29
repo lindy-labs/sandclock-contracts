@@ -73,7 +73,7 @@ contract RebalanceScWethV2 is Script, scWETHv2Helper {
     // wont have enough wstEth funds for the supply
     uint256 stEthRateTolerance = 0.9995e18;
 
-    bool useZeroX = false;
+    bool useZeroEx = false;
 
     ///////////////////////////////////////////////////////////////////////
 
