@@ -1817,7 +1817,7 @@ contract scUSDCv2Test is Test {
         uint256 initialBalance = 1_000_000e6;
         deal(address(usdc), address(vault), initialBalance);
 
-        bytes[] memory callData = new  bytes[](2);
+        bytes[] memory callData = new bytes[](2);
         callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV2.id(), initialBalance);
         callData[1] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV2.id(), 200 ether);
 
@@ -1841,7 +1841,7 @@ contract scUSDCv2Test is Test {
         uint256 initialBalance = 1_000_000e6;
         deal(address(usdc), address(vault), initialBalance);
 
-        bytes[] memory callData = new  bytes[](2);
+        bytes[] memory callData = new bytes[](2);
         callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV2.id(), initialBalance);
         callData[1] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV2.id(), 200 ether);
 
@@ -1871,7 +1871,7 @@ contract scUSDCv2Test is Test {
         uint256 initialBalance = 1_000_000e6;
         deal(address(usdc), address(vault), initialBalance);
 
-        bytes[] memory callData = new  bytes[](2);
+        bytes[] memory callData = new bytes[](2);
         callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV2.id(), initialBalance);
         callData[1] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV2.id(), 200 ether);
 
@@ -1957,7 +1957,7 @@ contract scUSDCv2Test is Test {
         uint256 initialBalance = 1_000_000e6;
         deal(address(usdc), address(vault), initialBalance);
 
-        bytes[] memory callData = new  bytes[](2);
+        bytes[] memory callData = new bytes[](2);
         callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV2.id(), initialBalance);
         callData[1] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV2.id(), 200 ether);
 
@@ -1978,7 +1978,7 @@ contract scUSDCv2Test is Test {
         uint256 initialBalance = 1_000_000e6;
         deal(address(usdc), address(vault), initialBalance);
 
-        bytes[] memory callData = new  bytes[](2);
+        bytes[] memory callData = new bytes[](2);
         callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV2.id(), initialBalance);
         callData[1] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV2.id(), 200 ether);
 
