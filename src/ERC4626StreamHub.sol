@@ -42,24 +42,41 @@ contract ERC4626StreamHub is Multicall {
         asset = _vault.asset();
     }
 
-    // TODO: add deposit & openYieldStream in the same function?
     function deposit(uint256 _shares) external {
         vault.safeTransferFrom(msg.sender, address(this), _shares);
         balanceOf[msg.sender] += _shares;
+    }
+
+    // TODO: tests
+    function depositAssets(uint256 _assets) external {
+        IERC20(vault.asset()).safeTransferFrom(msg.sender, address(this), _assets);
+        uint256 shares = vault.deposit(_assets, address(this));
+        balanceOf[msg.sender] += shares;
     }
 
     function withdraw(uint256 _shares) external {
         _checkSufficientShares(_shares);
 
         balanceOf[msg.sender] -= _shares;
-        vault.safeTransfer(msg.sender, _shares);
+        vault.transfer(msg.sender, _shares);
+    }
+
+    // TODO: tests
+    function withdrawAssets(uint256 _assets) external returns (uint256) {
+        uint256 shares = vault.convertToShares(_assets);
+        _checkSufficientShares(shares);
+
+        balanceOf[msg.sender] -= shares;
+        vault.redeem(shares, msg.sender, address(this));
+
+        return shares;
     }
 
     function openYieldStream(uint256 _shares, address _to) external {
         _openYieldStream(_shares, _to);
     }
 
-    function openMultipleYieldStreams(address[] calldata _receivers, uint256[] calldata _allocations) external {
+    function openYieldStreamMultiple(address[] calldata _receivers, uint256[] calldata _allocations) external {
         if (_receivers.length != _allocations.length) revert InputParamsLengthMismatch();
 
         for (uint256 i = 0; i < _receivers.length; i++) {
@@ -67,8 +84,22 @@ contract ERC4626StreamHub is Multicall {
         }
     }
 
-    // TODO: claim from multiple streams at once?
-    function claimYield(address _from, address _to) external {
+    function claimYield(address _from, address _to) public {
+        _claimYield(_from, _to);
+    }
+
+    function claimYieldMultiple(address[] calldata _froms, address[] calldata _tos) external {
+        if (_froms.length != _tos.length) revert InputParamsLengthMismatch();
+
+        for (uint256 i = 0; i < _froms.length; i++) {
+            claimYield(_froms[i], _tos[i]);
+        }
+    }
+
+    // TODO: should this be restricted to only the recipient/streamer?
+    function _claimYield(address _from, address _to) internal {
+        // require(_from == msg.sender || _to == msg.sender, "ERC4626StreamHub: caller is not a party to the stream");
+
         uint256 streamId = getStreamId(_from, _to);
         YieldStream storage stream = yieldStreams[streamId];
 
@@ -89,9 +120,7 @@ contract ERC4626StreamHub is Multicall {
 
         uint256 yield = _calculateYield(stream.shares, stream.principal);
 
-        if (yield > 0) {
-            stream.shares -= vault.withdraw(yield, _to, address(this));
-        }
+        if (yield > 0) stream.shares -= vault.withdraw(yield, _to, address(this));
 
         balanceOf[msg.sender] += stream.shares;
 
