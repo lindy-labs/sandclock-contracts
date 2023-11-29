@@ -4,12 +4,13 @@ pragma solidity ^0.8.10;
 import "forge-std/console2.sol";
 import "forge-std/Test.sol";
 
-import {ERC20} from "solmate/tokens/ERC20.sol";
-import {ERC4626} from "solmate/mixins/ERC4626.sol";
+import {IERC4626} from "openzeppelin-contracts/interfaces/IERC4626.sol";
+import {IERC20} from "openzeppelin-contracts/interfaces/IERC20.sol";
+import {IERC20Metadata} from "openzeppelin-contracts/interfaces/IERC20Metadata.sol";
+import {ERC4626Mock} from "openzeppelin-contracts/mocks/ERC4626Mock.sol";
+import {ERC20Mock} from "openzeppelin-contracts/mocks/ERC20Mock.sol";
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
-import {MockERC4626} from "solmate/test/utils/mocks/MockERC4626.sol";
-import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 
 import {AccessControl} from "openzeppelin-contracts/access/AccessControl.sol";
 import {Multicall} from "openzeppelin-contracts/utils/Multicall.sol";
@@ -20,16 +21,16 @@ contract ERC4626StreamHubTests is Test {
     using FixedPointMathLib for uint256;
 
     ERC4626StreamHub public streamHub;
-    MockERC4626 public vault;
-    MockERC20 public asset;
+    IERC4626 public vault;
+    IERC20Metadata public asset;
 
     address constant alice = address(0x06);
     address constant bob = address(0x07);
     address constant carol = address(0x08);
 
     function setUp() public {
-        asset = new MockERC20("MockERC20", "Mock20", 18);
-        vault = new MockERC4626(asset, "Mock4626", "Mock");
+        asset = new ERC20Mock("MockERC20", "Mock20", address(this), 0);
+        vault = new ERC4626Mock(asset, "Mock4626", "Mock");
         streamHub = new ERC4626StreamHub(vault);
 
         // make initial deposit to vault

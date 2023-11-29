@@ -3,17 +3,17 @@ pragma solidity ^0.8.10;
 
 import "forge-std/console2.sol";
 
-import {ERC20} from "solmate/tokens/ERC20.sol";
-import {ERC4626} from "solmate/mixins/ERC4626.sol";
+import {IERC4626} from "openzeppelin-contracts/interfaces/IERC4626.sol";
+import {IERC20} from "openzeppelin-contracts/interfaces/IERC20.sol";
+import {SafeERC20} from "openzeppelin-contracts/token/ERC20/utils/SafeERC20.sol";
 import {AccessControl} from "openzeppelin-contracts/access/AccessControl.sol";
-import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 import {Multicall} from "openzeppelin-contracts/utils/Multicall.sol";
 
 contract ERC4626StreamHub is Multicall {
     using FixedPointMathLib for uint256;
-    using SafeTransferLib for ERC20;
-    using SafeTransferLib for ERC4626;
+    using SafeERC20 for IERC20;
+    using SafeERC20 for IERC4626;
 
     error NotEnoughShares();
     error ZeroSharesStreamNotAllowed();
@@ -22,8 +22,7 @@ contract ERC4626StreamHub is Multicall {
     error NoYieldToClaim();
     error InputParamsLengthMismatch();
 
-    ERC4626 public vault;
-    ERC20 public asset;
+    IERC4626 public vault;
 
     mapping(address => uint256) public balanceOf;
     mapping(uint256 => YieldStream) public yieldStreams;
@@ -37,9 +36,8 @@ contract ERC4626StreamHub is Multicall {
         address recipient;
     }
 
-    constructor(ERC4626 _vault) {
+    constructor(IERC4626 _vault) {
         vault = _vault;
-        asset = _vault.asset();
     }
 
     function deposit(uint256 _shares) external {
