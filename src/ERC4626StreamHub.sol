@@ -16,8 +16,11 @@ contract ERC4626StreamHub is Multicall {
     using SafeTransferLib for ERC4626;
 
     error NotEnoughShares();
+    error ZeroSharesStreamNotAllowed();
+    error InvalidReceiverAddress();
     error StreamDoesntExist();
     error NoYieldToClaim();
+    error InputParamsLengthMismatch();
 
     ERC4626 public vault;
     ERC20 public asset;
@@ -46,29 +49,22 @@ contract ERC4626StreamHub is Multicall {
     }
 
     function withdraw(uint256 _shares) external {
-        if (_shares > balanceOf[msg.sender]) {
-            revert NotEnoughShares();
-        }
+        _checkSufficientShares(_shares);
 
         balanceOf[msg.sender] -= _shares;
         vault.safeTransfer(msg.sender, _shares);
     }
 
-    // TODO: open multiple streams at once?
     function openYieldStream(uint256 _shares, address _to) external {
-        uint256 value = _shares.mulDivDown(vault.totalAssets(), vault.totalSupply());
+        _openYieldStream(_shares, _to);
+    }
 
-        if (_shares > balanceOf[msg.sender]) {
-            revert NotEnoughShares();
+    function openMultipleYieldStreams(address[] calldata _receivers, uint256[] calldata _allocations) external {
+        if (_receivers.length != _allocations.length) revert InputParamsLengthMismatch();
+
+        for (uint256 i = 0; i < _receivers.length; i++) {
+            _openYieldStream(_allocations[i], _receivers[i]);
         }
-
-        balanceOf[msg.sender] -= _shares;
-        uint256 streamId = getStreamId(msg.sender, _to);
-
-        YieldStream storage stream = yieldStreams[streamId];
-        stream.shares += _shares;
-        stream.principal += value;
-        stream.recipient = _to;
     }
 
     // TODO: claim from multiple streams at once?
@@ -113,9 +109,33 @@ contract ERC4626StreamHub is Multicall {
         return uint256(keccak256(abi.encodePacked(_from, _to)));
     }
 
+    function _openYieldStream(uint256 _shares, address _to) internal {
+        _checkSufficientShares(_shares);
+        _checkReceiverAddress(_to);
+
+        balanceOf[msg.sender] -= _shares;
+        uint256 streamId = getStreamId(msg.sender, _to);
+        uint256 value = vault.convertToAssets(_shares);
+
+        YieldStream storage stream = yieldStreams[streamId];
+        stream.shares += _shares;
+        stream.principal += value;
+        stream.recipient = _to;
+    }
+
     function _calculateYield(uint256 _shares, uint256 _valueAtOpen) internal view returns (uint256) {
         uint256 currentValue = _shares.mulDivDown(vault.totalAssets(), vault.totalSupply());
 
         return currentValue > _valueAtOpen ? currentValue - _valueAtOpen : 0;
+    }
+
+    function _checkReceiverAddress(address _receiver) internal pure {
+        if (_receiver == address(0)) revert InvalidReceiverAddress();
+    }
+
+    function _checkSufficientShares(uint256 _shares) internal view {
+        if (_shares == 0) revert ZeroSharesStreamNotAllowed();
+
+        if (_shares > balanceOf[msg.sender]) revert NotEnoughShares();
     }
 }

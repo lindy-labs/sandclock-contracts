@@ -114,6 +114,24 @@ contract ERC4626StreamHubTests is Test {
         streamHub.openYieldStream(shares + 1, alice);
     }
 
+    function test_openYieldStream_failsFor0Shares() public {
+        uint256 shares = _depositToVault(alice, 1e18);
+        _depositToStreamVault(alice, shares);
+
+        vm.startPrank(alice);
+        vm.expectRevert(ERC4626StreamHub.ZeroSharesStreamNotAllowed.selector);
+        streamHub.openYieldStream(0, alice);
+    }
+
+    function test_openYieldStream_failsIfReceiverIsAddress0() public {
+        uint256 shares = _depositToVault(alice, 1e18);
+        _depositToStreamVault(alice, shares);
+
+        vm.startPrank(alice);
+        vm.expectRevert(ERC4626StreamHub.InvalidReceiverAddress.selector);
+        streamHub.openYieldStream(shares, address(0));
+    }
+
     function test_openYieldStream_toAnother() public {
         uint256 shares = _depositToVault(alice, 1e18);
         _depositToStreamVault(alice, shares);
@@ -208,6 +226,63 @@ contract ERC4626StreamHubTests is Test {
         // share price increased by 200% in total from the initial deposit
         // expected yield is 75% of that whole gain
         assertEq(streamHub.yieldFor(alice, bob), (deposit * 2).mulWadUp(0.75e18));
+    }
+
+    function test_openMultipleYieldStreams_createsStreamsForAllReceivers() public {
+        uint256 deposit = 1e18;
+        uint256 shares = _depositToVault(alice, deposit);
+        _depositToStreamVault(alice, shares);
+
+        address[] memory receivers = new address[](2);
+        receivers[0] = bob;
+        receivers[1] = carol;
+        uint256[] memory allocations = new uint256[](2);
+        allocations[0] = shares * 3 / 4;
+        allocations[1] = shares / 4;
+
+        vm.startPrank(alice);
+        streamHub.openMultipleYieldStreams(receivers, allocations);
+
+        (uint256 streamShares,, address receiver) = streamHub.yieldStreams(streamHub.getStreamId(alice, bob));
+        assertEq(streamShares, shares * 3 / 4);
+        assertEq(receiver, bob);
+
+        (streamShares,, receiver) = streamHub.yieldStreams(streamHub.getStreamId(alice, carol));
+        assertEq(streamShares, shares / 4);
+        assertEq(receiver, carol);
+    }
+
+    function test_openMultipleYieldStreams_failsIfReceiversAndAllocationLengthsDontMatch() public {
+        uint256 deposit = 1e18;
+        uint256 shares = _depositToVault(alice, deposit);
+        _depositToStreamVault(alice, shares);
+
+        address[] memory receivers = new address[](2);
+        receivers[0] = bob;
+        receivers[1] = carol;
+        uint256[] memory allocations = new uint256[](1);
+        allocations[0] = shares;
+
+        vm.startPrank(alice);
+        vm.expectRevert(ERC4626StreamHub.InputParamsLengthMismatch.selector);
+        streamHub.openMultipleYieldStreams(receivers, allocations);
+    }
+
+    function test_openMultipleYieldStreams_failsIfAllocationIsGreaterThanSharesBalance() public {
+        uint256 deposit = 1e18;
+        uint256 shares = _depositToVault(alice, deposit);
+        _depositToStreamVault(alice, shares);
+
+        address[] memory receivers = new address[](2);
+        receivers[0] = bob;
+        receivers[1] = carol;
+        uint256[] memory allocations = new uint256[](2);
+        allocations[0] = shares;
+        allocations[1] = 1;
+
+        vm.startPrank(alice);
+        vm.expectRevert(ERC4626StreamHub.NotEnoughShares.selector);
+        streamHub.openMultipleYieldStreams(receivers, allocations);
     }
 
     function test_yieldFor_returns0IfNoYield() public {
