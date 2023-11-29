@@ -9,13 +9,14 @@ import {ERC4626} from "solmate/mixins/ERC4626.sol";
 import {AccessControl} from "openzeppelin-contracts/access/AccessControl.sol";
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
+import {Multicall} from "openzeppelin-contracts/utils/Multicall.sol";
 
 import {Constants as C} from "./lib/Constants.sol";
 
 import {MockERC4626} from "solmate/test/utils/mocks/MockERC4626.sol";
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 
-contract ERC4626StreamHub {
+contract ERC4626StreamHub is Multicall {
     using FixedPointMathLib for uint256;
     using SafeTransferLib for ERC20;
     using SafeTransferLib for ERC4626;
@@ -568,6 +569,27 @@ contract ERC4626StreamHubTests is Test {
         assertEq(streamHub.yieldFor(alice, bob), 0);
         assertEq(asset.balanceOf(carol), 0);
         assertEq(streamHub.yieldFor(alice, carol), carolsYield);
+    }
+
+    function test_multicall_depositAndOpenYieldStreamInOneTransaction() public {
+        uint256 shares = _depositToVault(alice, 1e18);
+
+        // deposit to streamHub & open stream in one transaction
+        bytes[] memory data = new bytes[](2);
+        data[0] = abi.encodeWithSelector(ERC4626StreamHub.deposit.selector, shares);
+        data[1] = abi.encodeWithSelector(ERC4626StreamHub.openYieldStream.selector, shares, alice);
+
+        vm.startPrank(alice);
+        vault.approve(address(streamHub), shares);
+        streamHub.multicall(data);
+        vm.stopPrank();
+
+        assertEq(streamHub.balanceOf(alice), 0);
+
+        (uint256 streamShares,, address receiver) = streamHub.yieldStreams(streamHub.getStreamId(alice, alice));
+
+        assertEq(streamShares, shares);
+        assertEq(receiver, alice);
     }
 
     function _depositToVault(address _from, uint256 _amount) internal returns (uint256 shares) {
