@@ -151,7 +151,7 @@ contract ERC4626StreamHub is Multicall {
     }
 
     function _calculateYield(uint256 _shares, uint256 _valueAtOpen) internal view returns (uint256) {
-        uint256 currentValue = _shares.mulDivDown(vault.totalAssets(), vault.totalSupply());
+        uint256 currentValue = vault.convertToAssets(_shares);
 
         return currentValue > _valueAtOpen ? currentValue - _valueAtOpen : 0;
     }

@@ -567,7 +567,7 @@ contract ERC4626StreamHubTests is Test {
         assertEq(streamHub.yieldFor(alice, carol), carolsYield);
     }
 
-    function test_multicall_depositAndOpenYieldStreamInOneTransaction() public {
+    function test_multicall_depositAndOpenYieldStream() public {
         uint256 shares = _depositToVault(alice, 1e18);
 
         // deposit to streamHub & open stream in one transaction
@@ -586,6 +586,59 @@ contract ERC4626StreamHubTests is Test {
 
         assertEq(streamShares, shares);
         assertEq(receiver, alice);
+    }
+
+    function test_multicall_openMultipleYieldStreams() public {
+        uint256 shares = _depositToVault(alice, 1e18);
+
+        bytes[] memory data = new bytes[](3);
+        data[0] = abi.encodeWithSelector(ERC4626StreamHub.deposit.selector, shares);
+        data[1] = abi.encodeWithSelector(ERC4626StreamHub.openYieldStream.selector, shares * 3 / 4, bob);
+        data[2] = abi.encodeWithSelector(ERC4626StreamHub.openYieldStream.selector, shares / 4, carol);
+
+        vm.startPrank(alice);
+        vault.approve(address(streamHub), shares);
+        streamHub.multicall(data);
+        vm.stopPrank();
+
+        assertEq(streamHub.balanceOf(alice), 0);
+
+        (uint256 streamShares,, address receiver) = streamHub.yieldStreams(streamHub.getStreamId(alice, bob));
+        assertEq(streamShares, shares * 3 / 4);
+        assertEq(receiver, bob);
+
+        (streamShares,, receiver) = streamHub.yieldStreams(streamHub.getStreamId(alice, carol));
+        assertEq(streamShares, shares / 4);
+        assertEq(receiver, carol);
+    }
+
+    function test_multicall_claimYieldFromMultipleStreams() public {
+        uint256 deposit = 1e18;
+        uint256 alicesShares = _depositToVault(alice, deposit);
+        _depositToStreamVault(alice, alicesShares);
+        uint256 bobsShares = _depositToVault(bob, deposit * 2);
+        _depositToStreamVault(bob, bobsShares);
+
+        vm.prank(alice);
+        streamHub.openYieldStream(alicesShares, carol);
+        vm.prank(bob);
+        streamHub.openYieldStream(bobsShares, carol);
+
+        // add 100% profit to vault
+        _createProfitForVault(1e18);
+
+        bytes[] memory data = new bytes[](2);
+        data[0] = abi.encodeWithSelector(ERC4626StreamHub.claimYield.selector, alice, carol);
+        data[1] = abi.encodeWithSelector(ERC4626StreamHub.claimYield.selector, bob, carol);
+
+        assertEq(streamHub.yieldFor(alice, carol), deposit);
+        assertEq(streamHub.yieldFor(bob, carol), deposit * 2);
+
+        streamHub.multicall(data);
+
+        assertEq(asset.balanceOf(carol), deposit * 3);
+        assertEq(streamHub.yieldFor(alice, carol), 0);
+        assertEq(streamHub.yieldFor(bob, carol), 0);
     }
 
     function _depositToVault(address _from, uint256 _amount) internal returns (uint256 shares) {
