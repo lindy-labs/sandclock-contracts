@@ -23,6 +23,9 @@ contract ERC4626StreamHub is Multicall {
     error NoYieldToClaim();
     error InputParamsLengthMismatch();
 
+    event Deposit(address indexed depositor, uint256 shares);
+    event Withdraw(address indexed depositor, uint256 shares);
+
     IERC4626 public vault;
 
     mapping(address => uint256) public balanceOf;
@@ -45,15 +48,17 @@ contract ERC4626StreamHub is Multicall {
     function deposit(uint256 _shares) external {
         vault.safeTransferFrom(msg.sender, address(this), _shares);
         balanceOf[msg.sender] += _shares;
+
+        emit Deposit(msg.sender, _shares);
     }
 
-    function depositAssets(uint256 _assets) external returns (uint256) {
+    function depositAssets(uint256 _assets) external returns (uint256 shares) {
         IERC20(vault.asset()).safeTransferFrom(msg.sender, address(this), _assets);
 
-        uint256 shares = vault.deposit(_assets, address(this));
+        shares = vault.deposit(_assets, address(this));
         balanceOf[msg.sender] += shares;
 
-        return shares;
+        emit Deposit(msg.sender, shares);
     }
 
     function withdraw(uint256 _shares) external {
@@ -61,16 +66,18 @@ contract ERC4626StreamHub is Multicall {
 
         balanceOf[msg.sender] -= _shares;
         vault.transfer(msg.sender, _shares);
+
+        emit Withdraw(msg.sender, _shares);
     }
 
-    function withdrawAssets(uint256 _assets) external returns (uint256) {
-        uint256 shares = vault.convertToShares(_assets);
+    function withdrawAssets(uint256 _assets) external returns (uint256 shares) {
+        shares = vault.convertToShares(_assets);
         _checkSufficientShares(shares);
 
         balanceOf[msg.sender] -= shares;
         vault.redeem(shares, msg.sender, address(this));
 
-        return shares;
+        emit Withdraw(msg.sender, shares);
     }
 
     function openYieldStream(uint256 _shares, address _to) external {
