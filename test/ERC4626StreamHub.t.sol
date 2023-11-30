@@ -68,6 +68,36 @@ contract ERC4626StreamHubTests is Test {
         assertEq(vault.balanceOf(alice), 0);
     }
 
+    function test_depositAssets_tracksDepositedShares() public {
+        uint256 amount = 1e18;
+        deal(address(asset), alice, amount);
+        uint256 expectedShares = vault.convertToShares(amount);
+
+        vm.startPrank(alice);
+        asset.approve(address(streamHub), amount);
+        streamHub.depositAssets(amount);
+        vm.stopPrank();
+
+        assertEq(streamHub.balanceOf(alice), expectedShares);
+        assertEq(asset.balanceOf(address(alice)), 0);
+    }
+
+    function test_depositAssets_secondDepositAddsSharesToPrevious() public {
+        uint256 shares = _depositToVault(alice, 2e18);
+
+        vm.startPrank(alice);
+        vault.approve(address(streamHub), shares);
+        streamHub.deposit(shares / 2);
+
+        assertEq(streamHub.balanceOf(alice), shares / 2);
+
+        streamHub.deposit(shares / 2);
+
+        assertEq(streamHub.balanceOf(alice), shares);
+        assertEq(vault.balanceOf(address(streamHub)), shares);
+        assertEq(vault.balanceOf(alice), 0);
+    }
+
     function test_withdraw_reduceWithdrawnShares() public {
         uint256 shares = _depositToVault(alice, 1e18);
         _depositToStreamVault(alice, shares);
@@ -89,6 +119,32 @@ contract ERC4626StreamHubTests is Test {
 
         vm.expectRevert(ERC4626StreamHub.NotEnoughShares.selector);
         streamHub.withdraw(shares);
+    }
+
+    function test_withdrawAssets_reduceWithdrawnShares() public {
+        uint256 deposit = 1e18;
+        uint256 shares = _depositToVault(alice, deposit);
+        _depositToStreamVault(alice, shares);
+
+        vm.startPrank(alice);
+        streamHub.withdrawAssets(deposit / 2);
+
+        assertEq(streamHub.balanceOf(alice), shares / 2);
+        assertEq(vault.balanceOf(address(streamHub)), shares / 2);
+        assertEq(vault.balanceOf(alice), 0);
+        assertEq(asset.balanceOf(alice), deposit / 2);
+    }
+
+    function test_withdrawAssets_cannotWithdrawSharesAllocatedToStream() public {
+        uint256 deposit = 1e18;
+        uint256 shares = _depositToVault(alice, deposit);
+        _depositToStreamVault(alice, shares);
+
+        vm.startPrank(alice);
+        streamHub.openYieldStream(shares / 2, bob);
+
+        vm.expectRevert(ERC4626StreamHub.NotEnoughShares.selector);
+        streamHub.withdrawAssets(deposit);
     }
 
     function test_openYieldStream_toSelf() public {

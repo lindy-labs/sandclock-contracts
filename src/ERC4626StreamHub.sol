@@ -10,6 +10,7 @@ import {AccessControl} from "openzeppelin-contracts/access/AccessControl.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 import {Multicall} from "openzeppelin-contracts/utils/Multicall.sol";
 
+// TODO: add events
 contract ERC4626StreamHub is Multicall {
     using FixedPointMathLib for uint256;
     using SafeERC20 for IERC20;
@@ -38,6 +39,7 @@ contract ERC4626StreamHub is Multicall {
 
     constructor(IERC4626 _vault) {
         vault = _vault;
+        IERC20(vault.asset()).approve(address(vault), type(uint256).max);
     }
 
     function deposit(uint256 _shares) external {
@@ -45,11 +47,13 @@ contract ERC4626StreamHub is Multicall {
         balanceOf[msg.sender] += _shares;
     }
 
-    // TODO: tests
-    function depositAssets(uint256 _assets) external {
+    function depositAssets(uint256 _assets) external returns (uint256) {
         IERC20(vault.asset()).safeTransferFrom(msg.sender, address(this), _assets);
+
         uint256 shares = vault.deposit(_assets, address(this));
         balanceOf[msg.sender] += shares;
+
+        return shares;
     }
 
     function withdraw(uint256 _shares) external {
@@ -59,7 +63,6 @@ contract ERC4626StreamHub is Multicall {
         vault.transfer(msg.sender, _shares);
     }
 
-    // TODO: tests
     function withdrawAssets(uint256 _assets) external returns (uint256) {
         uint256 shares = vault.convertToShares(_assets);
         _checkSufficientShares(shares);
