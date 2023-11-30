@@ -342,7 +342,7 @@ contract scWETHTest is Test {
 
     function test_receiveFlashLoan_InvalidFlashLoanCaller() public {
         address[] memory empty;
-        uint256[] memory amounts = new uint[](1);
+        uint256[] memory amounts = new uint256[](1);
         amounts[0] = 1;
         vm.expectRevert(InvalidFlashLoanCaller.selector);
         vault.receiveFlashLoan(empty, amounts, amounts, abi.encode(1));

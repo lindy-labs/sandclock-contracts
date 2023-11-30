@@ -73,6 +73,8 @@ contract RebalanceScWethV2 is Script, scWETHv2Helper {
     // wont have enough wstEth funds for the supply
     uint256 stEthRateTolerance = 0.9995e18;
 
+    bool useZeroEx = false;
+
     ///////////////////////////////////////////////////////////////////////
 
     struct RebalanceDataParams {
@@ -185,7 +187,7 @@ contract RebalanceScWethV2 is Script, scWETHv2Helper {
             uint256 wethSwapAmount = investFlashLoanAmount + _investAmount;
             bytes memory swapData = getSwapData(wethSwapAmount, C.WETH, C.WSTETH);
 
-            if (swapData.length > 0) {
+            if ((swapData.length > 0) && useZeroEx) {
                 multicallData.push(
                     abi.encodeWithSelector(
                         BaseV2Vault.zeroExSwap.selector, C.WETH, C.WSTETH, wethSwapAmount, swapData, 0
@@ -236,7 +238,7 @@ contract RebalanceScWethV2 is Script, scWETHv2Helper {
 
             bytes memory swapData = getSwapData(swapAmount, C.WSTETH, C.WETH);
 
-            if (swapData.length > 0) {
+            if ((swapData.length > 0) && useZeroEx) {
                 multicallData.push(
                     abi.encodeWithSelector(
                         BaseV2Vault.zeroExSwap.selector,
