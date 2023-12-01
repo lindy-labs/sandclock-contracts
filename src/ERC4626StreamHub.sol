@@ -83,15 +83,15 @@ contract ERC4626StreamHub is Multicall {
         emit Withdraw(msg.sender, shares);
     }
 
-    function openYieldStream(uint256 _shares, address _to) external {
-        _openYieldStream(_shares, _to);
+    function openYieldStream(address _to, uint256 _shares) external {
+        _openYieldStream(_to, _shares);
     }
 
     function openYieldStreamMultiple(address[] calldata _receivers, uint256[] calldata _allocations) external {
         if (_receivers.length != _allocations.length) revert InputParamsLengthMismatch();
 
         for (uint256 i = 0; i < _receivers.length; i++) {
-            _openYieldStream(_allocations[i], _receivers[i]);
+            _openYieldStream(_receivers[i], _allocations[i]);
         }
     }
 
@@ -111,8 +111,7 @@ contract ERC4626StreamHub is Multicall {
     function _claimYield(address _from, address _to) internal {
         // require(_from == msg.sender || _to == msg.sender, "ERC4626StreamHub: caller is not a party to the stream");
 
-        uint256 streamId = getStreamId(_from, _to);
-        YieldStream storage stream = yieldStreams[streamId];
+        YieldStream storage stream = yieldStreams[getStreamId(_from, _to)];
 
         uint256 yield = _calculateYield(stream.shares, stream.principal);
 
@@ -143,8 +142,7 @@ contract ERC4626StreamHub is Multicall {
     }
 
     function yieldFor(address _from, address _to) external view returns (uint256) {
-        uint256 streamId = getStreamId(_from, _to);
-        YieldStream memory stream = yieldStreams[streamId];
+        YieldStream memory stream = yieldStreams[getStreamId(_from, _to)];
 
         return _calculateYield(stream.shares, stream.principal);
     }
@@ -153,15 +151,14 @@ contract ERC4626StreamHub is Multicall {
         return uint256(keccak256(abi.encodePacked(_from, _to)));
     }
 
-    function _openYieldStream(uint256 _shares, address _to) internal {
+    function _openYieldStream(address _to, uint256 _shares) internal {
         _checkSufficientShares(_shares);
         _checkReceiverAddress(_to);
 
         balanceOf[msg.sender] -= _shares;
-        uint256 streamId = getStreamId(msg.sender, _to);
         uint256 value = vault.convertToAssets(_shares);
 
-        YieldStream storage stream = yieldStreams[streamId];
+        YieldStream storage stream = yieldStreams[getStreamId(msg.sender, _to)];
         stream.shares += _shares;
         stream.principal += value;
         stream.recipient = _to;

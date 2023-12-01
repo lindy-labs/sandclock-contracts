@@ -177,7 +177,7 @@ contract ERC4626StreamHubTests is Test {
         uint256 sharesToAllocate = shares / 2;
 
         vm.startPrank(alice);
-        streamHub.openYieldStream(shares / 2, bob);
+        streamHub.openYieldStream(bob, shares / 2);
 
         vm.expectRevert(ERC4626StreamHub.NotEnoughShares.selector);
         uint256 withdrawShares = shares - sharesToAllocate + 1; // 1 more than available
@@ -213,12 +213,13 @@ contract ERC4626StreamHubTests is Test {
     function test_withdrawAssets_cannotWithdrawSharesAllocatedToStream() public {
         uint256 shares = _depositToVault(alice, 2e18);
         _depositToStreamVault(alice, shares);
-        uint256 allocateShares = shares / 2;
 
         vm.startPrank(alice);
-        streamHub.openYieldStream(allocateShares, bob);
+        streamHub.openYieldStream(bob, shares / 2);
 
-        uint256 withdrawAmount = vault.convertToAssets(shares - allocateShares + 1); // 1 more than available
+        uint256 freeShares = streamHub.balanceOf(alice);
+
+        uint256 withdrawAmount = vault.convertToAssets(freeShares + 1);
 
         vm.expectRevert(ERC4626StreamHub.NotEnoughShares.selector);
         streamHub.withdrawAssets(withdrawAmount);
@@ -242,7 +243,7 @@ contract ERC4626StreamHubTests is Test {
         _depositToStreamVault(alice, shares);
 
         vm.startPrank(alice);
-        streamHub.openYieldStream(shares, alice);
+        streamHub.openYieldStream(alice, shares);
 
         assertEq(streamHub.balanceOf(alice), 0);
 
@@ -260,7 +261,7 @@ contract ERC4626StreamHubTests is Test {
         emit OpenYieldStream(alice, bob, shares);
 
         vm.startPrank(alice);
-        streamHub.openYieldStream(shares, bob);
+        streamHub.openYieldStream(bob, shares);
     }
 
     function test_openYieldStream_failsIfNotEnoughShares() public {
@@ -269,7 +270,7 @@ contract ERC4626StreamHubTests is Test {
 
         vm.startPrank(alice);
         vm.expectRevert(ERC4626StreamHub.NotEnoughShares.selector);
-        streamHub.openYieldStream(shares + 1, alice);
+        streamHub.openYieldStream(alice, shares + 1);
     }
 
     function test_openYieldStream_failsFor0Shares() public {
@@ -278,7 +279,7 @@ contract ERC4626StreamHubTests is Test {
 
         vm.startPrank(alice);
         vm.expectRevert(ERC4626StreamHub.ZeroSharesStreamNotAllowed.selector);
-        streamHub.openYieldStream(0, alice);
+        streamHub.openYieldStream(alice, 0);
     }
 
     function test_openYieldStream_failsIfReceiverIsAddress0() public {
@@ -287,7 +288,7 @@ contract ERC4626StreamHubTests is Test {
 
         vm.startPrank(alice);
         vm.expectRevert(ERC4626StreamHub.InvalidReceiverAddress.selector);
-        streamHub.openYieldStream(shares, address(0));
+        streamHub.openYieldStream(address(0), shares);
     }
 
     function test_openYieldStream_toAnother() public {
@@ -295,7 +296,7 @@ contract ERC4626StreamHubTests is Test {
         _depositToStreamVault(alice, shares);
 
         vm.startPrank(alice);
-        streamHub.openYieldStream(shares, bob);
+        streamHub.openYieldStream(bob, shares);
 
         assertEq(streamHub.balanceOf(alice), 0);
 
@@ -310,8 +311,8 @@ contract ERC4626StreamHubTests is Test {
         _depositToStreamVault(alice, shares);
 
         vm.startPrank(alice);
-        streamHub.openYieldStream(shares / 2, bob);
-        streamHub.openYieldStream(shares / 4, carol);
+        streamHub.openYieldStream(bob, shares / 2);
+        streamHub.openYieldStream(carol, shares / 4);
 
         (uint256 streamShares,, address receiver) = streamHub.yieldStreams(streamHub.getStreamId(alice, bob));
         assertEq(streamShares, shares / 2);
@@ -330,7 +331,7 @@ contract ERC4626StreamHubTests is Test {
         _depositToStreamVault(alice, shares);
 
         vm.startPrank(alice);
-        streamHub.openYieldStream(shares / 2, bob);
+        streamHub.openYieldStream(bob, shares / 2);
 
         (uint256 streamShares,,) = streamHub.yieldStreams(streamHub.getStreamId(alice, bob));
 
@@ -339,7 +340,7 @@ contract ERC4626StreamHubTests is Test {
         assertEq(asset.balanceOf(bob), 0);
 
         // top up stream
-        streamHub.openYieldStream(shares / 2, bob);
+        streamHub.openYieldStream(bob, shares / 2);
 
         (streamShares,,) = streamHub.yieldStreams(streamHub.getStreamId(alice, bob));
 
@@ -354,13 +355,13 @@ contract ERC4626StreamHubTests is Test {
         _depositToStreamVault(alice, shares);
 
         vm.startPrank(alice);
-        streamHub.openYieldStream(shares / 2, bob);
+        streamHub.openYieldStream(bob, shares / 2);
 
         _createProfitForVault(0.2e18);
         uint256 yield = streamHub.yieldFor(alice, bob);
 
         // top up stream
-        streamHub.openYieldStream(shares / 2, bob);
+        streamHub.openYieldStream(bob, shares / 2);
 
         assertEq(streamHub.yieldFor(alice, bob), yield);
     }
@@ -371,13 +372,13 @@ contract ERC4626StreamHubTests is Test {
         _depositToStreamVault(alice, shares);
 
         vm.startPrank(alice);
-        streamHub.openYieldStream(shares / 2, bob);
+        streamHub.openYieldStream(bob, shares / 2);
 
         // double the share price
         _createProfitForVault(1e18);
 
         // top up stream with the remaining shares
-        streamHub.openYieldStream(shares / 2, bob);
+        streamHub.openYieldStream(bob, shares / 2);
 
         _createProfitForVault(0.5e18);
 
@@ -448,7 +449,7 @@ contract ERC4626StreamHubTests is Test {
         _depositToStreamVault(alice, shares);
 
         vm.startPrank(alice);
-        streamHub.openYieldStream(shares, bob);
+        streamHub.openYieldStream(bob, shares);
 
         // no share price increase => no yield
         assertEq(streamHub.yieldFor(alice, bob), 0);
@@ -459,7 +460,7 @@ contract ERC4626StreamHubTests is Test {
         _depositToStreamVault(alice, shares);
 
         vm.startPrank(alice);
-        streamHub.openYieldStream(shares, bob);
+        streamHub.openYieldStream(bob, shares);
 
         // create a 20% loss
         _createProfitForVault(-0.2e18);
@@ -475,7 +476,7 @@ contract ERC4626StreamHubTests is Test {
 
         vm.startPrank(alice);
         // depositor opens a stream to himself
-        streamHub.openYieldStream(shares, alice);
+        streamHub.openYieldStream(alice, shares);
 
         // add 50% profit to vault
         _createProfitForVault(0.5e18);
@@ -493,7 +494,7 @@ contract ERC4626StreamHubTests is Test {
         _depositToStreamVault(alice, shares);
 
         vm.startPrank(alice);
-        streamHub.openYieldStream(shares, bob);
+        streamHub.openYieldStream(bob, shares);
 
         // add 50% profit to vault
         _createProfitForVault(0.5e18);
@@ -510,7 +511,7 @@ contract ERC4626StreamHubTests is Test {
         _depositToStreamVault(alice, shares);
 
         vm.startPrank(alice);
-        streamHub.openYieldStream(shares, bob);
+        streamHub.openYieldStream(bob, shares);
 
         // add 50% profit to vault
         _createProfitForVault(0.5e18);
@@ -529,7 +530,7 @@ contract ERC4626StreamHubTests is Test {
         _depositToStreamVault(alice, shares);
 
         vm.startPrank(alice);
-        streamHub.openYieldStream(shares, bob);
+        streamHub.openYieldStream(bob, shares);
 
         vm.expectRevert(ERC4626StreamHub.NoYieldToClaim.selector);
         streamHub.claimYield(alice, bob);
@@ -541,7 +542,7 @@ contract ERC4626StreamHubTests is Test {
         _depositToStreamVault(alice, shares);
 
         vm.startPrank(alice);
-        streamHub.openYieldStream(shares, bob);
+        streamHub.openYieldStream(bob, shares);
 
         // create a 20% loss
         _createProfitForVault(-0.2e18);
@@ -556,8 +557,8 @@ contract ERC4626StreamHubTests is Test {
         _depositToStreamVault(alice, shares);
 
         vm.startPrank(alice);
-        streamHub.openYieldStream(shares / 2, bob);
-        streamHub.openYieldStream(shares / 2, carol);
+        streamHub.openYieldStream(bob, shares / 2);
+        streamHub.openYieldStream(carol, shares / 2);
 
         // add 100% profit to vault
         _createProfitForVault(1e18);
@@ -590,9 +591,9 @@ contract ERC4626StreamHubTests is Test {
         _depositToStreamVault(bob, bobsShares);
 
         vm.prank(alice);
-        streamHub.openYieldStream(alicesShares, carol);
+        streamHub.openYieldStream(carol, alicesShares);
         vm.prank(bob);
-        streamHub.openYieldStream(bobsShares, carol);
+        streamHub.openYieldStream(carol, bobsShares);
 
         // add 100% profit to vault
         _createProfitForVault(1e18);
@@ -618,7 +619,7 @@ contract ERC4626StreamHubTests is Test {
         _depositToStreamVault(alice, shares);
 
         vm.startPrank(alice);
-        streamHub.openYieldStream(shares, bob);
+        streamHub.openYieldStream(bob, shares);
 
         // add 50% profit to vault
         _createProfitForVault(0.5e18);
@@ -642,7 +643,7 @@ contract ERC4626StreamHubTests is Test {
         _depositToStreamVault(alice, shares);
 
         vm.startPrank(alice);
-        streamHub.openYieldStream(shares, bob);
+        streamHub.openYieldStream(bob, shares);
 
         // add 100% profit to vault
         _createProfitForVault(1e18);
@@ -663,7 +664,7 @@ contract ERC4626StreamHubTests is Test {
         _depositToStreamVault(alice, shares);
 
         vm.startPrank(alice);
-        streamHub.openYieldStream(shares, bob);
+        streamHub.openYieldStream(bob, shares);
 
         // add 50% profit to vault
         _createProfitForVault(0.5e18);
@@ -686,7 +687,7 @@ contract ERC4626StreamHubTests is Test {
         _depositToStreamVault(alice, shares);
 
         vm.startPrank(alice);
-        streamHub.openYieldStream(shares, bob);
+        streamHub.openYieldStream(bob, shares);
 
         // add 50% profit to vault
         _createProfitForVault(0.5e18);
@@ -707,7 +708,7 @@ contract ERC4626StreamHubTests is Test {
         _depositToStreamVault(alice, shares);
 
         vm.startPrank(alice);
-        streamHub.openYieldStream(shares, bob);
+        streamHub.openYieldStream(bob, shares);
 
         // create a 20% loss
         _createProfitForVault(-0.2e18);
@@ -726,7 +727,7 @@ contract ERC4626StreamHubTests is Test {
         _depositToStreamVault(alice, shares);
 
         vm.startPrank(alice);
-        streamHub.openYieldStream(shares, bob);
+        streamHub.openYieldStream(bob, shares);
 
         // works
         streamHub.closeYieldStream(bob);
@@ -742,8 +743,8 @@ contract ERC4626StreamHubTests is Test {
         _depositToStreamVault(alice, shares);
 
         vm.startPrank(alice);
-        streamHub.openYieldStream(shares / 2, bob);
-        streamHub.openYieldStream(shares / 2, carol);
+        streamHub.openYieldStream(bob, shares / 2);
+        streamHub.openYieldStream(carol, shares / 2);
 
         // create a 20% profit
         _createProfitForVault(0.2e18);
@@ -768,7 +769,7 @@ contract ERC4626StreamHubTests is Test {
         // deposit to streamHub & open stream in one transaction
         bytes[] memory data = new bytes[](2);
         data[0] = abi.encodeWithSelector(ERC4626StreamHub.deposit.selector, shares);
-        data[1] = abi.encodeWithSelector(ERC4626StreamHub.openYieldStream.selector, shares, alice);
+        data[1] = abi.encodeWithSelector(ERC4626StreamHub.openYieldStream.selector, alice, shares);
 
         vm.startPrank(alice);
         vault.approve(address(streamHub), shares);
@@ -788,8 +789,8 @@ contract ERC4626StreamHubTests is Test {
 
         bytes[] memory data = new bytes[](3);
         data[0] = abi.encodeWithSelector(ERC4626StreamHub.deposit.selector, shares);
-        data[1] = abi.encodeWithSelector(ERC4626StreamHub.openYieldStream.selector, shares * 3 / 4, bob);
-        data[2] = abi.encodeWithSelector(ERC4626StreamHub.openYieldStream.selector, shares / 4, carol);
+        data[1] = abi.encodeWithSelector(ERC4626StreamHub.openYieldStream.selector, bob, shares * 3 / 4);
+        data[2] = abi.encodeWithSelector(ERC4626StreamHub.openYieldStream.selector, carol, shares / 4);
 
         vm.startPrank(alice);
         vault.approve(address(streamHub), shares);
@@ -815,9 +816,9 @@ contract ERC4626StreamHubTests is Test {
         _depositToStreamVault(bob, bobsShares);
 
         vm.prank(alice);
-        streamHub.openYieldStream(alicesShares, carol);
+        streamHub.openYieldStream(carol, alicesShares);
         vm.prank(bob);
-        streamHub.openYieldStream(bobsShares, carol);
+        streamHub.openYieldStream(carol, bobsShares);
 
         // add 100% profit to vault
         _createProfitForVault(1e18);
