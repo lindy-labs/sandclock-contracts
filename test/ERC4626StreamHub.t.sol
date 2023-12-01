@@ -21,6 +21,9 @@ contract ERC4626StreamHubTests is Test {
 
     event Deposit(address indexed depositor, uint256 shares);
     event Withdraw(address indexed depositor, uint256 shares);
+    event OpenYieldStream(address indexed streamer, address indexed recipient, uint256 shares);
+    event ClaimYield(address indexed streamer, address indexed recipient, uint256 yield);
+    event CloseYieldStream(address indexed streamer, address indexed recipient, uint256 shares);
 
     ERC4626StreamHub public streamHub;
     IERC4626 public vault;
@@ -247,6 +250,17 @@ contract ERC4626StreamHubTests is Test {
 
         assertEq(streamShares, shares);
         assertEq(receiver, alice);
+    }
+
+    function test_openYieldStream_emitsEvent() public {
+        uint256 shares = _depositToVault(alice, 4e18);
+        _depositToStreamVault(alice, shares);
+
+        vm.expectEmit(true, true, true, true);
+        emit OpenYieldStream(alice, bob, shares);
+
+        vm.startPrank(alice);
+        streamHub.openYieldStream(shares, bob);
     }
 
     function test_openYieldStream_failsIfNotEnoughShares() public {
@@ -491,6 +505,24 @@ contract ERC4626StreamHubTests is Test {
         assertEq(asset.balanceOf(bob), deposit / 2);
     }
 
+    function test_claimYield_emitsEvent() public {
+        uint256 shares = _depositToVault(alice, 3e18);
+        _depositToStreamVault(alice, shares);
+
+        vm.startPrank(alice);
+        streamHub.openYieldStream(shares, bob);
+
+        // add 50% profit to vault
+        _createProfitForVault(0.5e18);
+
+        uint256 yield = streamHub.yieldFor(alice, bob);
+
+        vm.expectEmit(true, true, true, true);
+        emit ClaimYield(alice, bob, yield);
+
+        streamHub.claimYield(alice, bob);
+    }
+
     function test_claimYield_revertsIfNoYield() public {
         uint256 deposit = 1e18;
         uint256 shares = _depositToVault(alice, deposit);
@@ -603,6 +635,26 @@ contract ERC4626StreamHubTests is Test {
         assertEq(shares_, 0, "shares");
         assertEq(value, 0, "value at open");
         assertEq(receiver, address(0), "receiver");
+    }
+
+    function test_closeYieldStream_emitsEvent() public {
+        uint256 shares = _depositToVault(alice, 2e18);
+        _depositToStreamVault(alice, shares);
+
+        vm.startPrank(alice);
+        streamHub.openYieldStream(shares, bob);
+
+        // add 100% profit to vault
+        _createProfitForVault(1e18);
+
+        uint256 yield = streamHub.yieldFor(alice, bob);
+        uint256 unlockedShares = shares - vault.convertToShares(yield);
+
+        vm.expectEmit(true, true, true, true);
+        emit CloseYieldStream(alice, bob, unlockedShares);
+        emit ClaimYield(alice, bob, yield);
+
+        streamHub.closeYieldStream(bob);
     }
 
     function test_closeYieldStream_stopsGeneratingYieldForReceiver() public {
