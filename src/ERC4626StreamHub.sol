@@ -19,7 +19,7 @@ contract ERC4626StreamHub is Multicall {
     error NotEnoughShares();
     error ZeroSharesStreamNotAllowed();
     error InvalidReceiverAddress();
-    error StreamDoesntExist();
+    error StreamDoesNotExist();
     error NoYieldToClaim();
     error InputParamsLengthMismatch();
 
@@ -40,7 +40,6 @@ contract ERC4626StreamHub is Multicall {
     struct YieldStream {
         uint256 shares;
         uint256 principal;
-        address recipient;
     }
 
     constructor(IERC4626 _vault) {
@@ -105,7 +104,6 @@ contract ERC4626StreamHub is Multicall {
         YieldStream storage stream = yieldStreams[getStreamId(msg.sender, _to)];
         stream.shares += _shares;
         stream.principal += value;
-        stream.recipient = _to;
 
         emit OpenYieldStream(msg.sender, _to, _shares);
     }
