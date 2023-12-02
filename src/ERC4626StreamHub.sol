@@ -87,7 +87,7 @@ contract ERC4626StreamHub is Multicall {
         _openYieldStream(_to, _shares);
     }
 
-    function openYieldStreamMultiple(address[] calldata _receivers, uint256[] calldata _allocations) external {
+    function openYieldStreamBatch(address[] calldata _receivers, uint256[] calldata _allocations) external {
         if (_receivers.length != _allocations.length) revert InputParamsLengthMismatch();
 
         for (uint256 i = 0; i < _receivers.length; i++) {
@@ -95,15 +95,30 @@ contract ERC4626StreamHub is Multicall {
         }
     }
 
-    function claimYield(address _from, address _to) public {
+    function _openYieldStream(address _to, uint256 _shares) internal {
+        _checkSufficientShares(_shares);
+        _checkReceiverAddress(_to);
+
+        balanceOf[msg.sender] -= _shares;
+        uint256 value = vault.convertToAssets(_shares);
+
+        YieldStream storage stream = yieldStreams[getStreamId(msg.sender, _to)];
+        stream.shares += _shares;
+        stream.principal += value;
+        stream.recipient = _to;
+
+        emit OpenYieldStream(msg.sender, _to, _shares);
+    }
+
+    function claimYield(address _from, address _to) external {
         _claimYield(_from, _to);
     }
 
-    function claimYieldMultiple(address[] calldata _froms, address[] calldata _tos) external {
+    function claimYieldBatch(address[] calldata _froms, address[] calldata _tos) external {
         if (_froms.length != _tos.length) revert InputParamsLengthMismatch();
 
         for (uint256 i = 0; i < _froms.length; i++) {
-            claimYield(_froms[i], _tos[i]);
+            _claimYield(_froms[i], _tos[i]);
         }
     }
 
@@ -122,17 +137,26 @@ contract ERC4626StreamHub is Multicall {
         emit ClaimYield(_from, _to, yield);
     }
 
+    function closeYieldStreamBatch(address[] calldata _tos) external {
+        for (uint256 i = 0; i < _tos.length; i++) {
+            _closeYieldStream(_tos[i]);
+        }
+    }
+
     function closeYieldStream(address _to) external {
+        _closeYieldStream(_to);
+    }
+
+    function _closeYieldStream(address _to) internal {
         uint256 streamId = getStreamId(msg.sender, _to);
         YieldStream memory stream = yieldStreams[streamId];
 
-        if (stream.shares == 0) revert StreamDoesntExist();
+        if (stream.shares == 0) revert StreamDoesNotExist();
 
         uint256 yield = _calculateYield(stream.shares, stream.principal);
 
-        if (yield != 0) {
-            stream.shares -= vault.withdraw(yield, _to, address(this));
-        }
+        // claim yield if any
+        if (yield != 0) stream.shares -= vault.withdraw(yield, _to, address(this));
 
         balanceOf[msg.sender] += stream.shares;
 
@@ -149,21 +173,6 @@ contract ERC4626StreamHub is Multicall {
 
     function getStreamId(address _from, address _to) public pure returns (uint256) {
         return uint256(keccak256(abi.encodePacked(_from, _to)));
-    }
-
-    function _openYieldStream(address _to, uint256 _shares) internal {
-        _checkSufficientShares(_shares);
-        _checkReceiverAddress(_to);
-
-        balanceOf[msg.sender] -= _shares;
-        uint256 value = vault.convertToAssets(_shares);
-
-        YieldStream storage stream = yieldStreams[getStreamId(msg.sender, _to)];
-        stream.shares += _shares;
-        stream.principal += value;
-        stream.recipient = _to;
-
-        emit OpenYieldStream(msg.sender, _to, _shares);
     }
 
     function _calculateYield(uint256 _shares, uint256 _valueAtOpen) internal view returns (uint256) {
