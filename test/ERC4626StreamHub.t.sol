@@ -21,9 +21,9 @@ contract ERC4626StreamHubTests is Test {
 
     event Deposit(address indexed depositor, uint256 shares);
     event Withdraw(address indexed depositor, uint256 shares);
-    event OpenYieldStream(address indexed streamer, address indexed recipient, uint256 shares);
-    event ClaimYield(address indexed streamer, address indexed recipient, uint256 yield);
-    event CloseYieldStream(address indexed streamer, address indexed recipient, uint256 shares);
+    event OpenYieldStream(address indexed streamer, address indexed receiver, uint256 shares);
+    event ClaimYield(address indexed streamer, address indexed receiver, uint256 yield);
+    event CloseYieldStream(address indexed streamer, address indexed receiver, uint256 shares);
 
     ERC4626StreamHub public streamHub;
     IERC4626 public vault;
@@ -268,7 +268,7 @@ contract ERC4626StreamHubTests is Test {
         _depositToStreamVault(alice, shares);
 
         vm.startPrank(alice);
-        vm.expectRevert(ERC4626StreamHub.ZeroSharesStreamNotAllowed.selector);
+        vm.expectRevert(ERC4626StreamHub.ZeroShares.selector);
         streamHub.openYieldStream(alice, 0);
     }
 
@@ -787,7 +787,7 @@ contract ERC4626StreamHubTests is Test {
         assertEq(streamShares, 0);
     }
 
-    // *** multicall ***
+    // *** #multicall ***
 
     function test_multicall_depositAndOpenYieldStream() public {
         uint256 shares = _depositToVault(alice, 1e18);
@@ -859,6 +859,8 @@ contract ERC4626StreamHubTests is Test {
         assertEq(streamHub.yieldFor(alice, carol), 0);
         assertEq(streamHub.yieldFor(bob, carol), 0);
     }
+
+    // *** helpers ***
 
     function _depositToVault(address _from, uint256 _amount) internal returns (uint256 shares) {
         vm.startPrank(_from);

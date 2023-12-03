@@ -13,7 +13,7 @@ contract ERC4626StreamHub is Multicall {
     using SafeERC20 for IERC4626;
 
     error NotEnoughShares();
-    error ZeroSharesStreamNotAllowed();
+    error ZeroShares();
     error InvalidReceiverAddress();
     error StreamDoesNotExist();
     error NoYieldToClaim();
@@ -21,9 +21,9 @@ contract ERC4626StreamHub is Multicall {
 
     event Deposit(address indexed depositor, uint256 shares);
     event Withdraw(address indexed depositor, uint256 shares);
-    event OpenYieldStream(address indexed streamer, address indexed recipient, uint256 shares);
-    event ClaimYield(address indexed streamer, address indexed recipient, uint256 yield);
-    event CloseYieldStream(address indexed streamer, address indexed recipient, uint256 shares);
+    event OpenYieldStream(address indexed streamer, address indexed receiver, uint256 shares);
+    event ClaimYield(address indexed streamer, address indexed receiver, uint256 yield);
+    event CloseYieldStream(address indexed streamer, address indexed receiver, uint256 shares);
 
     IERC4626 public immutable vault;
 
@@ -69,11 +69,10 @@ contract ERC4626StreamHub is Multicall {
     }
 
     function withdrawAssets(uint256 _assets) external returns (uint256 shares) {
-        shares = vault.convertToShares(_assets);
-        _checkSufficientShares(shares);
+        shares = _withdrawFromVault(_assets, msg.sender);
 
+        _checkSufficientShares(shares);
         balanceOf[msg.sender] -= shares;
-        vault.redeem(shares, msg.sender, address(this));
 
         emit Withdraw(msg.sender, shares);
     }
@@ -83,11 +82,11 @@ contract ERC4626StreamHub is Multicall {
     }
 
     // TODO: do we need batch functions? same could be achieved using multicall
-    function openYieldStreamBatch(address[] calldata _receivers, uint256[] calldata _allocations) external {
-        if (_receivers.length != _allocations.length) revert InputParamsLengthMismatch();
+    function openYieldStreamBatch(address[] calldata _receivers, uint256[] calldata _shares) external {
+        if (_receivers.length != _shares.length) revert InputParamsLengthMismatch();
 
         for (uint256 i = 0; i < _receivers.length; i++) {
-            _openYieldStream(_receivers[i], _allocations[i]);
+            _openYieldStream(_receivers[i], _shares[i]);
         }
     }
 
@@ -96,11 +95,10 @@ contract ERC4626StreamHub is Multicall {
         _checkReceiverAddress(_to);
 
         balanceOf[msg.sender] -= _shares;
-        uint256 value = vault.convertToAssets(_shares);
 
         YieldStream storage stream = yieldStreams[getStreamId(msg.sender, _to)];
         stream.shares += _shares;
-        stream.principal += value;
+        stream.principal += _convertToAssets(_shares);
 
         emit OpenYieldStream(msg.sender, _to, _shares);
     }
@@ -127,7 +125,7 @@ contract ERC4626StreamHub is Multicall {
 
         if (yield == 0) revert NoYieldToClaim();
 
-        stream.shares -= vault.withdraw(yield, _to, address(this));
+        stream.shares -= _withdrawFromVault(yield, _to);
 
         emit ClaimYield(_from, _to, yield);
     }
@@ -151,7 +149,7 @@ contract ERC4626StreamHub is Multicall {
         uint256 yield = _calculateYield(stream.shares, stream.principal);
 
         // claim yield if any
-        if (yield != 0) stream.shares -= vault.withdraw(yield, _to, address(this));
+        if (yield != 0) stream.shares -= _withdrawFromVault(yield, _to);
 
         balanceOf[msg.sender] += stream.shares;
 
@@ -171,7 +169,7 @@ contract ERC4626StreamHub is Multicall {
     }
 
     function _calculateYield(uint256 _shares, uint256 _valueAtOpen) internal view returns (uint256) {
-        uint256 currentValue = vault.convertToAssets(_shares);
+        uint256 currentValue = _convertToAssets(_shares);
 
         return currentValue > _valueAtOpen ? currentValue - _valueAtOpen : 0;
     }
@@ -181,8 +179,16 @@ contract ERC4626StreamHub is Multicall {
     }
 
     function _checkSufficientShares(uint256 _shares) internal view {
-        if (_shares == 0) revert ZeroSharesStreamNotAllowed();
+        if (_shares == 0) revert ZeroShares();
 
         if (_shares > balanceOf[msg.sender]) revert NotEnoughShares();
+    }
+
+    function _withdrawFromVault(uint256 _assets, address _receiver) internal returns (uint256) {
+        return vault.withdraw(_assets, _receiver, address(this));
+    }
+
+    function _convertToAssets(uint256 _shares) internal view returns (uint256) {
+        return vault.convertToAssets(_shares);
     }
 }
