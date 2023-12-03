@@ -6,13 +6,9 @@ import "forge-std/console2.sol";
 import {IERC4626} from "openzeppelin-contracts/interfaces/IERC4626.sol";
 import {IERC20} from "openzeppelin-contracts/interfaces/IERC20.sol";
 import {SafeERC20} from "openzeppelin-contracts/token/ERC20/utils/SafeERC20.sol";
-import {AccessControl} from "openzeppelin-contracts/access/AccessControl.sol";
-import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 import {Multicall} from "openzeppelin-contracts/utils/Multicall.sol";
 
-// TODO: add events
 contract ERC4626StreamHub is Multicall {
-    using FixedPointMathLib for uint256;
     using SafeERC20 for IERC20;
     using SafeERC20 for IERC4626;
 
@@ -29,11 +25,11 @@ contract ERC4626StreamHub is Multicall {
     event ClaimYield(address indexed streamer, address indexed recipient, uint256 yield);
     event CloseYieldStream(address indexed streamer, address indexed recipient, uint256 shares);
 
-    IERC4626 public vault;
+    IERC4626 public immutable vault;
 
     mapping(address => uint256) public balanceOf;
     mapping(uint256 => YieldStream) public yieldStreams;
-    // TODO: required for frontend?
+    // TODO: needed for frontend? ie should the frontend be able to query this to get all the streams for a given address?
     mapping(address => address[]) public receiverToDepositors;
     mapping(address => address[]) public depositorToReceivers;
 
@@ -44,12 +40,12 @@ contract ERC4626StreamHub is Multicall {
 
     constructor(IERC4626 _vault) {
         vault = _vault;
-        IERC20(vault.asset()).approve(address(vault), type(uint256).max);
+        IERC20(vault.asset()).safeApprove(address(vault), type(uint256).max);
     }
 
     function deposit(uint256 _shares) external {
-        vault.safeTransferFrom(msg.sender, address(this), _shares);
         balanceOf[msg.sender] += _shares;
+        vault.safeTransferFrom(msg.sender, address(this), _shares);
 
         emit Deposit(msg.sender, _shares);
     }
@@ -67,7 +63,7 @@ contract ERC4626StreamHub is Multicall {
         _checkSufficientShares(_shares);
 
         balanceOf[msg.sender] -= _shares;
-        vault.transfer(msg.sender, _shares);
+        vault.safeTransfer(msg.sender, _shares);
 
         emit Withdraw(msg.sender, _shares);
     }
@@ -86,6 +82,7 @@ contract ERC4626StreamHub is Multicall {
         _openYieldStream(_to, _shares);
     }
 
+    // TODO: do we need batch functions? same could be achieved using multicall
     function openYieldStreamBatch(address[] calldata _receivers, uint256[] calldata _allocations) external {
         if (_receivers.length != _allocations.length) revert InputParamsLengthMismatch();
 
@@ -135,14 +132,14 @@ contract ERC4626StreamHub is Multicall {
         emit ClaimYield(_from, _to, yield);
     }
 
+    function closeYieldStream(address _to) external {
+        _closeYieldStream(_to);
+    }
+
     function closeYieldStreamBatch(address[] calldata _tos) external {
         for (uint256 i = 0; i < _tos.length; i++) {
             _closeYieldStream(_tos[i]);
         }
-    }
-
-    function closeYieldStream(address _to) external {
-        _closeYieldStream(_to);
     }
 
     function _closeYieldStream(address _to) internal {
