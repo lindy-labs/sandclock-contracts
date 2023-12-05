@@ -36,9 +36,6 @@ contract ERC4626StreamHub is Multicall {
 
     IERC4626 public immutable vault;
 
-    // depositor to number of shares he has deposited
-    mapping(address => uint256) public balanceOf;
-
     // receiver to number of shares it is entitled to as the yield beneficiary
     mapping(address => uint256) public receiverShares;
 
@@ -48,73 +45,9 @@ contract ERC4626StreamHub is Multicall {
     // receiver to total amount of assets (principal) allocated from a single address
     mapping(address => mapping(address => uint256)) public receiverPrincipal;
 
-    // TODO: needed for frontend? ie should the frontend be able to query this to get all the streams for a given address?
-    mapping(address => address[]) public receiverToDepositors;
-    mapping(address => address[]) public depositorToReceivers;
-
     constructor(IERC4626 _vault) {
         vault = _vault;
         IERC20(vault.asset()).safeApprove(address(vault), type(uint256).max);
-    }
-
-    /**
-     * @dev Deposits a specified number of shares into the contract.
-     * Increases the balance of the depositor and transfers the shares from the depositor's address to the contract's address.
-     * @param _shares The number of shares to deposit.
-     */
-    function deposit(uint256 _shares) external {
-        balanceOf[msg.sender] += _shares;
-        vault.safeTransferFrom(msg.sender, address(this), _shares);
-
-        emit Deposit(msg.sender, _shares);
-    }
-
-    /**
-     * @dev Deposits a specified number of assets into the contract.
-     * Transfers the assets from the depositor's address to the contract's address and mints the corresponding shares.
-     * Increases the balance of the depositor by the number of shares minted.
-     * @param _assets The number of assets to deposit.
-     * @return shares The number of shares minted.
-     */
-    function depositAssets(uint256 _assets) external returns (uint256 shares) {
-        IERC20(vault.asset()).safeTransferFrom(msg.sender, address(this), _assets);
-
-        shares = vault.deposit(_assets, address(this));
-        balanceOf[msg.sender] += shares;
-
-        emit Deposit(msg.sender, shares);
-    }
-
-    /**
-     * @dev Withdraws a specified number of shares from the contract.
-     * Decreases the balance of the withdrawer and transfers the shares from the contract's address to the withdrawer's address.
-     * Shares allocated to yield streams cannot be withdrawn until the stream is closed.
-     * @param _shares The number of shares to withdraw.
-     */
-    function withdraw(uint256 _shares) external {
-        _checkShares(_shares);
-
-        balanceOf[msg.sender] -= _shares;
-        vault.safeTransfer(msg.sender, _shares);
-
-        emit Withdraw(msg.sender, _shares);
-    }
-
-    /**
-     * @dev Withdraws a specified number of assets from the contract.
-     * Burns the corresponding shares and transfers the assets from the contract's address to the withdrawer's address.
-     * Decreases the balance of the withdrawer by the number of shares burned.
-     * Shares allocated to yield streams cannot be withdrawn until the stream is closed.
-     * @param _assets The number of assets to withdraw.
-     * @return shares The number of shares burned.
-     */
-    function withdrawAssets(uint256 _assets) external returns (uint256 shares) {
-        shares = _withdrawFromVault(_assets, msg.sender);
-
-        _checkShares(shares);
-        balanceOf[msg.sender] -= shares;
-
-        emit Withdraw(msg.sender, shares);
     }
 
     /**
@@ -123,14 +56,16 @@ contract ERC4626StreamHub is Multicall {
      * @param _shares The number of shares to allocate for the yield stream.
      */
     function openYieldStream(address _receiver, uint256 _shares) public {
-        _checkShares(_shares);
         _checkAddress(_receiver);
+        _checkShares(_shares);
 
         if (_receiver == msg.sender) revert CannotOpenStreamToSelf();
 
+        vault.safeTransferFrom(msg.sender, address(this), _shares);
+
         uint256 principal = _convertToAssets(_shares);
 
-        balanceOf[msg.sender] -= _shares;
+        // balanceOf[msg.sender] -= _shares;
         receiverShares[_receiver] += _shares;
         receiverTotalPrincipal[_receiver] += principal;
         receiverPrincipal[_receiver][msg.sender] += principal;
@@ -163,7 +98,7 @@ contract ERC4626StreamHub is Multicall {
         if (principal == 0) revert StreamDoesNotExist();
 
         // asset amount of equivalent shares
-        uint256 ask = vault.convertToShares(principal);
+        uint256 ask = _convertToShares(principal);
         uint256 totalPrincipal = receiverTotalPrincipal[_receiver];
         // the maximum amount of shares that can be attributed to the sender
         uint256 have = receiverShares[_receiver].mulDivDown(principal, totalPrincipal);
@@ -176,7 +111,8 @@ contract ERC4626StreamHub is Multicall {
         receiverPrincipal[_receiver][msg.sender] = 0;
         receiverTotalPrincipal[_receiver] -= totalPrincipal;
         receiverShares[_receiver] -= shares;
-        balanceOf[msg.sender] += shares;
+
+        vault.safeTransfer(msg.sender, shares);
 
         emit CloseYieldStream(msg.sender, _receiver, shares);
     }
@@ -200,7 +136,7 @@ contract ERC4626StreamHub is Multicall {
     function claimYield(address _to) external returns (uint256 assets) {
         _checkAddress(_to);
 
-        uint256 principalInShares = vault.convertToShares(receiverTotalPrincipal[msg.sender]);
+        uint256 principalInShares = _convertToShares(receiverTotalPrincipal[msg.sender]);
         uint256 shares = receiverShares[msg.sender];
 
         // if vault made a loss, there is no yield to claim
@@ -237,17 +173,15 @@ contract ERC4626StreamHub is Multicall {
         if (_receiver == address(0)) revert AddressZero();
     }
 
-    function _checkShares(uint256 _shares) internal view {
+    function _checkShares(uint256 _shares) internal pure {
         if (_shares == 0) revert ZeroShares();
-
-        if (_shares > balanceOf[msg.sender]) revert NotEnoughShares();
-    }
-
-    function _withdrawFromVault(uint256 _assets, address _receiver) internal returns (uint256) {
-        return vault.withdraw(_assets, _receiver, address(this));
     }
 
     function _convertToAssets(uint256 _shares) internal view returns (uint256) {
         return vault.convertToAssets(_shares);
+    }
+
+    function _convertToShares(uint256 _assets) internal view returns (uint256) {
+        return vault.convertToShares(_assets);
     }
 }
