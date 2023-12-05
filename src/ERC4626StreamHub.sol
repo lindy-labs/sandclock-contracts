@@ -7,42 +7,50 @@ import {IERC4626} from "openzeppelin-contracts/interfaces/IERC4626.sol";
 import {IERC20} from "openzeppelin-contracts/interfaces/IERC20.sol";
 import {SafeERC20} from "openzeppelin-contracts/token/ERC20/utils/SafeERC20.sol";
 import {Multicall} from "openzeppelin-contracts/utils/Multicall.sol";
+import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 
 /**
  * @title ERC4626StreamHub
- * @dev This contract implements a stream hub for managing yield streams between senders and recipients.
+ * @dev This contract implements a stream hub for managing yield streams between senders and receivers.
  * It allows users to deposit shares or assets into the contract, open yield streams, claim yield from streams,
  * and close streams to withdraw remaining shares. The contract uses the ERC4626 interface for interacting with the vault.
  */
 contract ERC4626StreamHub is Multicall {
+    using FixedPointMathLib for uint256;
     using SafeERC20 for IERC20;
     using SafeERC20 for IERC4626;
 
     error NotEnoughShares();
     error ZeroShares();
-    error InvalidReceiverAddress();
+    error AddressZero();
+    error CannotOpenStreamToSelf();
     error StreamDoesNotExist();
     error NoYieldToClaim();
     error InputParamsLengthMismatch();
 
     event Deposit(address indexed depositor, uint256 shares);
     event Withdraw(address indexed depositor, uint256 shares);
-    event OpenYieldStream(address indexed streamer, address indexed receiver, uint256 shares);
-    event ClaimYield(address indexed streamer, address indexed receiver, uint256 yield);
+    event OpenYieldStream(address indexed streamer, address indexed receiver, uint256 shares, uint256 principal);
+    event ClaimYield(address indexed receiver, address indexed claimedTo, uint256 yield);
     event CloseYieldStream(address indexed streamer, address indexed receiver, uint256 shares);
 
     IERC4626 public immutable vault;
 
+    // depositor to number of shares he has deposited
     mapping(address => uint256) public balanceOf;
-    mapping(uint256 => YieldStream) public yieldStreams;
+
+    // receiver to number of shares it is entitled to as the yield beneficiary
+    mapping(address => uint256) public receiverShares;
+
+    // receiver to total amount of assets (principal) - not claimable
+    mapping(address => uint256) public receiverTotalPrincipal;
+
+    // receiver to total amount of assets (principal) allocated from a single address
+    mapping(address => mapping(address => uint256)) public receiverPrincipal;
+
     // TODO: needed for frontend? ie should the frontend be able to query this to get all the streams for a given address?
     mapping(address => address[]) public receiverToDepositors;
     mapping(address => address[]) public depositorToReceivers;
-
-    struct YieldStream {
-        uint256 shares;
-        uint256 principal;
-    }
 
     constructor(IERC4626 _vault) {
         vault = _vault;
@@ -84,7 +92,7 @@ contract ERC4626StreamHub is Multicall {
      * @param _shares The number of shares to withdraw.
      */
     function withdraw(uint256 _shares) external {
-        _checkSufficientShares(_shares);
+        _checkShares(_shares);
 
         balanceOf[msg.sender] -= _shares;
         vault.safeTransfer(msg.sender, _shares);
@@ -103,148 +111,120 @@ contract ERC4626StreamHub is Multicall {
     function withdrawAssets(uint256 _assets) external returns (uint256 shares) {
         shares = _withdrawFromVault(_assets, msg.sender);
 
-        _checkSufficientShares(shares);
+        _checkShares(shares);
         balanceOf[msg.sender] -= shares;
 
         emit Withdraw(msg.sender, shares);
     }
 
     /**
-     * @dev Opens a yield stream for a specific recipient with a given number of shares.
-     * @param _to The address of the recipient.
+     * @dev Opens a yield stream for a specific receiver with a given number of shares.
+     * @param _receiver The address of the receiver.
      * @param _shares The number of shares to allocate for the yield stream.
      */
-    function openYieldStream(address _to, uint256 _shares) external {
-        _openYieldStream(_to, _shares);
+    function openYieldStream(address _receiver, uint256 _shares) public {
+        _checkShares(_shares);
+        _checkAddress(_receiver);
+
+        if (_receiver == msg.sender) revert CannotOpenStreamToSelf();
+
+        uint256 principal = _convertToAssets(_shares);
+
+        balanceOf[msg.sender] -= _shares;
+        receiverShares[_receiver] += _shares;
+        receiverTotalPrincipal[_receiver] += principal;
+        receiverPrincipal[_receiver][msg.sender] += principal;
+
+        emit OpenYieldStream(msg.sender, _receiver, _shares, principal);
     }
 
     // TODO: do we need batch functions? same could be achieved using multicall
     /**
-     * @dev Opens yield streams for multiple recipients with corresponding shares.
-     * @param _receivers An array of recipient addresses.
-     * @param _shares An array of share amounts corresponding to each recipient.
+     * @dev Opens yield streams for multiple receivers with corresponding shares.
+     * @param _receivers An array of receiver addresses.
+     * @param _shares An array of share amounts corresponding to each receiver.
      */
     function openYieldStreamBatch(address[] calldata _receivers, uint256[] calldata _shares) external {
         if (_receivers.length != _shares.length) revert InputParamsLengthMismatch();
 
         for (uint256 i = 0; i < _receivers.length; i++) {
-            _openYieldStream(_receivers[i], _shares[i]);
+            openYieldStream(_receivers[i], _shares[i]);
         }
     }
 
     /**
-     * @dev The caller must have sufficient shares.
-     * @dev The recipient address must be valid.
+     * @dev Closes a yield stream for a specific receiver.
+     * If there is any yield to claim, it will be claimed and transferred to the receiver.
+     * @param _receiver The address of the receiver.
      */
-    function _openYieldStream(address _to, uint256 _shares) internal {
-        _checkSufficientShares(_shares);
-        _checkReceiverAddress(_to);
+    function closeYieldStream(address _receiver) public {
+        uint256 principal = receiverPrincipal[_receiver][msg.sender];
 
-        balanceOf[msg.sender] -= _shares;
+        if (principal == 0) revert StreamDoesNotExist();
 
-        YieldStream storage stream = yieldStreams[getStreamId(msg.sender, _to)];
-        stream.shares += _shares;
-        stream.principal += _convertToAssets(_shares);
+        // asset amount of equivalent shares
+        uint256 ask = vault.convertToShares(principal);
+        uint256 totalPrincipal = receiverTotalPrincipal[_receiver];
+        // the maximum amount of shares that can be attributed to the sender
+        uint256 have = receiverShares[_receiver].mulDivDown(principal, totalPrincipal);
 
-        emit OpenYieldStream(msg.sender, _to, _shares);
+        // if there was a loss, withdraw the percentage of the shares
+        // equivalent to the sender share of the total principal
+        uint256 shares = ask > have ? have : ask;
+
+        // update state and transfer
+        receiverPrincipal[_receiver][msg.sender] = 0;
+        receiverTotalPrincipal[_receiver] -= totalPrincipal;
+        receiverShares[_receiver] -= shares;
+        balanceOf[msg.sender] += shares;
+
+        emit CloseYieldStream(msg.sender, _receiver, shares);
     }
 
     /**
-     * @dev Claims the yield for a single stream defined by `_from` to `_to` addresses.
-     * @param _from The address of the sender of the stream.
-     * @param _to The address of the recipient of the stream.
-     */
-    function claimYield(address _from, address _to) external {
-        _claimYield(_from, _to);
-    }
-
-    /**
-     * @dev Claims the yield for multiple streams in a batch.
-     * @param _froms The array of addresses representing the senders of the streams.
-     * @param _tos The array of addresses representing the recipients of the streams.
-     * @notice The length of `_froms` and `_tos` arrays must be the same.
-     */
-    function claimYieldBatch(address[] calldata _froms, address[] calldata _tos) external {
-        if (_froms.length != _tos.length) revert InputParamsLengthMismatch();
-
-        for (uint256 i = 0; i < _froms.length; i++) {
-            _claimYield(_froms[i], _tos[i]);
-        }
-    }
-
-    // TODO: should this be restricted to only the recipient/streamer?
-    function _claimYield(address _from, address _to) internal {
-        // require(_from == msg.sender || _to == msg.sender, "ERC4626StreamHub: caller is not a party to the stream");
-
-        YieldStream storage stream = yieldStreams[getStreamId(_from, _to)];
-
-        uint256 yield = _calculateYield(stream.shares, stream.principal);
-
-        if (yield == 0) revert NoYieldToClaim();
-
-        stream.shares -= _withdrawFromVault(yield, _to);
-
-        emit ClaimYield(_from, _to, yield);
-    }
-
-    /**
-     * @dev Closes a yield stream for a specific recipient.
-     * If there is any yield to claim, it will be claimed and transferred to the recipient.
-     * @param _to The address of the recipient.
-     */
-    function closeYieldStream(address _to) external {
-        _closeYieldStream(_to);
-    }
-
-    /**
-     * @dev Closes multiple yield streams for multiple recipients.
-     * If there is any yield to claim on any stream, it will be claimed and transferred to the recipient.
-     * @param _tos The array of recipient addresses.
+     * @dev Closes multiple yield streams for multiple receivers.
+     * If there is any yield to claim on any stream, it will be claimed and transferred to the receiver.
+     * @param _tos The array of receiver addresses.
      */
     function closeYieldStreamBatch(address[] calldata _tos) external {
         for (uint256 i = 0; i < _tos.length; i++) {
-            _closeYieldStream(_tos[i]);
+            closeYieldStream(_tos[i]);
         }
     }
 
-    function _closeYieldStream(address _to) internal {
-        uint256 streamId = getStreamId(msg.sender, _to);
-        YieldStream memory stream = yieldStreams[streamId];
+    /**
+     * @dev Claims the yield for the sender and transfers it to the specified receiver address.
+     * @param _to The address to receive the claimed yield.
+     * @return assets The amount of assets (tokens) claimed as yield.
+     */
+    function claimYield(address _to) external returns (uint256 assets) {
+        _checkAddress(_to);
 
-        if (stream.shares == 0) revert StreamDoesNotExist();
+        uint256 principalInShares = vault.convertToShares(receiverTotalPrincipal[msg.sender]);
+        uint256 shares = receiverShares[msg.sender];
 
-        uint256 yield = _calculateYield(stream.shares, stream.principal);
+        // if vault made a loss, there is no yield to claim
+        if (shares <= principalInShares) revert NoYieldToClaim();
 
-        // claim yield if any
-        if (yield != 0) stream.shares -= _withdrawFromVault(yield, _to);
+        uint256 yieldShares = shares - principalInShares;
 
-        balanceOf[msg.sender] += stream.shares;
+        receiverShares[msg.sender] -= yieldShares;
 
-        emit CloseYieldStream(msg.sender, _to, stream.shares);
+        assets = vault.redeem(yieldShares, _to, address(this));
 
-        delete yieldStreams[streamId];
+        emit ClaimYield(msg.sender, _to, assets);
     }
 
     /**
      * @dev Calculates the yield for a given stream between two addresses.
-     * @param _from The address of the sender.
-     * @param _to The address of the recipient.
+     * @param _receiver The address of the receiver of the stream.
      * @return The calculated yield.
      */
-    function yieldFor(address _from, address _to) external view returns (uint256) {
-        YieldStream memory stream = yieldStreams[getStreamId(_from, _to)];
+    function yieldFor(address _receiver) public view returns (uint256) {
+        uint256 shares = receiverShares[_receiver];
+        uint256 principal = receiverTotalPrincipal[_receiver];
 
-        return _calculateYield(stream.shares, stream.principal);
-    }
-
-    /**
-     * @dev Generates a unique stream ID based on the sender and recipient addresses.
-     * @param _from The address of the sender.
-     * @param _to The address of the recipient.
-     * @return The generated stream ID.
-     */
-    function getStreamId(address _from, address _to) public pure returns (uint256) {
-        return uint256(keccak256(abi.encodePacked(_from, _to)));
+        return _calculateYield(shares, principal);
     }
 
     function _calculateYield(uint256 _shares, uint256 _valueAtOpen) internal view returns (uint256) {
@@ -253,11 +233,11 @@ contract ERC4626StreamHub is Multicall {
         return currentValue > _valueAtOpen ? currentValue - _valueAtOpen : 0;
     }
 
-    function _checkReceiverAddress(address _receiver) internal pure {
-        if (_receiver == address(0)) revert InvalidReceiverAddress();
+    function _checkAddress(address _receiver) internal pure {
+        if (_receiver == address(0)) revert AddressZero();
     }
 
-    function _checkSufficientShares(uint256 _shares) internal view {
+    function _checkShares(uint256 _shares) internal view {
         if (_shares == 0) revert ZeroShares();
 
         if (_shares > balanceOf[msg.sender]) revert NotEnoughShares();
