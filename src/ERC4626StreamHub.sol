@@ -12,8 +12,8 @@ import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 /**
  * @title ERC4626StreamHub
  * @dev This contract implements a stream hub for managing yield streams between senders and receivers.
- * It allows users to deposit shares or assets into the contract, open yield streams, claim yield from streams,
- * and close streams to withdraw remaining shares. The contract uses the ERC4626 interface for interacting with the vault.
+ * It allows users to open yield streams, claim yield from streams, and close streams to withdraw remaining shares.
+ * The contract uses the ERC4626 interface for interacting with the underlying vault.
  */
 contract ERC4626StreamHub is Multicall {
     using FixedPointMathLib for uint256;
@@ -56,10 +56,9 @@ contract ERC4626StreamHub is Multicall {
      * @param _shares The number of shares to allocate for the yield stream.
      */
     function openYieldStream(address _receiver, uint256 _shares) public {
-        _checkAddress(_receiver);
-        _checkShares(_shares);
-
-        if (_receiver == msg.sender) revert CannotOpenStreamToSelf();
+        _checkZeroAddress(_receiver);
+        _checkReceiver(_receiver);
+        _checkZeroShares(_shares);
 
         vault.safeTransferFrom(msg.sender, address(this), _shares);
 
@@ -89,7 +88,7 @@ contract ERC4626StreamHub is Multicall {
 
     /**
      * @dev Closes a yield stream for a specific receiver.
-     * If there is any yield to claim, it will be claimed and transferred to the receiver.
+     * If there is any yield to claim for the stream, it will remain unclaimed until the receiver calls `claimYield` function.
      * @param _receiver The address of the receiver.
      */
     function closeYieldStream(address _receiver) public {
@@ -134,7 +133,7 @@ contract ERC4626StreamHub is Multicall {
      * @return assets The amount of assets (tokens) claimed as yield.
      */
     function claimYield(address _to) external returns (uint256 assets) {
-        _checkAddress(_to);
+        _checkZeroAddress(_to);
 
         uint256 principalInShares = _convertToShares(receiverTotalPrincipal[msg.sender]);
         uint256 shares = receiverShares[msg.sender];
@@ -157,24 +156,22 @@ contract ERC4626StreamHub is Multicall {
      * @return The calculated yield.
      */
     function yieldFor(address _receiver) public view returns (uint256) {
-        uint256 shares = receiverShares[_receiver];
         uint256 principal = receiverTotalPrincipal[_receiver];
+        uint256 currentValue = _convertToAssets(receiverShares[_receiver]);
 
-        return _calculateYield(shares, principal);
+        return currentValue > principal ? currentValue - principal : 0;
     }
 
-    function _calculateYield(uint256 _shares, uint256 _valueAtOpen) internal view returns (uint256) {
-        uint256 currentValue = _convertToAssets(_shares);
-
-        return currentValue > _valueAtOpen ? currentValue - _valueAtOpen : 0;
-    }
-
-    function _checkAddress(address _receiver) internal pure {
+    function _checkZeroAddress(address _receiver) internal pure {
         if (_receiver == address(0)) revert AddressZero();
     }
 
-    function _checkShares(uint256 _shares) internal pure {
+    function _checkZeroShares(uint256 _shares) internal pure {
         if (_shares == 0) revert ZeroShares();
+    }
+
+    function _checkReceiver(address _receiver) internal view {
+        if (_receiver == msg.sender) revert CannotOpenStreamToSelf();
     }
 
     function _convertToAssets(uint256 _shares) internal view returns (uint256) {
