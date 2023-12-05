@@ -117,8 +117,8 @@ contract ERC4626StreamHub is Multicall {
     }
 
     /**
-     * @dev Closes multiple yield streams for multiple receivers.
-     * If there is any yield to claim on any stream, it will be claimed and transferred to the receiver.
+     * @dev Closes multiple yield streams for multiple receivers from the same streamer.
+     * If there is any yield to claim for the stream, it will remain unclaimed until the receiver calls `claimYield` function.
      * @param _tos The array of receiver addresses.
      */
     function closeYieldStreamBatch(address[] calldata _tos) external {
@@ -151,8 +151,8 @@ contract ERC4626StreamHub is Multicall {
     }
 
     /**
-     * @dev Calculates the yield for a given stream between two addresses.
-     * @param _receiver The address of the receiver of the stream.
+     * @dev Calculates the yield for a given receiver.
+     * @param _receiver The address of the receiver.
      * @return The calculated yield.
      */
     function yieldFor(address _receiver) public view returns (uint256) {
