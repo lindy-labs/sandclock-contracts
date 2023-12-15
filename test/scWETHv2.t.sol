@@ -1302,6 +1302,137 @@ contract scWETHv2Test is Test {
         assertApproxEqRel(balance, profit.mulWadDown(vault.performanceFee()), 0.015e18);
     }
 
+    function _rebalance(uint256 investAmount) internal {
+        (bytes[] memory callData,, uint256 totalFlashLoanAmount) = _getInvestParams(investAmount, 1e18, 0);
+        hoax(keeper);
+        vault.rebalance(investAmount, totalFlashLoanAmount, callData);
+    }
+
+    function test_depositFee_1() public {
+        _setUp(18785507);
+
+        vault.setDepositFee(0.005e18);
+
+        uint256 initialDeposit = 50 ether;
+        _depositToVault(address(this), initialDeposit);
+
+        _rebalance(initialDeposit - minimumFloatAmount);
+
+        uint256 bigDeposit = 100 ether;
+        address bigDepositor = address(0x11);
+        uint256 smallDeposit = 10 ether;
+        address smallDepositor = address(0x22);
+
+        console2.log("--- before big deposit ---");
+        console2.log("pps\t\t\t\t", vault.convertToAssets(1e18));
+
+        uint256 previewBigShares = vault.previewDeposit(bigDeposit);
+        uint256 bigShares = _depositToVault(bigDepositor, bigDeposit);
+        assertEq(previewBigShares, bigShares);
+
+        console2.log("--- after big deposit ---");
+        console2.log("pps\t\t\t\t", vault.convertToAssets(1e18));
+
+        uint256 smallShares = _depositToVault(smallDepositor, smallDeposit);
+
+        console2.log("--- before rebalance ---");
+        console2.log("pps\t\t\t\t", vault.convertToAssets(1e18));
+        console2.log("vault balance", vault.balanceOf(address(vault)));
+        console2.log("initial depositor assets\t", vault.convertToAssets(vault.balanceOf(address(this))));
+        console2.log("bigShares to assets\t\t", vault.convertToAssets(bigShares));
+        console2.log("smallShares to assets\t\t", vault.convertToAssets(smallShares));
+        console2.log("--- ---");
+
+        _rebalance(bigDeposit + smallDeposit);
+
+        console2.log("--- after rebalance ---");
+        console2.log("pps\t\t\t\t", vault.convertToAssets(1e18));
+        console2.log("vault balance", vault.balanceOf(address(vault)));
+        console2.log("initial depositor assets\t", vault.convertToAssets(vault.balanceOf(address(this))));
+        console2.log("bigShares to assets\t\t", vault.convertToAssets(bigShares));
+        console2.log("smallShares to assets\t\t", vault.convertToAssets(smallShares));
+        console2.log("--- ---");
+
+        console2.log("--- small depositor redeem all ---");
+        vm.startPrank(smallDepositor);
+        uint256 smallWithdraw = vault.redeem(vault.balanceOf(smallDepositor), smallDepositor, smallDepositor);
+
+        console2.log("pps\t\t\t\t", vault.convertToAssets(1e18));
+        console2.log("smallWithdraw amount\t\t", smallWithdraw);
+        console2.log("vault balance", vault.balanceOf(address(vault)));
+        console2.log("initial depositor assets\t", vault.convertToAssets(vault.balanceOf(address(this))));
+        console2.log("bigShares to assets\t\t", vault.convertToAssets(bigShares));
+    }
+
+    function test_depositFee_2() public {
+        _setUp(18785507);
+
+        vault.setDepositFee(0.005e18);
+
+        uint256 initialDeposit = 50 ether;
+        _depositToVault(address(this), initialDeposit);
+
+        _rebalance(initialDeposit - minimumFloatAmount);
+
+        uint256 initialValue = vault.convertToAssets(vault.balanceOf(address(this)));
+        console2.log("initial value\t\t\t", initialValue);
+
+        uint256 interest = uint256(0.08e18).mulDivDown(7 days, 365 days);
+        uint256 expectedInterest = 1e18;
+
+        for (int256 i = 0; i < 10; i++) {
+            uint256 newDeposit = vault.totalAssets().mulWadDown(0.1e18);
+            address newDepositor = address(0x11);
+            _depositToVault(newDepositor, newDeposit);
+
+            expectedInterest = expectedInterest.mulWadDown(1e18 + interest);
+            uint256 totalAssets = vault.totalAssets();
+            uint256 gain = totalAssets.mulWadDown(interest);
+            deal(address(weth), address(vault), weth.balanceOf(address(vault)) + gain);
+
+            _rebalance(newDeposit);
+        }
+
+        uint256 endValue = vault.convertToAssets(vault.balanceOf(address(this)));
+        console2.log("end value\t\t\t", endValue);
+        uint256 expectedEndValue = initialValue.mulWadDown(expectedInterest);
+        console2.log("expected end value\t\t", expectedEndValue);
+
+        console2.log("end value / expected end value", endValue.divWadDown(expectedEndValue));
+    }
+
+    function test_depositFee_mintKeepsSamePps() public {
+        _setUp(18785507);
+
+        vault.setDepositFee(0.005e18);
+
+        uint256 initialDeposit = 50 ether;
+        _depositToVault(address(this), initialDeposit);
+
+        _rebalance(initialDeposit - minimumFloatAmount);
+
+        console2.log("--- before mint ---");
+        console2.log("pps\t\t\t\t", vault.convertToAssets(1e18));
+
+        address depositor = address(0x11);
+
+        uint256 depositorBalance = 10 ether;
+        deal(address(weth), depositor, depositorBalance);
+        vm.startPrank(depositor);
+        weth.approve(address(vault), depositorBalance);
+
+        uint256 sharesToMint = 1e18;
+
+        uint256 assets = vault.previewMint(sharesToMint);
+
+        vault.mint(sharesToMint, depositor);
+
+        console2.log("--- after mint ---");
+        console2.log("pps\t\t\t\t", vault.convertToAssets(1e18));
+
+        assertEq(weth.balanceOf(depositor), depositorBalance - assets);
+    }
+
     function test_invest_withZeroExWethToWstEthSwap() public {
         _setUp(17934941);
 

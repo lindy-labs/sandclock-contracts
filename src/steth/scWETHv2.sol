@@ -121,6 +121,10 @@ contract scWETHv2 is BaseV2Vault {
 
         _harvest();
 
+        if (balanceOf[address(this)] > 0) {
+            _burn(address(this), balanceOf[address(this)]);
+        }
+
         emit Rebalanced(totalCollateral(), totalDebt(), _wethBalance());
     }
 
@@ -242,6 +246,37 @@ contract scWETHv2 is BaseV2Vault {
         afterDeposit(assets, shares);
     }
 
+    function deposit(uint256 assets, address receiver) public override returns (uint256 shares) {
+        // Check for rounding error since we round down in previewDeposit.
+        require((shares = previewDeposit(assets)) != 0, "ZERO_SHARES");
+
+        // Need to transfer before minting or ERC777s could reenter.
+        asset.safeTransferFrom(msg.sender, address(this), assets);
+
+        _mint(receiver, shares);
+
+        if (depositFee > 0) _mint(address(this), shares.mulDivDown(depositFee, C.ONE - depositFee));
+
+        emit Deposit(msg.sender, receiver, assets, shares);
+
+        afterDeposit(assets, shares);
+    }
+
+    function mint(uint256 shares, address receiver) public override returns (uint256 assets) {
+        assets = previewMint(shares); // No need to check for rounding error, previewMint rounds up.
+
+        // Need to transfer before minting or ERC777s could reenter.
+        asset.safeTransferFrom(msg.sender, address(this), assets);
+
+        _mint(receiver, shares);
+
+        if (depositFee > 0) _mint(address(this), shares.mulDivDown(depositFee, C.ONE - depositFee));
+
+        emit Deposit(msg.sender, receiver, assets, shares);
+
+        afterDeposit(assets, shares);
+    }
+
     /// @dev called after the flashLoan on rebalance
     function receiveFlashLoan(
         address[] memory,
@@ -351,9 +386,7 @@ contract scWETHv2 is BaseV2Vault {
 
     /// @notice returns amount of shares to be minted for a given amount of assets (including the deposit fee)
     function previewDeposit(uint256 assets) public view override returns (uint256) {
-        uint256 fee = assets.mulWadUp(depositFee);
-
-        return super.previewDeposit(assets - fee);
+        return super.previewDeposit(assets).mulWadUp(C.ONE - depositFee);
     }
 
     /// @notice returns amount of assets needed (including the deposit fee) to mint a given amount of shares
