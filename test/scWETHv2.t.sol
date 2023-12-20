@@ -1221,7 +1221,7 @@ contract scWETHv2Test is Test {
 
         uint256 stEthRateTolerance = 0.999e18;
 
-        uint256 amount = 100 ether;
+        uint256 amount = 10 ether;
         _depositToVault(address(this), amount);
 
         uint256 investAmount = amount - minimumFloatAmount;
@@ -1240,14 +1240,7 @@ contract scWETHv2Test is Test {
 
         bytes[] memory callData = new bytes[](3);
 
-        callData[0] = abi.encodeWithSelector(
-            BaseV2Vault.zeroExSwap.selector,
-            ERC20(C.WETH),
-            wstEth,
-            investAmount + totalFlashLoanAmount,
-            "", // empty swap data
-            aaveV3SupplyAmount + compoundSupplyAmount // min wstEth amount to receive
-        );
+        callData[0] = abi.encodeWithSelector(scWETHv2.swapWethToWstEth.selector, investAmount + totalFlashLoanAmount);
 
         callData[1] = abi.encodeWithSelector(
             scWETHv2.supplyAndBorrow.selector, aaveV3AdapterId, aaveV3SupplyAmount, aaveV3FlashLoanAmount
@@ -1255,6 +1248,12 @@ contract scWETHv2Test is Test {
 
         callData[2] = abi.encodeWithSelector(
             scWETHv2.supplyAndBorrow.selector, compoundV3AdapterId, compoundSupplyAmount, compoundFlashLoanAmount
+        );
+
+        // expect a call on curve pool to exchange weth for stETH
+        vm.expectCall(
+            address(vault.swapper().curvePool()),
+            abi.encodeCall(ICurvePool.exchange, (0, 1, investAmount + totalFlashLoanAmount, 0))
         );
 
         hoax(keeper);
@@ -1270,46 +1269,12 @@ contract scWETHv2Test is Test {
         );
     }
 
-    function test_invest_withCurveWethToWstEthSwap_failsIfAmountReceivedFromSwapIsBelowMin() public {
-        _setUp(18819890);
-
-        uint256 stEthRateTolerance = 0.999e18;
-
-        uint256 amount = 100 ether;
-        _depositToVault(address(this), amount);
-
-        uint256 investAmount = amount - minimumFloatAmount;
-        uint256 flashLoanAmount = _calcSupplyBorrowFlashLoanAmount(aaveV3Adapter, investAmount);
-        uint256 supplyAmount = priceConverter.ethToWstEth(investAmount + flashLoanAmount).mulWadDown(stEthRateTolerance);
-
-        // force the swap amount out check to fail
-        uint256 wstEthAmountOutMin = supplyAmount.mulWadDown(1.01e18);
-
-        bytes[] memory callData = new bytes[](2);
-
-        callData[0] = abi.encodeWithSelector(
-            BaseV2Vault.zeroExSwap.selector,
-            ERC20(C.WETH),
-            wstEth,
-            investAmount + flashLoanAmount,
-            "",
-            wstEthAmountOutMin
-        );
-
-        callData[1] =
-            abi.encodeWithSelector(scWETHv2.supplyAndBorrow.selector, aaveV3AdapterId, supplyAmount, flashLoanAmount);
-
-        hoax(keeper);
-        vm.expectRevert(AmountReceivedBelowMin.selector);
-        vault.rebalance(investAmount, flashLoanAmount, callData);
-    }
-
     function test_invest_withCurveWethToWstEthSwap_switchToUpdatedSwapperOnExistingContract() public {
         _setUp(18819890);
         vault = scWETHv2(payable(0x4c406C068106375724275Cbff028770C544a1333)); // mainnet scWETHv2 address
         vaultHelper = new scWETHv2Helper(vault, priceConverter);
 
-        uint256 amount = 100 ether;
+        uint256 amount = 10 ether;
         _depositToVault(address(this), amount);
 
         targetLtv[aaveV3Adapter] = 0.85e18;
@@ -1319,18 +1284,11 @@ contract scWETHv2Test is Test {
 
         bytes[] memory callData = new bytes[](2);
 
-        callData[0] = abi.encodeWithSelector(
-            BaseV2Vault.zeroExSwap.selector, ERC20(C.WETH), wstEth, investAmount + flashLoanAmount, "", 0
-        );
+        callData[0] = abi.encodeWithSelector(scWETHv2.swapWethToWstEth.selector, investAmount + flashLoanAmount);
         callData[1] =
             abi.encodeWithSelector(scWETHv2.supplyAndBorrow.selector, aaveV3AdapterId, supplyAmount, flashLoanAmount);
 
         uint256 totalCollateral = vault.totalCollateral();
-
-        // assert rebalance reverts on current swapper
-        vm.expectRevert();
-        vm.prank(0x397502F15E11C524F23C0c003f5E8004C1c5c71D); // keeper account
-        vault.rebalance(investAmount, flashLoanAmount, callData);
 
         // change to new swapper
         Swapper swapper = new Swapper();
@@ -1338,6 +1296,9 @@ contract scWETHv2Test is Test {
         // set new swapper contract
         vault.setSwapper(swapper);
 
+        vm.expectCall(
+            address(swapper.curvePool()), abi.encodeCall(ICurvePool.exchange, (0, 1, investAmount + flashLoanAmount, 0))
+        );
         // try rebalance with new swapper
         vm.prank(0x397502F15E11C524F23C0c003f5E8004C1c5c71D); // keeper account
         vault.rebalance(investAmount, flashLoanAmount, callData);

@@ -37,4 +37,6 @@ contract MockCurvePool is ICurvePool {
 
         return dx;
     }
+
+    function get_dy(int128 i, int128 j, uint256 dx) external view override returns (uint256) {}
 }
