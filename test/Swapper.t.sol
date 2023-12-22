@@ -39,7 +39,15 @@ contract SwapperTest is Test {
             abi.encodeWithSelector(swapper.lidoSwapWethToWstEth.selector, wethAmount)
         );
 
-        uint256 stEthAmountReceived = wstEth.unwrap(abi.decode(result, (uint256)));
+        uint256 wstEthAmountReceived = abi.decode(result, (uint256));
+
+        assertEq(
+            wstEthAmountReceived,
+            wstEth.balanceOf(address(this)),
+            "wstEth amount received should be equal to wstEth balance"
+        );
+
+        uint256 stEthAmountReceived = wstEth.unwrap(wstEthAmountReceived);
 
         // when using curve, the amount should be greater than the weth amount
         assertTrue(stEthAmountReceived > wethAmount, "stEthAmount should be greater than wethAmount");
@@ -57,7 +65,15 @@ contract SwapperTest is Test {
             abi.encodeWithSelector(swapper.lidoSwapWethToWstEth.selector, wethAmount)
         );
 
-        uint256 stEthAmountReceived = wstEth.unwrap(abi.decode(result, (uint256)));
+        uint256 wstEthAmountReceived = abi.decode(result, (uint256));
+
+        assertEq(
+            wstEthAmountReceived,
+            wstEth.balanceOf(address(this)),
+            "wstEth amount received should be equal to wstEth balance"
+        );
+
+        uint256 stEthAmountReceived = wstEth.unwrap(wstEthAmountReceived);
 
         // when using lido, stEth received should be equal to weth amount (with possible rounding errors)
         assertApproxEqAbs(stEthAmountReceived, wethAmount, 2, "stEthAmount should be equal to wethAmount");
