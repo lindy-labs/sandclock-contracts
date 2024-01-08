@@ -46,6 +46,8 @@ contract DeployStakingTest is Test {
         assertEq(deployed.name(), deployStaking.NAME(), "name");
         assertEq(deployed.symbol(), deployStaking.SYMBOL(), "symbol");
         assertEq(deployed.duration(), deployStaking.DURATION(), "duration");
+
+        assertTrue(deployed.isVault(MA.SCWETHV2), "scWethV2 vault not added");
     }
 
     function test_run_failsIfAlreadyDeployed() public {

@@ -40,6 +40,9 @@ contract DeployStaking is CREATE3Script {
 
         sQuartz.grantRole(sQuartz.DISTRIBUTOR(), distributor);
 
+        // add scWETHv2
+        sQuartz.addVault(MA.SCWETHV2);
+
         vm.stopBroadcast();
     }
 }
