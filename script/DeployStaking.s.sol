@@ -1,24 +1,44 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity ^0.8.13;
 
+import "forge-std/Script.sol";
 import {CREATE3Script} from "./base/CREATE3Script.sol";
 import {RewardTracker} from "../src/staking/RewardTracker.sol";
-import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
+import {MainnetAddresses as MA} from "./base/MainnetAddresses.sol";
+import {Constants as C} from "../src/lib/Constants.sol";
 
 contract DeployStaking is CREATE3Script {
-    bytes32 public constant DISTRIBUTOR = keccak256("DISTRIBUTOR");
-    bytes32 public constant DEFAULT_ADMIN_ROLE = 0x00;
+    string public NAME = "Staked Quartz";
+    string public SYMBOL = "sQuartz";
+    uint64 public constant DURATION = 30 days;
+
+    uint256 deployerPrivateKey;
+    address distributor;
+    address treasury;
+
+    function _init() internal virtual {
+        deployerPrivateKey = uint256(vm.envBytes32("PRIVATE_KEY"));
+        distributor = vm.envAddress("DISTRIBUTOR");
+        treasury = vm.envAddress("TREASURY");
+    }
 
     function run() external returns (RewardTracker sQuartz) {
-        uint256 deployerPrivateKey = uint256(vm.envBytes32("PRIVATE_KEY"));
+        _init();
 
-        MockERC20 quartz;
-        address WETH = 0x7b79995e5f793A07Bc00c21412e50Ecae098E7f9; // weth on sepolia
+        require(deployerPrivateKey != 0, "Deployer private key not set");
+        require(distributor != address(0), "Distributor not set");
+        require(treasury != address(0), "Treasury not set");
 
         vm.startBroadcast(deployerPrivateKey);
 
-        quartz = new MockERC20("Mock Quartz", "QUARTZ", 18);
-        sQuartz = new RewardTracker(address(msg.sender), address(quartz), "Staked Quartz", "sQuartz", WETH, 30 days);
+        bytes memory creationCode = abi.encodePacked(
+            type(RewardTracker).creationCode,
+            abi.encode(vm.addr(deployerPrivateKey), treasury, MA.QUARTZ, NAME, SYMBOL, C.WETH, DURATION)
+        );
+
+        sQuartz = RewardTracker(create3.deploy(getCreate3ContractSalt("RewardTracker"), creationCode));
+
+        sQuartz.grantRole(sQuartz.DISTRIBUTOR(), distributor);
 
         vm.stopBroadcast();
     }

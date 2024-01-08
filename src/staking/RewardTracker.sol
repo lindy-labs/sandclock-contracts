@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0
-pragma solidity ^0.8.10;
+pragma solidity ^0.8.13;
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {ERC4626} from "solmate/mixins/ERC4626.sol";
@@ -60,6 +60,7 @@ contract RewardTracker is BonusTracker, DebtTracker, AccessControl {
     uint64 public immutable duration;
 
     constructor(
+        address admin,
         address _treasury,
         address _stakeToken,
         string memory _name,
@@ -67,8 +68,10 @@ contract RewardTracker is BonusTracker, DebtTracker, AccessControl {
         address _rewardToken,
         uint64 _duration
     ) BonusTracker(ERC20(_stakeToken), _name, _symbol) {
-        _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
+        _grantRole(DEFAULT_ADMIN_ROLE, admin);
+
         if (_treasury == address(0)) revert TreasuryCannotBeZero();
+
         treasury = _treasury;
         rewardToken = ERC20(_rewardToken);
         duration = _duration;

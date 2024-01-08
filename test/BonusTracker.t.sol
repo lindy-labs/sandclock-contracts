@@ -24,8 +24,9 @@ contract BonusTrackerTest is DSTestPlus {
     function setUp() public {
         stakeToken = new MockERC20("Mock Quartz", "QUARTZ", 18);
         rewardToken = new MockERC20("Mock WETH", "WETH", 18);
-        stakingPool =
-            new RewardTracker(treasury, address(stakeToken), "Staked Quartz", "sQuartz", address(rewardToken), DURATION);
+        stakingPool = new RewardTracker(
+            address(this), treasury, address(stakeToken), "Staked Quartz", "sQuartz", address(rewardToken), DURATION
+        );
 
         rewardToken.mint(address(this), 1000 ether);
         stakeToken.mint(address(this), 1000 ether);
