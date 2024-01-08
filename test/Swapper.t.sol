@@ -32,7 +32,9 @@ contract SwapperTest is Test {
         deal(C.WETH, address(this), wethAmount);
 
         // expect a call to curvePool.exchange
-        vm.expectCall(address(swapper.curvePool()), abi.encodeCall(swapper.curvePool().exchange, (0, 1, wethAmount, 0)));
+        vm.expectCall(
+            address(swapper.curvePool()), abi.encodeCall(swapper.curvePool().exchange, (0, 1, wethAmount, wethAmount))
+        );
 
         // execute the swap
         bytes memory result = address(swapper).functionDelegateCall(

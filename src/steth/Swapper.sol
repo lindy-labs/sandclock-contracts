@@ -143,7 +143,7 @@ contract Swapper {
         // eth to stEth
         // if curve exchange rate is better than lido's 1:1, use curve
         if (curvePool.get_dy(0, 1, _wethAmount) > _wethAmount) {
-            curvePool.exchange{value: _wethAmount}(0, 1, _wethAmount, 0);
+            curvePool.exchange{value: _wethAmount}(0, 1, _wethAmount, _wethAmount);
         } else {
             stEth.submit{value: _wethAmount}(address(0x00));
         }
