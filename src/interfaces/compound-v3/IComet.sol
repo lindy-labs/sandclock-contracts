@@ -23,7 +23,6 @@ interface IComet {
      * @param asset The asset to supply
      * @param amount The quantity to supply
      */
-
     function supply(address asset, uint256 amount) external;
 
     /**
