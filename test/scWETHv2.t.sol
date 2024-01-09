@@ -1216,6 +1216,98 @@ contract scWETHv2Test is Test {
         );
     }
 
+    function test_invest_withCurveWethToWstEthSwap() public {
+        _setUp(18819890);
+
+        uint256 stEthRateTolerance = 0.999e18;
+
+        uint256 amount = 10 ether;
+        _depositToVault(address(this), amount);
+
+        uint256 investAmount = amount - minimumFloatAmount;
+        uint256 aaveV3Amount = investAmount.mulWadDown(0.8e18);
+        uint256 compoundAmount = investAmount.mulWadDown(0.2e18);
+
+        uint256 aaveV3FlashLoanAmount = _calcSupplyBorrowFlashLoanAmount(aaveV3Adapter, aaveV3Amount);
+        uint256 compoundFlashLoanAmount = _calcSupplyBorrowFlashLoanAmount(compoundV3Adapter, compoundAmount);
+
+        uint256 aaveV3SupplyAmount =
+            priceConverter.ethToWstEth(aaveV3Amount + aaveV3FlashLoanAmount).mulWadDown(stEthRateTolerance);
+        uint256 compoundSupplyAmount =
+            priceConverter.ethToWstEth(compoundAmount + compoundFlashLoanAmount).mulWadDown(stEthRateTolerance);
+
+        uint256 totalFlashLoanAmount = aaveV3FlashLoanAmount + compoundFlashLoanAmount;
+        uint256 totalWethAmount = investAmount + totalFlashLoanAmount;
+
+        bytes[] memory callData = new bytes[](3);
+
+        callData[0] = abi.encodeWithSelector(scWETHv2.swapWethToWstEth.selector, totalWethAmount);
+
+        callData[1] = abi.encodeWithSelector(
+            scWETHv2.supplyAndBorrow.selector, aaveV3AdapterId, aaveV3SupplyAmount, aaveV3FlashLoanAmount
+        );
+
+        callData[2] = abi.encodeWithSelector(
+            scWETHv2.supplyAndBorrow.selector, compoundV3AdapterId, compoundSupplyAmount, compoundFlashLoanAmount
+        );
+
+        // expect a call on curve pool to exchange weth for stETH
+        vm.expectCall(
+            address(vault.swapper().curvePool()),
+            abi.encodeCall(ICurvePool.exchange, (0, 1, totalWethAmount, totalWethAmount))
+        );
+
+        hoax(keeper);
+        vault.rebalance(investAmount, totalFlashLoanAmount, callData);
+
+        _floatCheck();
+        _investChecksWithoutEuler(
+            investAmount,
+            priceConverter.wstEthToEth(aaveV3SupplyAmount + compoundSupplyAmount),
+            totalFlashLoanAmount,
+            0.8e18,
+            0.2e18
+        );
+    }
+
+    function test_invest_withCurveWethToWstEthSwap_switchToUpdatedSwapperOnExistingContract() public {
+        _setUp(18819890);
+        vault = scWETHv2(payable(0x4c406C068106375724275Cbff028770C544a1333)); // mainnet scWETHv2 address
+        vaultHelper = new scWETHv2Helper(vault, priceConverter);
+
+        uint256 amount = 10 ether;
+        _depositToVault(address(this), amount);
+
+        targetLtv[aaveV3Adapter] = 0.85e18;
+        uint256 investAmount = amount - minimumFloatAmount;
+        uint256 flashLoanAmount = _calcSupplyBorrowFlashLoanAmount(aaveV3Adapter, investAmount);
+        uint256 totalWethAmount = investAmount + flashLoanAmount;
+        uint256 supplyAmount = priceConverter.ethToWstEth(totalWethAmount).mulWadDown(0.999e18);
+
+        bytes[] memory callData = new bytes[](2);
+
+        callData[0] = abi.encodeWithSelector(scWETHv2.swapWethToWstEth.selector, totalWethAmount);
+        callData[1] =
+            abi.encodeWithSelector(scWETHv2.supplyAndBorrow.selector, aaveV3AdapterId, supplyAmount, flashLoanAmount);
+
+        uint256 totalCollateral = vault.totalCollateral();
+
+        // change to new swapper
+        Swapper swapper = new Swapper();
+        vm.prank(0x6cF38285FdFAf8D67205ca444A899025b5B18e83); // admin account
+        // set new swapper contract
+        vault.setSwapper(swapper);
+
+        vm.expectCall(
+            address(swapper.curvePool()), abi.encodeCall(ICurvePool.exchange, (0, 1, totalWethAmount, totalWethAmount))
+        );
+        // try rebalance with new swapper
+        vm.prank(0x397502F15E11C524F23C0c003f5E8004C1c5c71D); // keeper account
+        vault.rebalance(investAmount, flashLoanAmount, callData);
+
+        assertEq(vault.totalCollateral(), totalCollateral + supplyAmount, "funds not invested");
+    }
+
     //////////////////////////// INTERNAL METHODS ////////////////////////////////////////
 
     function _calcSupplyBorrowFlashLoanAmount(IAdapter adapter, uint256 amount)

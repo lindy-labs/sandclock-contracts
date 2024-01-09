@@ -104,9 +104,7 @@ contract scWETHv2 is BaseV2Vault {
         emit Rebalanced(totalCollateral(), totalDebt(), asset.balanceOf(address(this)));
     }
 
-    /// @notice swap weth to wstEth
-    /// @dev the keeper will mostly use 0x (zeroExSwap method) for swapping weth to wstEth between rebalancing
-    /// @dev this method is just a precaution and to be only used by the keeper in case zeroEx API goes down
+    /// @notice swap weth to wstEth using lido for 1:1 conversion of weth to stEth
     /// @param _wethAmount amount of weth to be swapped to wstEth
     function swapWethToWstEth(uint256 _wethAmount) external {
         _onlyKeeperOrFlashLoan();
@@ -116,7 +114,7 @@ contract scWETHv2 is BaseV2Vault {
         );
     }
 
-    /// @notice swap wstEth to weth
+    /// @notice swap wstEth to weth on curve
     /// @dev mainly to be used in the multicall to swap withdrawn wstEth to weth to payback the flashloan
     /// @param _wstEthAmount amount of wstEth to be swapped to weth
     /// @param _slippageTolerance the max slippage during steth to eth swap (1e18 meaning 0 slippage tolerance)
@@ -141,7 +139,7 @@ contract scWETHv2 is BaseV2Vault {
     }
 
     /// @notice withdraw deposited funds from the lending markets to the vault
-    /// @param _amount : amount of assets to withdraw to the vault
+    /// @param _amount weth amount withdrawn to the vault
     function withdrawToVault(uint256 _amount) external {
         _onlyKeeper();
 
