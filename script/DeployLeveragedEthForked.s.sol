@@ -5,6 +5,7 @@ import "forge-std/console2.sol";
 import "forge-std/Test.sol";
 import "forge-std/StdStorage.sol";
 
+import {FixtureConstants} from "./base/FixtureConstants.sol";
 import {DeployLeveragedEth} from "./base/DeployLeveragedEth.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 import {MockWETH} from "../test/mocks/MockWETH.sol";
@@ -29,6 +30,9 @@ contract DeployLeveragedEthForked is DeployLeveragedEth, Test {
     uint256 public constant INITIAL_USDC_WITHDRAW = 1e6;
     uint256 public constant INITIAL_WETH_FUNDING = 10000e18;
     uint256 public constant INITIAL_USDC_FUNDING = 10000e6;
+
+    address alice = FixtureConstants.ALICE;
+    address bob = FixtureConstants.BOB;
 
     function run() external {
         _deploy();
