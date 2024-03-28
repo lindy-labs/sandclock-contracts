@@ -1,12 +1,12 @@
-// erc20 methods
+// ERC20 functions
 methods {
-    name()                                returns (string)  => DISPATCHER(true)
-    symbol()                              returns (string)  => DISPATCHER(true)
-    decimals()                            returns (uint8)   => DISPATCHER(true)
-    totalSupply()                         returns (uint256) => DISPATCHER(true)
-    balanceOf(address)                    returns (uint256) => DISPATCHER(true)
-    allowance(address,address)            returns (uint256) => DISPATCHER(true)
-    approve(address,uint256)              returns (bool)    => DISPATCHER(true)
-    transfer(address,uint256)             returns (bool)    => DISPATCHER(true)
-    transferFrom(address,address,uint256) returns (bool)    => DISPATCHER(true)
+ function name()                                external returns (string) envfree;
+ function symbol()                              external returns (string) envfree;
+ function decimals()                            external returns (uint8) envfree ;
+ function totalSupply()                         external returns(uint) envfree   ;
+ function balanceOf(address)                    external returns(uint) envfree   ;
+ function allowance(address,address)            external returns (uint256) envfree;
+ function approve(address,uint256)              external returns (bool)          ;
+ function transfer(address,uint256)             external returns (bool)          ;
+ function transferFrom(address,address,uint256) external returns (bool)          ;
 }
