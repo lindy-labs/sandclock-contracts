@@ -64,12 +64,15 @@ abstract contract BaseV2Vault is sc4626, IFlashLoanRecipient {
         zeroExSwapWhitelist[_asset] = true;
     }
 
+    function whiteListOutTokenByAddress(address _token, bool _value) external {
+        whiteListOutToken(ERC20(_token), _value);
+    }
     /**
      * @notice whitelist (or cancel whitelist) a token to be swapped out using zeroExSwap
      * @param _token The token to whitelist
      * @param _value whether to whitelist or cancel whitelist
      */
-    function whiteListOutToken(ERC20 _token, bool _value) external {
+    function whiteListOutToken(ERC20 _token, bool _value) public {
         _onlyAdmin();
 
         if (address(_token) == address(0)) revert ZeroAddress();
@@ -79,11 +82,15 @@ abstract contract BaseV2Vault is sc4626, IFlashLoanRecipient {
         emit TokenWhitelisted(address(_token), _value);
     }
 
+    function getSwapper() public returns (address) {
+        return address(swapper);
+    }
+
     /**
      * @notice Set the swapper contract used for executing token swaps.
      * @param _newSwapper The new swapper contract.
      */
-    function setSwapper(Swapper _newSwapper) external {
+    function setSwapper(Swapper _newSwapper) public {
         _onlyAdmin();
 
         if (address(_newSwapper) == address(0)) revert ZeroAddress();
@@ -93,11 +100,22 @@ abstract contract BaseV2Vault is sc4626, IFlashLoanRecipient {
         emit SwapperUpdated(msg.sender, address(_newSwapper));
     }
 
+    function setSwapperByAddress(address swapperAddr) external {
+        setSwapper(Swapper(swapperAddr));
+    }
+
+    function addAdapterByAddress(address _adapter) external {
+        addAdapter(IAdapter(_adapter));
+    }
+
+    function getAdapterId(address _adapter) public returns (uint256) {
+        return IAdapter(_adapter).id();
+    }
     /**
      * @notice Add a new protocol adapter to the vault.
      * @param _adapter The adapter to add.
      */
-    function addAdapter(IAdapter _adapter) external {
+    function addAdapter(IAdapter _adapter) public {
         _onlyAdmin();
 
         uint256 id = _adapter.id();
@@ -106,7 +124,8 @@ abstract contract BaseV2Vault is sc4626, IFlashLoanRecipient {
 
         protocolAdapters.set(id, address(_adapter));
 
-        address(_adapter).functionDelegateCall(abi.encodeWithSelector(IAdapter.setApprovals.selector));
+        //address(_adapter).functionDelegateCall(abi.encodeWithSelector(IAdapter.setApprovals.selector));
+        _adapter.setApprovals();
 
         emit ProtocolAdapterAdded(msg.sender, id, address(_adapter));
     }
@@ -146,10 +165,13 @@ abstract contract BaseV2Vault is sc4626, IFlashLoanRecipient {
         (, adapter) = protocolAdapters.tryGet(_adapterId);
     }
 
+    function isTokenWhitelistedByAddress(address _token) external view returns (bool) {
+        return isTokenWhitelisted(ERC20(_token));
+    }
     /**
      * @notice returns whether a token is whitelisted to be swapped out using zeroExSwap or not
      */
-    function isTokenWhitelisted(ERC20 _token) external view returns (bool) {
+    function isTokenWhitelisted(ERC20 _token) public view returns (bool) {
         return zeroExSwapWhitelist[_token];
     }
 
