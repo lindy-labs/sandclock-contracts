@@ -64,6 +64,10 @@ abstract contract BaseV2Vault is sc4626, IFlashLoanRecipient {
         zeroExSwapWhitelist[_asset] = true;
     }
 
+    function getPALength() external returns (uint256) {
+        return protocolAdapters.length();
+    }
+
     function whiteListOutTokenByAddress(address _token, bool _value) external {
         whiteListOutToken(ERC20(_token), _value);
     }
@@ -139,12 +143,14 @@ abstract contract BaseV2Vault is sc4626, IFlashLoanRecipient {
         _onlyAdmin();
         _isSupportedCheck(_adapterId);
 
+        IAdapter _adapter = IAdapter(protocolAdapters.get(_adapterId));
         // check if protocol is being used
-        if (!_force && IAdapter(protocolAdapters.get(_adapterId)).getCollateral(address(this)) > 0) {
+        if (!_force && _adapter.getCollateral(address(this)) > 0) {
             revert ProtocolInUse(_adapterId);
         }
 
-        _adapterDelegateCall(_adapterId, abi.encodeWithSelector(IAdapter.revokeApprovals.selector));
+        //_adapterDelegateCall(_adapterId, abi.encodeWithSelector(IAdapter.revokeApprovals.selector));
+        _adapter.revokeApprovals();
 
         protocolAdapters.remove(_adapterId);
 

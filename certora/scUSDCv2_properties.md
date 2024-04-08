@@ -51,8 +51,15 @@ It has the following view functions, which do not change state:
 
 | No. | Property  | Category | Priority | Specified | Verified | Report |
 | ---- | --------  | -------- | -------- | -------- | -------- | -------- |
+|  | `rebalance(_callData)` should rebalances the vault's positions/loans in multiple lending markets based on the operations in `_callData` | high-level | high | Y | Y | [Link]() |
+|  | `exitAllPositions(_endUsdcBalanceMin)` should make usdc balance at least equals to `_endUsdcBalanceMin` | variable transition | medium | Y | Y | [Link]() |
+|  | `exitAllPositions(_endUsdcBalanceMin)`, when `_endUsdcBalanceMin` is 0, should make the total debt to be 0 as well | variable transition | medium | Y | Y | [Link]() |
+|  | `exitAllPositions(_endUsdcBalanceMin)`, when `_endUsdcBalanceMin` is 0, should make the total collateral to be 0 as well | variable transition | medium | Y | Y | [Link]() |
 |  | `addAdapter(_adapter)` should update the state variable `protocolAdapters` with the parameter provided by `_adapter`, as long as `_adapter` is not already present in `protocolAdapters` | variable transition | medium | Y | Y | [Link]() |
 |  | `addAdapter(_adapter)` should revert if `_adapter` is already present in `protocolAdapters` | unit test | medium | Y | Y | [Link]() |
+|  | `removeAdapter(_adapterId, _forced)` should update the state variable `protocolAdapters` with the parameters provided by `_adapterId` and `_forced`, as long as `_adapterId` is not being used | variable transition | medium | Y | Y | [Link]() |
+|  | `removeAdapter(_adapterId, _forced)` should revert if `_adapterId` (with `_forced`==`false`) is being used | unit test | medium | Y | Y | [Link]() |
+|  | `addAdapter(_adapter)` followed by `removeAdapter(getAdapterId(_adapter), true)` should not change the state variable `protocolAdapters` with the parameter provided by `_adapter` | variable transition | high | Y | Y | [Link]() |
 |  | `whiteListOutToken(ERC20 _token, bool _value)` should update the state variable `zeroExSwapWhitelist` with the parameters provided by `_token` and `_value`, as long as `_token` is not the address zero | variable transition | medium | Y | Y | [Link]() |
 |  | `whiteListOutToken(ERC20 _token, bool _value)` should revert if `_token` is the address zero | unit test | medium | Y | Y | [Link]() |
 |  | `setSwapper(Swapper _newSwapper)` should update the state variable `swapper` with the value provided by `_newSwapper`, as long as `_newSwapper` is not the address zero | variable transition | medium | Y | Y | [Link]() |

@@ -71,6 +71,22 @@ contract scUSDCv2 is BaseV2Vault {
                             PUBLIC API
     //////////////////////////////////////////////////////////////*/
 
+    function rebalanceWithoutOperations() external {
+        _onlyKeeper();
+
+        // invest any weth remaining after rebalancing
+        _invest();
+
+        // enforce float to be above the minimum required
+        uint256 float = usdcBalance();
+        uint256 floatRequired = totalAssets().mulWadDown(floatPercentage);
+
+        if (float < floatRequired) {
+            revert FloatBalanceTooLow(float, floatRequired);
+        }
+
+        emit Rebalanced(totalCollateral(), totalDebt(), float);
+    }
     /**
      * @notice Rebalance the vault's positions/loans in multiple lending markets.
      * @dev Called to increase or decrease the WETH debt to maintain the LTV (loan to value) and avoid liquidation.
