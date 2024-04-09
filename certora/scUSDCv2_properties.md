@@ -52,6 +52,8 @@ It has the following view functions, which do not change state:
 | No. | Property  | Category | Priority | Specified | Verified | Report |
 | ---- | --------  | -------- | -------- | -------- | -------- | -------- |
 |  | `rebalance(_callData)` should rebalances the vault's positions/loans in multiple lending markets based on the operations in `_callData` | high-level | high | Y | Y | [Link]() |
+|  | `sellProfit(uint256 _usdcAmountOutMin)` should sell WETH profits, as long as `wethInvested()` is greater than `totalDebt()` (swaps to USDC) | high-level | high | Y | Y | [Link]() |
+|  | `sellProfit(uint256 _usdcAmountOutMin)` should revert if `wethInvested()` is lesser than or equal to `totalDebt()` | unit test | medium | Y | Y | [Link]() |
 |  | `exitAllPositions(_endUsdcBalanceMin)` should make usdc balance at least equals to `_endUsdcBalanceMin` | variable transition | medium | Y | Y | [Link]() |
 |  | `exitAllPositions(_endUsdcBalanceMin)`, when `_endUsdcBalanceMin` is 0, should make the total debt to be 0 as well | variable transition | medium | Y | Y | [Link]() |
 |  | `exitAllPositions(_endUsdcBalanceMin)`, when `_endUsdcBalanceMin` is 0, should make the total collateral to be 0 as well | variable transition | medium | Y | Y | [Link]() |

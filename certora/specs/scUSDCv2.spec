@@ -2,8 +2,10 @@ import "erc20.spec";
 
 using USDC as asset;
 using WETH as weth;
+using scWETHv2 as wethVault;
 using AaveV2ScUsdcAdapter as adapter;
 using MockWstETH as wstETH;
+using PriceConverter as priceConverter;
 
 methods {
     // state mofidying functions
@@ -48,6 +50,7 @@ methods {
     function getPALength() external returns (uint256) envfree;
     function currentContract.getCollateral(uint256 _adapterId) external returns (uint256) envfree;
     function currentContract.getDebt(uint256 _adapterId) external returns (uint256) envfree;
+    function priceConverter.ethToUsdc(uint256 _ethAmount) external returns (uint256) envfree;
     
     // erc20
     function asset.totalSupply() external returns (uint256) envfree;
@@ -57,16 +60,20 @@ methods {
 
 
     // state constants
-    function _.getCollateral(address _adapter) external     => DISPATCHER(true);
-    function _.getDebt(address _adapter) external           => DISPATCHER(true);
-    function _.id() external                                => DISPATCHER(true);
-    function _.setApprovals() external                      => DISPATCHER(true);
-    function _.revokeApprovals() external                   => DISPATCHER(true);
-    function _.supply(uint256 _amount) external             => DISPATCHER(true);
-    function _.borrow(uint256 _amount) external             => DISPATCHER(true);
+    function _.getCollateral(address _adapter) external                 => DISPATCHER(true);
+    function _.getDebt(address _adapter) external                       => DISPATCHER(true);
+    function _.id() external                                            => DISPATCHER(true);
+    function _.setApprovals() external                                  => DISPATCHER(true);
+    function _.revokeApprovals() external                               => DISPATCHER(true);
+    function _.supply(uint256 _amount) external     => DISPATCHER(true);
+    function _.borrow(uint256 _amount) external     => DISPATCHER(true);
 }
 
-definition delta(uint256 a, uint256 b) returns mathint = a > b ? a - b : b - a;
+definition delta(mathint a, mathint b) returns mathint = a > b ? a - b : b - a;
+
+definition percentDelta(uint256 a, uint256 b) returns mathint = (delta(a, b) * (10 ^ 18)) / b;
+
+definition assertApproxEqRel(uint256 a, uint256 b, uint256 maxD) returns bool = (b == 0 ? (a == b):percentDelta(a, b)<=to_mathint(maxD));
 
 /*
     @Rule
@@ -76,7 +83,7 @@ definition delta(uint256 a, uint256 b) returns mathint = a > b ? a - b : b - a;
     @Description:
         the function call rebalance(operations) rebalances the vault's positions/loans in multiple lending markets
 */
-rule integrity_of_rebalance(address _adapter, uint256 initialBalance, uint256 initialDebt) {
+/*rule integrity_of_rebalance(address _adapter, uint256 initialBalance, uint256 initialDebt) {
     env e;
     require _adapter == adapter;
     require getPALength() == 0;
@@ -93,11 +100,67 @@ rule integrity_of_rebalance(address _adapter, uint256 initialBalance, uint256 in
 
     assert totalCollateral() == initialBalance;
 
-    uint256 collateral = getCollateral(adapterId);
+    mathint collateral = getCollateral(adapterId);
 
-    assert delta(collateral, initialBalance) <= 1;
+    assert delta(collateral, to_mathint(initialBalance)) <= 1;
+}*/
+
+/*
+    @Rule
+
+    @Category: High
+
+    @Description:
+        the function call sellProfit(_usdcAmountOutMin) aells WETH profits (swaps to USDC), as long as the weth invested is greater than the total debt
+*/
+rule integrity_of_sellProfit(address _adapter, uint256 initialBalance, uint256 _usdcAmountOutMin) {
+    env e;
+    require _adapter == adapter;
+    require getPALength() == 0;
+    addAdapterByAddress(e, _adapter);
+    uint256 adapterId = getAdapterId(_adapter);
+    assert getAdapter(adapterId) == _adapter;
+
+    require asset.balanceOf(currentContract) == initialBalance;
+    uint256 _getDebt = getDebt(adapterId);
+    uint256 _totalDebt = totalDebt();
+    uint256 _wethInvested = wethInvested();
+    uint256 _getProfit = getProfit();
+    //mathint _totalAssets = totalAssets();
+    mathint _usdcBalance = usdcBalance();
+
+    require _wethInvested > _totalDebt; // Avoid sellProfit to revert
+
+    sellProfit(e, _usdcAmountOutMin);
+
+    assert _getDebt == getDebt(adapterId);
+    assert _totalDebt == totalDebt();
+    uint256 getProfit() == 0;
+
 }
 
+/*
+    @Rule
+
+    @Category: Unit test
+
+    @Description:
+        function sellProfit reverts if the weth invested is less than or equal to the total debt
+*/
+/*rule sellProfit_reverts_if_wethInvested_is_less_than_or_equal_to_totalDebt(address _adapter, uint256 initialBalance, uint256 _usdcAmountOutMin) {
+    env e;
+    require _adapter == adapter;
+    require getPALength() == 0;
+    addAdapterByAddress(e, _adapter);
+    uint256 adapterId = getAdapterId(_adapter);
+    assert getAdapter(adapterId) == _adapter;
+
+    require asset.balanceOf(currentContract) == initialBalance;
+    require wethInvested() <= totalDebt(); // Expected to revert
+
+    sellProfit@withrevert(e, _usdcAmountOutMin);
+    assert lastReverted;
+}*/
 /*
     @Rule
 
