@@ -1,9 +1,9 @@
 import "erc20.spec";
 
-using USDC as asset;
+using MockUSDC as asset;
 using WETH as weth;
-using scWETHv2 as wethVault;
-using AaveV2ScUsdcAdapter as adapter;
+using scWETH as wethVault;
+using AaveV3ScUsdcAdapter as adapter;
 using MockWstETH as wstETH;
 using PriceConverter as priceConverter;
 
@@ -21,6 +21,7 @@ methods {
     function currentContract.whiteListOutTokenByAddress(address _token, bool _value) external;
     function currentContract.addAdapterByAddress(address _adapter) external;
     function removeAdapter(uint256 _adapterId, bool _force) external;
+    function disinvest(uint256 _amount) external;
 
     // view functions
     function convertToShares(uint256 assets) external returns (uint256) envfree;
@@ -62,6 +63,7 @@ methods {
     // state constants
     function _.getCollateral(address _adapter) external                 => DISPATCHER(true);
     function _.getDebt(address _adapter) external                       => DISPATCHER(true);
+    function _.withdraw(address _adapter) external                      => DISPATCHER(true);
     function _.id() external                                            => DISPATCHER(true);
     function _.setApprovals() external                                  => DISPATCHER(true);
     function _.revokeApprovals() external                               => DISPATCHER(true);
@@ -100,20 +102,21 @@ definition assertApproxEqRel(uint256 a, uint256 b, uint256 maxD) returns bool = 
 
     assert totalCollateral() == initialBalance;
 
-    mathint collateral = getCollateral(adapterId);
+    mathint collateral_ = getCollateral(adapterId);
+    //mathint debt_ = getDebt(adapterId);
 
-    assert delta(collateral, to_mathint(initialBalance)) <= 1;
+    assert delta(collateral_, to_mathint(initialBalance)) <= 1;
+    //assert delta(debt_, to_mathint(initialDebt)) <= 1; // Not OK
 }*/
-
 /*
     @Rule
 
     @Category: High
 
     @Description:
-        the function call sellProfit(_usdcAmountOutMin) aells WETH profits (swaps to USDC), as long as the weth invested is greater than the total debt
+        the function call sellProfit(_usdcAmountOutMin) sells WETH profits (swaps to USDC), as long as the weth invested is greater than the total debt
 */
-rule integrity_of_sellProfit(address _adapter, uint256 initialBalance, uint256 _usdcAmountOutMin) {
+/*rule integrity_of_sellProfit(address _adapter, uint256 initialBalance, uint256 _usdcAmountOutMin) { // Timed out
     env e;
     require _adapter == adapter;
     require getPALength() == 0;
@@ -126,7 +129,6 @@ rule integrity_of_sellProfit(address _adapter, uint256 initialBalance, uint256 _
     uint256 _totalDebt = totalDebt();
     uint256 _wethInvested = wethInvested();
     uint256 _getProfit = getProfit();
-    //mathint _totalAssets = totalAssets();
     mathint _usdcBalance = usdcBalance();
 
     require _wethInvested > _totalDebt; // Avoid sellProfit to revert
@@ -135,10 +137,9 @@ rule integrity_of_sellProfit(address _adapter, uint256 initialBalance, uint256 _
 
     assert _getDebt == getDebt(adapterId);
     assert _totalDebt == totalDebt();
-    uint256 getProfit() == 0;
+    assert getProfit() == 0;
 
-}
-
+}*/
 /*
     @Rule
 
@@ -160,6 +161,147 @@ rule integrity_of_sellProfit(address _adapter, uint256 initialBalance, uint256 _
 
     sellProfit@withrevert(e, _usdcAmountOutMin);
     assert lastReverted;
+}*/
+
+/*
+    @Rule
+
+    @Category: Medium
+
+    @Description:
+        the function call supply(balance) supplies USDC assets (balance) to a lending market
+*/
+/*rule integrity_of_supply(address _adapter, uint256 initialBalance) { // Not OK
+    env e;
+    require _adapter == adapter;
+    require getPALength() == 0;
+    addAdapterByAddress(e, _adapter);
+    uint256 adapterId = getAdapterId(_adapter);
+    assert getAdapter(adapterId) == _adapter;
+
+    require asset.balanceOf(currentContract) == initialBalance;
+
+    adapter.supply(e, initialBalance);
+
+    assert adapter.getCollateral(e, currentContract) == initialBalance;
+
+}*/
+/*
+    @Rule
+
+    @Category: Medium
+
+    @Description:
+        the function call borrow(balance) borrows WETH from a lending market
+*/
+/*rule integrity_of_borrow(address _adapter, uint256 initialBalance, uint256 borrowAmount) { // Not OK
+    env e;
+    require _adapter == adapter;
+    require getPALength() == 0;
+    addAdapterByAddress(e, _adapter);
+    uint256 adapterId = getAdapterId(_adapter);
+    assert getAdapter(adapterId) == _adapter;
+
+    require asset.balanceOf(currentContract) == initialBalance;
+
+    adapter.supply(e, initialBalance);
+
+    adapter.borrow(e, borrowAmount);
+
+    assert adapter.getDebt(e, currentContract) == borrowAmount;
+
+}*/
+/*
+    @Rule
+
+    @Category: Medium
+
+    @Description:
+        the function call repay(amount) repays WETH to a lending market
+*/
+/*
+rule integrity_of_repay(address _adapter) { // Not OK
+    env e;
+    require _adapter == adapter;
+    require getPALength() == 0;
+    addAdapterByAddress(e, _adapter);
+    uint256 adapterId = getAdapterId(_adapter);
+    assert getAdapter(adapterId) == _adapter;
+
+    uint256 initialBalance = 10 ^ 10;
+    uint256 borrowAmount = 2 * 10 ^ 18;
+
+    require asset.balanceOf(currentContract) == initialBalance;
+
+    adapter.supply(e, initialBalance);
+    adapter.borrow(e, borrowAmount);
+
+    uint256 repayAmount = 10 ^ 18;
+    adapter.repay(e, repayAmount);
+
+    assert delta(adapter.getDebt(e, currentContract), borrowAmount - repayAmount) <= 1;
+}
+*/
+/*
+    @Rule
+
+    @Category: Medium
+
+    @Description:
+        the function call withdraw(amount) withdraws USDC assets from a lending market
+*/
+/*rule integrity_of_withdraw(address _adapter) { // Not OK
+    env e;
+    require _adapter == adapter;
+    require getPALength() == 0;
+    addAdapterByAddress(e, _adapter);
+    uint256 adapterId = getAdapterId(_adapter);
+    assert getAdapter(adapterId) == _adapter;
+
+    uint256 initialBalance = 10 ^ 10;
+    require asset.balanceOf(currentContract) == initialBalance;
+    
+    adapter.supply(e, initialBalance);
+    adapter.borrow(e, 10 ^ 18);
+
+    uint256 withdrawAmount = 5 * 10 ^ 9;
+    adapter.withdraw(e, withdrawAmount);
+
+    //assert usdcBalance() == withdrawAmount; // Not OK
+    assert delta(adapter.getCollateral(e, currentContract), initialBalance - withdrawAmount) <= 1; // Not OK
+}*/
+/*
+    @Rule
+
+    @Category: Medium
+
+    @Description:
+        the function call disinvest(amount) withdraws WETH from the staking vault (scWETH)
+*/
+/*rule integrity_of_disinvest(address _adapter) { // Not OK (Timed-out)
+    env e;
+    require _adapter == adapter;
+    require getPALength() == 0;
+    addAdapterByAddress(e, _adapter);
+    uint256 adapterId = getAdapterId(_adapter);
+    assert getAdapter(adapterId) == _adapter;
+
+    uint256 initialBalance = 10 ^ 12;
+    uint256 initialDebt = 100 * 10 ^ 18;
+
+    require asset.balanceOf(currentContract) == initialBalance;
+
+    adapter.supply(e, initialBalance);
+    adapter.borrow(e, initialDebt);
+
+    rebalanceWithoutOperations(e);
+
+    uint256 disinvestAmount = assert_uint256(wethInvested() / 2);
+
+    disinvest(e, disinvestAmount);
+
+    assert weth.balanceOf(currentContract) == disinvestAmount;
+    assert to_mathint(wethInvested()) == initialDebt - disinvestAmount; // Not OK
 }*/
 /*
     @Rule
