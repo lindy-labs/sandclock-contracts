@@ -226,6 +226,13 @@ contract scUSDCv2 is BaseV2Vault {
      * @param _adapterId The ID of the lending market adapter.
      * @param _amount The amount of USDC to supply.
      */
+    function supplyNew(uint256 _adapterId, uint256 _amount) external {
+        _onlyKeeperOrFlashLoan();
+        _isSupportedCheck(_adapterId);
+
+        IAdapter(getAdapter(_adapterId)).supply(_amount);
+    }
+
     function supply(uint256 _adapterId, uint256 _amount) external {
         _onlyKeeperOrFlashLoan();
         _isSupportedCheck(_adapterId);
@@ -238,6 +245,13 @@ contract scUSDCv2 is BaseV2Vault {
      * @param _adapterId The ID of the lending market adapter.
      * @param _amount The amount of WETH to borrow.
      */
+    function borrowNew(uint256 _adapterId, uint256 _amount) external {
+        _onlyKeeperOrFlashLoan();
+        _isSupportedCheck(_adapterId);
+
+        IAdapter(getAdapter(_adapterId)).borrow(_amount);
+    }
+
     function borrow(uint256 _adapterId, uint256 _amount) external {
         _onlyKeeperOrFlashLoan();
         _isSupportedCheck(_adapterId);

@@ -9,6 +9,8 @@ using PriceConverter as priceConverter;
 
 methods {
     // state mofidying functions
+    function supplyNew(uint256 _adapterId, uint256 _amount) external;
+    function borrowNew(uint256 _adapterId, uint256 _amount) external;
     function mint(uint256 shares, address receiver) external returns (uint256);
     function deposit(uint256 assets, address receiver) external returns (uint256);
     function withdraw(uint256 assets, address receiver, address owner) external returns (uint256);
@@ -85,7 +87,7 @@ definition assertApproxEqRel(uint256 a, uint256 b, uint256 maxD) returns bool = 
     @Description:
         the function call rebalance(operations) rebalances the vault's positions/loans in multiple lending markets
 */
-/*rule integrity_of_rebalance(address _adapter, uint256 initialBalance, uint256 initialDebt) {
+rule integrity_of_rebalance(address _adapter, uint256 initialBalance, uint256 initialDebt) {
     env e;
     require _adapter == adapter;
     require getPALength() == 0;
@@ -95,19 +97,19 @@ definition assertApproxEqRel(uint256 a, uint256 b, uint256 maxD) returns bool = 
 
     require asset.balanceOf(currentContract) == initialBalance;
 
-    adapter.supply(e, initialBalance);
-    adapter.borrow(e, initialDebt);
+    supplyNew(e, adapterId, initialBalance);
+    /*adapter.*/borrowNew(e, adapterId, initialDebt);
 
     rebalanceWithoutOperations(e);
 
-    assert totalCollateral() == initialBalance;
+    //assert totalCollateral() == initialBalance;
 
     mathint collateral_ = getCollateral(adapterId);
-    //mathint debt_ = getDebt(adapterId);
+    mathint debt_ = getDebt(adapterId);
 
     assert delta(collateral_, to_mathint(initialBalance)) <= 1;
-    //assert delta(debt_, to_mathint(initialDebt)) <= 1; // Not OK
-}*/
+    assert delta(debt_, to_mathint(initialDebt)) <= 1; // Not OK
+}
 /*
     @Rule
 
