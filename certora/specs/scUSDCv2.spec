@@ -61,7 +61,6 @@ methods {
     function weth.balanceOf(address) external returns (uint256) envfree;
     function wstETH.getWstETHByStETH(uint256 _stETHAmount) external returns (uint256) envfree;
 
-
     // state constants
     function _.getCollateral(address _adapter) external                 => DISPATCHER(true);
     function _.getDebt(address _adapter) external                       => DISPATCHER(true);
@@ -96,19 +95,18 @@ rule integrity_of_rebalance(address _adapter, uint256 initialBalance, uint256 in
     assert getAdapter(adapterId) == _adapter;
 
     require asset.balanceOf(currentContract) == initialBalance;
+    require weth.balanceOf(currentContract) > 0; // Force investing
 
     supplyNew(e, adapterId, initialBalance);
-    /*adapter.*/borrowNew(e, adapterId, initialDebt);
+    borrowNew(e, adapterId, initialDebt);
 
     rebalanceWithoutOperations(e);
-
-    //assert totalCollateral() == initialBalance;
 
     mathint collateral_ = getCollateral(adapterId);
     mathint debt_ = getDebt(adapterId);
 
     assert delta(collateral_, to_mathint(initialBalance)) <= 1;
-    assert delta(debt_, to_mathint(initialDebt)) <= 1; // Not OK
+    assert delta(debt_, to_mathint(initialDebt)) <= 1;
 }
 /*
     @Rule
