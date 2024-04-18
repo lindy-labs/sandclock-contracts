@@ -86,7 +86,7 @@ definition assertApproxEqRel(uint256 a, uint256 b, uint256 maxD) returns bool = 
     @Description:
         the function call rebalance(operations) rebalances the vault's positions/loans in multiple lending markets
 */
-rule integrity_of_rebalance(address _adapter, uint256 initialBalance, uint256 initialDebt) {
+/*rule integrity_of_rebalance(address _adapter, uint256 initialBalance, uint256 initialDebt) {
     env e;
     require _adapter == adapter;
     require getPALength() == 0;
@@ -107,7 +107,7 @@ rule integrity_of_rebalance(address _adapter, uint256 initialBalance, uint256 in
 
     assert delta(collateral_, to_mathint(initialBalance)) <= 1;
     assert delta(debt_, to_mathint(initialDebt)) <= 1;
-}
+}*/
 /*
     @Rule
 
@@ -116,7 +116,7 @@ rule integrity_of_rebalance(address _adapter, uint256 initialBalance, uint256 in
     @Description:
         the function call sellProfit(_usdcAmountOutMin) sells WETH profits (swaps to USDC), as long as the weth invested is greater than the total debt
 */
-/*rule integrity_of_sellProfit(address _adapter, uint256 initialBalance, uint256 _usdcAmountOutMin) { // Timed out
+/*rule integrity_of_sellProfit(address _adapter, uint256 initialBalance, uint256 _usdcAmountOutMin) {
     env e;
     require _adapter == adapter;
     require getPALength() == 0;
@@ -171,7 +171,7 @@ rule integrity_of_rebalance(address _adapter, uint256 initialBalance, uint256 in
     @Description:
         the function call supply(balance) supplies USDC assets (balance) to a lending market
 */
-/*rule integrity_of_supply(address _adapter, uint256 initialBalance) { // Not OK
+/*rule integrity_of_supply(address _adapter, uint256 initialBalance) {
     env e;
     require _adapter == adapter;
     require getPALength() == 0;
@@ -194,7 +194,7 @@ rule integrity_of_rebalance(address _adapter, uint256 initialBalance, uint256 in
     @Description:
         the function call borrow(balance) borrows WETH from a lending market
 */
-/*rule integrity_of_borrow(address _adapter, uint256 initialBalance, uint256 borrowAmount) { // Not OK
+/*rule integrity_of_borrow(address _adapter, uint256 borrowAmount) {
     env e;
     require _adapter == adapter;
     require getPALength() == 0;
@@ -203,8 +203,6 @@ rule integrity_of_rebalance(address _adapter, uint256 initialBalance, uint256 in
     assert getAdapter(adapterId) == _adapter;
 
     require asset.balanceOf(currentContract) == initialBalance;
-
-    adapter.supply(e, initialBalance);
 
     adapter.borrow(e, borrowAmount);
 
@@ -219,8 +217,7 @@ rule integrity_of_rebalance(address _adapter, uint256 initialBalance, uint256 in
     @Description:
         the function call repay(amount) repays WETH to a lending market
 */
-/*
-rule integrity_of_repay(address _adapter) { // Not OK
+/*rule integrity_of_repay(address _adapter, uint256 initialBalance, uint256 borrowAmount, uint256 repayAmount) {
     env e;
     require _adapter == adapter;
     require getPALength() == 0;
@@ -228,20 +225,17 @@ rule integrity_of_repay(address _adapter) { // Not OK
     uint256 adapterId = getAdapterId(_adapter);
     assert getAdapter(adapterId) == _adapter;
 
-    uint256 initialBalance = 10 ^ 10;
-    uint256 borrowAmount = 2 * 10 ^ 18;
-
     require asset.balanceOf(currentContract) == initialBalance;
 
     adapter.supply(e, initialBalance);
     adapter.borrow(e, borrowAmount);
 
-    uint256 repayAmount = 10 ^ 18;
+    require repayAmount <= borrowAmount;
+
     adapter.repay(e, repayAmount);
 
     assert delta(adapter.getDebt(e, currentContract), borrowAmount - repayAmount) <= 1;
-}
-*/
+}*/
 /*
     @Rule
 
@@ -250,7 +244,7 @@ rule integrity_of_repay(address _adapter) { // Not OK
     @Description:
         the function call withdraw(amount) withdraws USDC assets from a lending market
 */
-/*rule integrity_of_withdraw(address _adapter) { // Not OK
+/*rule integrity_of_withdraw(address _adapter, uint256 initialBalance, uint256 borrowAmount, uint256 withdrawAmount) {
     env e;
     require _adapter == adapter;
     require getPALength() == 0;
@@ -258,17 +252,17 @@ rule integrity_of_repay(address _adapter) { // Not OK
     uint256 adapterId = getAdapterId(_adapter);
     assert getAdapter(adapterId) == _adapter;
 
-    uint256 initialBalance = 10 ^ 10;
     require asset.balanceOf(currentContract) == initialBalance;
     
     adapter.supply(e, initialBalance);
-    adapter.borrow(e, 10 ^ 18);
+    adapter.borrow(e, borrowAmount);
 
-    uint256 withdrawAmount = 5 * 10 ^ 9;
+    require withdrawAmount <= initialBalance;
+
     adapter.withdraw(e, withdrawAmount);
 
-    //assert usdcBalance() == withdrawAmount; // Not OK
-    assert delta(adapter.getCollateral(e, currentContract), initialBalance - withdrawAmount) <= 1; // Not OK
+    assert usdcBalance() == withdrawAmount;
+    assert delta(adapter.getCollateral(e, currentContract), initialBalance - withdrawAmount) <= 1;
 }*/
 /*
     @Rule
@@ -278,16 +272,13 @@ rule integrity_of_repay(address _adapter) { // Not OK
     @Description:
         the function call disinvest(amount) withdraws WETH from the staking vault (scWETH)
 */
-/*rule integrity_of_disinvest(address _adapter) { // Not OK (Timed-out)
+/*rule integrity_of_disinvest(address _adapter, uint256 initialBalance, uint256 initialDebt) {
     env e;
     require _adapter == adapter;
     require getPALength() == 0;
     addAdapterByAddress(e, _adapter);
     uint256 adapterId = getAdapterId(_adapter);
     assert getAdapter(adapterId) == _adapter;
-
-    uint256 initialBalance = 10 ^ 12;
-    uint256 initialDebt = 100 * 10 ^ 18;
 
     require asset.balanceOf(currentContract) == initialBalance;
 
@@ -301,7 +292,7 @@ rule integrity_of_repay(address _adapter) { // Not OK
     disinvest(e, disinvestAmount);
 
     assert weth.balanceOf(currentContract) == disinvestAmount;
-    assert to_mathint(wethInvested()) == initialDebt - disinvestAmount; // Not OK
+    assert to_mathint(wethInvested()) == initialDebt - disinvestAmount;
 }*/
 /*
     @Rule

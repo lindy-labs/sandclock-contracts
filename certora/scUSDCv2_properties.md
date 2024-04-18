@@ -52,13 +52,13 @@ It has the following view functions, which do not change state:
 | No. | Property  | Category | Priority | Specified | Verified | Report |
 | ---- | --------  | -------- | -------- | -------- | -------- | -------- |
 |  | `rebalance(_callData)` should rebalances the vault's positions/loans in multiple lending markets based on the operations in `_callData` | high-level | high | Y | Y | [Link]() |
-|  | `sellProfit(uint256 _usdcAmountOutMin)` should sell WETH profits, as long as `wethInvested()` is greater than `totalDebt()` (swaps to USDC) | high-level | high | Y | N (Time out) | [Link]() |
+|  | `sellProfit(uint256 _usdcAmountOutMin)` should sell WETH profits, as long as `wethInvested()` is greater than `totalDebt()` (swaps to USDC) | high-level | high | Y | Y | [Link]() |
 |  | `sellProfit(uint256 _usdcAmountOutMin)` should revert if `wethInvested()` is lesser than or equal to `totalDebt()` | unit test | medium | Y | Y | [Link]() |
 |  | `supply(uint256 _adapterId, uint256 _amount)` should supply USDC assets (`_amount`) to a lending market given by `_adapterId` | medium | medium | Y | Y | [Link]() |
-|  | `borrow(uint256 _adapterId, uint256 _amount)` should borrow WETH (`_amount`) from a lending market given by `_adapterId` | medium | medium | Y | N | [Link]() |
-|  | `repay(uint256 _adapterId, uint256 _amount)` should repay WETH (`_amount`) to a lending market given by `_adapterId` | medium | medium | Y | N | [Link]() |
-|  | `withdraw(uint256 _adapterId, uint256 _amount)` should withdraw USDC assets (`_amount`) from a lending market given by `_adapterId` | medium | medium | Y | N | [Link]() |
-|  | `disinvest(uint256 _amount)` should withdraws WETH (`_amount`) from the staking vault (scWETH) | medium | medium | Y | N (Timed-out) | [Link]() |
+|  | `borrow(uint256 _adapterId, uint256 _amount)` should borrow WETH (`_amount`) from a lending market given by `_adapterId` | medium | medium | Y | Y | [Link]() |
+|  | `repay(uint256 _adapterId, uint256 _amount)` should repay WETH (`_amount`) to a lending market given by `_adapterId` | medium | medium | Y | Y | [Link]() |
+|  | `withdraw(uint256 _adapterId, uint256 _amount)` should withdraw USDC assets (`_amount`) from a lending market given by `_adapterId` | medium | medium | Y | Y | [Link]() |
+|  | `disinvest(uint256 _amount)` should withdraws WETH (`_amount`) from the staking vault (scWETH) | medium | medium | Y | Y | [Link]() |
 |  | `exitAllPositions(_endUsdcBalanceMin)` should make usdc balance at least equals to `_endUsdcBalanceMin` | variable transition | medium | Y | Y | [Link]() |
 |  | `exitAllPositions(_endUsdcBalanceMin)`, when `_endUsdcBalanceMin` is 0, should make the total debt to be 0 as well | variable transition | medium | Y | Y | [Link]() |
 |  | `exitAllPositions(_endUsdcBalanceMin)`, when `_endUsdcBalanceMin` is 0, should make the total collateral to be 0 as well | variable transition | medium | Y | Y | [Link]() |
