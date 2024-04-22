@@ -6,6 +6,7 @@ using scWETH as wethVault;
 using AaveV3ScUsdcAdapter as adapter;
 using MockWstETH as wstETH;
 using PriceConverter as priceConverter;
+using MockChainlinkPriceFeed as uePF;
 
 methods {
     // state mofidying functions
@@ -24,6 +25,7 @@ methods {
     function currentContract.addAdapterByAddress(address _adapter) external;
     function removeAdapter(uint256 _adapterId, bool _force) external;
     function disinvest(uint256 _amount) external;
+    function uePF.setLatestAnswer(int256 _answer) external;
 
     // view functions
     function convertToShares(uint256 assets) external returns (uint256) envfree;
@@ -54,7 +56,8 @@ methods {
     function currentContract.getCollateral(uint256 _adapterId) external returns (uint256) envfree;
     function currentContract.getDebt(uint256 _adapterId) external returns (uint256) envfree;
     function priceConverter.ethToUsdc(uint256 _ethAmount) external returns (uint256) envfree;
-    
+    function adapter.getSupplyAmount() external returns (uint256) envfree; 
+    function adapter.getBorrowAmount() external returns (uint256) envfree; 
     // erc20
     function asset.totalSupply() external returns (uint256) envfree;
     function asset.balanceOf(address) external returns (uint256) envfree;
@@ -71,6 +74,10 @@ methods {
     function _.supply(uint256 _amount) external     => DISPATCHER(true);
     function _.borrow(uint256 _amount) external     => DISPATCHER(true);
 }
+
+definition WAD() returns mathint = 10 ^ 18;
+
+definition WETH_USDC_DECIMALS_DIFF() returns mathint = 10 ^ 12;
 
 definition delta(mathint a, mathint b) returns mathint = a > b ? a - b : b - a;
 
@@ -180,10 +187,14 @@ definition assertApproxEqRel(uint256 a, uint256 b, uint256 maxD) returns bool = 
     assert getAdapter(adapterId) == _adapter;
 
     require asset.balanceOf(currentContract) == initialBalance;
+    mathint _totalCollateralBase = adapter.getSupplyAmount();
 
     adapter.supply(e, initialBalance);
 
+    mathint totalCollateralBase_ = adapter.getSupplyAmount();
+
     assert adapter.getCollateral(e, currentContract) == initialBalance;
+    assert _totalCollateralBase + initialBalance == totalCollateralBase_;
 
 }*/
 /*
@@ -202,11 +213,19 @@ definition assertApproxEqRel(uint256 a, uint256 b, uint256 maxD) returns bool = 
     uint256 adapterId = getAdapterId(_adapter);
     assert getAdapter(adapterId) == _adapter;
 
-    require asset.balanceOf(currentContract) == initialBalance;
+    require asset.balanceOf(currentContract) == borrowAmount;
+
+    uePF.setLatestAnswer(e, 10 ^ 18);
+    mathint _totalDebtBase = adapter.getBorrowAmount();
 
     adapter.borrow(e, borrowAmount);
 
+    mathint totalDebtBase_ = adapter.getBorrowAmount();
+
+    mathint usdcPriceInWeth = WAD();
+
     assert adapter.getDebt(e, currentContract) == borrowAmount;
+    assert delta(((_totalDebtBase + borrowAmount) / WETH_USDC_DECIMALS_DIFF()) * WAD() / usdcPriceInWeth, totalDebtBase_) <= 1;
 
 }*/
 /*

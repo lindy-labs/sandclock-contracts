@@ -46,11 +46,18 @@ contract AaveV3ScUsdcAdapter is IAdapter {
         pool.supply(address(usdc), _amount, address(this), 0);
     }
 
+    function getSupplyAmount() external view returns (uint256 totalCollateralBase) {
+        (totalCollateralBase, , , , , ) = pool.getUserAccountData(address(this));
+    }
+
     /// @inheritdoc IAdapter
     function borrow(uint256 _amount) external override {
         pool.borrow(address(weth), _amount, C.AAVE_VAR_INTEREST_RATE_MODE, 0, address(this));
     }
 
+    function getBorrowAmount() external view returns (uint256 totalDebtBase) {
+        (, totalDebtBase, , , , ) = pool.getUserAccountData(address(this));
+    }
     /// @inheritdoc IAdapter
     function repay(uint256 _amount) external override {
         pool.repay(address(weth), _amount, C.AAVE_VAR_INTEREST_RATE_MODE, address(this));
