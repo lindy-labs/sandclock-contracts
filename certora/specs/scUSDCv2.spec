@@ -3,7 +3,8 @@ import "erc20.spec";
 using MockUSDC as asset;
 using WETH as weth;
 using scWETH as wethVault;
-using AaveV3ScUsdcAdapter as adapter;
+using AaveV2ScUsdcAdapter as adapter2;
+using AaveV3ScUsdcAdapter as adapter3;
 using MockWstETH as wstETH;
 using PriceConverter as priceConverter;
 using MockChainlinkPriceFeed as uePF;
@@ -52,12 +53,13 @@ methods {
     function isSupported(uint256 _adapterId) external returns (bool) envfree;
     function getAdapter(uint256 _adapterId) external returns (address) envfree;
     function currentContract.getAdapterId(address _adapter) external returns (uint256) envfree;
-    function getPALength() external returns (uint256) envfree;
     function currentContract.getCollateral(uint256 _adapterId) external returns (uint256) envfree;
     function currentContract.getDebt(uint256 _adapterId) external returns (uint256) envfree;
     function priceConverter.ethToUsdc(uint256 _ethAmount) external returns (uint256) envfree;
-    function adapter.getSupplyAmount() external returns (uint256) envfree; 
-    function adapter.getBorrowAmount() external returns (uint256) envfree; 
+    function adapter2.getSupplyAmount() external returns (uint256) envfree; 
+    function adapter2.getBorrowAmount() external returns (uint256) envfree; 
+    function adapter3.getSupplyAmount() external returns (uint256) envfree; 
+    function adapter3.getBorrowAmount() external returns (uint256) envfree; 
     // erc20
     function asset.totalSupply() external returns (uint256) envfree;
     function asset.balanceOf(address) external returns (uint256) envfree;
@@ -93,24 +95,27 @@ definition assertApproxEqRel(uint256 a, uint256 b, uint256 maxD) returns bool = 
     @Description:
         the function call rebalance(operations) rebalances the vault's positions/loans in multiple lending markets
 */
-/*rule integrity_of_rebalance(address _adapter, uint256 initialBalance, uint256 initialDebt) {
+/*rule integrity_of_rebalance(address _adapter2, address _adapter3, uint256 initialBalance, uint256 initialDebt) {
     env e;
-    require _adapter == adapter;
-    require getPALength() == 0;
-    addAdapterByAddress(e, _adapter);
-    uint256 adapterId = getAdapterId(_adapter);
-    assert getAdapter(adapterId) == _adapter;
+    require _adapter2 == adapter2 && _adapter3 == adapter3;
+    addAdapterByAddress(e, _adapter2);
+    addAdapterByAddress(e, _adapter3);
+    uint256 adapterId2 = getAdapterId(_adapter2);
+    uint256 adapterId3 = getAdapterId(_adapter3);
 
     require asset.balanceOf(currentContract) == initialBalance;
     require weth.balanceOf(currentContract) > 0; // Force investing
 
-    supplyNew(e, adapterId, initialBalance);
-    borrowNew(e, adapterId, initialDebt);
+    supplyNew(e, adapterId2, initialBalance);
+    borrowNew(e, adapterId2, initialDebt);
 
     rebalanceWithoutOperations(e);
 
-    mathint collateral_ = getCollateral(adapterId);
-    mathint debt_ = getDebt(adapterId);
+    assert totalDebt() == initialDebt;
+    assert totalCollateral() == initialBalance;
+
+    mathint collateral_ = getCollateral(adapterId2);
+    mathint debt_ = getDebt(adapterId2);
 
     assert delta(collateral_, to_mathint(initialBalance)) <= 1;
     assert delta(debt_, to_mathint(initialDebt)) <= 1;
@@ -125,11 +130,9 @@ definition assertApproxEqRel(uint256 a, uint256 b, uint256 maxD) returns bool = 
 */
 /*rule integrity_of_sellProfit(address _adapter, uint256 initialBalance, uint256 _usdcAmountOutMin) {
     env e;
-    require _adapter == adapter;
-    require getPALength() == 0;
+    require _adapter == adapter2;
     addAdapterByAddress(e, _adapter);
     uint256 adapterId = getAdapterId(_adapter);
-    assert getAdapter(adapterId) == _adapter;
 
     require asset.balanceOf(currentContract) == initialBalance;
     uint256 _getDebt = getDebt(adapterId);
@@ -157,11 +160,9 @@ definition assertApproxEqRel(uint256 a, uint256 b, uint256 maxD) returns bool = 
 */
 /*rule sellProfit_reverts_if_wethInvested_is_less_than_or_equal_to_totalDebt(address _adapter, uint256 initialBalance, uint256 _usdcAmountOutMin) {
     env e;
-    require _adapter == adapter;
-    require getPALength() == 0;
+    require _adapter == adapter2;
     addAdapterByAddress(e, _adapter);
     uint256 adapterId = getAdapterId(_adapter);
-    assert getAdapter(adapterId) == _adapter;
 
     require asset.balanceOf(currentContract) == initialBalance;
     require wethInvested() <= totalDebt(); // Expected to revert
@@ -178,24 +179,25 @@ definition assertApproxEqRel(uint256 a, uint256 b, uint256 maxD) returns bool = 
     @Description:
         the function call supply(balance) supplies USDC assets (balance) to a lending market
 */
-/*rule integrity_of_supply(address _adapter, uint256 initialBalance) {
+/*rule integrity_of_supply(address _adapter2, address _adapter3, uint256 amount2, uint256 amount3) {
     env e;
-    require _adapter == adapter;
-    require getPALength() == 0;
-    addAdapterByAddress(e, _adapter);
-    uint256 adapterId = getAdapterId(_adapter);
-    assert getAdapter(adapterId) == _adapter;
+    require _adapter2 == adapter2 && _adapter3 == adapter3;
+    addAdapterByAddress(e, _adapter2);
+    addAdapterByAddress(e, _adapter3);
 
-    require asset.balanceOf(currentContract) == initialBalance;
-    mathint _totalCollateralBase = adapter.getSupplyAmount();
+    require asset.balanceOf(currentContract) == amount2;
+    mathint _collateral2 = adapter2.getSupplyAmount();
+    mathint _collateral3 = adapter3.getSupplyAmount();
 
-    adapter.supply(e, initialBalance);
+    adapter2.supply(e, amount2);
+    adapter3.supply(e, amount3);
 
-    mathint totalCollateralBase_ = adapter.getSupplyAmount();
+    mathint collateral2_ = adapter2.getSupplyAmount();
+    mathint collateral3_ = adapter3.getSupplyAmount();
 
-    assert adapter.getCollateral(e, currentContract) == initialBalance;
-    assert _totalCollateralBase + initialBalance == totalCollateralBase_;
-
+    assert adapter2.getCollateral(e, currentContract) == amount2 && adapter3.getCollateral(e, currentContract) == amount3;
+    assert _collateral2 + amount2 == collateral2_ && _collateral3 + amount3 == collateral3_;
+    assert to_mathint(totalCollateral()) == amount2 + amount3;
 }*/
 /*
     @Rule
@@ -207,11 +209,9 @@ definition assertApproxEqRel(uint256 a, uint256 b, uint256 maxD) returns bool = 
 */
 /*rule integrity_of_borrow(address _adapter, uint256 borrowAmount) {
     env e;
-    require _adapter == adapter;
-    require getPALength() == 0;
+    require _adapter == adapter2;
     addAdapterByAddress(e, _adapter);
     uint256 adapterId = getAdapterId(_adapter);
-    assert getAdapter(adapterId) == _adapter;
 
     require asset.balanceOf(currentContract) == borrowAmount;
 
@@ -238,11 +238,9 @@ definition assertApproxEqRel(uint256 a, uint256 b, uint256 maxD) returns bool = 
 */
 /*rule integrity_of_repay(address _adapter, uint256 initialBalance, uint256 borrowAmount, uint256 repayAmount) {
     env e;
-    require _adapter == adapter;
-    require getPALength() == 0;
+    require _adapter == adapter2;
     addAdapterByAddress(e, _adapter);
     uint256 adapterId = getAdapterId(_adapter);
-    assert getAdapter(adapterId) == _adapter;
 
     require asset.balanceOf(currentContract) == initialBalance;
 
@@ -265,11 +263,9 @@ definition assertApproxEqRel(uint256 a, uint256 b, uint256 maxD) returns bool = 
 */
 /*rule integrity_of_withdraw(address _adapter, uint256 initialBalance, uint256 borrowAmount, uint256 withdrawAmount) {
     env e;
-    require _adapter == adapter;
-    require getPALength() == 0;
+    require _adapter == adapter2;
     addAdapterByAddress(e, _adapter);
     uint256 adapterId = getAdapterId(_adapter);
-    assert getAdapter(adapterId) == _adapter;
 
     require asset.balanceOf(currentContract) == initialBalance;
     
@@ -291,18 +287,16 @@ definition assertApproxEqRel(uint256 a, uint256 b, uint256 maxD) returns bool = 
     @Description:
         the function call disinvest(amount) withdraws WETH from the staking vault (scWETH)
 */
-/*rule integrity_of_disinvest(address _adapter, uint256 initialBalance, uint256 initialDebt) {
+/*rule integrity_of_disinvest(address _adapter2, uint256 initialBalance, uint256 initialDebt) {
     env e;
-    require _adapter == adapter;
-    require getPALength() == 0;
-    addAdapterByAddress(e, _adapter);
-    uint256 adapterId = getAdapterId(_adapter);
-    assert getAdapter(adapterId) == _adapter;
+    require _adapter2 == adapter2;
+    addAdapterByAddress(e, _adapter2);
+    uint256 adapterId2 = getAdapterId(_adapter2);
 
     require asset.balanceOf(currentContract) == initialBalance;
 
-    adapter.supply(e, initialBalance);
-    adapter.borrow(e, initialDebt);
+    adapter2.supply(e, initialBalance);
+    adapter2.borrow(e, initialDebt);
 
     rebalanceWithoutOperations(e);
 
@@ -366,13 +360,16 @@ definition assertApproxEqRel(uint256 a, uint256 b, uint256 maxD) returns bool = 
     @Description:
         function addAdapter updates the state variable protocolAdapters with the value provided by the parameter _adapter
 */
-/*rule integrity_of_addAdapter(address _adapter) {
+/*rule integrity_of_addAdapter(address _adapter2, address _adapter3) {
     env e;
-    require _adapter == adapter;
-    uint256 adapterId = getAdapterId(_adapter);
-    require !isSupported(adapterId);
-    addAdapterByAddress(e, _adapter);
-    assert getAdapter(adapterId) == _adapter;
+    require _adapter2 == adapter2 && _adapter3 == adapter3;
+    uint256 adapterId2 = getAdapterId(_adapter2);
+    uint256 adapterId3 = getAdapterId(_adapter3);
+    require !isSupported(adapterId2) && !isSupported(adapterId3);
+    addAdapterByAddress(e, _adapter2);
+    addAdapterByAddress(e, _adapter3);
+    assert getAdapter(adapterId3) == _adapter3;
+    assert getAdapter(adapterId2) == _adapter2;
 }*/
 
 /*
@@ -385,7 +382,7 @@ definition assertApproxEqRel(uint256 a, uint256 b, uint256 maxD) returns bool = 
 */
 /*rule addAdapter_reverts_if_address_is_already_present(address _adapter) {
     env e;
-    require _adapter == adapter;
+    require _adapter == adapter2;
     uint256 adapterId = getAdapterId(_adapter);
     require isSupported(adapterId);
     addAdapterByAddress@withrevert(e, _adapter);
@@ -400,12 +397,13 @@ definition assertApproxEqRel(uint256 a, uint256 b, uint256 maxD) returns bool = 
     @Description:
         function removeAdapter updates the state variable protocolAdapters with the value provided by the parameter _adapterId
 */
-/*rule integrity_of_removeAdapter(uint256 _adapterId) {
+/*rule integrity_of_removeAdapter(uint256 _adapterId2, uint256 _adapterId3) {
     env e;
-    require getAdapter(_adapterId) == adapter;
-    require(adapter.getCollateral(e, currentContract) == 0);
-    removeAdapter(e, _adapterId, true);
-    assert !isSupported(_adapterId);
+    require getAdapter(_adapterId2) == adapter2 && getAdapter(_adapterId3) == adapter3;
+    require(adapter2.getCollateral(e, currentContract) == 0);
+    removeAdapter(e, _adapterId2, true);
+    assert !isSupported(_adapterId2);
+    assert getAdapter(_adapterId3) == adapter3;
 }*/
 
 /*
@@ -418,7 +416,7 @@ definition assertApproxEqRel(uint256 a, uint256 b, uint256 maxD) returns bool = 
 */
 /*rule removeAdapter_reverts_if_adapter_is_being_used(uint256 _adapterId, bool _forced) {
     env e;
-    require getAdapter(_adapterId) == adapter;
+    require getAdapter(_adapterId) == adapter2;
     require(!_forced && adapter.getCollateral(e, currentContract) > 0);
     removeAdapter@withrevert(e, _adapterId, _forced);
     assert lastReverted;
@@ -432,15 +430,18 @@ definition assertApproxEqRel(uint256 a, uint256 b, uint256 maxD) returns bool = 
     @Description:
         function addAdapter followed by removeAdapter do not change protocolAdapters for the same adapter
 */
-/*rule addAdapter_followed_by_removeAdapter(address _adapter) {
+/*rule addAdapter_followed_by_removeAdapter(address _adapter2, address _adapter3) {
     env e;
-    require _adapter == adapter;
-    uint256 _adapterId = getAdapterId(_adapter);
-    require !isSupported(_adapterId);
-    addAdapterByAddress(e, _adapter);
-    assert getAdapter(_adapterId) == _adapter;
-    removeAdapter(e, _adapterId, true);
-    assert !isSupported(_adapterId);
+    require _adapter2 == adapter2 && _adapter3 == adapter3;
+    uint256 _adapterId2 = getAdapterId(_adapter2);
+    uint256 _adapterId3 = getAdapterId(_adapter3);
+    require !isSupported(_adapterId2) && !isSupported(_adapterId3);
+    addAdapterByAddress(e, _adapter2);
+    addAdapterByAddress(e, _adapter3);
+    assert getAdapter(_adapterId2) == _adapter2;
+    removeAdapter(e, _adapterId2, true);
+    assert !isSupported(_adapterId2);
+    assert getAdapter(_adapterId3) == adapter3;
 }*/
 
 /*

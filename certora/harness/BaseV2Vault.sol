@@ -64,10 +64,6 @@ abstract contract BaseV2Vault is sc4626, IFlashLoanRecipient {
         zeroExSwapWhitelist[_asset] = true;
     }
 
-    function getPALength() external returns (uint256) {
-        return protocolAdapters.length();
-    }
-
     function whiteListOutTokenByAddress(address _token, bool _value) external {
         whiteListOutToken(ERC20(_token), _value);
     }
