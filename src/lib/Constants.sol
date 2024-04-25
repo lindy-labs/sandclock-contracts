@@ -106,4 +106,11 @@ library Constants {
 
     // Aerodrome Router contract
     address public constant BASE_AERODROME_ROUTER = 0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43;
+
+    // address of the Aave v3 pool contract
+    address public constant BASE_AAVE_V3_POOL = 0xA238Dd80C259a72e81d7e4664a9801593F98d1c5;
+    // address of the Aave v3 "aEthwstETH" token (supply token)
+    address public constant BASE_AAVE_V3_AWSTETH_TOKEN = 0x99CBC45ea5bb7eF3a5BC08FB1B7E56bB2442Ef0D;
+    // address of the Aave v3 "variableDebtEthWETH" token (variable debt token)
+    address public constant BASE_AAVE_V3_VAR_DEBT_WETH_TOKEN = 0x24e6e0795b3c7c71D965fCc4f371803d1c1DcA1E;
 }

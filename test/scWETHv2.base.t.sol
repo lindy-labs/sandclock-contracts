@@ -71,7 +71,7 @@ contract scWETHv2Base is Test {
 
         priceConverter = new PriceConverter(address(this));
         vault = _deployVaultWithDefaultParams();
-        vaultHelper = new scWETHv2Helper(vault, priceConverter);
+        // vaultHelper = new scWETHv2Helper(vault, priceConverter);
 
         weth = WETH(payable(address(vault.asset())));
         // stEth = ILido(C.STETH);
@@ -102,6 +102,6 @@ contract scWETHv2Base is Test {
 
     function testDeploy() public {
         console.log("vault address: ", address(vault));
-        assertEq(address(vault), address(0x0));
+        assert(address(vault) != address(0x0));
     }
 }
