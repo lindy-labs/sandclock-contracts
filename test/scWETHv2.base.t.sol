@@ -36,6 +36,16 @@ import {PriceConverter} from "../src/steth/PriceConverter.sol";
 import {MockAdapter} from "./mocks/adapters/MockAdapter.sol";
 
 contract scWETHv2Base is Test {
+    using FixedPointMathLib for uint256;
+    using Address for address;
+
+    event Harvested(uint256 profitSinceLastHarvest, uint256 performanceFee);
+    event MinFloatAmountUpdated(address indexed user, uint256 newMinFloatAmount);
+    event Rebalanced(uint256 totalCollateral, uint256 totalDebt, uint256 floatBalance);
+    event SuppliedAndBorrowed(uint256 adapterId, uint256 supplyAmount, uint256 borrowAmount);
+    event RepaidAndWithdrawn(uint256 adapterId, uint256 repayAmount, uint256 withdrawAmount);
+    event WithdrawnToVault(uint256 amount);
+
     uint256 baseFork;
     uint256 blockNumber = 13629397;
 
@@ -71,7 +81,7 @@ contract scWETHv2Base is Test {
 
         priceConverter = new PriceConverter(address(this));
         vault = _deployVaultWithDefaultParams();
-        // vaultHelper = new scWETHv2Helper(vault, priceConverter);
+        vaultHelper = new scWETHv2Helper(vault, priceConverter);
 
         weth = WETH(payable(address(vault.asset())));
         // stEth = ILido(C.STETH);
@@ -100,8 +110,201 @@ contract scWETHv2Base is Test {
         return new scWETHv2(admin, keeper, WETH(payable(C.BASE_WETH)), new Swapper(), priceConverter);
     }
 
-    function testDeploy() public {
-        console.log("vault address: ", address(vault));
-        assert(address(vault) != address(0x0));
+    function test_supplyAndBorrow() public {
+        uint256 supplyAmount = 100 ether;
+        uint256 borrowAmount = supplyAmount / 2;
+        deal(address(wstEth), address(vault), supplyAmount);
+
+        // revert if called by another user
+        vm.expectRevert(CallerNotKeeper.selector);
+        vault.supplyAndBorrow(aaveV3AdapterId, supplyAmount, borrowAmount);
+
+        vm.startPrank(keeper);
+        vm.expectEmit(true, true, true, true);
+        emit SuppliedAndBorrowed(aaveV3AdapterId, supplyAmount, borrowAmount);
+        vault.supplyAndBorrow(aaveV3AdapterId, supplyAmount, borrowAmount);
+
+        assertEq(ERC20(C.BASE_WSTETH).balanceOf(address(vault)), 0, "wstEth not supplied");
+        assertEq(ERC20(C.BASE_WETH).balanceOf(address(vault)), borrowAmount, "weth not borrowed");
+    }
+
+    function test_repayAndWithdraw() public {
+        uint256 supplyAmount = 100 ether;
+        uint256 borrowAmount = supplyAmount / 2;
+        deal(address(wstEth), address(vault), supplyAmount);
+
+        hoax(keeper);
+        vault.supplyAndBorrow(aaveV3AdapterId, supplyAmount, borrowAmount);
+
+        // revert if called by another user
+        hoax(alice);
+        vm.expectRevert(CallerNotKeeper.selector);
+        vault.repayAndWithdraw(aaveV3AdapterId, supplyAmount, borrowAmount);
+
+        vm.startPrank(keeper);
+        vm.expectEmit(true, true, true, true);
+        emit RepaidAndWithdrawn(aaveV3AdapterId, borrowAmount, supplyAmount);
+        vault.repayAndWithdraw(aaveV3AdapterId, borrowAmount, supplyAmount);
+
+        assertEq(ERC20(C.BASE_WSTETH).balanceOf(address(vault)), supplyAmount, "wstEth not withdrawn");
+        assertEq(ERC20(C.BASE_WETH).balanceOf(address(vault)), 0, "weth not repaid");
+    }
+
+    function test_deposit_eth(uint256 amount) public {
+        amount = bound(amount, boundMinimum, 1e21);
+        vm.deal(address(this), amount);
+
+        assertEq(weth.balanceOf(address(this)), 0);
+        assertEq(address(this).balance, amount);
+
+        vault.deposit{value: amount}(address(this));
+
+        assertEq(address(this).balance, 0, "eth not transferred from user");
+        assertEq(vault.balanceOf(address(this)), amount, "shares not minted");
+        assertEq(weth.balanceOf(address(vault)), amount, "weth not transferred to vault");
+
+        vm.expectRevert("ZERO_SHARES");
+        vault.deposit{value: 0}(address(this));
+    }
+
+    function testBaseSwapWethToWstEth() public {
+        Swapper swapper = new Swapper();
+
+        uint256 amount = 10 ether;
+        deal(address(weth), address(swapper), amount);
+
+        hoax(keeper);
+        swapper.baseSwapWethToWstEth(amount, 0.01e18);
+
+        // assertEq(wstEth.balanceOf(address(this)), wstEthAmount, "wstEth not received");
+        // assertEq(weth.balanceOf(address(this)), 0, "weth not transferred");
+    }
+
+    function testBaseSwapWstEthToWeth() public {
+        Swapper swapper = new Swapper();
+
+        uint256 amount = 10 ether;
+        deal(address(wstEth), address(swapper), amount);
+
+        hoax(keeper);
+        swapper.baseSwapWstEthToWeth(amount, 0.01e18);
+
+        // assertEq(wstEth.balanceOf(address(this)), wstEthAmount, "wstEth not received");
+        // assertEq(weth.balanceOf(address(this)), 0, "weth not transferred");
+    }
+
+    function test_invest_basic(uint256 amount) public {
+        amount = bound(amount, boundMinimum, 1000 ether);
+        _depositToVault(address(this), amount);
+        _depositChecks(amount, amount);
+
+        uint256 investAmount = amount - minimumFloatAmount;
+
+        (bytes[] memory callData, uint256 totalSupplyAmount, uint256 totalFlashLoanAmount) =
+            _getInvestParams(investAmount);
+
+        // deposit into strategy
+        hoax(keeper);
+        vault.rebalance(investAmount, totalFlashLoanAmount, callData);
+
+        // _floatCheck();
+
+        // _investChecks(investAmount, priceConverter.wstEthToEth(totalSupplyAmount), totalFlashLoanAmount);
+    }
+
+    ////////////////////////////////////////// INTERNAL METHODS //////////////////////////////////////////
+
+    function _getInvestParams(uint256 amount) internal view returns (bytes[] memory, uint256, uint256) {
+        uint256 investAmount = amount;
+        uint256 stEthRateTolerance = 0.999e18;
+
+        uint256 aaveV3Amount = amount;
+
+        uint256 aaveV3FlashLoanAmount = _calcSupplyBorrowFlashLoanAmount(aaveV3Adapter, aaveV3Amount);
+
+        uint256 aaveV3SupplyAmount =
+            priceConverter.ethToWstEth(aaveV3Amount + aaveV3FlashLoanAmount).mulWadDown(stEthRateTolerance);
+
+        uint256 totalFlashLoanAmount = aaveV3FlashLoanAmount;
+
+        console.log("aaveV3SupplyAmount: ", aaveV3SupplyAmount);
+        console.log("aaveV3FlashLoanAmount: ", aaveV3FlashLoanAmount);
+
+        console.log("investAmount: ", investAmount);
+        console.log("totalFlashLoanAmount: ", totalFlashLoanAmount);
+
+        console.log("borrowAmount", aaveV3FlashLoanAmount.mulWadUp(1e18 + flashLoanFeePercent));
+
+        // if there are flash loan fees then the below code borrows the required flashloan amount plus the flashloan fees
+        // but this actually increases our LTV to a little more than the target ltv (which might not be desired)
+
+        bytes[] memory callData = new bytes[](2);
+
+        callData[0] =
+            abi.encodeWithSelector(scWETHv2.swapWethToWstEth.selector, investAmount + totalFlashLoanAmount, 0.01e18);
+
+        callData[1] = abi.encodeWithSelector(
+            scWETHv2.supplyAndBorrow.selector,
+            aaveV3AdapterId,
+            aaveV3SupplyAmount,
+            aaveV3FlashLoanAmount.mulWadUp(1e18 + flashLoanFeePercent)
+        );
+
+        return (callData, aaveV3SupplyAmount, totalFlashLoanAmount);
+    }
+
+    function _investChecks(uint256 amount, uint256 totalSupplyAmount, uint256 totalDebtTaken) internal {
+        uint256 totalCollateral = priceConverter.wstEthToEth(vault.totalCollateral());
+        uint256 totalDebt = vault.totalDebt();
+        assertApproxEqRel(totalCollateral - totalDebt, amount, 0.01e18, "totalAssets not equal amount");
+        assertEq(vault.totalInvested(), amount, "totalInvested not updated");
+        assertApproxEqRel(totalCollateral, totalSupplyAmount, 0.0001e18, "totalCollateral not equal totalSupplyAmount");
+        assertApproxEqRel(totalDebt, totalDebtTaken, 100, "totalDebt not equal totalDebtTaken");
+
+        uint256 aaveV3Deposited = vaultHelper.getCollateralInWeth(aaveV3Adapter) - vault.getDebt(aaveV3Adapter.id());
+
+        assertApproxEqRel(aaveV3Deposited, amount, 0.005e18, "aaveV3 allocation not correct");
+
+        assertApproxEqRel(
+            vaultHelper.allocationPercent(aaveV3Adapter), 1e18, 0.005e18, "aaveV3 allocationPercent not correct"
+        );
+
+        assertApproxEqRel(
+            vaultHelper.getLtv(aaveV3Adapter), targetLtv[aaveV3Adapter], 0.005e18, "aaveV3 ltv not correct"
+        );
+    }
+
+    function _calcSupplyBorrowFlashLoanAmount(IAdapter adapter, uint256 amount)
+        internal
+        view
+        returns (uint256 flashLoanAmount)
+    {
+        uint256 debt = vault.getDebt(adapter.id());
+        uint256 collateral = vaultHelper.getCollateralInWeth(adapter);
+
+        uint256 target = targetLtv[adapter].mulWadDown(amount + collateral);
+
+        // calculate the flashloan amount needed
+        flashLoanAmount = (target - debt).divWadDown(C.ONE - targetLtv[adapter]);
+    }
+
+    function _floatCheck() internal {
+        assertGe(weth.balanceOf(address(vault)), minimumFloatAmount, "float not maintained");
+    }
+
+    function _depositChecks(uint256 amount, uint256 preDepositBal) internal {
+        assertEq(vault.convertToAssets(10 ** vault.decimals()), 1e18, "convertToAssets decimal assertion failed");
+        assertEq(vault.totalAssets(), amount, "totalAssets assertion failed");
+        assertEq(vault.balanceOf(address(this)), amount, "balanceOf assertion failed");
+        assertEq(vault.convertToAssets(vault.balanceOf(address(this))), amount, "convertToAssets assertion failed");
+        assertEq(weth.balanceOf(address(this)), preDepositBal - amount, "weth balance assertion failed");
+    }
+
+    function _depositToVault(address user, uint256 amount) internal returns (uint256 shares) {
+        deal(address(weth), user, amount);
+        vm.startPrank(user);
+        weth.approve(address(vault), amount);
+        shares = vault.deposit(amount, user);
+        vm.stopPrank();
     }
 }

@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.19;
 
+import "forge-std/console.sol";
+
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {WETH} from "solmate/tokens/WETH.sol";
 import {ILido} from "../interfaces/lido/ILido.sol";
@@ -37,12 +39,14 @@ contract Swapper {
     function baseSwapWethToWstEth(uint256 _wethAmount, uint256 _wstEthAmountOutMin) external returns (uint256) {
         weth.approve(address(router), _wethAmount);
 
-        address[] memory path = new address[](2);
-        path[0] = C.BASE_WETH;
-        path[1] = C.BASE_WSTETH;
+        IRouter.Route memory route =
+            IRouter.Route({from: C.BASE_WETH, to: C.BASE_WSTETH, stable: false, factory: C.BASE_AERODROME_FACTORY});
+
+        IRouter.Route[] memory routes = new IRouter.Route[](1);
+        routes[0] = route;
 
         uint256[] memory amounts =
-            router.swapExactTokensForTokens(_wethAmount, _wstEthAmountOutMin, path, msg.sender, block.timestamp);
+            router.swapExactTokensForTokens(_wethAmount, _wstEthAmountOutMin, routes, msg.sender, block.timestamp);
 
         return amounts[1];
     }
@@ -50,12 +54,14 @@ contract Swapper {
     function baseSwapWstEthToWeth(uint256 _wstEthAmount, uint256 _wethAmountOutMin) external returns (uint256) {
         wstEth.approve(address(router), _wstEthAmount);
 
-        address[] memory path = new address[](2);
-        path[0] = C.BASE_WSTETH;
-        path[1] = C.BASE_WETH;
+        IRouter.Route memory route =
+            IRouter.Route({from: C.BASE_WSTETH, to: C.BASE_WETH, stable: false, factory: C.BASE_AERODROME_FACTORY});
+
+        IRouter.Route[] memory routes = new IRouter.Route[](1);
+        routes[0] = route;
 
         uint256[] memory amounts =
-            router.swapExactTokensForTokens(_wstEthAmount, _wethAmountOutMin, path, msg.sender, block.timestamp);
+            router.swapExactTokensForTokens(_wstEthAmount, _wethAmountOutMin, routes, msg.sender, block.timestamp);
 
         return amounts[1];
     }

@@ -106,6 +106,7 @@ library Constants {
 
     // Aerodrome Router contract
     address public constant BASE_AERODROME_ROUTER = 0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43;
+    address public constant BASE_AERODROME_FACTORY = 0x420DD381b31aEf6683db6B902084cB0FFECe40Da;
 
     // address of the Aave v3 pool contract
     address public constant BASE_AAVE_V3_POOL = 0xA238Dd80C259a72e81d7e4664a9801593F98d1c5;

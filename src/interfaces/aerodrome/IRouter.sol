@@ -2,10 +2,17 @@
 pragma solidity ^0.8.13;
 
 interface IRouter {
+    struct Route {
+        address from;
+        address to;
+        bool stable;
+        address factory;
+    }
+
     function swapExactTokensForTokens(
         uint256 amountIn,
         uint256 amountOutMin,
-        address[] calldata path,
+        Route[] calldata routes,
         address to,
         uint256 deadline
     ) external returns (uint256[] memory amounts);
