@@ -16,9 +16,10 @@ import {IwstETH} from "../interfaces/lido/IwstETH.sol";
 contract PriceConverter is AccessControl {
     using FixedPointMathLib for uint256;
 
-    IwstETH constant wstETH = IwstETH(C.WSTETH);
+    IwstETH constant wstETH = IwstETH(C.BASE_WSTETH);
 
     event UsdcToEthPriceFeedUpdated(address indexed admin, address newPriceFeed);
+    event wstEThToEthPriceFeedUpdated(address indexed admin, address newPriceFeed);
     event StEthToEthPriceFeedUpdated(address indexed admin, address newPriceFeed);
 
     // Chainlink price feed (USDC -> ETH)
@@ -26,6 +27,9 @@ contract PriceConverter is AccessControl {
 
     // Chainlink price feed (stETH -> ETH)
     AggregatorV3Interface public stEThToEthPriceFeed = AggregatorV3Interface(C.CHAINLINK_STETH_ETH_PRICE_FEED);
+
+    // Chainlink price feed (stETH -> ETH)
+    AggregatorV3Interface public wstEThToEthPriceFeed = AggregatorV3Interface(C.BASE_CHAINLINK_WSTETH_ETH_PRICE_FEED);
 
     constructor(address _admin) {
         _zeroAddressCheck(_admin);
@@ -51,13 +55,13 @@ contract PriceConverter is AccessControl {
 
     /// @notice Set the chainlink price feed for stETH -> ETH.
     /// @param _newPriceFeed The new price feed.
-    function setStEThToEthPriceFeed(address _newPriceFeed) external {
+    function setwstEThToEthPriceFeed(address _newPriceFeed) external {
         _onlyAdmin();
         _zeroAddressCheck(_newPriceFeed);
 
-        stEThToEthPriceFeed = AggregatorV3Interface(_newPriceFeed);
+        wstEThToEthPriceFeed = AggregatorV3Interface(_newPriceFeed);
 
-        emit StEthToEthPriceFeedUpdated(msg.sender, address(_newPriceFeed));
+        emit wstEThToEthPriceFeedUpdated(msg.sender, address(_newPriceFeed));
     }
 
     /**
@@ -81,27 +85,30 @@ contract PriceConverter is AccessControl {
     }
 
     function ethToWstEth(uint256 ethAmount) public view returns (uint256) {
-        (, int256 price,,,) = stEThToEthPriceFeed.latestRoundData();
+        (, int256 price,,,) = wstEThToEthPriceFeed.latestRoundData();
 
-        uint256 stEthAmount = ethAmount.divWadDown(uint256(price));
-
-        return wstETH.getWstETHByStETH(stEthAmount);
-    }
-
-    function stEthToEth(uint256 _stEthAmount) public view returns (uint256) {
-        (, int256 price,,,) = stEThToEthPriceFeed.latestRoundData();
-
-        return _stEthAmount.mulWadDown(uint256(price));
+        return ethAmount.divWadDown(uint256(price));
     }
 
     function wstEthToEth(uint256 wstEthAmount) public view returns (uint256) {
-        // wstETh to stEth using exchangeRate
-        uint256 stEthAmount = wstETH.getStETHByWstETH(wstEthAmount);
+        // wstETh to ETH using exchangeRate
+        (, int256 price,,,) = wstEThToEthPriceFeed.latestRoundData();
 
-        return stEthToEth(stEthAmount);
+        return wstEthAmount.mulWadDown(uint256(price));
     }
 
     function _zeroAddressCheck(address _address) internal pure {
         if (_address == address(0)) revert ZeroAddress();
+    }
+
+    /// @notice Set the chainlink price feed for stETH -> ETH.
+    /// @param _newPriceFeed The new price feed.
+    function setStEThToEthPriceFeed(address _newPriceFeed) external {
+        _onlyAdmin();
+        _zeroAddressCheck(_newPriceFeed);
+
+        stEThToEthPriceFeed = AggregatorV3Interface(_newPriceFeed);
+
+        emit StEthToEthPriceFeedUpdated(msg.sender, address(_newPriceFeed));
     }
 }

@@ -11,6 +11,7 @@ import {Address} from "openzeppelin-contracts/utils/Address.sol";
 
 import {AmountReceivedBelowMin} from "../errors/scErrors.sol";
 import {ISwapRouter} from "../interfaces/uniswap/ISwapRouter.sol";
+import {IRouter} from "../interfaces/aerodrome/IRouter.sol";
 import {Constants as C} from "../lib/Constants.sol";
 
 /**
@@ -23,14 +24,72 @@ contract Swapper {
     using SafeTransferLib for ERC20;
     using Address for address;
 
+    WETH public constant weth = WETH(payable(C.BASE_WETH));
+    IwstETH public constant wstEth = IwstETH(C.BASE_WSTETH);
+
     // Uniswap V3 router
     ISwapRouter public constant swapRouter = ISwapRouter(C.UNISWAP_V3_SWAP_ROUTER);
-
     ICurvePool public constant curvePool = ICurvePool(C.CURVE_ETH_STETH_POOL);
-
-    WETH public constant weth = WETH(payable(C.WETH));
     ILido public constant stEth = ILido(C.STETH);
-    IwstETH public constant wstEth = IwstETH(C.WSTETH);
+
+    IRouter public constant router = IRouter(C.BASE_AERODROME_ROUTER);
+
+    function baseSwapWethToWstEth(uint256 _wethAmount, uint256 _wstEthAmountOutMin) external returns (uint256) {
+        weth.approve(address(router), _wethAmount);
+
+        address[] memory path = new address[](2);
+        path[0] = C.BASE_WETH;
+        path[1] = C.BASE_WSTETH;
+
+        uint256[] memory amounts =
+            router.swapExactTokensForTokens(_wethAmount, _wstEthAmountOutMin, path, msg.sender, block.timestamp);
+
+        return amounts[1];
+    }
+
+    function baseSwapWstEthToWeth(uint256 _wstEthAmount, uint256 _wethAmountOutMin) external returns (uint256) {
+        wstEth.approve(address(router), _wstEthAmount);
+
+        address[] memory path = new address[](2);
+        path[0] = C.BASE_WSTETH;
+        path[1] = C.BASE_WETH;
+
+        uint256[] memory amounts =
+            router.swapExactTokensForTokens(_wstEthAmount, _wethAmountOutMin, path, msg.sender, block.timestamp);
+
+        return amounts[1];
+    }
+
+    /**
+     * @notice Swap tokens on 0x protocol.
+     * @param _tokenIn Address of the token to swap.
+     * @param _tokenOut Address of the token to receive.
+     * @param _amountIn Amount of the token to swap.
+     * @param _amountOutMin Minimum amount of the token to receive.
+     * @param _swapData Encoded swap data obtained from 0x API.
+     * @return Amount of the token received.
+     */
+    function zeroExSwap(
+        ERC20 _tokenIn,
+        ERC20 _tokenOut,
+        uint256 _amountIn,
+        uint256 _amountOutMin,
+        bytes calldata _swapData
+    ) external returns (uint256) {
+        uint256 tokenOutInitialBalance = _tokenOut.balanceOf(address(this));
+
+        _tokenIn.safeApprove(C.ZERO_EX_ROUTER, _amountIn);
+
+        C.ZERO_EX_ROUTER.functionCall(_swapData);
+
+        uint256 amountReceived = _tokenOut.balanceOf(address(this)) - tokenOutInitialBalance;
+
+        if (amountReceived < _amountOutMin) revert AmountReceivedBelowMin();
+
+        _tokenIn.approve(C.ZERO_EX_ROUTER, 0);
+
+        return amountReceived;
+    }
 
     /**
      * @notice Swap tokens on Uniswap V3 using exact input single function.
@@ -101,58 +160,27 @@ contract Swapper {
     }
 
     /**
-     * @notice Swap tokens on 0x protocol.
-     * @param _tokenIn Address of the token to swap.
-     * @param _tokenOut Address of the token to receive.
-     * @param _amountIn Amount of the token to swap.
-     * @param _amountOutMin Minimum amount of the token to receive.
-     * @param _swapData Encoded swap data obtained from 0x API.
-     * @return Amount of the token received.
-     */
-    function zeroExSwap(
-        ERC20 _tokenIn,
-        ERC20 _tokenOut,
-        uint256 _amountIn,
-        uint256 _amountOutMin,
-        bytes calldata _swapData
-    ) external returns (uint256) {
-        uint256 tokenOutInitialBalance = _tokenOut.balanceOf(address(this));
-
-        _tokenIn.safeApprove(C.ZERO_EX_ROUTER, _amountIn);
-
-        C.ZERO_EX_ROUTER.functionCall(_swapData);
-
-        uint256 amountReceived = _tokenOut.balanceOf(address(this)) - tokenOutInitialBalance;
-
-        if (amountReceived < _amountOutMin) revert AmountReceivedBelowMin();
-
-        _tokenIn.approve(C.ZERO_EX_ROUTER, 0);
-
-        return amountReceived;
-    }
-
-    /**
      * Swap WETH to wstETH using Lido or Curve for ETH to stETH conversion, whichever is cheaper.
      * @param _wethAmount Amount of WETH to swap.
      * @return Amount of wstETH received.
      */
     function lidoSwapWethToWstEth(uint256 _wethAmount) external returns (uint256) {
-        // weth to eth
-        weth.withdraw(_wethAmount);
+        // // weth to eth
+        // weth.withdraw(_wethAmount);
 
-        // eth to stEth
-        // if curve exchange rate is better than lido's 1:1, use curve
-        if (curvePool.get_dy(0, 1, _wethAmount) > _wethAmount) {
-            curvePool.exchange{value: _wethAmount}(0, 1, _wethAmount, _wethAmount);
-        } else {
-            stEth.submit{value: _wethAmount}(address(0x00));
-        }
+        // // eth to stEth
+        // // if curve exchange rate is better than lido's 1:1, use curve
+        // if (curvePool.get_dy(0, 1, _wethAmount) > _wethAmount) {
+        //     curvePool.exchange{value: _wethAmount}(0, 1, _wethAmount, _wethAmount);
+        // } else {
+        //     stEth.submit{value: _wethAmount}(address(0x00));
+        // }
 
-        // stEth to wstEth
-        uint256 stEthBalance = stEth.balanceOf(address(this));
-        ERC20(address(stEth)).safeApprove(address(wstEth), stEthBalance);
+        // // stEth to wstEth
+        // uint256 stEthBalance = stEth.balanceOf(address(this));
+        // ERC20(address(stEth)).safeApprove(address(wstEth), stEthBalance);
 
-        return wstEth.wrap(stEthBalance);
+        // return wstEth.wrap(stEthBalance);
     }
 
     /**
@@ -165,12 +193,12 @@ contract Swapper {
         external
         returns (uint256 wethReceived)
     {
-        // stEth to eth
-        ERC20(address(stEth)).safeApprove(address(curvePool), _stEthAmount);
+        // // stEth to eth
+        // ERC20(address(stEth)).safeApprove(address(curvePool), _stEthAmount);
 
-        wethReceived = curvePool.exchange(1, 0, _stEthAmount, _wethAmountOutMin);
+        // wethReceived = curvePool.exchange(1, 0, _stEthAmount, _wethAmountOutMin);
 
-        // eth to weth
-        weth.deposit{value: address(this).balance}();
+        // // eth to weth
+        // weth.deposit{value: address(this).balance}();
     }
 }

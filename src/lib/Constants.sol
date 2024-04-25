@@ -94,4 +94,16 @@ library Constants {
 
     // Morpho
     address public constant MORPHO = 0x33333aea097c193e66081E930c33020272b33333;
+
+    ////// BASE ADDRESSES ////////////////////////////
+    // address of the WETH token contract
+    address public constant BASE_WETH = 0x4200000000000000000000000000000000000006;
+    // address of the wrapped stETH token contract
+    address public constant BASE_WSTETH = 0xc1CBa3fCea344f92D9239c08C0568f6F2F0ee452;
+
+    // Chainlink pricefeed (wstEth -> ETH)
+    address public constant BASE_CHAINLINK_WSTETH_ETH_PRICE_FEED = 0xa669E5272E60f78299F4824495cE01a3923f4380;
+
+    // Aerodrome Router contract
+    address public constant BASE_AERODROME_ROUTER = 0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43;
 }

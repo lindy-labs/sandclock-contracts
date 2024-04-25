@@ -56,12 +56,12 @@ contract scWETHv2 is BaseV2Vault {
     // a simple solution to that is just using minimumFloatAmount instead of a percentage float
     uint256 public minimumFloatAmount = 1 ether;
 
-    IwstETH constant wstETH = IwstETH(C.WSTETH);
+    IwstETH constant wstETH = IwstETH(C.BASE_WSTETH);
 
     constructor(address _admin, address _keeper, WETH _weth, Swapper _swapper, PriceConverter _priceConverter)
         BaseV2Vault(_admin, _keeper, _weth, _priceConverter, _swapper, "Sandclock Yield ETH", "scETH")
     {
-        zeroExSwapWhitelist[ERC20(C.WSTETH)] = true;
+        zeroExSwapWhitelist[ERC20(C.BASE_WSTETH)] = true;
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -106,11 +106,15 @@ contract scWETHv2 is BaseV2Vault {
 
     /// @notice swap weth to wstEth using lido for 1:1 conversion of weth to stEth
     /// @param _wethAmount amount of weth to be swapped to wstEth
-    function swapWethToWstEth(uint256 _wethAmount) external {
+    function swapWethToWstEth(uint256 _wethAmount, uint256 _slippageTolerance) external {
         _onlyKeeperOrFlashLoan();
 
+        if (_slippageTolerance > C.ONE) revert InvalidSlippageTolerance();
+
+        uint256 wstEthAmountOutMin = priceConverter.ethToWstEth(_wethAmount).mulWadDown(_slippageTolerance);
+
         address(swapper).functionDelegateCall(
-            abi.encodeWithSelector(Swapper.lidoSwapWethToWstEth.selector, _wethAmount)
+            abi.encodeWithSelector(Swapper.baseSwapWethToWstEth.selector, _wethAmount, wstEthAmountOutMin)
         );
     }
 
@@ -129,12 +133,10 @@ contract scWETHv2 is BaseV2Vault {
             _wstEthAmount = wstEthBalance;
         }
 
-        uint256 stEthAmount = wstETH.unwrap(_wstEthAmount);
-
-        uint256 wethAmountOutMin = priceConverter.stEthToEth(stEthAmount).mulWadDown(_slippageTolerance);
+        uint256 wethAmountOutMin = priceConverter.wstEthToEth(_wstEthAmount).mulWadDown(_slippageTolerance);
 
         address(swapper).functionDelegateCall(
-            abi.encodeWithSelector(Swapper.curveSwapStEthToWeth.selector, stEthAmount, wethAmountOutMin)
+            abi.encodeWithSelector(Swapper.baseSwapWstEthToWeth.selector, _wstEthAmount, wethAmountOutMin)
         );
     }
 
