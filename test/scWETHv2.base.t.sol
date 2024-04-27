@@ -195,7 +195,7 @@ contract scWETHv2Base is Test {
 
     function test_invest_basic() public {
         // amount = bound(amount, boundMinimum, 1000 ether);
-        uint256 amount = 100 ether;
+        uint256 amount = 10 ether;
 
         _depositToVault(address(this), amount);
         _depositChecks(amount, amount);
