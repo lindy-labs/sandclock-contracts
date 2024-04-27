@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.13;
 
+import "forge-std/console.sol";
+
 import {
     ZeroAddress,
     InvalidSlippageTolerance,
@@ -244,11 +246,16 @@ contract scWETHv2 is BaseV2Vault {
     function supplyAndBorrow(uint256 _adapterId, uint256 _supplyAmount, uint256 _borrowAmount) external {
         _onlyKeeperOrFlashLoan();
 
+        console.log("Starting supply and borrow");
+
         address adapter = protocolAdapters.get(_adapterId);
 
+        console.log("Starting supply");
         _adapterDelegateCall(adapter, abi.encodeWithSelector(IAdapter.supply.selector, _supplyAmount));
+        console.log("Starting borrow");
         _adapterDelegateCall(adapter, abi.encodeWithSelector(IAdapter.borrow.selector, _borrowAmount));
 
+        console.log("Finish supply and borrow");
         emit SuppliedAndBorrowed(_adapterId, _supplyAmount, _borrowAmount);
     }
 

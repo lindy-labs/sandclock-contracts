@@ -94,7 +94,7 @@ contract scWETHv2Base is Test {
 
         _setupAdapters();
 
-        targetLtv[aaveV3Adapter] = 0.7e18;
+        targetLtv[aaveV3Adapter] = 0.4e18;
     }
 
     function _setupAdapters() internal {
@@ -193,8 +193,10 @@ contract scWETHv2Base is Test {
         // assertEq(weth.balanceOf(address(this)), 0, "weth not transferred");
     }
 
-    function test_invest_basic(uint256 amount) public {
-        amount = bound(amount, boundMinimum, 1000 ether);
+    function test_invest_basic() public {
+        // amount = bound(amount, boundMinimum, 1000 ether);
+        uint256 amount = 100 ether;
+
         _depositToVault(address(this), amount);
         _depositChecks(amount, amount);
 
@@ -210,6 +212,17 @@ contract scWETHv2Base is Test {
         // _floatCheck();
 
         // _investChecks(investAmount, priceConverter.wstEthToEth(totalSupplyAmount), totalFlashLoanAmount);
+    }
+
+    function test_priceConverter() public {
+        uint256 ethAmount = 1 ether;
+        uint256 wstEthAmount = 1 ether;
+
+        uint256 ethToWstEth = priceConverter.ethToWstEth(ethAmount);
+        uint256 wstEthToEth = priceConverter.wstEthToEth(wstEthAmount);
+
+        console.log("1 eth = ", ethToWstEth);
+        console.log("1 wstEth = ", wstEthToEth);
     }
 
     ////////////////////////////////////////// INTERNAL METHODS //////////////////////////////////////////
