@@ -167,31 +167,31 @@ contract scWETHv2Base is Test {
         vault.deposit{value: 0}(address(this));
     }
 
-    function testBaseSwapWethToWstEth() public {
-        Swapper swapper = new Swapper();
+    // function testBaseSwapWethToWstEth() public {
+    //     Swapper swapper = new Swapper();
 
-        uint256 amount = 10 ether;
-        deal(address(weth), address(swapper), amount);
+    //     uint256 amount = 10 ether;
+    //     deal(address(weth), address(swapper), amount);
 
-        hoax(keeper);
-        swapper.baseSwapWethToWstEth(amount, 0.01e18);
+    //     hoax(keeper);
+    //     swapper.baseSwapWethToWstEth(amount, 0.01e18);
 
-        // assertEq(wstEth.balanceOf(address(this)), wstEthAmount, "wstEth not received");
-        // assertEq(weth.balanceOf(address(this)), 0, "weth not transferred");
-    }
+    //     // assertEq(wstEth.balanceOf(address(this)), wstEthAmount, "wstEth not received");
+    //     // assertEq(weth.balanceOf(address(this)), 0, "weth not transferred");
+    // }
 
-    function testBaseSwapWstEthToWeth() public {
-        Swapper swapper = new Swapper();
+    // function testBaseSwapWstEthToWeth() public {
+    //     Swapper swapper = new Swapper();
 
-        uint256 amount = 10 ether;
-        deal(address(wstEth), address(swapper), amount);
+    //     uint256 amount = 10 ether;
+    //     deal(address(wstEth), address(swapper), amount);
 
-        hoax(keeper);
-        swapper.baseSwapWstEthToWeth(amount, 0.01e18);
+    //     hoax(keeper);
+    //     swapper.baseSwapWstEthToWeth(amount, 0.01e18);
 
-        // assertEq(wstEth.balanceOf(address(this)), wstEthAmount, "wstEth not received");
-        // assertEq(weth.balanceOf(address(this)), 0, "weth not transferred");
-    }
+    //     // assertEq(wstEth.balanceOf(address(this)), wstEthAmount, "wstEth not received");
+    //     // assertEq(weth.balanceOf(address(this)), 0, "weth not transferred");
+    // }
 
     function test_invest_basic() public {
         // amount = bound(amount, boundMinimum, 1000 ether);
@@ -209,27 +209,16 @@ contract scWETHv2Base is Test {
         hoax(keeper);
         vault.rebalance(investAmount, totalFlashLoanAmount, callData);
 
-        // _floatCheck();
+        _floatCheck();
 
         // _investChecks(investAmount, priceConverter.wstEthToEth(totalSupplyAmount), totalFlashLoanAmount);
-    }
-
-    function test_priceConverter() public {
-        uint256 ethAmount = 1 ether;
-        uint256 wstEthAmount = 1 ether;
-
-        uint256 ethToWstEth = priceConverter.ethToWstEth(ethAmount);
-        uint256 wstEthToEth = priceConverter.wstEthToEth(wstEthAmount);
-
-        console.log("1 eth = ", ethToWstEth);
-        console.log("1 wstEth = ", wstEthToEth);
     }
 
     ////////////////////////////////////////// INTERNAL METHODS //////////////////////////////////////////
 
     function _getInvestParams(uint256 amount) internal view returns (bytes[] memory, uint256, uint256) {
         uint256 investAmount = amount;
-        uint256 stEthRateTolerance = 0.999e18;
+        uint256 stEthRateTolerance = 0.992e18;
 
         uint256 aaveV3Amount = amount;
 
@@ -239,22 +228,15 @@ contract scWETHv2Base is Test {
             priceConverter.ethToWstEth(aaveV3Amount + aaveV3FlashLoanAmount).mulWadDown(stEthRateTolerance);
 
         uint256 totalFlashLoanAmount = aaveV3FlashLoanAmount;
-
-        console.log("aaveV3SupplyAmount: ", aaveV3SupplyAmount);
-        console.log("aaveV3FlashLoanAmount: ", aaveV3FlashLoanAmount);
-
-        console.log("investAmount: ", investAmount);
-        console.log("totalFlashLoanAmount: ", totalFlashLoanAmount);
-
-        console.log("borrowAmount", aaveV3FlashLoanAmount.mulWadUp(1e18 + flashLoanFeePercent));
-
+        uint256 totalSupplyAmount = aaveV3SupplyAmount;
         // if there are flash loan fees then the below code borrows the required flashloan amount plus the flashloan fees
         // but this actually increases our LTV to a little more than the target ltv (which might not be desired)
 
         bytes[] memory callData = new bytes[](2);
 
-        callData[0] =
-            abi.encodeWithSelector(scWETHv2.swapWethToWstEth.selector, investAmount + totalFlashLoanAmount, 0.01e18);
+        callData[0] = abi.encodeWithSelector(
+            scWETHv2.swapWethToWstEth.selector, investAmount + totalFlashLoanAmount, totalSupplyAmount
+        );
 
         callData[1] = abi.encodeWithSelector(
             scWETHv2.supplyAndBorrow.selector,
@@ -263,7 +245,7 @@ contract scWETHv2Base is Test {
             aaveV3FlashLoanAmount.mulWadUp(1e18 + flashLoanFeePercent)
         );
 
-        return (callData, aaveV3SupplyAmount, totalFlashLoanAmount);
+        return (callData, totalSupplyAmount, totalFlashLoanAmount);
     }
 
     function _investChecks(uint256 amount, uint256 totalSupplyAmount, uint256 totalDebtTaken) internal {

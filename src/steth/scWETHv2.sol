@@ -108,26 +108,21 @@ contract scWETHv2 is BaseV2Vault {
 
     /// @notice swap weth to wstEth using lido for 1:1 conversion of weth to stEth
     /// @param _wethAmount amount of weth to be swapped to wstEth
-    function swapWethToWstEth(uint256 _wethAmount, uint256 _slippageTolerance) external {
+    function swapWethToWstEth(uint256 _wethAmount, uint256 _wstEthAmountOutMin) external {
         _onlyKeeperOrFlashLoan();
 
-        if (_slippageTolerance > C.ONE) revert InvalidSlippageTolerance();
-
-        uint256 wstEthAmountOutMin = priceConverter.ethToWstEth(_wethAmount).mulWadDown(_slippageTolerance);
-
         address(swapper).functionDelegateCall(
-            abi.encodeWithSelector(Swapper.baseSwapWethToWstEth.selector, _wethAmount, wstEthAmountOutMin)
+            abi.encodeWithSelector(
+                Swapper.baseSwapWethToWstEth.selector, _wethAmount, _wstEthAmountOutMin, address(this)
+            )
         );
     }
 
     /// @notice swap wstEth to weth on curve
     /// @dev mainly to be used in the multicall to swap withdrawn wstEth to weth to payback the flashloan
     /// @param _wstEthAmount amount of wstEth to be swapped to weth
-    /// @param _slippageTolerance the max slippage during steth to eth swap (1e18 meaning 0 slippage tolerance)
-    function swapWstEthToWeth(uint256 _wstEthAmount, uint256 _slippageTolerance) external {
+    function swapWstEthToWeth(uint256 _wstEthAmount, uint256 _wethAmountOutMin) external {
         _onlyKeeperOrFlashLoan();
-
-        if (_slippageTolerance > C.ONE) revert InvalidSlippageTolerance();
 
         uint256 wstEthBalance = wstETH.balanceOf(address(this));
 
@@ -135,10 +130,10 @@ contract scWETHv2 is BaseV2Vault {
             _wstEthAmount = wstEthBalance;
         }
 
-        uint256 wethAmountOutMin = priceConverter.wstEthToEth(_wstEthAmount).mulWadDown(_slippageTolerance);
-
         address(swapper).functionDelegateCall(
-            abi.encodeWithSelector(Swapper.baseSwapWstEthToWeth.selector, _wstEthAmount, wethAmountOutMin)
+            abi.encodeWithSelector(
+                Swapper.baseSwapWstEthToWeth.selector, _wstEthAmount, _wethAmountOutMin, address(this)
+            )
         );
     }
 
@@ -246,16 +241,11 @@ contract scWETHv2 is BaseV2Vault {
     function supplyAndBorrow(uint256 _adapterId, uint256 _supplyAmount, uint256 _borrowAmount) external {
         _onlyKeeperOrFlashLoan();
 
-        console.log("Starting supply and borrow");
-
         address adapter = protocolAdapters.get(_adapterId);
 
-        console.log("Starting supply");
         _adapterDelegateCall(adapter, abi.encodeWithSelector(IAdapter.supply.selector, _supplyAmount));
-        console.log("Starting borrow");
         _adapterDelegateCall(adapter, abi.encodeWithSelector(IAdapter.borrow.selector, _borrowAmount));
 
-        console.log("Finish supply and borrow");
         emit SuppliedAndBorrowed(_adapterId, _supplyAmount, _borrowAmount);
     }
 

@@ -36,7 +36,10 @@ contract Swapper {
 
     IRouter public constant router = IRouter(C.BASE_AERODROME_ROUTER);
 
-    function baseSwapWethToWstEth(uint256 _wethAmount, uint256 _wstEthAmountOutMin) external returns (uint256) {
+    function baseSwapWethToWstEth(uint256 _wethAmount, uint256 _wstEthAmountOutMin, address _vault)
+        external
+        returns (uint256)
+    {
         weth.approve(address(router), _wethAmount);
 
         IRouter.Route memory route =
@@ -46,12 +49,15 @@ contract Swapper {
         routes[0] = route;
 
         uint256[] memory amounts =
-            router.swapExactTokensForTokens(_wethAmount, _wstEthAmountOutMin, routes, msg.sender, block.timestamp);
+            router.swapExactTokensForTokens(_wethAmount, _wstEthAmountOutMin, routes, _vault, block.timestamp);
 
         return amounts[1];
     }
 
-    function baseSwapWstEthToWeth(uint256 _wstEthAmount, uint256 _wethAmountOutMin) external returns (uint256) {
+    function baseSwapWstEthToWeth(uint256 _wstEthAmount, uint256 _wethAmountOutMin, address _vault)
+        external
+        returns (uint256)
+    {
         wstEth.approve(address(router), _wstEthAmount);
 
         IRouter.Route memory route =
@@ -61,7 +67,7 @@ contract Swapper {
         routes[0] = route;
 
         uint256[] memory amounts =
-            router.swapExactTokensForTokens(_wstEthAmount, _wethAmountOutMin, routes, msg.sender, block.timestamp);
+            router.swapExactTokensForTokens(_wstEthAmount, _wethAmountOutMin, routes, _vault, block.timestamp);
 
         return amounts[1];
     }
