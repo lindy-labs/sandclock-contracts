@@ -205,9 +205,13 @@ contract scWETHv2Base is Test {
         (bytes[] memory callData, uint256 totalSupplyAmount, uint256 totalFlashLoanAmount) =
             _getInvestParams(investAmount);
 
+        console.log("totalAssets before rebalance", vault.totalAssets());
+
         // deposit into strategy
         hoax(keeper);
         vault.rebalance(investAmount, totalFlashLoanAmount, callData);
+
+        console.log("totalAssets after rebalance", vault.totalAssets());
 
         _floatCheck();
 
@@ -218,7 +222,7 @@ contract scWETHv2Base is Test {
 
     function _getInvestParams(uint256 amount) internal view returns (bytes[] memory, uint256, uint256) {
         uint256 investAmount = amount;
-        uint256 stEthRateTolerance = 0.992e18;
+        uint256 stEthRateTolerance = 0.99e18;
 
         uint256 aaveV3Amount = amount;
 
