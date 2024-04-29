@@ -222,7 +222,7 @@ contract scWETHv2Base is Test {
 
     function _getInvestParams(uint256 amount) internal view returns (bytes[] memory, uint256, uint256) {
         uint256 investAmount = amount;
-        uint256 stEthRateTolerance = 0.99e18;
+        uint256 stEthRateTolerance = 0.993e18;
 
         uint256 aaveV3Amount = amount;
 
