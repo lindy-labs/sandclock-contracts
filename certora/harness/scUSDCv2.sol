@@ -33,6 +33,8 @@ contract scUSDCv2 is BaseV2Vault {
 
     WETH public weth;// = WETH(payable(C.WETH));
 
+    bytes[] callDataGen;
+
     // leveraged (w)eth vault
     ERC4626 public immutable scWETH;
 
@@ -90,10 +92,11 @@ contract scUSDCv2 is BaseV2Vault {
     /**
      * @notice Rebalance the vault's positions/loans in multiple lending markets.
      * @dev Called to increase or decrease the WETH debt to maintain the LTV (loan to value) and avoid liquidation.
-     * @param _callData The encoded data for the calls to be made to the lending markets.
      */
-    function rebalance(bytes[] calldata _callData) external {
+    function rebalance(/*bytes[] calldata _callData*/) external {
         _onlyKeeper();
+
+        bytes[] memory _callData = callDataGen;
 
         _multiCall(_callData);
 
@@ -111,14 +114,29 @@ contract scUSDCv2 is BaseV2Vault {
         emit Rebalanced(totalCollateral(), totalDebt(), float);
     }
 
+    function fillCallData1(address adapter3, uint256 totalCollateral, uint256 totalDebt) external {
+        callDataGen = new bytes[](2);
+        callDataGen[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, IAdapter(adapter3).id(), totalCollateral);
+        callDataGen[1] = abi.encodeWithSelector(scUSDCv2.borrow.selector, IAdapter(adapter3).id(), totalDebt);
+    }
+
+    function fillCallData2(address adapter2, address adapter3, uint256 debtToMove, uint256 collateralToMove) external {
+        callDataGen = new bytes[](4);
+        callDataGen[0] = abi.encodeWithSelector(scUSDCv2.repay.selector, IAdapter(adapter3).id(), debtToMove);
+        callDataGen[1] = abi.encodeWithSelector(scUSDCv2.withdraw.selector, IAdapter(adapter3).id(), collateralToMove);
+        callDataGen[2] = abi.encodeWithSelector(scUSDCv2.supply.selector, IAdapter(adapter2).id(), collateralToMove);
+        callDataGen[3] = abi.encodeWithSelector(scUSDCv2.borrow.selector, IAdapter(adapter2).id(), debtToMove);
+    }
+
     /**
      * @notice Reallocate collateral & debt between lending markets, ie move debt and collateral positions from one lending market to another.
      * @dev To move the funds between lending markets, the vault uses flashloans to repay debt and release collateral in one lending market enabling it to be moved to anoter mm.
      * @param _flashLoanAmount The amount of WETH to flashloan from Balancer. Has to be at least equal to amount of WETH debt moved between lending markets.
-     * @param _callData The encoded data for the calls to be made to the lending markets.
      */
-    function reallocate(uint256 _flashLoanAmount, bytes[] calldata _callData) external {
+    function reallocate(uint256 _flashLoanAmount/*, bytes[] calldata _callData*/) external {
         _onlyKeeper();
+
+        bytes[] memory _callData = callDataGen;
 
         if (_flashLoanAmount == 0) revert FlashLoanAmountZero();
 

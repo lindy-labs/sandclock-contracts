@@ -18,6 +18,8 @@ methods {
     function withdraw(uint256 assets, address receiver, address owner) external returns (uint256);
     function redeem(uint256 shares, address receiver, address owner) external returns (uint256);
     function rebalanceWithoutOperations() external;
+    function rebalance() external;
+    function reallocate(uint256 _flashLoanAmount) external;
     function exitAllPositions(uint256) external;
     //function totalCollateral() external;
     function sellProfit(uint256 _usdcAmountOutMin) external ;
@@ -27,6 +29,8 @@ methods {
     function removeAdapter(uint256 _adapterId, bool _force) external;
     function disinvest(uint256 _amount) external;
     function uePF.setLatestAnswer(int256 _answer) external;
+    function fillCallData1(address, uint256, uint256) external;
+    function fillCallData2(address, address, uint256, uint256) external;
 
     // view functions
     function convertToShares(uint256 assets) external returns (uint256) envfree;
@@ -59,7 +63,7 @@ methods {
     function adapter2.getSupplyAmount() external returns (uint256) envfree; 
     function adapter2.getBorrowAmount() external returns (uint256) envfree; 
     function adapter3.getSupplyAmount() external returns (uint256) envfree; 
-    function adapter3.getBorrowAmount() external returns (uint256) envfree; 
+    function adapter3.getBorrowAmount() external returns (uint256) envfree;
     // erc20
     function asset.totalSupply() external returns (uint256) envfree;
     function asset.balanceOf(address) external returns (uint256) envfree;
@@ -119,6 +123,57 @@ definition assertApproxEqRel(uint256 a, uint256 b, uint256 maxD) returns bool = 
 
     assert delta(collateral_, to_mathint(initialBalance)) <= 1;
     assert delta(debt_, to_mathint(initialDebt)) <= 1;
+}*/
+/*
+    @Rule
+
+    @Category: Medium
+
+    @Description:
+        the function call reallocate(uint256, bytes[]) reallocates collateral & debt between lending markets, ie move debt and collateral positions from one lending market to another
+*/
+/*rule integrity_of_reallocate(address _adapter2, address _adapter3, uint256 totalCollateral, uint256 totalDebt) {
+    env e;
+    require _adapter2 == adapter2 && _adapter3 == adapter3;
+    addAdapterByAddress(e, _adapter2);
+    addAdapterByAddress(e, _adapter3);
+    uint256 adapterId2 = getAdapterId(_adapter2);
+    uint256 adapterId3 = getAdapterId(_adapter3);
+
+    require asset.balanceOf(currentContract) == totalCollateral;
+
+    fillCallData1(e, _adapter3, totalCollateral, totalDebt);
+
+    rebalance(e);
+
+    assert delta(getCollateral(adapterId3), totalCollateral) <=1; // Initializing
+    assert delta(getDebt(adapterId3), totalDebt) <= 1;
+
+    assert delta(getCollateral(adapterId2), 0) <=1;
+    assert delta(getDebt(adapterId2), 0) <= 1;
+
+        // move everything from Aave to Euler
+    uint256 collateralToMove = totalCollateral;
+    uint256 debtToMove = totalDebt;
+    uint256 flashLoanAmount = debtToMove;
+
+    fillCallData2(e, _adapter2, _adapter3, debtToMove, collateralToMove);
+
+    //assert !flashLoanInitiated();
+
+    reallocate(e, flashLoanAmount);
+
+    //assert !flashLoanInitiated();
+
+    assert delta(to_mathint(totalCollateral()), to_mathint(totalCollateral)) <= 1;
+    assert delta(to_mathint(totalDebt()), to_mathint(totalDebt)) <= 1;
+
+    assert delta(to_mathint(getCollateral(adapterId3)), 0) <=1; // Leaving
+    assert delta(to_mathint(getDebt(adapterId3)), 0) <= 1;
+
+    assert delta(to_mathint(getCollateral(adapterId2)), to_mathint(totalCollateral)) <=1; // Arriving
+    assert delta(to_mathint(getDebt(adapterId2)), to_mathint(totalDebt)) <= 1;
+
 }*/
 /*
     @Rule

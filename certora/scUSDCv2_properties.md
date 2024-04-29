@@ -52,6 +52,7 @@ It has the following view functions, which do not change state:
 | No. | Property  | Category | Priority | Specified | Verified | Report |
 | ---- | --------  | -------- | -------- | -------- | -------- | -------- |
 |  | `rebalance(_callData)` should rebalances the vault's positions/loans in multiple lending markets based on the operations in `_callData` | high-level | high | Y | Y | [Link]() |
+|  | `reallocate(flashLoanAmount,_callData)` should reallocates collateral & debt between lending markets, ie move debt and collateral positions from one lending market to another based on the operations in `_callData` | high-level | high | Y | Y | [Link]() |
 |  | `sellProfit(uint256 _usdcAmountOutMin)` should sell WETH profits, as long as `wethInvested()` is greater than `totalDebt()` (swaps to USDC) | high-level | high | Y | Y | [Link]() |
 |  | `sellProfit(uint256 _usdcAmountOutMin)` should revert if `wethInvested()` is lesser than or equal to `totalDebt()` | unit test | medium | Y | Y | [Link]() |
 |  | `supply(uint256 _adapterId, uint256 _amount)` should supply USDC assets (`_amount`) to a lending market given by `_adapterId` | medium | medium | Y | Y | [Link]() |
