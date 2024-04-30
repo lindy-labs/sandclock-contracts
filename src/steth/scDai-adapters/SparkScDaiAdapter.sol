@@ -18,7 +18,7 @@ contract SparkScDaiAdapter is IAdapter {
     WETH constant weth = WETH(payable(C.WETH));
 
     // Aave v3 pool contract
-    IPool public constant pool = IPool(C.AAVE_V3_POOL);
+    IPool public constant pool = IPool(C.SPARK_POOL);
     // Aave v3 pool data provider contract
     IPoolDataProvider public constant sparkPoolDataProvider = IPoolDataProvider(C.SPARK_POOL_DATA_PROVIDER);
     // Aave v3 "aEthUSDC" token (supply token)
