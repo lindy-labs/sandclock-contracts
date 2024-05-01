@@ -28,6 +28,8 @@ library Constants {
     address public constant LUSD = 0x5f98805A4E8be255a32880FDeC7F6728C6568bA0;
     // address of the DAI token contract
     address public constant DAI = 0x6B175474E89094C44Da98b954EedeAC495271d0F;
+    // address of the sDAI token contract
+    address public constant SDAI = 0x83F20F44975D03b1b09e64809B757c47f942BEeA;
 
     // address of the Curve pool for ETH-stETH
     address public constant CURVE_ETH_STETH_POOL = 0xDC24316b9AE028F1497c275EB9192a3Ea0f67022;
@@ -52,6 +54,7 @@ library Constants {
     address public constant SPARK_POOL = 0xC13e21B648A5Ee794902342038FF3aDAB66BE987;
     address public constant SPARK_POOL_DATA_PROVIDER = 0xFc21d6d146E6086B8359705C8b28512a983db0cb;
     address public constant SPARK_ADAI_TOKEN = 0x4DEDf26112B3Ec8eC46e7E31EA5e123490B05B8B;
+    address public constant SPARK_ASDAI_TOKEN = 0x78f897F0fE2d3B5690EbAe7f19862DEacedF10a7;
     address public constant SPARK_VAR_DEBT_WETH_TOKEN = 0x2e7576042566f8D6990e07A1B61Ad1efd86Ae70d;
 
     // EULER Contracts

@@ -3,6 +3,7 @@ pragma solidity ^0.8.19;
 
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 import {AccessControl} from "openzeppelin-contracts/access/AccessControl.sol";
+import {ERC4626} from "solmate/mixins/ERC4626.sol";
 
 import {ZeroAddress, CallerNotAdmin} from "../errors/scErrors.sol";
 import {Constants as C} from "../lib/Constants.sol";
@@ -17,6 +18,7 @@ contract PriceConverter is AccessControl {
     using FixedPointMathLib for uint256;
 
     IwstETH constant wstETH = IwstETH(C.WSTETH);
+    ERC4626 constant sDai = ERC4626(C.SDAI);
 
     event UsdcToEthPriceFeedUpdated(address indexed admin, address newPriceFeed);
     event StEthToEthPriceFeedUpdated(address indexed admin, address newPriceFeed);
@@ -83,16 +85,28 @@ contract PriceConverter is AccessControl {
         return (_usdcAmount * C.WETH_USDC_DECIMALS_DIFF).mulWadDown(uint256(usdcPriceInEth));
     }
 
-    function ethToDai(uint256 _ethAmount) public view returns (uint256) {
+    function ethToDai(uint256 _ethAmount) internal view returns (uint256) {
         (, int256 daiPriceInEth,,,) = daiToEthPriceFeed.latestRoundData();
 
         return _ethAmount.divWadDown(uint256(daiPriceInEth));
     }
 
-    function daiToEth(uint256 _daiAmount) public view returns (uint256) {
+    function daiToEth(uint256 _daiAmount) internal view returns (uint256) {
         (, int256 daiPriceInEth,,,) = daiToEthPriceFeed.latestRoundData();
 
         return _daiAmount.mulWadDown(uint256(daiPriceInEth));
+    }
+
+    function ethTosDai(uint256 _ethAmount) public view returns (uint256) {
+        uint256 daiAmount = ethToDai(_ethAmount);
+
+        return sDai.convertToShares(daiAmount);
+    }
+
+    function sDaiToEth(uint256 _sDaiAmount) public view returns (uint256) {
+        uint256 daiAmount = sDai.convertToAssets(_sDaiAmount);
+
+        return daiToEth(daiAmount);
     }
 
     function ethToWstEth(uint256 ethAmount) public view returns (uint256) {

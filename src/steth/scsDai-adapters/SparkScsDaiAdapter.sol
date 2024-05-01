@@ -13,8 +13,8 @@ import {IAdapter} from "../IAdapter.sol";
  * @title Aave v3 Lending Protocol Adapter
  * @notice Facilitates lending and borrowing for the Aave v3 lending protocol
  */
-contract SparkScDaiAdapter is IAdapter {
-    ERC20 constant dai = ERC20(C.DAI);
+contract SparkScsDaiAdapter is IAdapter {
+    ERC20 constant dai = ERC20(C.SDAI);
     WETH constant weth = WETH(payable(C.WETH));
 
     // Aave v3 pool contract
@@ -22,7 +22,7 @@ contract SparkScDaiAdapter is IAdapter {
     // Aave v3 pool data provider contract
     IPoolDataProvider public constant sparkPoolDataProvider = IPoolDataProvider(C.SPARK_POOL_DATA_PROVIDER);
     // Aave v3 "aEthUSDC" token (supply token)
-    ERC20 public constant aDai = ERC20(C.SPARK_ADAI_TOKEN);
+    ERC20 public constant aDai = ERC20(C.SPARK_ASDAI_TOKEN);
     // Aave v3 "variableDebtEthWETH" token (variable debt token)
     ERC20 public constant dWeth = ERC20(C.SPARK_VAR_DEBT_WETH_TOKEN);
 

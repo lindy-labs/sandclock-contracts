@@ -22,7 +22,7 @@ import {Swapper} from "./Swapper.sol";
  * @title Sandclock Dai Vault
  * @dev code mostly copied from scUSDCv2
  */
-contract scDAI is BaseV2Vault {
+contract scsDAI is BaseV2Vault {
     using SafeTransferLib for ERC20;
     using SafeTransferLib for WETH;
     using FixedPointMathLib for uint256;
@@ -47,7 +47,7 @@ contract scDAI is BaseV2Vault {
     );
     event Reallocated();
     event Rebalanced(uint256 totalCollateral, uint256 totalDebt, uint256 floatBalance);
-    event ProfitSold(uint256 wethSold, uint256 daiReceived);
+    event ProfitSold(uint256 wethSold, uint256 sDaiReceived);
     event Supplied(uint256 adapterId, uint256 amount);
     event Borrowed(uint256 adapterId, uint256 amount);
     event Repaid(uint256 adapterId, uint256 amount);
@@ -56,7 +56,7 @@ contract scDAI is BaseV2Vault {
     event Disinvested(uint256 wethAmount);
 
     constructor(address _admin, address _keeper, ERC4626 _scWETH, PriceConverter _priceConverter, Swapper _swapper)
-        BaseV2Vault(_admin, _keeper, ERC20(C.DAI), _priceConverter, _swapper, "Sandclock Yield DAI", "scDAI")
+        BaseV2Vault(_admin, _keeper, ERC20(C.SDAI), _priceConverter, _swapper, "Sandclock Yield sDAI", "scsDAI")
     {
         _zeroAddressCheck(address(_scWETH));
 
@@ -82,13 +82,13 @@ contract scDAI is BaseV2Vault {
         // invest any weth remaining after rebalancing
         _invest();
 
-        // enforce float to be above the minimum required
-        uint256 float = daiBalance();
-        uint256 floatRequired = totalAssets().mulWadDown(floatPercentage);
+        // // enforce float to be above the minimum required
+        uint256 float = sDaiBalance();
+        // uint256 floatRequired = totalAssets().mulWadDown(floatPercentage);
 
-        if (float < floatRequired) {
-            revert FloatBalanceTooLow(float, floatRequired);
-        }
+        // if (float < floatRequired) {
+        //     revert FloatBalanceTooLow(float, floatRequired);
+        // }
 
         emit Rebalanced(totalCollateral(), totalDebt(), float);
     }
@@ -120,9 +120,9 @@ contract scDAI is BaseV2Vault {
     /**
      * @notice Sells WETH profits (swaps to USDC).
      * @dev As the vault generates yield by staking WETH, the profits are in WETH.
-     * @param _daiAmountOutMin The minimum amount of USDC to receive.
+     * @param _sDaiAmountOutMin The minimum amount of USDC to receive.
      */
-    function sellProfit(uint256 _daiAmountOutMin) external {
+    function sellProfit(uint256 _sDaiAmountOutMin) external {
         _onlyKeeper();
 
         uint256 profit = _calculateWethProfit(wethInvested(), totalDebt());
@@ -130,9 +130,9 @@ contract scDAI is BaseV2Vault {
         if (profit == 0) revert NoProfitsToSell();
 
         uint256 withdrawn = _disinvest(profit);
-        uint256 daiReceived = _swapWethForDai(withdrawn, _daiAmountOutMin);
+        uint256 sDaiReceived = _swapWethForDai(withdrawn, _sDaiAmountOutMin);
 
-        emit ProfitSold(withdrawn, daiReceived);
+        emit ProfitSold(withdrawn, sDaiReceived);
     }
 
     /**
@@ -168,7 +168,7 @@ contract scDAI is BaseV2Vault {
             if (wethLeft != 0) _swapWethForDai(wethLeft, 0);
         }
 
-        if (daiBalance() < _endDaiBalanceMin) revert EndDaiBalanceTooLow();
+        if (sDaiBalance() < _endDaiBalanceMin) revert EndDaiBalanceTooLow();
 
         emit EmergencyExitExecuted(msg.sender, wethBalance, debt, collateral);
     }
@@ -265,13 +265,13 @@ contract scDAI is BaseV2Vault {
      * @notice total claimable assets of the vault in USDC.
      */
     function totalAssets() public view override returns (uint256) {
-        return _calculateTotalAssets(daiBalance(), totalCollateral(), wethInvested(), totalDebt());
+        return _calculateTotalAssets(sDaiBalance(), totalCollateral(), wethInvested(), totalDebt());
     }
 
     /**
      * @notice Returns the USDC balance of the vault.
      */
-    function daiBalance() public view returns (uint256) {
+    function sDaiBalance() public view returns (uint256) {
         return asset.balanceOf(address(this));
     }
 
@@ -402,7 +402,7 @@ contract scDAI is BaseV2Vault {
     function beforeWithdraw(uint256 _assets, uint256) internal override {
         // here we need to make sure that the vault has enough assets to cover the withdrawal
         // the idea is to keep the same ltv after the withdrawal as before on every protocol
-        uint256 initialBalance = daiBalance();
+        uint256 initialBalance = sDaiBalance();
         if (initialBalance >= _assets) return;
 
         uint256 collateral = totalCollateral();
@@ -411,39 +411,39 @@ contract scDAI is BaseV2Vault {
         uint256 total = _calculateTotalAssets(initialBalance, collateral, invested, debt);
         uint256 profit = _calculateWethProfit(invested, debt);
         uint256 floatRequired = total > _assets ? (total - _assets).mulWadUp(floatPercentage) : 0;
-        uint256 daiNeeded = _assets + floatRequired - initialBalance;
+        uint256 sDaiNeeded = _assets + floatRequired - initialBalance;
 
         // first try to sell profits to cover withdrawal amount
         if (profit != 0) {
             uint256 withdrawn = _disinvest(profit);
-            uint256 daiAmountOutMin = priceConverter.ethToDai(withdrawn).mulWadDown(slippageTolerance);
-            uint256 daiReceived = _swapWethForDai(withdrawn, daiAmountOutMin);
+            uint256 sDaiAmountOutMin = priceConverter.ethTosDai(withdrawn).mulWadDown(slippageTolerance);
+            uint256 sDaiReceived = _swapWethForDai(withdrawn, sDaiAmountOutMin);
 
-            if (initialBalance + daiReceived >= _assets) return;
+            if (initialBalance + sDaiReceived >= _assets) return;
 
-            daiNeeded -= daiReceived;
+            sDaiNeeded -= sDaiReceived;
         }
 
-        // if we still need more dai, we need to repay debt and withdraw collateral
-        _repayDebtAndReleaseCollateral(debt, collateral, invested, daiNeeded);
+        // if we still need more sDai, we need to repay debt and withdraw collateral
+        _repayDebtAndReleaseCollateral(debt, collateral, invested, sDaiNeeded);
     }
 
     function _repayDebtAndReleaseCollateral(
         uint256 _totalDebt,
         uint256 _totalCollateral,
         uint256 _invested,
-        uint256 _daiNeeded
+        uint256 _sDaiNeeded
     ) internal {
         // handle rounding errors when withdrawing everything
-        _daiNeeded = _daiNeeded > _totalCollateral ? _totalCollateral : _daiNeeded;
-        // to keep the same ltv, total debt in weth to be repaid has to be proportional to total dai collateral we are withdrawing
-        uint256 wethNeeded = _daiNeeded.mulDivUp(_totalDebt, _totalCollateral);
+        _sDaiNeeded = _sDaiNeeded > _totalCollateral ? _totalCollateral : _sDaiNeeded;
+        // to keep the same ltv, total debt in weth to be repaid has to be proportional to total sDai collateral we are withdrawing
+        uint256 wethNeeded = _sDaiNeeded.mulDivUp(_totalDebt, _totalCollateral);
         wethNeeded = wethNeeded > _invested ? _invested : wethNeeded;
 
         uint256 wethDisinvested = 0;
         if (wethNeeded != 0) wethDisinvested = _disinvest(wethNeeded);
 
-        // repay debt and withdraw collateral from each protocol in proportion to dai supplied
+        // repay debt and withdraw collateral from each protocol in proportion to sDai supplied
         uint256 length = protocolAdapters.length();
 
         for (uint256 i = 0; i < length; i++) {
@@ -453,10 +453,10 @@ contract scDAI is BaseV2Vault {
             if (collateral == 0) continue;
 
             uint256 debt = IAdapter(adapter).getDebt(address(this));
-            uint256 toWithdraw = _daiNeeded.mulDivUp(collateral, _totalCollateral);
+            uint256 toWithdraw = _sDaiNeeded.mulDivUp(collateral, _totalCollateral);
 
             if (wethDisinvested != 0 && debt != 0) {
-                // keep the same ltv when withdrawing dai supplied from each protocol
+                // keep the same ltv when withdrawing sDai supplied from each protocol
                 uint256 toRepay = toWithdraw.mulDivUp(debt, collateral);
 
                 if (toRepay > wethDisinvested) {
@@ -483,9 +483,9 @@ contract scDAI is BaseV2Vault {
 
         if (profit != 0) {
             // account for slippage when selling weth profits
-            total += priceConverter.ethToDai(profit).mulWadDown(slippageTolerance);
+            total += priceConverter.ethTosDai(profit).mulWadDown(slippageTolerance);
         } else {
-            total -= priceConverter.ethToDai(_debt - _invested);
+            total -= priceConverter.ethTosDai(_debt - _invested);
         }
     }
 
@@ -497,10 +497,10 @@ contract scDAI is BaseV2Vault {
         return weth.balanceOf(address(this));
     }
 
-    function _swapWethForDai(uint256 _wethAmount, uint256 _daiAmountOutMin) internal returns (uint256) {
+    function _swapWethForDai(uint256 _wethAmount, uint256 _sDaiAmountOutMin) internal returns (uint256) {
         bytes memory result = address(swapper).functionDelegateCall(
             abi.encodeWithSelector(
-                Swapper.uniswapSwapExactInput.selector, weth, asset, _wethAmount, _daiAmountOutMin, 500 /* pool fee*/
+                Swapper.uniswapSwapExactInput.selector, weth, asset, _wethAmount, _sDaiAmountOutMin, 500 /* pool fee*/
             )
         );
 
