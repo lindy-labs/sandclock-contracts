@@ -68,6 +68,7 @@ library Constants {
 
     // adress of the Chainlink aggregator for the USDC/eth price feed
     address public constant CHAINLINK_USDC_ETH_PRICE_FEED = 0x986b5E1e1755e3C2440e960477f25201B0a8bbD4;
+    address public constant CHAINLINK_DAI_ETH_PRICE_FEED = 0x773616E4d11A78F511299002da57A0a94577F1f4;
     // Chainlink pricefeed (stETH -> ETH)
     address public constant CHAINLINK_STETH_ETH_PRICE_FEED = 0x86392dC19c0b719886221c78AB11eb8Cf5c52812;
     // Liquity pricefeed (USD -> ETH) with Chainlink as primary and Tellor as backup.

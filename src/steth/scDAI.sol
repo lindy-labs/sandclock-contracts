@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.19;
 
-import {NoProfitsToSell, FlashLoanAmountZero, EndUsdcBalanceTooLow, FloatBalanceTooLow} from "../errors/scErrors.sol";
+import {NoProfitsToSell, FlashLoanAmountZero, EndDaiBalanceTooLow, FloatBalanceTooLow} from "../errors/scErrors.sol";
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {WETH} from "solmate/tokens/WETH.sol";
@@ -47,7 +47,7 @@ contract scDAI is BaseV2Vault {
     );
     event Reallocated();
     event Rebalanced(uint256 totalCollateral, uint256 totalDebt, uint256 floatBalance);
-    event ProfitSold(uint256 wethSold, uint256 usdcReceived);
+    event ProfitSold(uint256 wethSold, uint256 daiReceived);
     event Supplied(uint256 adapterId, uint256 amount);
     event Borrowed(uint256 adapterId, uint256 amount);
     event Repaid(uint256 adapterId, uint256 amount);
@@ -83,7 +83,7 @@ contract scDAI is BaseV2Vault {
         _invest();
 
         // enforce float to be above the minimum required
-        uint256 float = usdcBalance();
+        uint256 float = daiBalance();
         uint256 floatRequired = totalAssets().mulWadDown(floatPercentage);
 
         if (float < floatRequired) {
@@ -120,9 +120,9 @@ contract scDAI is BaseV2Vault {
     /**
      * @notice Sells WETH profits (swaps to USDC).
      * @dev As the vault generates yield by staking WETH, the profits are in WETH.
-     * @param _usdcAmountOutMin The minimum amount of USDC to receive.
+     * @param _daiAmountOutMin The minimum amount of USDC to receive.
      */
-    function sellProfit(uint256 _usdcAmountOutMin) external {
+    function sellProfit(uint256 _daiAmountOutMin) external {
         _onlyKeeper();
 
         uint256 profit = _calculateWethProfit(wethInvested(), totalDebt());
@@ -130,18 +130,18 @@ contract scDAI is BaseV2Vault {
         if (profit == 0) revert NoProfitsToSell();
 
         uint256 withdrawn = _disinvest(profit);
-        uint256 usdcReceived = _swapWethForUsdc(withdrawn, _usdcAmountOutMin);
+        uint256 daiReceived = _swapWethForDai(withdrawn, _daiAmountOutMin);
 
-        emit ProfitSold(withdrawn, usdcReceived);
+        emit ProfitSold(withdrawn, daiReceived);
     }
 
     /**
      * @notice Emergency exit to disinvest everything, repay all debt and withdraw all collateral to the vault.
      * @dev In unlikely situation that the vault makes a loss on ETH staked, the total debt would be higher than ETH available to "unstake",
      *  which can lead to withdrawals being blocked. To handle this situation, the vault can close all positions in all lending markets and release all of the assets (realize all losses).
-     * @param _endUsdcBalanceMin The minimum USDC balance of the vault at the end of execution (after all positions are closed).
+     * @param _endDaiBalanceMin The minimum USDC balance of the vault at the end of execution (after all positions are closed).
      */
-    function exitAllPositions(uint256 _endUsdcBalanceMin) external {
+    function exitAllPositions(uint256 _endDaiBalanceMin) external {
         _onlyKeeper();
 
         uint256 collateral = totalCollateral();
@@ -165,10 +165,10 @@ contract scDAI is BaseV2Vault {
             // if some WETH remains after repaying all debt, swap it to USDC
             uint256 wethLeft = _wethBalance();
 
-            if (wethLeft != 0) _swapWethForUsdc(wethLeft, 0);
+            if (wethLeft != 0) _swapWethForDai(wethLeft, 0);
         }
 
-        if (usdcBalance() < _endUsdcBalanceMin) revert EndUsdcBalanceTooLow();
+        if (daiBalance() < _endDaiBalanceMin) revert EndDaiBalanceTooLow();
 
         emit EmergencyExitExecuted(msg.sender, wethBalance, debt, collateral);
     }
@@ -194,7 +194,7 @@ contract scDAI is BaseV2Vault {
 
         if (flashLoanType == FlashLoanType.ExitAllPositions) {
             _repayAllDebtAndWithdrawCollateral();
-            _swapUsdcForExactWeth(flashLoanAmount);
+            _swapDaiForExactWeth(flashLoanAmount);
         } else {
             (, bytes[] memory callData) = abi.decode(_data, (FlashLoanType, bytes[]));
             _multiCall(callData);
@@ -265,13 +265,13 @@ contract scDAI is BaseV2Vault {
      * @notice total claimable assets of the vault in USDC.
      */
     function totalAssets() public view override returns (uint256) {
-        return _calculateTotalAssets(usdcBalance(), totalCollateral(), wethInvested(), totalDebt());
+        return _calculateTotalAssets(daiBalance(), totalCollateral(), wethInvested(), totalDebt());
     }
 
     /**
      * @notice Returns the USDC balance of the vault.
      */
-    function usdcBalance() public view returns (uint256) {
+    function daiBalance() public view returns (uint256) {
         return asset.balanceOf(address(this));
     }
 
@@ -402,7 +402,7 @@ contract scDAI is BaseV2Vault {
     function beforeWithdraw(uint256 _assets, uint256) internal override {
         // here we need to make sure that the vault has enough assets to cover the withdrawal
         // the idea is to keep the same ltv after the withdrawal as before on every protocol
-        uint256 initialBalance = usdcBalance();
+        uint256 initialBalance = daiBalance();
         if (initialBalance >= _assets) return;
 
         uint256 collateral = totalCollateral();
@@ -411,39 +411,39 @@ contract scDAI is BaseV2Vault {
         uint256 total = _calculateTotalAssets(initialBalance, collateral, invested, debt);
         uint256 profit = _calculateWethProfit(invested, debt);
         uint256 floatRequired = total > _assets ? (total - _assets).mulWadUp(floatPercentage) : 0;
-        uint256 usdcNeeded = _assets + floatRequired - initialBalance;
+        uint256 daiNeeded = _assets + floatRequired - initialBalance;
 
         // first try to sell profits to cover withdrawal amount
         if (profit != 0) {
             uint256 withdrawn = _disinvest(profit);
-            uint256 usdcAmountOutMin = priceConverter.ethToUsdc(withdrawn).mulWadDown(slippageTolerance);
-            uint256 usdcReceived = _swapWethForUsdc(withdrawn, usdcAmountOutMin);
+            uint256 daiAmountOutMin = priceConverter.ethToDai(withdrawn).mulWadDown(slippageTolerance);
+            uint256 daiReceived = _swapWethForDai(withdrawn, daiAmountOutMin);
 
-            if (initialBalance + usdcReceived >= _assets) return;
+            if (initialBalance + daiReceived >= _assets) return;
 
-            usdcNeeded -= usdcReceived;
+            daiNeeded -= daiReceived;
         }
 
-        // if we still need more usdc, we need to repay debt and withdraw collateral
-        _repayDebtAndReleaseCollateral(debt, collateral, invested, usdcNeeded);
+        // if we still need more dai, we need to repay debt and withdraw collateral
+        _repayDebtAndReleaseCollateral(debt, collateral, invested, daiNeeded);
     }
 
     function _repayDebtAndReleaseCollateral(
         uint256 _totalDebt,
         uint256 _totalCollateral,
         uint256 _invested,
-        uint256 _usdcNeeded
+        uint256 _daiNeeded
     ) internal {
         // handle rounding errors when withdrawing everything
-        _usdcNeeded = _usdcNeeded > _totalCollateral ? _totalCollateral : _usdcNeeded;
-        // to keep the same ltv, total debt in weth to be repaid has to be proportional to total usdc collateral we are withdrawing
-        uint256 wethNeeded = _usdcNeeded.mulDivUp(_totalDebt, _totalCollateral);
+        _daiNeeded = _daiNeeded > _totalCollateral ? _totalCollateral : _daiNeeded;
+        // to keep the same ltv, total debt in weth to be repaid has to be proportional to total dai collateral we are withdrawing
+        uint256 wethNeeded = _daiNeeded.mulDivUp(_totalDebt, _totalCollateral);
         wethNeeded = wethNeeded > _invested ? _invested : wethNeeded;
 
         uint256 wethDisinvested = 0;
         if (wethNeeded != 0) wethDisinvested = _disinvest(wethNeeded);
 
-        // repay debt and withdraw collateral from each protocol in proportion to usdc supplied
+        // repay debt and withdraw collateral from each protocol in proportion to dai supplied
         uint256 length = protocolAdapters.length();
 
         for (uint256 i = 0; i < length; i++) {
@@ -453,10 +453,10 @@ contract scDAI is BaseV2Vault {
             if (collateral == 0) continue;
 
             uint256 debt = IAdapter(adapter).getDebt(address(this));
-            uint256 toWithdraw = _usdcNeeded.mulDivUp(collateral, _totalCollateral);
+            uint256 toWithdraw = _daiNeeded.mulDivUp(collateral, _totalCollateral);
 
             if (wethDisinvested != 0 && debt != 0) {
-                // keep the same ltv when withdrawing usdc supplied from each protocol
+                // keep the same ltv when withdrawing dai supplied from each protocol
                 uint256 toRepay = toWithdraw.mulDivUp(debt, collateral);
 
                 if (toRepay > wethDisinvested) {
@@ -483,9 +483,9 @@ contract scDAI is BaseV2Vault {
 
         if (profit != 0) {
             // account for slippage when selling weth profits
-            total += priceConverter.ethToUsdc(profit).mulWadDown(slippageTolerance);
+            total += priceConverter.ethToDai(profit).mulWadDown(slippageTolerance);
         } else {
-            total -= priceConverter.ethToUsdc(_debt - _invested);
+            total -= priceConverter.ethToDai(_debt - _invested);
         }
     }
 
@@ -497,17 +497,17 @@ contract scDAI is BaseV2Vault {
         return weth.balanceOf(address(this));
     }
 
-    function _swapWethForUsdc(uint256 _wethAmount, uint256 _usdcAmountOutMin) internal returns (uint256) {
+    function _swapWethForDai(uint256 _wethAmount, uint256 _daiAmountOutMin) internal returns (uint256) {
         bytes memory result = address(swapper).functionDelegateCall(
             abi.encodeWithSelector(
-                Swapper.uniswapSwapExactInput.selector, weth, asset, _wethAmount, _usdcAmountOutMin, 500 /* pool fee*/
+                Swapper.uniswapSwapExactInput.selector, weth, asset, _wethAmount, _daiAmountOutMin, 500 /* pool fee*/
             )
         );
 
         return abi.decode(result, (uint256));
     }
 
-    function _swapUsdcForExactWeth(uint256 _wethAmountOut) internal {
+    function _swapDaiForExactWeth(uint256 _wethAmountOut) internal {
         address(swapper).functionDelegateCall(
             abi.encodeWithSelector(
                 Swapper.uniswapSwapExactOutput.selector,

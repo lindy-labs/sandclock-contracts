@@ -24,6 +24,9 @@ contract PriceConverter is AccessControl {
     // Chainlink price feed (USDC -> ETH)
     AggregatorV3Interface public usdcToEthPriceFeed = AggregatorV3Interface(C.CHAINLINK_USDC_ETH_PRICE_FEED);
 
+    // Chainlink price feed (DAI -> ETH)
+    AggregatorV3Interface public daiToEthPriceFeed = AggregatorV3Interface(C.CHAINLINK_DAI_ETH_PRICE_FEED);
+
     // Chainlink price feed (stETH -> ETH)
     AggregatorV3Interface public stEThToEthPriceFeed = AggregatorV3Interface(C.CHAINLINK_STETH_ETH_PRICE_FEED);
 
@@ -78,6 +81,18 @@ contract PriceConverter is AccessControl {
         (, int256 usdcPriceInEth,,,) = usdcToEthPriceFeed.latestRoundData();
 
         return (_usdcAmount * C.WETH_USDC_DECIMALS_DIFF).mulWadDown(uint256(usdcPriceInEth));
+    }
+
+    function ethToDai(uint256 _ethAmount) public view returns (uint256) {
+        (, int256 daiPriceInEth,,,) = daiToEthPriceFeed.latestRoundData();
+
+        return _ethAmount.divWadDown(uint256(daiPriceInEth));
+    }
+
+    function daiToEth(uint256 _daiAmount) public view returns (uint256) {
+        (, int256 daiPriceInEth,,,) = daiToEthPriceFeed.latestRoundData();
+
+        return _daiAmount.mulWadDown(uint256(daiPriceInEth));
     }
 
     function ethToWstEth(uint256 ethAmount) public view returns (uint256) {

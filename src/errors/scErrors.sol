@@ -15,6 +15,7 @@ error CallerNotAdmin();
 error CallerNotKeeper();
 error NoProfitsToSell();
 error EndUsdcBalanceTooLow();
+error EndDaiBalanceTooLow();
 error InsufficientDepositBalance();
 error AmountReceivedBelowMin();
 error FlashLoanAmountZero();
