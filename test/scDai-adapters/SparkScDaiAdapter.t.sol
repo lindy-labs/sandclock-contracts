@@ -8,10 +8,10 @@ import {WETH} from "solmate/tokens/WETH.sol";
 
 import {Constants as C} from "../../src/lib/Constants.sol";
 import {IAdapter} from "../../src/steth/IAdapter.sol";
-import {SparkScsDaiAdapter} from "../../src/steth/scsDai-adapters/SparkScsDaiAdapter.sol";
+import {SparkScDaiAdapter} from "../../src/steth/scDai-adapters/SparkScDaiAdapter.sol";
 
-contract SparkScsDaiAdapterTest is Test {
-    SparkScsDaiAdapter adapter;
+contract SparkScDaiAdapterTest is Test {
+    SparkScDaiAdapter adapter;
     ERC20 sDai;
     WETH weth;
 
@@ -23,7 +23,7 @@ contract SparkScsDaiAdapterTest is Test {
         sDai = ERC20(C.SDAI);
         weth = WETH(payable(C.WETH));
 
-        adapter = new SparkScsDaiAdapter();
+        adapter = new SparkScDaiAdapter();
     }
 
     function test_setApprovals() public {

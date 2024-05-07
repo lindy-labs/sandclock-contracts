@@ -15,8 +15,8 @@ import {Constants as C} from "../src/lib/Constants.sol";
 import {ILendingPool} from "../src/interfaces/aave-v2/ILendingPool.sol";
 import {IProtocolDataProvider} from "../src/interfaces/aave-v2/IProtocolDataProvider.sol";
 import {IAdapter} from "../src/steth/IAdapter.sol";
-import {SparkScsDaiAdapter} from "../src/steth/scsDai-adapters/SparkScsDaiAdapter.sol";
-import {scsDAI} from "../src/steth/scsDAI.sol";
+import {SparkScDaiAdapter} from "../src/steth/scDai-adapters/SparkScDaiAdapter.sol";
+import {scDAI} from "../src/steth/scDAI.sol";
 
 import {scWETH} from "../src/steth/scWETH.sol";
 import {ISwapRouter} from "../src/interfaces/uniswap/ISwapRouter.sol";
@@ -31,7 +31,7 @@ import {IProtocolFeesCollector} from "../src/interfaces/balancer/IProtocolFeesCo
 import "../src/errors/scErrors.sol";
 import {FaultyAdapter} from "./mocks/adapters/FaultyAdapter.sol";
 
-contract scsDAITest is Test {
+contract scDAITest is Test {
     using FixedPointMathLib for uint256;
 
     event UsdcToEthPriceFeedUpdated(address indexed admin, address newPriceFeed);
@@ -63,9 +63,9 @@ contract scsDAITest is Test {
     ERC20 dai;
 
     scWETH wethVault;
-    scsDAI vault;
+    scDAI vault;
 
-    SparkScsDaiAdapter spark;
+    SparkScDaiAdapter spark;
     Swapper swapper;
     PriceConverter priceConverter;
 
@@ -76,7 +76,7 @@ contract scsDAITest is Test {
 
         dai = ERC20(C.SDAI);
         weth = WETH(payable(C.WETH));
-        spark = new SparkScsDaiAdapter();
+        spark = new SparkScDaiAdapter();
 
         _deployScWeth();
         _deployAndSetUpVault();
@@ -99,8 +99,8 @@ contract scsDAITest is Test {
         deal(address(dai), address(vault), initialBalance);
 
         bytes[] memory callData = new bytes[](2);
-        callData[0] = abi.encodeWithSelector(scsDAI.supply.selector, spark.id(), initialBalance);
-        callData[1] = abi.encodeWithSelector(scsDAI.borrow.selector, spark.id(), initialDebt);
+        callData[0] = abi.encodeWithSelector(scDAI.supply.selector, spark.id(), initialBalance);
+        callData[1] = abi.encodeWithSelector(scDAI.borrow.selector, spark.id(), initialDebt);
 
         vault.rebalance(callData);
 
@@ -116,28 +116,74 @@ contract scsDAITest is Test {
         uint256 floatPercentage = 0.01e18;
         vault.setFloatPercentage(floatPercentage);
 
-        supplyOnSpark = bound(supplyOnSpark, 1000e18, 1_000_000e18);
+        supplyOnSpark = bound(supplyOnSpark, 100e18, 1_000_000e18);
 
         uint256 initialBalance = supplyOnSpark.divWadDown(1e18 - floatPercentage);
         uint256 minFloat = supplyOnSpark.mulWadDown(floatPercentage);
 
         borrowOnSpark = bound(
             borrowOnSpark,
-            1e16,
+            1e10,
             priceConverter.sDaiToEth(supplyOnSpark).mulWadDown(spark.getMaxLtv() - 0.005e18) // -0.5% to avoid borrowing at max ltv
         );
 
         deal(address(dai), address(vault), initialBalance);
 
         bytes[] memory callData = new bytes[](2);
-        callData[0] = abi.encodeWithSelector(scsDAI.supply.selector, spark.id(), supplyOnSpark);
-        callData[1] = abi.encodeWithSelector(scsDAI.borrow.selector, spark.id(), borrowOnSpark);
+        callData[0] = abi.encodeWithSelector(scDAI.supply.selector, spark.id(), supplyOnSpark);
+        callData[1] = abi.encodeWithSelector(scDAI.borrow.selector, spark.id(), borrowOnSpark);
 
         vault.rebalance(callData);
 
         _assertCollateralAndDebt(spark.id(), supplyOnSpark, borrowOnSpark);
         assertApproxEqAbs(vault.totalAssets(), initialBalance, 1e10, "total assets");
         assertApproxEqAbs(vault.sDaiBalance(), minFloat, vault.totalAssets().mulWadDown(floatPercentage), "float");
+    }
+
+    function test_disinvest() public {
+        uint256 initialBalance = 1_000_000e18;
+        uint256 initialDebt = 100 ether;
+        deal(address(dai), address(vault), initialBalance);
+        bytes[] memory callData = new bytes[](2);
+        callData[0] = abi.encodeWithSelector(scDAI.supply.selector, spark.id(), initialBalance);
+        callData[1] = abi.encodeWithSelector(scDAI.borrow.selector, spark.id(), initialDebt);
+        vault.rebalance(callData);
+
+        uint256 disinvestAmount = vault.wethInvested() / 2;
+        vm.expectEmit(true, true, true, true);
+        emit Disinvested(disinvestAmount);
+
+        vault.disinvest(disinvestAmount);
+
+        assertEq(weth.balanceOf(address(vault)), disinvestAmount, "weth balance");
+        assertEq(vault.wethInvested(), initialDebt - disinvestAmount, "weth invested");
+    }
+
+    function test_sellProfit() public {
+        uint256 initialBalance = 100000e18;
+        uint256 initialDebt = 10 ether;
+        deal(address(dai), address(vault), initialBalance);
+
+        bytes[] memory callData = new bytes[](2);
+        callData[0] = abi.encodeWithSelector(scDAI.supply.selector, spark.id(), initialBalance);
+        callData[1] = abi.encodeWithSelector(scDAI.borrow.selector, spark.id(), initialDebt);
+
+        vault.rebalance(callData);
+
+        // add 100% profit to the weth vault
+        uint256 initialWethInvested = vault.wethInvested();
+        deal(address(weth), address(wethVault), initialWethInvested * 2);
+
+        uint256 daiBalanceBefore = vault.sDaiBalance();
+        uint256 profit = vault.getProfit();
+
+        vm.prank(keeper);
+        vault.sellProfit(0);
+
+        uint256 expectedDaiBalance = daiBalanceBefore + priceConverter.ethTosDai(profit);
+        _assertCollateralAndDebt(spark.id(), initialBalance, initialDebt);
+        assertApproxEqRel(vault.sDaiBalance(), expectedDaiBalance, 0.01e18, "dai balance");
+        assertApproxEqRel(vault.wethInvested(), initialWethInvested, 0.001e18, "sold more than actual profit");
     }
 
     ///////////////////////////////// INTERNAL METHODS /////////////////////////////////
@@ -166,7 +212,7 @@ contract scsDAITest is Test {
         priceConverter = new PriceConverter(address(this));
         swapper = new Swapper();
 
-        vault = new scsDAI(address(this), keeper, wethVault, priceConverter, swapper);
+        vault = new scDAI(address(this), keeper, wethVault, priceConverter, swapper);
 
         vault.addAdapter(spark);
 

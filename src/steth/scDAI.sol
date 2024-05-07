@@ -21,8 +21,9 @@ import {Swapper} from "./Swapper.sol";
 /**
  * @title Sandclock Dai Vault
  * @dev code mostly copied from scUSDCv2
+ * @notice deposit tokens -> DAI & sDAI
  */
-contract scsDAI is BaseV2Vault {
+contract scDAI is BaseV2Vault {
     using SafeTransferLib for ERC20;
     using SafeTransferLib for WETH;
     using FixedPointMathLib for uint256;
@@ -56,7 +57,7 @@ contract scsDAI is BaseV2Vault {
     event Disinvested(uint256 wethAmount);
 
     constructor(address _admin, address _keeper, ERC4626 _scWETH, PriceConverter _priceConverter, Swapper _swapper)
-        BaseV2Vault(_admin, _keeper, ERC20(C.SDAI), _priceConverter, _swapper, "Sandclock Yield sDAI", "scsDAI")
+        BaseV2Vault(_admin, _keeper, ERC20(C.SDAI), _priceConverter, _swapper, "Sandclock Yield DAI", "scDAI")
     {
         _zeroAddressCheck(address(_scWETH));
 
@@ -253,7 +254,7 @@ contract scsDAI is BaseV2Vault {
 
     /**
      * @notice Withdraw WETH from the staking vault (scWETH).
-     * @param _amount The amount of WETH to withdraw.
+     * @param _amount The amount of WETH to withdraw
      */
     function disinvest(uint256 _amount) external {
         _onlyKeeper();
