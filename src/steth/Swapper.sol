@@ -101,7 +101,7 @@ contract Swapper {
     }
 
     /**
-     * @notice Swap tokens on 0x protocol.
+     * @notice Swap tokens on LI.FI.
      * @param _tokenIn Address of the token to swap.
      * @param _tokenOut Address of the token to receive.
      * @param _amountIn Amount of the token to swap.
@@ -109,7 +109,7 @@ contract Swapper {
      * @param _swapData Encoded swap data obtained from 0x API.
      * @return Amount of the token received.
      */
-    function zeroExSwap(
+    function lifiSwap(
         ERC20 _tokenIn,
         ERC20 _tokenOut,
         uint256 _amountIn,
@@ -118,15 +118,15 @@ contract Swapper {
     ) external returns (uint256) {
         uint256 tokenOutInitialBalance = _tokenOut.balanceOf(address(this));
 
-        _tokenIn.safeApprove(C.ZERO_EX_ROUTER, _amountIn);
+        _tokenIn.safeApprove(C.LIFI, _amountIn);
 
-        C.ZERO_EX_ROUTER.functionCall(_swapData);
+        C.LIFI.functionCall(_swapData);
 
         uint256 amountReceived = _tokenOut.balanceOf(address(this)) - tokenOutInitialBalance;
 
         if (amountReceived < _amountOutMin) revert AmountReceivedBelowMin();
 
-        _tokenIn.approve(C.ZERO_EX_ROUTER, 0);
+        _tokenIn.approve(C.LIFI, 0);
 
         return amountReceived;
     }

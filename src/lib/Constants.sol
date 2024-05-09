@@ -87,6 +87,9 @@ library Constants {
     // address of the 0x swap router contract
     address public constant ZERO_EX_ROUTER = 0xDef1C0ded9bec7F1a1670819833240f027b25EfF;
 
+    // address of Lifi swap router contract
+    address public constant LIFI = 0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE;
+
     // Compound v3
     address public constant COMPOUND_V3_COMET_WETH = 0xA17581A9E3356d9A858b789D68B4d866e593aE94;
 

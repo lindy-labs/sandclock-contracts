@@ -189,9 +189,7 @@ contract RebalanceScWethV2 is Script, scWETHv2Helper {
 
             if ((swapData.length > 0) && useZeroEx) {
                 multicallData.push(
-                    abi.encodeWithSelector(
-                        BaseV2Vault.zeroExSwap.selector, C.WETH, C.WSTETH, wethSwapAmount, swapData, 0
-                    )
+                    abi.encodeWithSelector(BaseV2Vault.lifiSwap.selector, C.WETH, C.WSTETH, wethSwapAmount, swapData, 0)
                 );
             } else {
                 multicallData.push(abi.encodeWithSelector(scWETHv2.swapWethToWstEth.selector, wethSwapAmount));
@@ -241,7 +239,7 @@ contract RebalanceScWethV2 is Script, scWETHv2Helper {
             if ((swapData.length > 0) && useZeroEx) {
                 multicallData.push(
                     abi.encodeWithSelector(
-                        BaseV2Vault.zeroExSwap.selector,
+                        BaseV2Vault.lifiSwap.selector,
                         C.WSTETH,
                         C.WETH,
                         swapAmount,

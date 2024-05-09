@@ -123,7 +123,7 @@ contract scDAI is BaseV2Vault {
      * @dev As the vault generates yield by staking WETH, the profits are in WETH.
      * @param _sDaiAmountOutMin The minimum amount of USDC to receive.
      */
-    function sellProfit(uint256 _sDaiAmountOutMin) external {
+    function sellProfit(uint256 _sDaiAmountOutMin, bytes calldata _swapData) external {
         _onlyKeeper();
 
         uint256 profit = _calculateWethProfit(wethInvested(), totalDebt());
@@ -131,7 +131,7 @@ contract scDAI is BaseV2Vault {
         if (profit == 0) revert NoProfitsToSell();
 
         uint256 withdrawn = _disinvest(profit);
-        uint256 sDaiReceived = _swapWethForDai(withdrawn, _sDaiAmountOutMin);
+        uint256 sDaiReceived = _swapWethForAsset(withdrawn, _sDaiAmountOutMin, _swapData);
 
         emit ProfitSold(withdrawn, sDaiReceived);
     }
@@ -166,7 +166,8 @@ contract scDAI is BaseV2Vault {
             // if some WETH remains after repaying all debt, swap it to USDC
             uint256 wethLeft = _wethBalance();
 
-            if (wethLeft != 0) _swapWethForDai(wethLeft, 0);
+            bytes memory empty;
+            if (wethLeft != 0) _swapWethForAsset(wethLeft, 0, empty);
         }
 
         if (sDaiBalance() < _endDaiBalanceMin) revert EndDaiBalanceTooLow();
@@ -414,11 +415,12 @@ contract scDAI is BaseV2Vault {
         uint256 floatRequired = total > _assets ? (total - _assets).mulWadUp(floatPercentage) : 0;
         uint256 sDaiNeeded = _assets + floatRequired - initialBalance;
 
+        bytes memory empty;
         // first try to sell profits to cover withdrawal amount
         if (profit != 0) {
             uint256 withdrawn = _disinvest(profit);
             uint256 sDaiAmountOutMin = priceConverter.ethTosDai(withdrawn).mulWadDown(slippageTolerance);
-            uint256 sDaiReceived = _swapWethForDai(withdrawn, sDaiAmountOutMin);
+            uint256 sDaiReceived = _swapWethForAsset(withdrawn, sDaiAmountOutMin, empty);
 
             if (initialBalance + sDaiReceived >= _assets) return;
 
@@ -498,12 +500,23 @@ contract scDAI is BaseV2Vault {
         return weth.balanceOf(address(this));
     }
 
-    function _swapWethForDai(uint256 _wethAmount, uint256 _sDaiAmountOutMin) internal returns (uint256) {
-        bytes memory result = address(swapper).functionDelegateCall(
-            abi.encodeWithSelector(
+    function _swapWethForAsset(uint256 _wethAmount, uint256 _sDaiAmountOutMin, bytes memory _swapData)
+        internal
+        returns (uint256)
+    {
+        bytes memory data;
+
+        if (_swapData.length > 0) {
+            data = abi.encodeWithSelector(
+                Swapper.lifiSwap.selector, weth, asset, _wethAmount, _sDaiAmountOutMin, _swapData
+            );
+        } else {
+            data = abi.encodeWithSelector(
                 Swapper.uniswapSwapExactInput.selector, weth, asset, _wethAmount, _sDaiAmountOutMin, 500 /* pool fee*/
-            )
-        );
+            );
+        }
+
+        bytes memory result = address(swapper).functionDelegateCall(data);
 
         return abi.decode(result, (uint256));
     }

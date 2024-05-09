@@ -61,7 +61,7 @@ contract scWETHv2 is BaseV2Vault {
     constructor(address _admin, address _keeper, WETH _weth, Swapper _swapper, PriceConverter _priceConverter)
         BaseV2Vault(_admin, _keeper, _weth, _priceConverter, _swapper, "Sandclock Yield ETH", "scETH")
     {
-        zeroExSwapWhitelist[ERC20(C.WSTETH)] = true;
+        lifiSwapWhitelist[ERC20(C.WSTETH)] = true;
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -86,7 +86,7 @@ contract scWETHv2 is BaseV2Vault {
     /// @dev also mints performance fee tokens to the treasury based on the profits (if any) made by the vault
     /// @param _totalInvestAmount total amount of float in the strategy to invest in the lending markets in case of a invest
     /// @param _flashLoanAmount the amount to be flashloaned from balancer
-    /// @param _multicallData array of bytes containing the series of encoded functions to be called (the functions being one of supplyAndBorrow, repayAndWithdraw, swapWstEthToWeth, swapWethToWstEth, zeroExSwap)
+    /// @param _multicallData array of bytes containing the series of encoded functions to be called (the functions being one of supplyAndBorrow, repayAndWithdraw, swapWstEthToWeth, swapWethToWstEth, lifiSwap)
     function rebalance(uint256 _totalInvestAmount, uint256 _flashLoanAmount, bytes[] calldata _multicallData)
         external
     {
