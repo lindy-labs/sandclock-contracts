@@ -215,6 +215,89 @@ contract scDAITest is Test {
         console.log("eth balance", address(this).balance);
     }
 
+    function test_withdraw() public {
+        uint256 initialBalance = 1_000_000e18;
+        deal(address(dai), alice, initialBalance);
+
+        vm.startPrank(alice);
+        dai.approve(address(vault), initialBalance);
+        vault.deposit(initialBalance, alice);
+        vm.stopPrank();
+
+        bytes[] memory callData = new bytes[](2);
+        callData[0] = abi.encodeWithSelector(scDAI.supply.selector, spark.id(), initialBalance);
+        callData[1] = abi.encodeWithSelector(scDAI.borrow.selector, spark.id(), 100 ether);
+
+        vault.rebalance(callData);
+
+        uint256 withdrawAmount = vault.convertToAssets(vault.balanceOf(alice));
+        vm.prank(alice);
+        vault.withdraw(withdrawAmount, alice, alice);
+
+        assertEq(dai.balanceOf(alice), withdrawAmount, "alice asset balance");
+    }
+
+    function testFuzz_withdraw(uint256 _amount, uint256 _withdrawAmount) public {
+        _amount = 36072990718134180857610733478 * 1e12;
+        _withdrawAmount = 0;
+        _amount = bound(_amount, 1e18, 10_000_000e18); // upper limit constrained by weth available on aave v3
+        deal(address(dai), alice, _amount);
+        // console2.log("amount", _amount);
+
+        vm.startPrank(alice);
+        dai.approve(address(vault), type(uint256).max);
+        vault.deposit(_amount, alice);
+        vm.stopPrank();
+
+        uint256 borrowAmount = priceConverter.sDaiToEth(_amount.mulWadDown(0.7e18));
+
+        bytes[] memory callData = new bytes[](2);
+        callData[0] = abi.encodeWithSelector(scDAI.supply.selector, spark.id(), _amount);
+        callData[1] = abi.encodeWithSelector(scDAI.borrow.selector, spark.id(), borrowAmount);
+
+        vault.rebalance(callData);
+
+        uint256 total = vault.totalAssets();
+        _withdrawAmount = bound(_withdrawAmount, 1e18, total);
+        vm.startPrank(alice);
+        vault.withdraw(_withdrawAmount, alice, alice);
+
+        assertApproxEqAbs(vault.totalAssets(), total - _withdrawAmount, 0.0001e18, "total assets");
+        assertApproxEqAbs(dai.balanceOf(alice), _withdrawAmount, 0.01e18, "usdc balance");
+    }
+
+    function testFuzz_withdraw_whenInProfit(uint256 _amount, uint256 _withdrawAmount) public {
+        _amount = 0;
+        _amount = bound(_amount, 1e18, 10_000_000e18); // upper limit constrained by weth available on aave v3
+        deal(address(dai), alice, _amount);
+        console2.log("amount", _amount);
+
+        vm.startPrank(alice);
+        dai.approve(address(vault), type(uint256).max);
+        vault.deposit(_amount, alice);
+        vm.stopPrank();
+
+        uint256 borrowAmount = priceConverter.sDaiToEth(_amount.mulWadDown(0.7e18));
+
+        bytes[] memory callData = new bytes[](2);
+        callData[0] = abi.encodeWithSelector(scDAI.supply.selector, spark.id(), _amount);
+        callData[1] = abi.encodeWithSelector(scDAI.borrow.selector, spark.id(), borrowAmount);
+
+        vault.rebalance(callData);
+
+        // add 1% profit to the weth vault
+        uint256 wethInvested = weth.balanceOf(address(wethVault));
+        deal(address(weth), address(wethVault), wethInvested.mulWadUp(1.01e18));
+
+        uint256 total = vault.totalAssets();
+        _withdrawAmount = bound(_withdrawAmount, 1e18, total);
+        vm.startPrank(alice);
+        vault.withdraw(_withdrawAmount, alice, alice);
+
+        assertApproxEqAbs(vault.totalAssets(), total - _withdrawAmount, total.mulWadDown(0.001e18), "total assets");
+        assertApproxEqAbs(dai.balanceOf(alice), _withdrawAmount, _amount.mulWadDown(0.001e18), "dai balance");
+    }
+
     ///////////////////////////////// INTERNAL METHODS /////////////////////////////////
 
     function _deployScWeth() internal {

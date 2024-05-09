@@ -22,6 +22,7 @@ import {Swapper} from "./Swapper.sol";
  * @title Sandclock Dai Vault
  * @dev code mostly copied from scUSDCv2
  * @notice deposit tokens -> DAI & sDAI
+ * @dev ISSUES: We are not using Lifi for swapping profits during withdrawals (beforeWithdraw) & exitAllPositions
  */
 contract scDAI is BaseV2Vault {
     using SafeTransferLib for ERC20;
