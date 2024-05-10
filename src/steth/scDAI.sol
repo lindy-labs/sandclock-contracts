@@ -23,6 +23,7 @@ import {Swapper} from "./Swapper.sol";
  * @dev code mostly copied from scUSDCv2
  * @notice deposit tokens -> DAI & sDAI
  * @dev ISSUES: We are not using Lifi for swapping profits during withdrawals (beforeWithdraw) & exitAllPositions
+ * @dev in case of loss higher than 5% there is not enough weth after flashloan to payback flashloan
  */
 contract scDAI is BaseV2Vault {
     using SafeTransferLib for ERC20;

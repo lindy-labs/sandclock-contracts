@@ -191,7 +191,6 @@ contract scDAITest is Test {
     }
 
     function test_lifi() public {
-        console.log(address(this));
         uint256 amount = 10000000000000000000;
         address lifi = 0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE;
 
@@ -199,20 +198,16 @@ contract scDAITest is Test {
 
         ERC20(C.WETH).approve(lifi, amount);
 
-        console.log("dai balance", ERC20(C.SDAI).balanceOf(address(this)));
-        console.log("weth balance", ERC20(C.WETH).balanceOf(address(this)));
-        console.log("eth balance", address(this).balance);
-
-        console.log("-----------------------");
+        assertEq(0, ERC20(C.SDAI).balanceOf(address(this)));
+        assertEq(amount, ERC20(C.WETH).balanceOf(address(this)));
 
         bytes memory swapData =
             hex"878863a4a02f2e4a3e115e3d5285ade4a113cac81309fa4b93515ebe8d5a87760d8432d800000000000000000000000000000000000000000000000000000000000000c000000000000000000000000000000000000000000000000000000000000001000000000000000000000000007fa9385be102ac3eac297483dd6233d62b3e14960000000000000000000000000000000000000000000005d0ccd1235c457d5c2b000000000000000000000000000000000000000000000000000000000000016000000000000000000000000000000000000000000000000000000000000000086c6966692d617069000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002a307830303030303030303030303030303030303030303030303030303030303030303030303030303030000000000000000000000000000000000000000000000000000000000000000000001111111254eeb25477b68fb85ed929f73a9605820000000000000000000000001111111254eeb25477b68fb85ed929f73a960582000000000000000000000000c02aaa39b223fe8d0a0e5c4f27ead9083c756cc200000000000000000000000083f20f44975d03b1b09e64809b757c47f942beea0000000000000000000000000000000000000000000000008ac7230489e8000000000000000000000000000000000000000000000000000000000000000000e00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000030812aa3caf000000000000000000000000e37e799d5077682fa0a244d46e5649f71457bd09000000000000000000000000c02aaa39b223fe8d0a0e5c4f27ead9083c756cc200000000000000000000000083f20f44975d03b1b09e64809b757c47f942beea000000000000000000000000e37e799d5077682fa0a244d46e5649f71457bd090000000000000000000000001231deb6f5749ef6ce6943a275a1d3e7486f4eae0000000000000000000000000000000000000000000000008ac7230489e800000000000000000000000000000000000000000000000005d0ccd1235c457d5c2a0000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000014000000000000000000000000000000000000000000000000000000000000001600000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000017f0000000000000000000000000000000000000000000001610001330000e900a007e5c0d20000000000000000000000000000000000000000000000c500005500004f02a000000000000000000000000000000000000000000000000000000006dfdda0d1ee63c1e50088e6a0c2ddd26feeb64f039a2c41296fcb3f5640c02aaa39b223fe8d0a0e5c4f27ead9083c756cc200a0fd53121f512083f20f44975d03b1b09e64809b757c47f942beea6b175474e89094c44da98b954eedeac495271d0f00046e553f650000000000000000000000000000000000000000000000000000000000000000000000000000000000000000e37e799d5077682fa0a244d46e5649f71457bd0900a0f2fa6b6683f20f44975d03b1b09e64809b757c47f942beea0000000000000000000000000000000000000000000005d8480ea6c113ab03de00000000000000004013da5f59051fc280a06c4eca2783f20f44975d03b1b09e64809b757c47f942beea1111111254eeb25477b68fb85ed929f73a960582002a94d114000000000000000000000000000000000000000000000000";
 
         lifi.functionCall(swapData);
 
-        console.log("dai balance", ERC20(C.SDAI).balanceOf(address(this)));
-        console.log("weth balance", ERC20(C.WETH).balanceOf(address(this)));
-        console.log("eth balance", address(this).balance);
+        assertEq(27582668726196102150894, ERC20(C.SDAI).balanceOf(address(this)));
+        assertEq(0, ERC20(C.WETH).balanceOf(address(this)));
     }
 
     function test_withdraw() public {
@@ -296,6 +291,84 @@ contract scDAITest is Test {
 
         assertApproxEqAbs(vault.totalAssets(), total - _withdrawAmount, total.mulWadDown(0.001e18), "total assets");
         assertApproxEqAbs(dai.balanceOf(alice), _withdrawAmount, _amount.mulWadDown(0.001e18), "dai balance");
+    }
+
+    function test_exitAllPositions_RepaysDebtAndReleasesCollateralNoProfit() public {
+        uint256 initialBalance = 1_000_000e18;
+        deal(address(dai), address(vault), initialBalance);
+
+        bytes[] memory callData = new bytes[](2);
+        callData[0] = abi.encodeWithSelector(scDAI.supply.selector, spark.id(), initialBalance);
+        callData[1] = abi.encodeWithSelector(scDAI.borrow.selector, spark.id(), 100 ether);
+
+        vault.rebalance(callData);
+
+        assertEq(vault.getProfit(), 0, "profit");
+
+        uint256 totalBefore = vault.totalAssets();
+
+        vault.exitAllPositions(0);
+
+        assertApproxEqRel(vault.sDaiBalance(), totalBefore, 0.001e18, "vault asset balance");
+        assertEq(weth.balanceOf(address(vault)), 0, "weth balance");
+        assertEq(vault.wethInvested(), 0, "weth invested");
+        assertEq(vault.totalCollateral(), 0, "total collateral");
+        assertEq(vault.totalDebt(), 0, "total debt");
+    }
+
+    function test_exitAllPositions_RepaysDebtAndReleasesCollateralOnOneProtocolWhenUnderwater() public {
+        uint256 initialBalance = 1_000_000e18;
+        deal(address(dai), address(vault), initialBalance);
+
+        bytes[] memory callData = new bytes[](2);
+        callData[0] = abi.encodeWithSelector(scDAI.supply.selector, spark.id(), initialBalance);
+        callData[1] = abi.encodeWithSelector(scDAI.borrow.selector, spark.id(), 100 ether);
+
+        vault.rebalance(callData);
+
+        // simulate 5% loss
+        deal(address(weth), address(wethVault), 95 ether);
+
+        uint256 totalBefore = vault.totalAssets();
+
+        assertFalse(vault.flashLoanInitiated(), "flash loan initiated");
+
+        vault.exitAllPositions(0);
+
+        assertFalse(vault.flashLoanInitiated(), "flash loan initiated");
+
+        assertApproxEqRel(vault.sDaiBalance(), totalBefore, 0.02e18, "vault dai balance");
+        assertEq(vault.totalCollateral(), 0, "vault collateral");
+        assertEq(vault.totalDebt(), 0, "vault debt");
+        assertEq(weth.balanceOf(address(vault)), 0, "weth balance");
+        assertEq(vault.wethInvested(), 0, "weth invested");
+    }
+
+    function test_exitAllPositions_RepaysDebtAndReleasesCollateralOnOneProtocolWhenInProfit() public {
+        uint256 initialBalance = 1_000_000e18;
+        deal(address(dai), address(vault), initialBalance);
+
+        bytes[] memory callData = new bytes[](2);
+        callData[0] = abi.encodeWithSelector(scDAI.supply.selector, spark.id(), initialBalance);
+        callData[1] = abi.encodeWithSelector(scDAI.borrow.selector, spark.id(), 100 ether);
+
+        vault.rebalance(callData);
+
+        // simulate 50% profit
+        uint256 wethInvested = weth.balanceOf(address(wethVault));
+        deal(address(weth), address(wethVault), wethInvested.mulWadUp(1.5e18));
+
+        assertEq(vault.getProfit(), 50 ether, "profit");
+
+        uint256 totalBefore = vault.totalAssets();
+
+        vault.exitAllPositions(0);
+
+        assertApproxEqRel(vault.sDaiBalance(), totalBefore, 0.2e18, "vault dai balance");
+        assertEq(vault.totalCollateral(), 0, "vault collateral");
+        assertEq(vault.totalDebt(), 0, "vault debt");
+        assertEq(weth.balanceOf(address(vault)), 0, "weth balance");
+        assertEq(vault.wethInvested(), 0, "weth invested");
     }
 
     ///////////////////////////////// INTERNAL METHODS /////////////////////////////////
