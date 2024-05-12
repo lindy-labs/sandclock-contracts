@@ -158,14 +158,14 @@ contract scWETHv2Test is Test {
         assertEq(vault.isTokenWhitelisted(ERC20(C.USDC)), false);
     }
 
-    function test_lifiSwap_TokenOutNotAllowed() public {
+    function test_zeroExSwap_TokenOutNotAllowed() public {
         _setUp(BLOCK_AFTER_EULER_EXPLOIT);
         uint256 amount = 10 ether;
         _depositToVault(address(this), amount);
 
         vm.expectRevert(abi.encodeWithSelector(TokenOutNotAllowed.selector, C.USDC));
         hoax(keeper);
-        vault.lifiSwap(weth, ERC20(C.USDC), amount, "", 0);
+        vault.zeroExSwap(weth, ERC20(C.USDC), amount, "", 0);
     }
 
     function test_addAdapter() public {
@@ -320,7 +320,7 @@ contract scWETHv2Test is Test {
         balancer.flashLoan(address(vault), tokens, amounts, abi.encode(0, 0));
     }
 
-    // function test_lifiSwap_EulerToWeth() public {
+    // function test_zeroExSwap_EulerToWeth() public {
     //     _setUp(17322802);
 
     //     uint256 expectedWethAmount = 988320853404199400;
@@ -332,16 +332,16 @@ contract scWETHv2Test is Test {
     //     deal(C.EULER_REWARDS_TOKEN, address(vault), eulerAmount);
 
     //     vm.expectRevert(CallerNotKeeper.selector);
-    //     vault.lifiSwap(ERC20(C.EULER_REWARDS_TOKEN), ERC20(C.WETH), eulerAmount, swapData, 0);
+    //     vault.zeroExSwap(ERC20(C.EULER_REWARDS_TOKEN), ERC20(C.WETH), eulerAmount, swapData, 0);
 
     //     hoax(keeper);
-    //     vault.lifiSwap(ERC20(C.EULER_REWARDS_TOKEN), ERC20(C.WETH), eulerAmount, swapData, 0);
+    //     vault.zeroExSwap(ERC20(C.EULER_REWARDS_TOKEN), ERC20(C.WETH), eulerAmount, swapData, 0);
 
     //     assertGe(weth.balanceOf(address(vault)), expectedWethAmount, "weth not received");
     //     assertEq(ERC20(C.EULER_REWARDS_TOKEN).balanceOf(address(vault)), 0, "euler token not transferred out");
     // }
 
-    // function test_lifiSwap_WstEthToWeth() public {
+    // function test_zeroExSwap_WstEthToWeth() public {
     //     _setUp(17323024);
 
     //     uint256 wstEthAmount = 10 ether;
@@ -351,7 +351,7 @@ contract scWETHv2Test is Test {
 
     //     deal(address(wstEth), address(vault), wstEthAmount);
     //     vm.prank(keeper);
-    //     vault.lifiSwap(ERC20(address(wstEth)), ERC20(C.WETH), wstEthAmount, swapData, 0);
+    //     vault.zeroExSwap(ERC20(address(wstEth)), ERC20(C.WETH), wstEthAmount, swapData, 0);
 
     //     assertGe(weth.balanceOf(address(vault)), expectedWethAmount, "weth not received");
     //     assertEq(wstEth.balanceOf(address(vault)), 0, "wstEth not transferred out");
@@ -696,7 +696,7 @@ contract scWETHv2Test is Test {
 
         // swap wstEth to weth using zeroEx swap
         callData[1] = abi.encodeWithSelector(
-            BaseV2Vault.lifiSwap.selector, wstEth, ERC20(C.WETH), wstEthAmountToWithdraw, swapData, 0
+            BaseV2Vault.zeroExSwap.selector, wstEth, ERC20(C.WETH), wstEthAmountToWithdraw, swapData, 0
         );
 
         hoax(keeper);
@@ -1186,7 +1186,7 @@ contract scWETHv2Test is Test {
         bytes[] memory callData = new bytes[](3);
 
         callData[0] = abi.encodeWithSelector(
-            BaseV2Vault.lifiSwap.selector, weth, wstEth, investAmount + totalFlashLoanAmount, swapData, 1
+            BaseV2Vault.zeroExSwap.selector, weth, wstEth, investAmount + totalFlashLoanAmount, swapData, 1
         );
 
         callData[1] = abi.encodeWithSelector(

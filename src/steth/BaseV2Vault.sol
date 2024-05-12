@@ -43,8 +43,8 @@ abstract contract BaseV2Vault is sc4626, IFlashLoanRecipient {
     // mapping of IDs to lending protocol adapter contracts
     EnumerableMap.UintToAddressMap internal protocolAdapters;
 
-    // mapping for the tokenOuts allowed during lifiSwap
-    mapping(ERC20 => bool) internal lifiSwapWhitelist;
+    // mapping for the tokenOuts allowed during zeroExSwap
+    mapping(ERC20 => bool) internal zeroExSwapWhitelist;
 
     constructor(
         address _admin,
@@ -61,11 +61,11 @@ abstract contract BaseV2Vault is sc4626, IFlashLoanRecipient {
         priceConverter = _priceConverter;
         swapper = _swapper;
 
-        lifiSwapWhitelist[_asset] = true;
+        zeroExSwapWhitelist[_asset] = true;
     }
 
     /**
-     * @notice whitelist (or cancel whitelist) a token to be swapped out using lifiSwap
+     * @notice whitelist (or cancel whitelist) a token to be swapped out using zeroExSwap
      * @param _token The token to whitelist
      * @param _value whether to whitelist or cancel whitelist
      */
@@ -74,7 +74,7 @@ abstract contract BaseV2Vault is sc4626, IFlashLoanRecipient {
 
         if (address(_token) == address(0)) revert ZeroAddress();
 
-        lifiSwapWhitelist[_token] = _value;
+        zeroExSwapWhitelist[_token] = _value;
 
         emit TokenWhitelisted(address(_token), _value);
     }
@@ -147,10 +147,10 @@ abstract contract BaseV2Vault is sc4626, IFlashLoanRecipient {
     }
 
     /**
-     * @notice returns whether a token is whitelisted to be swapped out using lifiSwap or not
+     * @notice returns whether a token is whitelisted to be swapped out using zeroExSwap or not
      */
     function isTokenWhitelisted(ERC20 _token) external view returns (bool) {
-        return lifiSwapWhitelist[_token];
+        return zeroExSwapWhitelist[_token];
     }
 
     /**
@@ -175,7 +175,7 @@ abstract contract BaseV2Vault is sc4626, IFlashLoanRecipient {
      * @param _swapData The swap data for 0xrouter.
      * @param _assetAmountOutMin The minimum amount of "asset" token to receive for the swap.
      */
-    function lifiSwap(
+    function zeroExSwap(
         ERC20 _tokenIn,
         ERC20 _tokenOut,
         uint256 _amount,
@@ -184,11 +184,11 @@ abstract contract BaseV2Vault is sc4626, IFlashLoanRecipient {
     ) external {
         _onlyKeeperOrFlashLoan();
 
-        if (!lifiSwapWhitelist[_tokenOut]) revert TokenOutNotAllowed(address(_tokenOut));
+        if (!zeroExSwapWhitelist[_tokenOut]) revert TokenOutNotAllowed(address(_tokenOut));
 
         bytes memory result = address(swapper).functionDelegateCall(
             abi.encodeWithSelector(
-                Swapper.lifiSwap.selector, _tokenIn, _tokenOut, _amount, _assetAmountOutMin, _swapData
+                Swapper.zeroExSwap.selector, _tokenIn, _tokenOut, _amount, _assetAmountOutMin, _swapData
             )
         );
 

@@ -510,7 +510,7 @@ contract scDAI is BaseV2Vault {
 
         if (_swapData.length > 0) {
             data = abi.encodeWithSelector(
-                Swapper.lifiSwap.selector, weth, asset, _wethAmount, _sDaiAmountOutMin, _swapData
+                Swapper.zeroExSwap.selector, weth, asset, _wethAmount, _sDaiAmountOutMin, _swapData
             );
         } else {
             data = abi.encodeWithSelector(

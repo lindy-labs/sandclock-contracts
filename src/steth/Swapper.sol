@@ -109,7 +109,7 @@ contract Swapper {
      * @param _swapData Encoded swap data obtained from 0x API.
      * @return Amount of the token received.
      */
-    function lifiSwap(
+    function zeroExSwap(
         ERC20 _tokenIn,
         ERC20 _tokenOut,
         uint256 _amountIn,
