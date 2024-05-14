@@ -66,11 +66,29 @@ contract scDAI is BaseV2Vault {
         scWETH = _scWETH;
 
         weth.safeApprove(address(scWETH), type(uint256).max);
+        ERC20(C.DAI).safeApprove(C.SDAI, type(uint256).max);
     }
 
     /*//////////////////////////////////////////////////////////////
                             PUBLIC API
     //////////////////////////////////////////////////////////////*/
+
+    function depositDai(uint256 assets, address receiver) public virtual returns (uint256 shares) {
+        // Need to transfer before minting or ERC777s could reenter.
+        ERC20(C.DAI).safeTransferFrom(msg.sender, address(this), assets);
+
+        // DAI => SDAI
+        assets = ERC4626(C.SDAI).deposit(assets, address(this));
+
+        // Check for rounding error since we round down in previewDeposit.
+        require((shares = previewDeposit(assets)) != 0, "ZERO_SHARES");
+
+        _mint(receiver, shares);
+
+        emit Deposit(msg.sender, receiver, assets, shares);
+
+        afterDeposit(assets, shares);
+    }
 
     /**
      * @notice Rebalance the vault's positions/loans in multiple lending markets.

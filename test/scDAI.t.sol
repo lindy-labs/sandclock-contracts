@@ -10,6 +10,7 @@ import {IPool} from "aave-v3/interfaces/IPool.sol";
 import {IAToken} from "aave-v3/interfaces/IAToken.sol";
 import {IVariableDebtToken} from "aave-v3/interfaces/IVariableDebtToken.sol";
 import {IPoolDataProvider} from "aave-v3/interfaces/IPoolDataProvider.sol";
+import {ERC4626} from "solmate/mixins/ERC4626.sol";
 
 import {Constants as C} from "../src/lib/Constants.sol";
 import {ILendingPool} from "../src/interfaces/aave-v2/ILendingPool.sol";
@@ -62,6 +63,7 @@ contract scDAITest is Test {
     address constant alice = address(0x06);
 
     WETH weth;
+    ERC4626 sDai;
     ERC20 dai;
 
     scWETH wethVault;
@@ -76,7 +78,8 @@ contract scDAITest is Test {
         vm.selectFork(mainnetFork);
         vm.rollFork(19832667);
 
-        dai = ERC20(C.SDAI);
+        sDai = ERC4626(C.SDAI);
+        dai = ERC20(C.DAI);
         weth = WETH(payable(C.WETH));
         spark = new SparkScDaiAdapter();
 
@@ -95,10 +98,21 @@ contract scDAITest is Test {
         assertEq(weth.allowance(address(vault), address(vault.scWETH())), type(uint256).max, "scWETH allowance");
     }
 
+    function test_depositDai(uint256 daiAmount) public {
+        daiAmount = bound(daiAmount, 1e18, 100_000_000e18);
+        deal(C.DAI, address(this), daiAmount);
+        dai.approve(address(vault), daiAmount);
+        vault.depositDai(daiAmount, address(this));
+
+        uint256 expectedShares = sDai.convertToShares(daiAmount);
+
+        assertEq(vault.balanceOf(address(this)), expectedShares, "shares dont match");
+    }
+
     function test_rebalance() public {
         uint256 initialBalance = 1_000_000e18;
         uint256 initialDebt = 100 ether;
-        deal(address(dai), address(vault), initialBalance);
+        deal(address(sDai), address(vault), initialBalance);
 
         bytes[] memory callData = new bytes[](2);
         callData[0] = abi.encodeWithSelector(scDAI.supply.selector, spark.id(), initialBalance);
@@ -129,7 +143,7 @@ contract scDAITest is Test {
             priceConverter.sDaiToEth(supplyOnSpark).mulWadDown(spark.getMaxLtv() - 0.005e18) // -0.5% to avoid borrowing at max ltv
         );
 
-        deal(address(dai), address(vault), initialBalance);
+        deal(address(sDai), address(vault), initialBalance);
 
         bytes[] memory callData = new bytes[](2);
         callData[0] = abi.encodeWithSelector(scDAI.supply.selector, spark.id(), supplyOnSpark);
@@ -145,7 +159,7 @@ contract scDAITest is Test {
     function test_disinvest() public {
         uint256 initialBalance = 1_000_000e18;
         uint256 initialDebt = 100 ether;
-        deal(address(dai), address(vault), initialBalance);
+        deal(address(sDai), address(vault), initialBalance);
         bytes[] memory callData = new bytes[](2);
         callData[0] = abi.encodeWithSelector(scDAI.supply.selector, spark.id(), initialBalance);
         callData[1] = abi.encodeWithSelector(scDAI.borrow.selector, spark.id(), initialDebt);
@@ -164,7 +178,7 @@ contract scDAITest is Test {
     function test_sellProfit() public {
         uint256 initialBalance = 100000e18;
         uint256 initialDebt = 10 ether;
-        deal(address(dai), address(vault), initialBalance);
+        deal(address(sDai), address(vault), initialBalance);
 
         bytes[] memory callData = new bytes[](2);
         callData[0] = abi.encodeWithSelector(scDAI.supply.selector, spark.id(), initialBalance);
@@ -176,7 +190,7 @@ contract scDAITest is Test {
         uint256 initialWethInvested = vault.wethInvested();
         deal(address(weth), address(wethVault), initialWethInvested * 2);
 
-        uint256 daiBalanceBefore = vault.sDaiBalance();
+        uint256 sDaiBalanceBefore = vault.sDaiBalance();
         uint256 profit = vault.getProfit();
 
         vm.prank(keeper);
@@ -184,9 +198,9 @@ contract scDAITest is Test {
             hex"878863a496bdd049928fadd44bb50b83ba8d5e2715a135b8190596ac8be280b0cac2987700000000000000000000000000000000000000000000000000000000000000c00000000000000000000000000000000000000000000000000000000000000100000000000000000000000000c7183455a4c133ae270771860664b6b7ec320bb10000000000000000000000000000000000000000000005d25bb32f6753f62d8a000000000000000000000000000000000000000000000000000000000000016000000000000000000000000000000000000000000000000000000000000000086c6966692d617069000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002a307830303030303030303030303030303030303030303030303030303030303030303030303030303030000000000000000000000000000000000000000000000000000000000000000000001111111254eeb25477b68fb85ed929f73a9605820000000000000000000000001111111254eeb25477b68fb85ed929f73a960582000000000000000000000000c02aaa39b223fe8d0a0e5c4f27ead9083c756cc200000000000000000000000083f20f44975d03b1b09e64809b757c47f942beea0000000000000000000000000000000000000000000000008ac7230489e8000000000000000000000000000000000000000000000000000000000000000000e00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000030812aa3caf000000000000000000000000e37e799d5077682fa0a244d46e5649f71457bd09000000000000000000000000c02aaa39b223fe8d0a0e5c4f27ead9083c756cc200000000000000000000000083f20f44975d03b1b09e64809b757c47f942beea000000000000000000000000e37e799d5077682fa0a244d46e5649f71457bd090000000000000000000000001231deb6f5749ef6ce6943a275a1d3e7486f4eae0000000000000000000000000000000000000000000000008ac7230489e800000000000000000000000000000000000000000000000005d25bb32f6753f62d8a0000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000014000000000000000000000000000000000000000000000000000000000000001600000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000017f0000000000000000000000000000000000000000000001610001330000e900a007e5c0d20000000000000000000000000000000000000000000000c500005500004f02a000000000000000000000000000000000000000000000000000000006e1b5c60fee63c1e50088e6a0c2ddd26feeb64f039a2c41296fcb3f5640c02aaa39b223fe8d0a0e5c4f27ead9083c756cc200a0fd53121f512083f20f44975d03b1b09e64809b757c47f942beea6b175474e89094c44da98b954eedeac495271d0f00046e553f650000000000000000000000000000000000000000000000000000000000000000000000000000000000000000e37e799d5077682fa0a244d46e5649f71457bd0900a0f2fa6b6683f20f44975d03b1b09e64809b757c47f942beea0000000000000000000000000000000000000000000005d9d8f1d59771f8b38f00000000000000004019c350baac31a980a06c4eca2783f20f44975d03b1b09e64809b757c47f942beea1111111254eeb25477b68fb85ed929f73a960582002a94d114000000000000000000000000000000000000000000000000";
         vault.sellProfit(0, swapData);
 
-        uint256 expectedDaiBalance = daiBalanceBefore + priceConverter.ethTosDai(profit);
+        uint256 expectedDaiBalance = sDaiBalanceBefore + priceConverter.ethTosDai(profit);
         _assertCollateralAndDebt(spark.id(), initialBalance, initialDebt);
-        assertApproxEqRel(vault.sDaiBalance(), expectedDaiBalance, 0.01e18, "dai balance");
+        assertApproxEqRel(vault.sDaiBalance(), expectedDaiBalance, 0.01e18, "sDai balance");
         assertApproxEqRel(vault.wethInvested(), initialWethInvested, 0.001e18, "sold more than actual profit");
     }
 
@@ -212,10 +226,10 @@ contract scDAITest is Test {
 
     function test_withdraw() public {
         uint256 initialBalance = 1_000_000e18;
-        deal(address(dai), alice, initialBalance);
+        deal(address(sDai), alice, initialBalance);
 
         vm.startPrank(alice);
-        dai.approve(address(vault), initialBalance);
+        sDai.approve(address(vault), initialBalance);
         vault.deposit(initialBalance, alice);
         vm.stopPrank();
 
@@ -229,18 +243,18 @@ contract scDAITest is Test {
         vm.prank(alice);
         vault.withdraw(withdrawAmount, alice, alice);
 
-        assertEq(dai.balanceOf(alice), withdrawAmount, "alice asset balance");
+        assertEq(sDai.balanceOf(alice), withdrawAmount, "alice asset balance");
     }
 
     function testFuzz_withdraw(uint256 _amount, uint256 _withdrawAmount) public {
         _amount = 36072990718134180857610733478 * 1e12;
         _withdrawAmount = 0;
         _amount = bound(_amount, 1e18, 10_000_000e18); // upper limit constrained by weth available on aave v3
-        deal(address(dai), alice, _amount);
+        deal(address(sDai), alice, _amount);
         // console2.log("amount", _amount);
 
         vm.startPrank(alice);
-        dai.approve(address(vault), type(uint256).max);
+        sDai.approve(address(vault), type(uint256).max);
         vault.deposit(_amount, alice);
         vm.stopPrank();
 
@@ -258,17 +272,17 @@ contract scDAITest is Test {
         vault.withdraw(_withdrawAmount, alice, alice);
 
         assertApproxEqAbs(vault.totalAssets(), total - _withdrawAmount, 0.0001e18, "total assets");
-        assertApproxEqAbs(dai.balanceOf(alice), _withdrawAmount, 0.01e18, "usdc balance");
+        assertApproxEqAbs(sDai.balanceOf(alice), _withdrawAmount, 0.01e18, "usdc balance");
     }
 
     function testFuzz_withdraw_whenInProfit(uint256 _amount, uint256 _withdrawAmount) public {
         _amount = 0;
         _amount = bound(_amount, 1e18, 10_000_000e18); // upper limit constrained by weth available on aave v3
-        deal(address(dai), alice, _amount);
+        deal(address(sDai), alice, _amount);
         console2.log("amount", _amount);
 
         vm.startPrank(alice);
-        dai.approve(address(vault), type(uint256).max);
+        sDai.approve(address(vault), type(uint256).max);
         vault.deposit(_amount, alice);
         vm.stopPrank();
 
@@ -290,12 +304,12 @@ contract scDAITest is Test {
         vault.withdraw(_withdrawAmount, alice, alice);
 
         assertApproxEqAbs(vault.totalAssets(), total - _withdrawAmount, total.mulWadDown(0.001e18), "total assets");
-        assertApproxEqAbs(dai.balanceOf(alice), _withdrawAmount, _amount.mulWadDown(0.001e18), "dai balance");
+        assertApproxEqAbs(sDai.balanceOf(alice), _withdrawAmount, _amount.mulWadDown(0.001e18), "sDai balance");
     }
 
     function test_exitAllPositions_RepaysDebtAndReleasesCollateralNoProfit() public {
         uint256 initialBalance = 1_000_000e18;
-        deal(address(dai), address(vault), initialBalance);
+        deal(address(sDai), address(vault), initialBalance);
 
         bytes[] memory callData = new bytes[](2);
         callData[0] = abi.encodeWithSelector(scDAI.supply.selector, spark.id(), initialBalance);
@@ -318,7 +332,7 @@ contract scDAITest is Test {
 
     function test_exitAllPositions_RepaysDebtAndReleasesCollateralOnOneProtocolWhenUnderwater() public {
         uint256 initialBalance = 1_000_000e18;
-        deal(address(dai), address(vault), initialBalance);
+        deal(address(sDai), address(vault), initialBalance);
 
         bytes[] memory callData = new bytes[](2);
         callData[0] = abi.encodeWithSelector(scDAI.supply.selector, spark.id(), initialBalance);
@@ -337,7 +351,7 @@ contract scDAITest is Test {
 
         assertFalse(vault.flashLoanInitiated(), "flash loan initiated");
 
-        assertApproxEqRel(vault.sDaiBalance(), totalBefore, 0.02e18, "vault dai balance");
+        assertApproxEqRel(vault.sDaiBalance(), totalBefore, 0.02e18, "vault sDai balance");
         assertEq(vault.totalCollateral(), 0, "vault collateral");
         assertEq(vault.totalDebt(), 0, "vault debt");
         assertEq(weth.balanceOf(address(vault)), 0, "weth balance");
@@ -346,7 +360,7 @@ contract scDAITest is Test {
 
     function test_exitAllPositions_RepaysDebtAndReleasesCollateralOnOneProtocolWhenInProfit() public {
         uint256 initialBalance = 1_000_000e18;
-        deal(address(dai), address(vault), initialBalance);
+        deal(address(sDai), address(vault), initialBalance);
 
         bytes[] memory callData = new bytes[](2);
         callData[0] = abi.encodeWithSelector(scDAI.supply.selector, spark.id(), initialBalance);
@@ -364,7 +378,7 @@ contract scDAITest is Test {
 
         vault.exitAllPositions(0);
 
-        assertApproxEqRel(vault.sDaiBalance(), totalBefore, 0.2e18, "vault dai balance");
+        assertApproxEqRel(vault.sDaiBalance(), totalBefore, 0.2e18, "vault sDai balance");
         assertEq(vault.totalCollateral(), 0, "vault collateral");
         assertEq(vault.totalDebt(), 0, "vault debt");
         assertEq(weth.balanceOf(address(vault)), 0, "weth balance");

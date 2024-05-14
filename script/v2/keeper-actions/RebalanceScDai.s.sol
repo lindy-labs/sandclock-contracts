@@ -265,7 +265,9 @@ contract RebalancescDAI is Script {
             )
         );
 
-        (uint256 status, bytes memory data) = url.get();
+        string[] memory headers = new string[](1);
+        headers[0] = string(abi.encodePacked("accept: ", "application/json"));
+        (uint256 status, bytes memory data) = url.get(headers);
 
         if (status != 200) {
             console2.log("----- LI.FI GET request Failed ---- Using backup swappers -------");
