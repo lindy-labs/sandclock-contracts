@@ -514,8 +514,15 @@ contract scDAI is BaseV2Vault {
     }
 
     function _swapWethForAsset(uint256 _wethAmount, uint256 _sDaiAmountOutMin) internal returns (uint256) {
+        // weth => dai
         address(swapper).functionDelegateCall(
-            abi.encodeWithSelector(Swapper.uniswapSwapExactInputMultihop.selector, weth, C.DAI, _wethAmount, 1)
+            abi.encodeWithSelector(
+                Swapper.uniswapSwapExactInputMultihop.selector,
+                weth,
+                _wethAmount,
+                1,
+                abi.encodePacked(C.WETH, uint256(500), C.USDC, uint256(100), C.DAI)
+            )
         );
 
         uint256 sDaiReceived = ERC4626(C.SDAI).deposit(ERC20(C.DAI).balanceOf(address(this)), address(this));
@@ -532,7 +539,11 @@ contract scDAI is BaseV2Vault {
         // DAI => weth
         address(swapper).functionDelegateCall(
             abi.encodeWithSelector(
-                Swapper.uniswapSwapExactOutputMultihop.selector, C.DAI, weth, _wethAmountOut, type(uint256).max
+                Swapper.uniswapSwapExactOutputMultihop.selector,
+                C.DAI,
+                _wethAmountOut,
+                type(uint256).max,
+                abi.encodePacked(C.DAI, uint256(100), C.USDC, uint256(500), C.WETH)
             )
         );
 

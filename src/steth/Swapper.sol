@@ -10,9 +10,7 @@ import {IwstETH} from "../interfaces/lido/IwstETH.sol";
 import {ICurvePool} from "../interfaces/curve/ICurvePool.sol";
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 import {Address} from "openzeppelin-contracts/utils/Address.sol";
-import {AccessControl} from "openzeppelin-contracts/access/AccessControl.sol";
 
-import {ZeroAddress, CallerNotAdmin} from "../errors/scErrors.sol";
 import {AmountReceivedBelowMin} from "../errors/scErrors.sol";
 import {ISwapRouter} from "../interfaces/uniswap/ISwapRouter.sol";
 import {Constants as C} from "../lib/Constants.sol";
@@ -23,7 +21,7 @@ import {Constants as C} from "../lib/Constants.sol";
  * @dev This contract is only meant to be used via delegatecalls from another contract.
  * @dev Using this contract directly for swaps might result in reverts.
  */
-contract Swapper is AccessControl {
+contract Swapper {
     using SafeTransferLib for ERC20;
     using Address for address;
 
@@ -36,40 +34,21 @@ contract Swapper is AccessControl {
     ILido public constant stEth = ILido(C.STETH);
     IwstETH public constant wstEth = IwstETH(C.WSTETH);
 
-    mapping(address => mapping(address => bytes)) private swapPath;
-
-    constructor() {
-        // if (_admin == address(0)) revert ZeroAddress();
-        // _grantRole(DEFAULT_ADMIN_ROLE, _admin);
-
-        swapPath[C.DAI][C.WETH] = abi.encodePacked(C.DAI, uint256(100), C.USDC, uint256(500), C.WETH);
-        swapPath[C.WETH][C.DAI] = abi.encodePacked(C.WETH, uint256(500), C.USDC, uint256(100), C.DAI);
-    }
-
-    // function _onlyAdmin() internal view {
-    //     if (!hasRole(DEFAULT_ADMIN_ROLE, msg.sender)) revert CallerNotAdmin();
-    // }
-
-    // function setSwapPath(address _tokenIn, address _tokenOut, bytes calldata _path) external {
-    //     // _onlyAdmin();
-    //     swapPath[_tokenIn][_tokenOut] = _path;
+    // constructor() {
+    //     swapPath[C.DAI][C.WETH] = abi.encodePacked(C.DAI, uint256(100), C.USDC, uint256(500), C.WETH);
+    //     swapPath[C.WETH][C.DAI] = abi.encodePacked(C.WETH, uint256(500), C.USDC, uint256(100), C.DAI);
     // }
 
     function uniswapSwapExactInputMultihop(
         address _tokenIn,
-        address _tokenOut,
         uint256 _amountIn,
-        uint256 _amountOutMin
+        uint256 _amountOutMin,
+        bytes calldata _path
     ) external returns (uint256) {
         ERC20(_tokenIn).safeApprove(address(swapRouter), _amountIn);
 
-        console.log(_tokenIn);
-        console.log(_tokenOut);
-
-        console.logBytes(swapPath[_tokenIn][_tokenOut]);
-
         ISwapRouter.ExactInputParams memory params = ISwapRouter.ExactInputParams({
-            path: swapPath[_tokenIn][_tokenOut],
+            path: _path,
             recipient: address(this),
             deadline: block.timestamp,
             amountIn: _amountIn,
@@ -113,14 +92,14 @@ contract Swapper is AccessControl {
 
     function uniswapSwapExactOutputMultihop(
         address _tokenIn,
-        address _tokenOut,
         uint256 _amountOut,
-        uint256 _amountInMaximum
+        uint256 _amountInMaximum,
+        bytes calldata _path
     ) external returns (uint256) {
         ERC20(_tokenIn).safeApprove(address(swapRouter), _amountInMaximum);
 
         ISwapRouter.ExactOutputParams memory params = ISwapRouter.ExactOutputParams({
-            path: swapPath[_tokenIn][_tokenOut],
+            path: _path,
             recipient: address(this),
             deadline: block.timestamp,
             amountOut: _amountOut,
