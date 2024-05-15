@@ -105,11 +105,6 @@ contract scDAI is BaseV2Vault {
 
         // // enforce float to be above the minimum required
         uint256 float = sDaiBalance();
-        // uint256 floatRequired = totalAssets().mulWadDown(floatPercentage);
-
-        // if (float < floatRequired) {
-        //     revert FloatBalanceTooLow(float, floatRequired);
-        // }
 
         emit Rebalanced(totalCollateral(), totalDebt(), float);
     }
@@ -143,7 +138,7 @@ contract scDAI is BaseV2Vault {
      * @dev As the vault generates yield by staking WETH, the profits are in WETH.
      * @param _sDaiAmountOutMin The minimum amount of USDC to receive.
      */
-    function sellProfit(uint256 _sDaiAmountOutMin, bytes calldata _swapData) external {
+    function sellProfit(uint256 _sDaiAmountOutMin) external {
         _onlyKeeper();
 
         uint256 profit = _calculateWethProfit(wethInvested(), totalDebt());
@@ -151,7 +146,7 @@ contract scDAI is BaseV2Vault {
         if (profit == 0) revert NoProfitsToSell();
 
         uint256 withdrawn = _disinvest(profit);
-        uint256 sDaiReceived = _swapWethForAsset(withdrawn, _sDaiAmountOutMin, _swapData);
+        uint256 sDaiReceived = _swapWethForAsset(withdrawn, _sDaiAmountOutMin);
 
         emit ProfitSold(withdrawn, sDaiReceived);
     }
@@ -186,8 +181,7 @@ contract scDAI is BaseV2Vault {
             // if some WETH remains after repaying all debt, swap it to USDC
             uint256 wethLeft = _wethBalance();
 
-            bytes memory empty;
-            if (wethLeft != 0) _swapWethForAsset(wethLeft, 0, empty);
+            if (wethLeft != 0) _swapWethForAsset(wethLeft, 0);
         }
 
         if (sDaiBalance() < _endDaiBalanceMin) revert EndDaiBalanceTooLow();
@@ -216,7 +210,7 @@ contract scDAI is BaseV2Vault {
 
         if (flashLoanType == FlashLoanType.ExitAllPositions) {
             _repayAllDebtAndWithdrawCollateral();
-            _swapDaiForExactWeth(flashLoanAmount);
+            _swapAssetForExactWeth(flashLoanAmount);
         } else {
             (, bytes[] memory callData) = abi.decode(_data, (FlashLoanType, bytes[]));
             _multiCall(callData);
@@ -435,12 +429,11 @@ contract scDAI is BaseV2Vault {
         uint256 floatRequired = total > _assets ? (total - _assets).mulWadUp(floatPercentage) : 0;
         uint256 sDaiNeeded = _assets + floatRequired - initialBalance;
 
-        bytes memory empty;
         // first try to sell profits to cover withdrawal amount
         if (profit != 0) {
             uint256 withdrawn = _disinvest(profit);
             uint256 sDaiAmountOutMin = priceConverter.ethTosDai(withdrawn).mulWadDown(slippageTolerance);
-            uint256 sDaiReceived = _swapWethForAsset(withdrawn, sDaiAmountOutMin, empty);
+            uint256 sDaiReceived = _swapWethForAsset(withdrawn, sDaiAmountOutMin);
 
             if (initialBalance + sDaiReceived >= _assets) return;
 
@@ -520,37 +513,30 @@ contract scDAI is BaseV2Vault {
         return weth.balanceOf(address(this));
     }
 
-    function _swapWethForAsset(uint256 _wethAmount, uint256 _sDaiAmountOutMin, bytes memory _swapData)
-        internal
-        returns (uint256)
-    {
-        bytes memory data;
+    function _swapWethForAsset(uint256 _wethAmount, uint256 _sDaiAmountOutMin) internal returns (uint256) {
+        address(swapper).functionDelegateCall(
+            abi.encodeWithSelector(Swapper.uniswapSwapExactInputMultihop.selector, weth, C.DAI, _wethAmount, 1)
+        );
 
-        if (_swapData.length > 0) {
-            data = abi.encodeWithSelector(
-                Swapper.zeroExSwap.selector, weth, asset, _wethAmount, _sDaiAmountOutMin, _swapData
-            );
-        } else {
-            data = abi.encodeWithSelector(
-                Swapper.uniswapSwapExactInput.selector, weth, asset, _wethAmount, _sDaiAmountOutMin, 500 /* pool fee*/
-            );
-        }
+        uint256 sDaiReceived = ERC4626(C.SDAI).deposit(ERC20(C.DAI).balanceOf(address(this)), address(this));
 
-        bytes memory result = address(swapper).functionDelegateCall(data);
+        require(sDaiReceived > _sDaiAmountOutMin, "too little asset received");
 
-        return abi.decode(result, (uint256));
+        return sDaiReceived;
     }
 
-    function _swapDaiForExactWeth(uint256 _wethAmountOut) internal {
+    function _swapAssetForExactWeth(uint256 _wethAmountOut) internal {
+        // sdai => dai
+        ERC4626(C.SDAI).withdraw(asset.balanceOf(address(this)), address(this), address(this));
+
+        // DAI => weth
         address(swapper).functionDelegateCall(
             abi.encodeWithSelector(
-                Swapper.uniswapSwapExactOutput.selector,
-                asset,
-                weth,
-                _wethAmountOut,
-                type(uint256).max, // ignore slippage
-                500 // pool fee
+                Swapper.uniswapSwapExactOutputMultihop.selector, C.DAI, weth, _wethAmountOut, type(uint256).max
             )
         );
+
+        // dai to sdai
+        ERC4626(C.SDAI).deposit(ERC20(C.DAI).balanceOf(address(this)), address(this));
     }
 }

@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.19;
 
+import "forge-std/console.sol";
+
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {WETH} from "solmate/tokens/WETH.sol";
 import {ILido} from "../interfaces/lido/ILido.sol";
@@ -8,7 +10,9 @@ import {IwstETH} from "../interfaces/lido/IwstETH.sol";
 import {ICurvePool} from "../interfaces/curve/ICurvePool.sol";
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 import {Address} from "openzeppelin-contracts/utils/Address.sol";
+import {AccessControl} from "openzeppelin-contracts/access/AccessControl.sol";
 
+import {ZeroAddress, CallerNotAdmin} from "../errors/scErrors.sol";
 import {AmountReceivedBelowMin} from "../errors/scErrors.sol";
 import {ISwapRouter} from "../interfaces/uniswap/ISwapRouter.sol";
 import {Constants as C} from "../lib/Constants.sol";
@@ -19,7 +23,7 @@ import {Constants as C} from "../lib/Constants.sol";
  * @dev This contract is only meant to be used via delegatecalls from another contract.
  * @dev Using this contract directly for swaps might result in reverts.
  */
-contract Swapper {
+contract Swapper is AccessControl {
     using SafeTransferLib for ERC20;
     using Address for address;
 
@@ -31,6 +35,49 @@ contract Swapper {
     WETH public constant weth = WETH(payable(C.WETH));
     ILido public constant stEth = ILido(C.STETH);
     IwstETH public constant wstEth = IwstETH(C.WSTETH);
+
+    mapping(address => mapping(address => bytes)) private swapPath;
+
+    constructor() {
+        // if (_admin == address(0)) revert ZeroAddress();
+        // _grantRole(DEFAULT_ADMIN_ROLE, _admin);
+
+        swapPath[C.DAI][C.WETH] = abi.encodePacked(C.DAI, uint256(100), C.USDC, uint256(500), C.WETH);
+        swapPath[C.WETH][C.DAI] = abi.encodePacked(C.WETH, uint256(500), C.USDC, uint256(100), C.DAI);
+    }
+
+    // function _onlyAdmin() internal view {
+    //     if (!hasRole(DEFAULT_ADMIN_ROLE, msg.sender)) revert CallerNotAdmin();
+    // }
+
+    // function setSwapPath(address _tokenIn, address _tokenOut, bytes calldata _path) external {
+    //     // _onlyAdmin();
+    //     swapPath[_tokenIn][_tokenOut] = _path;
+    // }
+
+    function uniswapSwapExactInputMultihop(
+        address _tokenIn,
+        address _tokenOut,
+        uint256 _amountIn,
+        uint256 _amountOutMin
+    ) external returns (uint256) {
+        ERC20(_tokenIn).safeApprove(address(swapRouter), _amountIn);
+
+        console.log(_tokenIn);
+        console.log(_tokenOut);
+
+        console.logBytes(swapPath[_tokenIn][_tokenOut]);
+
+        ISwapRouter.ExactInputParams memory params = ISwapRouter.ExactInputParams({
+            path: swapPath[_tokenIn][_tokenOut],
+            recipient: address(this),
+            deadline: block.timestamp,
+            amountIn: _amountIn,
+            amountOutMinimum: _amountOutMin
+        });
+
+        return swapRouter.exactInput(params);
+    }
 
     /**
      * @notice Swap tokens on Uniswap V3 using exact input single function.
@@ -64,6 +111,24 @@ contract Swapper {
         return swapRouter.exactInputSingle(params);
     }
 
+    function uniswapSwapExactOutputMultihop(
+        address _tokenIn,
+        address _tokenOut,
+        uint256 _amountOut,
+        uint256 _amountInMaximum
+    ) external returns (uint256) {
+        ERC20(_tokenIn).safeApprove(address(swapRouter), _amountInMaximum);
+
+        ISwapRouter.ExactOutputParams memory params = ISwapRouter.ExactOutputParams({
+            path: swapPath[_tokenIn][_tokenOut],
+            recipient: address(this),
+            deadline: block.timestamp,
+            amountOut: _amountOut,
+            amountInMaximum: _amountInMaximum
+        });
+
+        return swapRouter.exactOutput(params);
+    }
     /**
      * @notice Swap tokens on Uniswap V3 using exact output single function.
      * @param _tokenIn Address of the token to swap.
@@ -73,6 +138,7 @@ contract Swapper {
      * @param _poolFee Pool fee of the Uniswap V3 pool.
      * @return Amount of the token swapped.
      */
+
     function uniswapSwapExactOutput(
         ERC20 _tokenIn,
         ERC20 _tokenOut,
