@@ -343,7 +343,7 @@ contract scDAITest is Test {
         vault.rebalance(callData);
 
         // simulate 50% loss
-        deal(address(weth), address(wethVault), 50 ether);
+        deal(address(weth), address(wethVault), 95 ether);
 
         uint256 totalBefore = vault.totalAssets();
 

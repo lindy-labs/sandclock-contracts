@@ -34,11 +34,6 @@ contract Swapper {
     ILido public constant stEth = ILido(C.STETH);
     IwstETH public constant wstEth = IwstETH(C.WSTETH);
 
-    // constructor() {
-    //     swapPath[C.DAI][C.WETH] = abi.encodePacked(C.DAI, uint256(100), C.USDC, uint256(500), C.WETH);
-    //     swapPath[C.WETH][C.DAI] = abi.encodePacked(C.WETH, uint256(500), C.USDC, uint256(100), C.DAI);
-    // }
-
     function uniswapSwapExactInputMultihop(
         address _tokenIn,
         uint256 _amountIn,

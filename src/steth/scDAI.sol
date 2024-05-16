@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.19;
 
+import "forge-std/console.sol";
+
 import {NoProfitsToSell, FlashLoanAmountZero, EndDaiBalanceTooLow, FloatBalanceTooLow} from "../errors/scErrors.sol";
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
@@ -521,7 +523,7 @@ contract scDAI is BaseV2Vault {
                 weth,
                 _wethAmount,
                 1,
-                abi.encodePacked(C.WETH, uint256(500), C.USDC, uint256(100), C.DAI)
+                abi.encodePacked(C.WETH, uint24(500), C.USDC, uint24(100), C.DAI)
             )
         );
 
@@ -534,7 +536,13 @@ contract scDAI is BaseV2Vault {
 
     function _swapAssetForExactWeth(uint256 _wethAmountOut) internal {
         // sdai => dai
-        ERC4626(C.SDAI).withdraw(asset.balanceOf(address(this)), address(this), address(this));
+        uint256 daiAmount = ERC4626(C.SDAI).redeem(asset.balanceOf(address(this)), address(this), address(this));
+
+        console.log("dai amount", daiAmount);
+        console.log("dai amount", ERC20(C.DAI).balanceOf(address(this)));
+        console.log("weth amount", _wethAmountOut);
+
+        console.log("Swapper", address(swapper));
 
         // DAI => weth
         address(swapper).functionDelegateCall(
@@ -542,12 +550,14 @@ contract scDAI is BaseV2Vault {
                 Swapper.uniswapSwapExactOutputMultihop.selector,
                 C.DAI,
                 _wethAmountOut,
-                type(uint256).max,
-                abi.encodePacked(C.DAI, uint256(100), C.USDC, uint256(500), C.WETH)
+                daiAmount,
+                abi.encodePacked(C.DAI, uint24(100), C.USDC, uint24(500), C.WETH)
             )
         );
 
-        // dai to sdai
+        console.log("weth amount", weth.balanceOf(address(this)));
+
+        // remaining dai to sdai
         ERC4626(C.SDAI).deposit(ERC20(C.DAI).balanceOf(address(this)), address(this));
     }
 }

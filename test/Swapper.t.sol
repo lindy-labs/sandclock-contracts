@@ -21,10 +21,30 @@ contract SwapperTest is Test {
     function setUp() public {
         uint256 mainnetFork = vm.createFork(vm.envString("RPC_URL_MAINNET"));
         vm.selectFork(mainnetFork);
-        vm.rollFork(18819890);
+        vm.rollFork(19880300);
 
         wstEth = IwstETH(C.WSTETH);
         swapper = new Swapper();
+    }
+
+    function test_uniswapSwapExactOutputMultihop() public {
+        // dai to weth
+        uint256 daiAmount = 100_000 ether;
+        deal(C.DAI, address(this), daiAmount);
+
+        bytes memory result = address(swapper).functionDelegateCall(
+            abi.encodeWithSelector(
+                swapper.uniswapSwapExactOutputMultihop.selector,
+                C.DAI,
+                2 ether,
+                daiAmount,
+                abi.encodePacked(C.DAI, uint24(100), C.USDC, uint24(500), C.WETH)
+            )
+        );
+
+        uint256 wethReceived = abi.decode(result, (uint256));
+
+        console.log("wethReceived", wethReceived);
     }
 
     function test_lidoSwapWethToWstEth_usesCurveForSmallAmounts() public {
