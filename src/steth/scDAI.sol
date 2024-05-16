@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.19;
 
-import "forge-std/console.sol";
-
 import {NoProfitsToSell, FlashLoanAmountZero, EndDaiBalanceTooLow, FloatBalanceTooLow} from "../errors/scErrors.sol";
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
@@ -527,7 +525,7 @@ contract scDAI is BaseV2Vault {
             )
         );
 
-        uint256 sDaiReceived = ERC4626(C.SDAI).deposit(ERC20(C.DAI).balanceOf(address(this)), address(this));
+        uint256 sDaiReceived = _swapDaiToSdai();
 
         require(sDaiReceived > _sDaiAmountOutMin, "too little asset received");
 
@@ -535,14 +533,7 @@ contract scDAI is BaseV2Vault {
     }
 
     function _swapAssetForExactWeth(uint256 _wethAmountOut) internal {
-        // sdai => dai
-        uint256 daiAmount = ERC4626(C.SDAI).redeem(asset.balanceOf(address(this)), address(this), address(this));
-
-        console.log("dai amount", daiAmount);
-        console.log("dai amount", ERC20(C.DAI).balanceOf(address(this)));
-        console.log("weth amount", _wethAmountOut);
-
-        console.log("Swapper", address(swapper));
+        uint256 daiAmount = _swapSdaiToDai();
 
         // DAI => weth
         address(swapper).functionDelegateCall(
@@ -551,13 +542,23 @@ contract scDAI is BaseV2Vault {
                 C.DAI,
                 _wethAmountOut,
                 daiAmount,
-                abi.encodePacked(C.DAI, uint24(100), C.USDC, uint24(500), C.WETH)
+                abi.encodePacked(C.WETH, uint24(500), C.USDC, uint24(100), C.DAI)
             )
         );
 
-        console.log("weth amount", weth.balanceOf(address(this)));
-
         // remaining dai to sdai
-        ERC4626(C.SDAI).deposit(ERC20(C.DAI).balanceOf(address(this)), address(this));
+        _swapDaiToSdai();
+    }
+
+    function _swapSdaiToDai() internal returns (uint256) {
+        return ERC4626(C.SDAI).redeem(sDaiBalance(), address(this), address(this));
+    }
+
+    function _swapDaiToSdai() internal returns (uint256) {
+        return ERC4626(C.SDAI).deposit(_daiBalance(), address(this));
+    }
+
+    function _daiBalance() internal returns (uint256) {
+        return ERC20(C.DAI).balanceOf(address(this));
     }
 }

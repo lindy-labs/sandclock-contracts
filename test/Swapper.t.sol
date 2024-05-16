@@ -38,7 +38,7 @@ contract SwapperTest is Test {
                 C.DAI,
                 2 ether,
                 daiAmount,
-                abi.encodePacked(C.DAI, uint24(100), C.USDC, uint24(500), C.WETH)
+                abi.encodePacked(C.WETH, uint24(500), C.USDC, uint24(100), C.DAI)
             )
         );
 
