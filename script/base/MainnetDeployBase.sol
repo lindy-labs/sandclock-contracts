@@ -7,6 +7,7 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 import {WETH} from "solmate/tokens/WETH.sol";
 import {AccessControl} from "openzeppelin-contracts/access/AccessControl.sol";
 import {ERC4626} from "solmate/mixins/ERC4626.sol";
+import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 
 import {MainnetAddresses} from "./MainnetAddresses.sol";
 import {Constants as C} from "../../src/lib/Constants.sol";
@@ -17,6 +18,8 @@ import {sc4626} from "../../src/sc4626.sol";
  * Mainnet base deployment file that handles deployment.
  */
 abstract contract MainnetDeployBase is CREATE3Script {
+    using SafeTransferLib for ERC20;
+
     uint256 deployerPrivateKey;
     address deployerAddress;
     address keeper;
@@ -69,7 +72,7 @@ abstract contract MainnetDeployBase is CREATE3Script {
         amountOut = ISwapRouter(C.UNISWAP_V3_SWAP_ROUTER).exactInputSingle(params);
     }
 
-    function _swapWethForSdai(uint256 _amount) internal returns (uint256 amountOut) {
+    function _swapWethForDai(uint256 _amount) internal returns (uint256 amountOut) {
         weth.deposit{value: _amount}();
 
         weth.approve(C.UNISWAP_V3_SWAP_ROUTER, _amount);
@@ -82,9 +85,9 @@ abstract contract MainnetDeployBase is CREATE3Script {
             amountOutMinimum: 0
         });
 
-        uint256 daiAmount = ISwapRouter(C.UNISWAP_V3_SWAP_ROUTER).exactInput(params);
+        amountOut = ISwapRouter(C.UNISWAP_V3_SWAP_ROUTER).exactInput(params);
 
-        ERC20(C.DAI).approve(C.SDAI, daiAmount);
-        amountOut = ERC4626(C.SDAI).deposit(daiAmount, address(this));
+        // ERC20(C.DAI).safeApprove(C.SDAI, daiAmount);
+        // amountOut = ERC4626(C.SDAI).deposit(daiAmount, address(this));
     }
 }

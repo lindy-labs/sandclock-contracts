@@ -10,15 +10,13 @@ import {Swapper} from "../../src/steth/Swapper.sol";
 import {PriceConverter} from "../../src/steth/PriceConverter.sol";
 import {SparkScDaiAdapter} from "../../src/steth/scDai-adapters/SparkScDaiAdapter.sol";
 import {IAdapter} from "../../src/steth/IAdapter.sol";
+import {Constants as C} from "../../src/lib/Constants.sol";
+import {ERC20} from "solmate/tokens/ERC20.sol";
 
 import {CREATE3Script} from "../base/CREATE3Script.sol";
 
 contract DeployScDaiMainnet is MainnetDeployBase {
     scWETHv2 scWethV2 = scWETHv2(payable(0x4c406C068106375724275Cbff028770C544a1333));
-
-    Swapper swapper;
-    PriceConverter priceConverter;
-    IAdapter sparkAdapter;
 
     function run() external {
         console2.log("--Deploy scDAI script running--");
@@ -29,18 +27,25 @@ contract DeployScDaiMainnet is MainnetDeployBase {
 
         vm.startBroadcast(deployerAddress);
 
-        swapper = new Swapper();
-        priceConverter = new PriceConverter(MainnetAddresses.MULTISIG);
-        sparkAdapter = new SparkScDaiAdapter();
+        Swapper swapper = new Swapper();
+        PriceConverter priceConverter = new PriceConverter(MainnetAddresses.MULTISIG);
+        IAdapter sparkAdapter = new SparkScDaiAdapter();
+
+        console2.log("swapper\t\t", address(swapper));
+        console2.log("priceConverter\t\t", address(priceConverter));
+        console2.log("sparkAdapter\t\t", address(sparkAdapter));
 
         // deploy vault
         scDAI vault = new scDAI(deployerAddress, keeper, scWethV2, priceConverter, swapper);
 
+        console2.log("scDAI\t\t", address(vault));
+
         vault.addAdapter(sparkAdapter);
 
         // initial deposit
-        uint256 daiAmount = _swapWethForSdai(0.01 ether);
-        _deposit(vault, daiAmount); // 0.01 ether worth of sDAI
+        uint256 daiAmount = _swapWethForDai(0.01 ether);
+        ERC20(C.DAI).approve(address(vault), daiAmount);
+        vault.depositDai(daiAmount, deployerAddress); // 0.01 ether worth of sDAI
 
         _transferAdminRoleToMultisig(vault, deployerAddress);
 
@@ -54,8 +59,5 @@ contract DeployScDaiMainnet is MainnetDeployBase {
         console2.log("deployer\t\t", address(deployerAddress));
         console2.log("keeper\t\t", address(keeper));
         console2.log("scWethV2\t\t", address(scWethV2));
-        console2.log("swapper\t\t", address(swapper));
-        console2.log("priceConverter\t\t", address(priceConverter));
-        console2.log("sparkAdapter\t\t", address(sparkAdapter));
     }
 }
