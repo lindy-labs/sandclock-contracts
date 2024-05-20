@@ -23,7 +23,7 @@ import {IAdapter} from "../../../src/steth/IAdapter.sol";
 /**
  * A script for executing rebalance functionality for scDAI vaults.
  */
-contract RebalancescDAI is Script {
+contract RebalanceScDAI is Script {
     using FixedPointMathLib for uint256;
     using Surl for *;
     using Strings for *;
@@ -127,9 +127,7 @@ contract RebalancescDAI is Script {
         // if profit is too small, don't sell & reinvest
         if (minExpectedsDaiProfit < minSDaiProfitToReinvest) return 0;
 
-        bytes memory lifiSwapData = getLifiSwapData(wethProfit, C.WETH, C.SDAI);
-
-        multicallData.push(abi.encodeWithSelector(scDAI.sellProfit.selector, minExpectedsDaiProfit, lifiSwapData));
+        multicallData.push(abi.encodeWithSelector(scDAI.sellProfit.selector, minExpectedsDaiProfit));
 
         return minExpectedsDaiProfit;
     }
@@ -244,36 +242,36 @@ contract RebalancescDAI is Script {
         console2.log("weth invested\t\t", vault.wethInvested());
     }
 
-    function getLifiSwapData(uint256 _amount, address _fromToken, address _toToken)
-        public
-        virtual
-        returns (bytes memory swapData)
-    {
-        string memory url = string(
-            abi.encodePacked(
-                "https://li.quest/v1/quote?fromChain=1&toChain=1&toToken=",
-                _toToken.toHexString(),
-                "&fromToken=",
-                _fromToken.toHexString(),
-                "&fromAmount=",
-                _amount.toString(),
-                "&fromAddress=",
-                address(vault).toHexString(),
-                "&toAddress=",
-                address(vault).toHexString(),
-                "&order=RECOMMENDED&slippage=0.005"
-            )
-        );
+    // function getLifiSwapData(uint256 _amount, address _fromToken, address _toToken)
+    //     public
+    //     virtual
+    //     returns (bytes memory swapData)
+    // {
+    //     string memory url = string(
+    //         abi.encodePacked(
+    //             "https://li.quest/v1/quote?fromChain=1&toChain=1&toToken=",
+    //             _toToken.toHexString(),
+    //             "&fromToken=",
+    //             _fromToken.toHexString(),
+    //             "&fromAmount=",
+    //             _amount.toString(),
+    //             "&fromAddress=",
+    //             address(vault).toHexString(),
+    //             "&toAddress=",
+    //             address(vault).toHexString(),
+    //             "&order=RECOMMENDED&slippage=0.005"
+    //         )
+    //     );
 
-        string[] memory headers = new string[](1);
-        headers[0] = string(abi.encodePacked("accept: ", "application/json"));
-        (uint256 status, bytes memory data) = url.get(headers);
+    //     string[] memory headers = new string[](1);
+    //     headers[0] = string(abi.encodePacked("accept: ", "application/json"));
+    //     (uint256 status, bytes memory data) = url.get(headers);
 
-        if (status != 200) {
-            console2.log("----- LI.FI GET request Failed ---- Using backup swappers -------");
-        } else {
-            string memory json = string(data);
-            swapData = json.readBytes(".data");
-        }
-    }
+    //     if (status != 200) {
+    //         console2.log("----- LI.FI GET request Failed ---- Using backup swappers -------");
+    //     } else {
+    //         string memory json = string(data);
+    //         swapData = json.readBytes(".data");
+    //     }
+    // }
 }

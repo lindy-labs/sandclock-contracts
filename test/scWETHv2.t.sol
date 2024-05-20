@@ -320,42 +320,42 @@ contract scWETHv2Test is Test {
         balancer.flashLoan(address(vault), tokens, amounts, abi.encode(0, 0));
     }
 
-    // function test_zeroExSwap_EulerToWeth() public {
-    //     _setUp(17322802);
+    function test_zeroExSwap_EulerToWeth() public {
+        _setUp(17322802);
 
-    //     uint256 expectedWethAmount = 988320853404199400;
+        uint256 expectedWethAmount = 988320853404199400;
 
-    //     bytes memory swapData =
-    //         hex"6af479b2000000000000000000000000000000000000000000000000000000000000008000000000000000000000000000000000000000000000003635c9adc5dea000000000000000000000000000000000000000000000000000000d941bdaa15b045e0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002bd9fcd98c322942075a5c3860693e9f4f03aae07b002710c02aaa39b223fe8d0a0e5c4f27ead9083c756cc2000000000000000000000000000000000000000000869584cd000000000000000000000000100000000000000000000000000000000000001100000000000000000000000000000000000000000000007992ffbce5646cdd8a";
+        bytes memory swapData =
+            hex"6af479b2000000000000000000000000000000000000000000000000000000000000008000000000000000000000000000000000000000000000003635c9adc5dea000000000000000000000000000000000000000000000000000000d941bdaa15b045e0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002bd9fcd98c322942075a5c3860693e9f4f03aae07b002710c02aaa39b223fe8d0a0e5c4f27ead9083c756cc2000000000000000000000000000000000000000000869584cd000000000000000000000000100000000000000000000000000000000000001100000000000000000000000000000000000000000000007992ffbce5646cdd8a";
 
-    //     uint256 eulerAmount = 1000e18;
-    //     deal(C.EULER_REWARDS_TOKEN, address(vault), eulerAmount);
+        uint256 eulerAmount = 1000e18;
+        deal(C.EULER_REWARDS_TOKEN, address(vault), eulerAmount);
 
-    //     vm.expectRevert(CallerNotKeeper.selector);
-    //     vault.zeroExSwap(ERC20(C.EULER_REWARDS_TOKEN), ERC20(C.WETH), eulerAmount, swapData, 0);
+        vm.expectRevert(CallerNotKeeper.selector);
+        vault.zeroExSwap(ERC20(C.EULER_REWARDS_TOKEN), ERC20(C.WETH), eulerAmount, swapData, 0);
 
-    //     hoax(keeper);
-    //     vault.zeroExSwap(ERC20(C.EULER_REWARDS_TOKEN), ERC20(C.WETH), eulerAmount, swapData, 0);
+        hoax(keeper);
+        vault.zeroExSwap(ERC20(C.EULER_REWARDS_TOKEN), ERC20(C.WETH), eulerAmount, swapData, 0);
 
-    //     assertGe(weth.balanceOf(address(vault)), expectedWethAmount, "weth not received");
-    //     assertEq(ERC20(C.EULER_REWARDS_TOKEN).balanceOf(address(vault)), 0, "euler token not transferred out");
-    // }
+        assertGe(weth.balanceOf(address(vault)), expectedWethAmount, "weth not received");
+        assertEq(ERC20(C.EULER_REWARDS_TOKEN).balanceOf(address(vault)), 0, "euler token not transferred out");
+    }
 
-    // function test_zeroExSwap_WstEthToWeth() public {
-    //     _setUp(17323024);
+    function test_zeroExSwap_WstEthToWeth() public {
+        _setUp(17323024);
 
-    //     uint256 wstEthAmount = 10 ether;
-    //     uint256 expectedWethAmount = 11115533999999999999;
-    //     bytes memory swapData =
-    //         hex"6af479b200000000000000000000000000000000000000000000000000000000000000800000000000000000000000000000000000000000000000008ac7230489e800000000000000000000000000000000000000000000000000009a774c31cfce1ae70000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002b7f39c581f595b53c5cb19bd0b3f8da6c935e2ca00001f4c02aaa39b223fe8d0a0e5c4f27ead9083c756cc2000000000000000000000000000000000000000000869584cd00000000000000000000000010000000000000000000000000000000000000110000000000000000000000000000000000000000000000513368369c646ce7f5";
+        uint256 wstEthAmount = 10 ether;
+        uint256 expectedWethAmount = 11115533999999999999;
+        bytes memory swapData =
+            hex"6af479b200000000000000000000000000000000000000000000000000000000000000800000000000000000000000000000000000000000000000008ac7230489e800000000000000000000000000000000000000000000000000009a774c31cfce1ae70000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002b7f39c581f595b53c5cb19bd0b3f8da6c935e2ca00001f4c02aaa39b223fe8d0a0e5c4f27ead9083c756cc2000000000000000000000000000000000000000000869584cd00000000000000000000000010000000000000000000000000000000000000110000000000000000000000000000000000000000000000513368369c646ce7f5";
 
-    //     deal(address(wstEth), address(vault), wstEthAmount);
-    //     vm.prank(keeper);
-    //     vault.zeroExSwap(ERC20(address(wstEth)), ERC20(C.WETH), wstEthAmount, swapData, 0);
+        deal(address(wstEth), address(vault), wstEthAmount);
+        vm.prank(keeper);
+        vault.zeroExSwap(ERC20(address(wstEth)), ERC20(C.WETH), wstEthAmount, swapData, 0);
 
-    //     assertGe(weth.balanceOf(address(vault)), expectedWethAmount, "weth not received");
-    //     assertEq(wstEth.balanceOf(address(vault)), 0, "wstEth not transferred out");
-    // }
+        assertGe(weth.balanceOf(address(vault)), expectedWethAmount, "weth not received");
+        assertEq(wstEth.balanceOf(address(vault)), 0, "wstEth not transferred out");
+    }
 
     function test_supplyAndBorrow() public {
         _setUp(BLOCK_BEFORE_EULER_EXPLOIT);
