@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.19;
 
-import "forge-std/console.sol";
-
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {WETH} from "solmate/tokens/WETH.sol";
 import {ILido} from "../interfaces/lido/ILido.sol";
@@ -34,6 +32,13 @@ contract Swapper {
     ILido public constant stEth = ILido(C.STETH);
     IwstETH public constant wstEth = IwstETH(C.WSTETH);
 
+    /**
+     * @notice Swap tokens on Uniswap V3 using exact input multi route
+     * @param _tokenIn Address of the token to swap
+     * @param _amountIn Amount of the token to swap
+     * @param _amountOutMin Minimum amount of the token to receive
+     * @param _path abi.encodePacked(_tokenIn, fees, ...middleTokens, ...fees, _tokenOut)
+     */
     function uniswapSwapExactInputMultihop(
         address _tokenIn,
         uint256 _amountIn,
@@ -85,6 +90,13 @@ contract Swapper {
         return swapRouter.exactInputSingle(params);
     }
 
+    /**
+     * @notice Swap tokens on Uniswap V3 using exact output multi route
+     * @param _tokenIn Address of the token to swap
+     * @param _amountOut Amount of the token to receive
+     * @param _amountInMaximum Maximum amount of the token to swap
+     * @param _path abi.encodePacked(_tokenOut, fees, ...middleTokens, ...fees, _tokenIn)
+     */
     function uniswapSwapExactOutputMultihop(
         address _tokenIn,
         uint256 _amountOut,
@@ -158,15 +170,15 @@ contract Swapper {
     ) external returns (uint256) {
         uint256 tokenOutInitialBalance = _tokenOut.balanceOf(address(this));
 
-        _tokenIn.safeApprove(C.LIFI, _amountIn);
+        _tokenIn.safeApprove(C.ZERO_EX_ROUTER, _amountIn);
 
-        C.LIFI.functionCall(_swapData);
+        C.ZERO_EX_ROUTER.functionCall(_swapData);
 
         uint256 amountReceived = _tokenOut.balanceOf(address(this)) - tokenOutInitialBalance;
 
         if (amountReceived < _amountOutMin) revert AmountReceivedBelowMin();
 
-        _tokenIn.approve(C.LIFI, 0);
+        _tokenIn.approve(C.ZERO_EX_ROUTER, 0);
 
         return amountReceived;
     }

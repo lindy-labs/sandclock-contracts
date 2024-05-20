@@ -39,8 +39,8 @@ contract DeployScDaiMainnet is MainnetDeployBase {
         vault.addAdapter(sparkAdapter);
 
         // initial deposit
-        // uint256 usdcAmount = _swapWethForUsdc(0.01 ether);
-        // _deposit(scUsdcV2, usdcAmount); // 0.01 ether worth of USDC
+        uint256 daiAmount = _swapWethForSdai(0.01 ether);
+        _deposit(vault, daiAmount); // 0.01 ether worth of sDAI
 
         _transferAdminRoleToMultisig(vault, deployerAddress);
 

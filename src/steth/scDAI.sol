@@ -558,7 +558,7 @@ contract scDAI is BaseV2Vault {
         return ERC4626(C.SDAI).deposit(_daiBalance(), address(this));
     }
 
-    function _daiBalance() internal returns (uint256) {
+    function _daiBalance() internal view returns (uint256) {
         return ERC20(C.DAI).balanceOf(address(this));
     }
 }
