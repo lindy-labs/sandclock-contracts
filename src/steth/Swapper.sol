@@ -153,7 +153,7 @@ contract Swapper {
     }
 
     /**
-     * @notice Swap tokens on LI.FI.
+     * @notice Swap tokens on 0xswap.
      * @param _tokenIn Address of the token to swap.
      * @param _tokenOut Address of the token to receive.
      * @param _amountIn Amount of the token to swap.

@@ -76,7 +76,7 @@ contract SwapperTest is Test {
     }
 
     function test_lidoSwapWethToWstEth_usesLidoForBiggerAmounts() public {
-        uint256 wethAmount = 100 ether;
+        uint256 wethAmount = 5000 ether;
         deal(C.WETH, address(this), wethAmount);
 
         // expect a call to stEth.submit
