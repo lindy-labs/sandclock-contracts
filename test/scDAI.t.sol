@@ -112,18 +112,18 @@ contract scDAITest is Test {
 
     function testFuzz_rebalance(uint256 supplyOnSpark, uint256 borrowOnSpark) public {
         uint256 floatPercentage = 0.01e18;
-        vault.setFloatPercentage(floatPercentage);
+        // -10 to account for rounding error difference between debt vs invested amounts
+        vault.setFloatPercentage(floatPercentage - 10);
 
         supplyOnSpark = bound(supplyOnSpark, 100e18, 1_000_000e18);
-
-        uint256 initialBalance = supplyOnSpark.divWadDown(1e18 - floatPercentage);
-        uint256 minFloat = supplyOnSpark.mulWadDown(floatPercentage);
-
         borrowOnSpark = bound(
             borrowOnSpark,
             1e10,
             priceConverter.sDaiToEth(supplyOnSpark).mulWadDown(spark.getMaxLtv() - 0.005e18) // -0.5% to avoid borrowing at max ltv
         );
+
+        uint256 initialBalance = supplyOnSpark.divWadDown(1e18 - floatPercentage);
+        uint256 minFloat = supplyOnSpark.mulWadDown(floatPercentage);
 
         deal(address(sDai), address(vault), initialBalance);
 
@@ -135,7 +135,7 @@ contract scDAITest is Test {
 
         _assertCollateralAndDebt(spark.id(), supplyOnSpark, borrowOnSpark);
         assertApproxEqAbs(vault.totalAssets(), initialBalance, 1e10, "total assets");
-        assertApproxEqAbs(vault.sDaiBalance(), minFloat, vault.totalAssets().mulWadDown(floatPercentage), "float");
+        assertApproxEqRel(vault.sDaiBalance(), minFloat, 0.05e18, "float");
     }
 
     function test_disinvest() public {
