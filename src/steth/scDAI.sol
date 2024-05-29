@@ -132,9 +132,9 @@ contract scDAI is BaseV2Vault {
     }
 
     /**
-     * @notice Sells WETH profits (swaps to USDC).
+     * @notice Sells WETH profits (swaps to SDAI).
      * @dev As the vault generates yield by staking WETH, the profits are in WETH.
-     * @param _sDaiAmountOutMin The minimum amount of USDC to receive.
+     * @param _sDaiAmountOutMin The minimum amount of SDAI to receive.
      */
     function sellProfit(uint256 _sDaiAmountOutMin) external {
         _onlyKeeper();
@@ -153,9 +153,9 @@ contract scDAI is BaseV2Vault {
      * @notice Emergency exit to disinvest everything, repay all debt and withdraw all collateral to the vault.
      * @dev In unlikely situation that the vault makes a loss on ETH staked, the total debt would be higher than ETH available to "unstake",
      *  which can lead to withdrawals being blocked. To handle this situation, the vault can close all positions in all lending markets and release all of the assets (realize all losses).
-     * @param _endDaiBalanceMin The minimum USDC balance of the vault at the end of execution (after all positions are closed).
+     * @param _endSdaiBalanceMin The minimum USDC balance of the vault at the end of execution (after all positions are closed).
      */
-    function exitAllPositions(uint256 _endDaiBalanceMin) external {
+    function exitAllPositions(uint256 _endSdaiBalanceMin) external {
         _onlyKeeper();
 
         uint256 collateral = totalCollateral();
@@ -182,7 +182,7 @@ contract scDAI is BaseV2Vault {
             if (wethLeft != 0) _swapWethForAsset(wethLeft, 0);
         }
 
-        if (sDaiBalance() < _endDaiBalanceMin) revert EndDaiBalanceTooLow();
+        if (sDaiBalance() < _endSdaiBalanceMin) revert EndDaiBalanceTooLow();
 
         emit EmergencyExitExecuted(msg.sender, wethBalance, debt, collateral);
     }
@@ -218,9 +218,9 @@ contract scDAI is BaseV2Vault {
     }
 
     /**
-     * @notice Supply USDC assets to a lending market.
+     * @notice Supply SDAI assets to a lending market.
      * @param _adapterId The ID of the lending market adapter.
-     * @param _amount The amount of USDC to supply.
+     * @param _amount The amount of SDAI to supply.
      */
     function supply(uint256 _adapterId, uint256 _amount) external {
         _onlyKeeperOrFlashLoan();
@@ -254,9 +254,9 @@ contract scDAI is BaseV2Vault {
     }
 
     /**
-     * @notice Withdraw USDC assets from a lending market.
+     * @notice Withdraw SDAI assets from a lending market.
      * @param _adapterId The ID of the lending market adapter.
-     * @param _amount The amount of USDC to withdraw.
+     * @param _amount The amount of SDAI to withdraw.
      */
     function withdraw(uint256 _adapterId, uint256 _amount) external {
         _onlyKeeperOrFlashLoan();
@@ -276,21 +276,21 @@ contract scDAI is BaseV2Vault {
     }
 
     /**
-     * @notice total claimable assets of the vault in USDC.
+     * @notice total claimable assets of the vault in SDAI.
      */
     function totalAssets() public view override returns (uint256) {
         return _calculateTotalAssets(sDaiBalance(), totalCollateral(), wethInvested(), totalDebt());
     }
 
     /**
-     * @notice Returns the USDC balance of the vault.
+     * @notice Returns the SDAI balance of the vault.
      */
     function sDaiBalance() public view returns (uint256) {
         return asset.balanceOf(address(this));
     }
 
     /**
-     * @notice Returns the USDC supplied as collateral in a lending market.
+     * @notice Returns the SDAI supplied as collateral in a lending market.
      * @param _adapterId The ID of the lending market adapter.
      */
     function getCollateral(uint256 _adapterId) external view returns (uint256) {
@@ -300,7 +300,7 @@ contract scDAI is BaseV2Vault {
     }
 
     /**
-     * @notice Returns the total USDC supplied as collateral in all lending markets.
+     * @notice Returns the total SDAI supplied as collateral in all lending markets.
      */
     function totalCollateral() public view returns (uint256 total) {
         uint256 length = protocolAdapters.length();
@@ -512,7 +512,7 @@ contract scDAI is BaseV2Vault {
     }
 
     function _swapWethForAsset(uint256 _wethAmount, uint256 _sDaiAmountOutMin) internal returns (uint256) {
-        // weth => dai
+        // weth => usdc => dai
         address(swapper).functionDelegateCall(
             abi.encodeWithSelector(
                 Swapper.uniswapSwapExactInputMultihop.selector,
@@ -533,7 +533,7 @@ contract scDAI is BaseV2Vault {
     function _swapAssetForExactWeth(uint256 _wethAmountOut) internal {
         uint256 daiAmount = _swapSdaiToDai();
 
-        // DAI => weth
+        // dai => usdc => weth
         address(swapper).functionDelegateCall(
             abi.encodeWithSelector(
                 Swapper.uniswapSwapExactOutputMultihop.selector,

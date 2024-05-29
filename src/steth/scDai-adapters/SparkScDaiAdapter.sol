@@ -21,9 +21,7 @@ contract SparkScDaiAdapter is IAdapter {
     IPool public constant pool = IPool(C.SPARK_POOL);
     // Aave v3 pool data provider contract
     IPoolDataProvider public constant sparkPoolDataProvider = IPoolDataProvider(C.SPARK_POOL_DATA_PROVIDER);
-    // Aave v3 "aEthUSDC" token (supply token)
     ERC20 public constant aDai = ERC20(C.SPARK_ASDAI_TOKEN);
-    // Aave v3 "variableDebtEthWETH" token (variable debt token)
     ERC20 public constant dWeth = ERC20(C.SPARK_VAR_DEBT_WETH_TOKEN);
 
     /// @inheritdoc IAdapter

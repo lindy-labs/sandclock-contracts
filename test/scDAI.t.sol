@@ -37,25 +37,7 @@ contract scDAITest is Test {
     using Address for address;
     using FixedPointMathLib for uint256;
 
-    event UsdcToEthPriceFeedUpdated(address indexed admin, address newPriceFeed);
-    event ProtocolAdapterAdded(address indexed admin, uint256 adapterId, address adapter);
-    event ProtocolAdapterRemoved(address indexed admin, uint256 adapterId);
-    event NewTargetLtvApplied(address indexed admin, uint256 newTargetLtv);
-    event SlippageToleranceUpdated(address indexed admin, uint256 newSlippageTolerance);
-    event EmergencyExitExecuted(
-        address indexed admin, uint256 wethWithdrawn, uint256 debtRepaid, uint256 collateralReleased
-    );
-    event Reallocated();
-    event Rebalanced(uint256 totalCollateral, uint256 totalDebt, uint256 floatBalance);
-    event ProfitSold(uint256 wethSold, uint256 usdcReceived);
-    event TokenSwapped(address token, uint256 amountSold, uint256 usdcReceived);
-    event Supplied(uint256 adapterId, uint256 amount);
-    event Borrowed(uint256 adapterId, uint256 amount);
-    event Repaid(uint256 adapterId, uint256 amount);
-    event Withdrawn(uint256 adapterId, uint256 amount);
     event Disinvested(uint256 wethAmount);
-    event RewardsClaimed(uint256 adapterId);
-    event SwapperUpdated(address indexed admin, Swapper newSwapper);
 
     uint256 mainnetFork;
 
@@ -274,7 +256,7 @@ contract scDAITest is Test {
         vault.withdraw(_withdrawAmount, alice, alice);
 
         assertApproxEqAbs(vault.totalAssets(), total - _withdrawAmount, 0.0001e18, "total assets");
-        assertApproxEqAbs(sDai.balanceOf(alice), _withdrawAmount, 0.01e18, "usdc balance");
+        assertApproxEqAbs(sDai.balanceOf(alice), _withdrawAmount, 0.01e18, "sdai balance");
     }
 
     function testFuzz_withdraw_whenInProfit(uint256 _amount, uint256 _withdrawAmount) public {
