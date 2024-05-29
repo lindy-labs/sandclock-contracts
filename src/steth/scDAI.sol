@@ -101,8 +101,13 @@ contract scDAI is BaseV2Vault {
         // invest any weth remaining after rebalancing
         _invest();
 
-        // // enforce float to be above the minimum required
+        // enforce float to be above the minimum required
         uint256 float = sDaiBalance();
+        uint256 floatRequired = totalAssets().mulWadDown(floatPercentage);
+
+        if (float < floatRequired) {
+            revert FloatBalanceTooLow(float, floatRequired);
+        }
 
         emit Rebalanced(totalCollateral(), totalDebt(), float);
     }
