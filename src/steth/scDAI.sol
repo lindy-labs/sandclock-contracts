@@ -518,39 +518,17 @@ contract scDAI is BaseV2Vault {
 
     function _swapWethForAsset(uint256 _wethAmount, uint256 _sDaiAmountOutMin) internal returns (uint256) {
         // weth => usdc => dai
-        address(swapper).functionDelegateCall(
-            abi.encodeWithSelector(
-                Swapper.uniswapSwapExactInputMultihop.selector,
-                weth,
-                _wethAmount,
-                1,
-                abi.encodePacked(C.WETH, uint24(500), C.USDC, uint24(100), C.DAI)
-            )
+        bytes memory result = address(swapper).functionDelegateCall(
+            abi.encodeWithSelector(Swapper.swapWethToSdai.selector, _wethAmount, _sDaiAmountOutMin)
         );
 
-        uint256 sDaiReceived = _swapDaiToSdai();
-
-        require(sDaiReceived > _sDaiAmountOutMin, "too little asset received");
-
-        return sDaiReceived;
+        return abi.decode(result, (uint256));
     }
 
     function _swapAssetForExactWeth(uint256 _wethAmountOut) internal {
-        uint256 daiAmount = _swapSdaiToDai();
-
-        // dai => usdc => weth
         address(swapper).functionDelegateCall(
-            abi.encodeWithSelector(
-                Swapper.uniswapSwapExactOutputMultihop.selector,
-                C.DAI,
-                _wethAmountOut,
-                daiAmount,
-                abi.encodePacked(C.WETH, uint24(500), C.USDC, uint24(100), C.DAI)
-            )
+            abi.encodeWithSelector(Swapper.swapSdaiForExactWeth.selector, sDaiBalance(), _wethAmountOut)
         );
-
-        // remaining dai to sdai
-        _swapDaiToSdai();
     }
 
     function _swapSdaiToDai() internal returns (uint256) {

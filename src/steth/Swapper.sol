@@ -8,6 +8,7 @@ import {IwstETH} from "../interfaces/lido/IwstETH.sol";
 import {ICurvePool} from "../interfaces/curve/ICurvePool.sol";
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 import {Address} from "openzeppelin-contracts/utils/Address.sol";
+import {ERC4626} from "solmate/mixins/ERC4626.sol";
 
 import {AmountReceivedBelowMin} from "../errors/scErrors.sol";
 import {ISwapRouter} from "../interfaces/uniswap/ISwapRouter.sol";
@@ -43,8 +44,8 @@ contract Swapper {
         address _tokenIn,
         uint256 _amountIn,
         uint256 _amountOutMin,
-        bytes calldata _path
-    ) external returns (uint256) {
+        bytes memory _path
+    ) public returns (uint256) {
         ERC20(_tokenIn).safeApprove(address(swapRouter), _amountIn);
 
         ISwapRouter.ExactInputParams memory params = ISwapRouter.ExactInputParams({
@@ -101,8 +102,8 @@ contract Swapper {
         address _tokenIn,
         uint256 _amountOut,
         uint256 _amountInMaximum,
-        bytes calldata _path
-    ) external returns (uint256) {
+        bytes memory _path
+    ) public returns (uint256) {
         ERC20(_tokenIn).safeApprove(address(swapRouter), _amountInMaximum);
 
         ISwapRouter.ExactOutputParams memory params = ISwapRouter.ExactOutputParams({
@@ -131,7 +132,7 @@ contract Swapper {
         uint256 _amountOut,
         uint256 _amountInMaximum,
         uint24 _poolFee
-    ) external returns (uint256) {
+    ) public returns (uint256) {
         ISwapRouter.ExactOutputSingleParams memory params = ISwapRouter.ExactOutputSingleParams({
             tokenIn: address(_tokenIn),
             tokenOut: address(_tokenOut),
@@ -224,5 +225,43 @@ contract Swapper {
 
         // eth to weth
         weth.deposit{value: address(this).balance}();
+    }
+
+    function swapWethToSdai(uint256 _wethAmount, uint256 _sDaiAmountOutMin) external returns (uint256 sDaiReceived) {
+        // weth => usdc => dai
+        uint256 daiAmount = uniswapSwapExactInputMultihop(
+            C.WETH, _wethAmount, 1, abi.encodePacked(C.WETH, uint24(500), C.USDC, uint24(100), C.DAI)
+        );
+
+        sDaiReceived = _swapDaiToSdai(daiAmount);
+
+        require(sDaiReceived > _sDaiAmountOutMin, "too little asset received");
+    }
+
+    function swapSdaiForExactWeth(uint256 _sDaiAmount, uint256 _wethAmountOut) external {
+        // sdai => dai
+        uint256 daiAmount = _swapSdaiToDai(_sDaiAmount);
+
+        // dai => usdc => weth
+        uniswapSwapExactOutputMultihop(
+            C.DAI, _wethAmountOut, daiAmount, abi.encodePacked(C.WETH, uint24(500), C.USDC, uint24(100), C.DAI)
+        );
+
+        // remaining dai to sdai
+        _swapDaiToSdai(_daiBalance());
+    }
+
+    ////////////////////////////////// INTERNAL FUNCTIONS //////////////////////////////////////////////////////
+
+    function _swapSdaiToDai(uint256 _sDaiAmount) internal returns (uint256) {
+        return ERC4626(C.SDAI).redeem(_sDaiAmount, address(this), address(this));
+    }
+
+    function _swapDaiToSdai(uint256 _daiAmount) internal returns (uint256) {
+        return ERC4626(C.SDAI).deposit(_daiAmount, address(this));
+    }
+
+    function _daiBalance() internal view returns (uint256) {
+        return ERC20(C.DAI).balanceOf(address(this));
     }
 }

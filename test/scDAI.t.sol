@@ -28,9 +28,7 @@ import {IVault} from "../src/interfaces/balancer/IVault.sol";
 import {ICurvePool} from "../src/interfaces/curve/ICurvePool.sol";
 import {ILido} from "../src/interfaces/lido/ILido.sol";
 import {IwstETH} from "../src/interfaces/lido/IwstETH.sol";
-import {IProtocolFeesCollector} from "../src/interfaces/balancer/IProtocolFeesCollector.sol";
 import "../src/errors/scErrors.sol";
-import {FaultyAdapter} from "./mocks/adapters/FaultyAdapter.sol";
 import {Address} from "openzeppelin-contracts/utils/Address.sol";
 
 contract scDAITest is Test {
