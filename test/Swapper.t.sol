@@ -6,6 +6,7 @@ import "forge-std/Test.sol";
 
 import {Address} from "openzeppelin-contracts/utils/Address.sol";
 
+import {ERC20} from "solmate/tokens/ERC20.sol";
 import {IwstETH} from "../src/interfaces/lido/IwstETH.sol";
 import {ILido} from "../src/interfaces/lido/ILido.sol";
 import {Constants as C} from "../src/lib/Constants.sol";
@@ -25,6 +26,8 @@ contract SwapperTest is Test {
 
         wstEth = IwstETH(C.WSTETH);
         swapper = new Swapper();
+
+        ERC20(C.DAI).approve(C.SDAI, type(uint256).max);
     }
 
     function test_uniswapSwapExactOutputMultihop() public {
@@ -99,6 +102,34 @@ contract SwapperTest is Test {
 
         // when using lido, stEth received should be equal to weth amount (with possible rounding errors)
         assertApproxEqAbs(stEthAmountReceived, wethAmount, 2, "stEthAmount should be equal to wethAmount");
+    }
+
+    function test_swapWethToSdai() public {
+        uint256 wethAmount = 1000 ether;
+        deal(C.WETH, address(this), wethAmount);
+
+        bytes memory result = address(swapper).functionDelegateCall(
+            abi.encodeWithSelector(swapper.swapWethToSdai.selector, wethAmount, 1)
+        );
+
+        uint256 sdaiReceived = abi.decode(result, (uint256));
+
+        assertEq(sdaiReceived, 2769454163646490100581023, "weth to sdai swap error");
+    }
+
+    function test_swapSdaiForExactWeth() public {
+        uint256 sDaiAmount = 100000 ether;
+        deal(C.SDAI, address(this), sDaiAmount);
+
+        uint256 wethToReceive = 7 ether;
+
+        address(swapper).functionDelegateCall(
+            abi.encodeWithSelector(swapper.swapSdaiForExactWeth.selector, sDaiAmount, wethToReceive)
+        );
+
+        uint256 wethReceived = ERC20(C.WETH).balanceOf(address(this));
+
+        assertEq(wethReceived, wethToReceive);
     }
 
     receive() external payable {}

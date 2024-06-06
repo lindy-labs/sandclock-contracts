@@ -241,7 +241,7 @@ contract Swapper {
 
         sDaiReceived = _swapDaiToSdai(daiAmount);
 
-        require(sDaiReceived > _sDaiAmountOutMin, "too little asset received");
+        if (sDaiReceived < _sDaiAmountOutMin) revert AmountReceivedBelowMin();
     }
 
     /**
