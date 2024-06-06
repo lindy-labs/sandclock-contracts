@@ -227,6 +227,12 @@ contract Swapper {
         weth.deposit{value: address(this).balance}();
     }
 
+    /**
+     * Swap exact amount  of Weth to sDai
+     * @param _wethAmount amount of weth to swap
+     * @param _sDaiAmountOutMin minimum amount of sDai to receive after the swap
+     * @return sDaiReceived amount of sDai received.
+     */
     function swapWethToSdai(uint256 _wethAmount, uint256 _sDaiAmountOutMin) external returns (uint256 sDaiReceived) {
         // weth => usdc => dai
         uint256 daiAmount = uniswapSwapExactInputMultihop(
@@ -238,9 +244,14 @@ contract Swapper {
         require(sDaiReceived > _sDaiAmountOutMin, "too little asset received");
     }
 
-    function swapSdaiForExactWeth(uint256 _sDaiAmount, uint256 _wethAmountOut) external {
+    /**
+     * Swap sdai to exact amount of weth
+     * @param _sDaiAmountOutMaximum maximum amount of sDai to swap for weth
+     * @param _wethAmountOut amount of weth to receive
+     */
+    function swapSdaiForExactWeth(uint256 _sDaiAmountOutMaximum, uint256 _wethAmountOut) external {
         // sdai => dai
-        uint256 daiAmount = _swapSdaiToDai(_sDaiAmount);
+        uint256 daiAmount = _swapSdaiToDai(_sDaiAmountOutMaximum);
 
         // dai => usdc => weth
         uniswapSwapExactOutputMultihop(

@@ -158,7 +158,7 @@ contract scDAI is BaseV2Vault {
      * @notice Emergency exit to disinvest everything, repay all debt and withdraw all collateral to the vault.
      * @dev In unlikely situation that the vault makes a loss on ETH staked, the total debt would be higher than ETH available to "unstake",
      *  which can lead to withdrawals being blocked. To handle this situation, the vault can close all positions in all lending markets and release all of the assets (realize all losses).
-     * @param _endSdaiBalanceMin The minimum USDC balance of the vault at the end of execution (after all positions are closed).
+     * @param _endSdaiBalanceMin The minimum SDAI balance of the vault at the end of execution (after all positions are closed).
      */
     function exitAllPositions(uint256 _endSdaiBalanceMin) external {
         _onlyKeeper();
@@ -181,7 +181,7 @@ contract scDAI is BaseV2Vault {
         } else {
             _repayAllDebtAndWithdrawCollateral();
 
-            // if some WETH remains after repaying all debt, swap it to USDC
+            // if some WETH remains after repaying all debt, swap it to SDAI
             uint256 wethLeft = _wethBalance();
 
             if (wethLeft != 0) _swapWethForAsset(wethLeft, 0);
