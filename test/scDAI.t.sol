@@ -202,7 +202,7 @@ contract scDAITest is Test {
         assertEq(0, ERC20(C.WETH).balanceOf(address(this)));
     }
 
-    function test_withdraw() public {
+    function test_withdrawFunds() public {
         uint256 initialBalance = 1_000_000e18;
         deal(address(sDai), alice, initialBalance);
 
@@ -361,6 +361,37 @@ contract scDAITest is Test {
         assertEq(vault.totalDebt(), 0, "vault debt");
         assertEq(weth.balanceOf(address(vault)), 0, "weth balance");
         assertEq(vault.wethInvested(), 0, "weth invested");
+    }
+
+    function test_repay() public {
+        uint256 initialBalance = 100_000e18;
+        uint256 borrowAmount = 2 ether;
+        uint256 repayAmount = 1 ether;
+
+        deal(address(sDai), address(vault), initialBalance);
+        vault.supply(spark.id(), initialBalance);
+        vault.borrow(spark.id(), borrowAmount);
+        vault.repay(spark.id(), repayAmount);
+
+        assertApproxEqAbs(spark.getDebt(address(vault)), borrowAmount - repayAmount, 1);
+    }
+
+    function test_withdraw() public {
+        uint256 initialBalance = 10_000e18;
+        deal(address(sDai), address(vault), initialBalance);
+        vault.supply(spark.id(), initialBalance);
+
+        uint256 withdrawAmount = 5_000e18;
+        vault.withdraw(spark.id(), withdrawAmount);
+
+        assertEq(vault.sDaiBalance(), withdrawAmount, "sdai balance");
+        assertApproxEqAbs(spark.getCollateral(address(vault)), initialBalance - withdrawAmount, 1, "collateral");
+    }
+
+    function test_reallocate_FailsIfCallerIsNotKeeper() public {
+        vm.prank(alice);
+        vm.expectRevert(CallerNotKeeper.selector);
+        vault.reallocate(0, new bytes[](0));
     }
 
     ///////////////////////////////// INTERNAL METHODS /////////////////////////////////
