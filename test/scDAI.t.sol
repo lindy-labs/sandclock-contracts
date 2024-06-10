@@ -398,11 +398,20 @@ contract scDAITest is Test {
         uint256 initialBalance = 1_000_000e18;
         deal(address(sDai), address(vault), initialBalance);
 
+        uint256 totalDebt = 100 ether;
+
         bytes[] memory callData = new bytes[](2);
         callData[0] = abi.encodeWithSelector(scDAI.supply.selector, spark.id(), initialBalance);
-        callData[1] = abi.encodeWithSelector(scDAI.borrow.selector, spark.id(), 100 ether);
+        callData[1] = abi.encodeWithSelector(scDAI.borrow.selector, spark.id(), totalDebt);
 
         vault.reallocate(50 ether, callData);
+
+        assertFalse(vault.flashLoanInitiated(), "flash loan initiated");
+
+        assertApproxEqAbs(vault.totalCollateral(), initialBalance, 1, "total collateral after");
+        assertApproxEqAbs(vault.totalDebt(), totalDebt, 1, "total debt after");
+
+        _assertCollateralAndDebt(spark.id(), initialBalance, totalDebt);
     }
 
     ///////////////////////////////// INTERNAL METHODS /////////////////////////////////
