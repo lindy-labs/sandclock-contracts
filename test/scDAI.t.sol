@@ -394,6 +394,17 @@ contract scDAITest is Test {
         vault.reallocate(0, new bytes[](0));
     }
 
+    function test_reallocate() public {
+        uint256 initialBalance = 1_000_000e18;
+        deal(address(sDai), address(vault), initialBalance);
+
+        bytes[] memory callData = new bytes[](2);
+        callData[0] = abi.encodeWithSelector(scDAI.supply.selector, spark.id(), initialBalance);
+        callData[1] = abi.encodeWithSelector(scDAI.borrow.selector, spark.id(), 100 ether);
+
+        vault.reallocate(50 ether, callData);
+    }
+
     ///////////////////////////////// INTERNAL METHODS /////////////////////////////////
 
     function _deployScWeth() internal {

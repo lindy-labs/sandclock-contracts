@@ -241,37 +241,4 @@ contract RebalanceScDAI is Script {
         console2.log("total debt\t\t", vault.totalDebt());
         console2.log("weth invested\t\t", vault.wethInvested());
     }
-
-    // function getLifiSwapData(uint256 _amount, address _fromToken, address _toToken)
-    //     public
-    //     virtual
-    //     returns (bytes memory swapData)
-    // {
-    //     string memory url = string(
-    //         abi.encodePacked(
-    //             "https://li.quest/v1/quote?fromChain=1&toChain=1&toToken=",
-    //             _toToken.toHexString(),
-    //             "&fromToken=",
-    //             _fromToken.toHexString(),
-    //             "&fromAmount=",
-    //             _amount.toString(),
-    //             "&fromAddress=",
-    //             address(vault).toHexString(),
-    //             "&toAddress=",
-    //             address(vault).toHexString(),
-    //             "&order=RECOMMENDED&slippage=0.005"
-    //         )
-    //     );
-
-    //     string[] memory headers = new string[](1);
-    //     headers[0] = string(abi.encodePacked("accept: ", "application/json"));
-    //     (uint256 status, bytes memory data) = url.get(headers);
-
-    //     if (status != 200) {
-    //         console2.log("----- LI.FI GET request Failed ---- Using backup swappers -------");
-    //     } else {
-    //         string memory json = string(data);
-    //         swapData = json.readBytes(".data");
-    //     }
-    // }
 }
