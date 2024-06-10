@@ -86,6 +86,5 @@ abstract contract MainnetDeployBase is CREATE3Script {
         });
 
         amountOut = ISwapRouter(C.UNISWAP_V3_SWAP_ROUTER).exactInput(params);
-
     }
 }
