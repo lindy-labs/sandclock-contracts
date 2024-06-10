@@ -87,7 +87,5 @@ abstract contract MainnetDeployBase is CREATE3Script {
 
         amountOut = ISwapRouter(C.UNISWAP_V3_SWAP_ROUTER).exactInput(params);
 
-        // ERC20(C.DAI).safeApprove(C.SDAI, daiAmount);
-        // amountOut = ERC4626(C.SDAI).deposit(daiAmount, address(this));
     }
 }
