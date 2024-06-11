@@ -12,6 +12,7 @@ import {SparkScDaiAdapter} from "../../src/steth/scDai-adapters/SparkScDaiAdapte
 import {IAdapter} from "../../src/steth/IAdapter.sol";
 import {Constants as C} from "../../src/lib/Constants.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
+import {ISwapRouter} from "../../src/interfaces/uniswap/ISwapRouter.sol";
 
 import {CREATE3Script} from "../base/CREATE3Script.sol";
 
@@ -59,5 +60,21 @@ contract DeployScDaiMainnet is MainnetDeployBase {
         console2.log("deployer\t\t", address(deployerAddress));
         console2.log("keeper\t\t", address(keeper));
         console2.log("scWethV2\t\t", address(scWethV2));
+    }
+
+    function _swapWethForDai(uint256 _amount) internal returns (uint256 amountOut) {
+        weth.deposit{value: _amount}();
+
+        weth.approve(C.UNISWAP_V3_SWAP_ROUTER, _amount);
+
+        ISwapRouter.ExactInputParams memory params = ISwapRouter.ExactInputParams({
+            path: abi.encodePacked(C.WETH, uint24(500), C.USDC, uint24(100), C.DAI),
+            recipient: deployerAddress,
+            deadline: block.timestamp + 1000,
+            amountIn: _amount,
+            amountOutMinimum: 0
+        });
+
+        amountOut = ISwapRouter(C.UNISWAP_V3_SWAP_ROUTER).exactInput(params);
     }
 }

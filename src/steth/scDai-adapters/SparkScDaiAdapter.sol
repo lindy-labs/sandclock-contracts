@@ -14,8 +14,8 @@ import {IAdapter} from "../IAdapter.sol";
  * @notice Facilitates lending and borrowing for the Aave v3 lending protocol
  */
 contract SparkScDaiAdapter is IAdapter {
-    ERC20 constant dai = ERC20(C.SDAI);
-    WETH constant weth = WETH(payable(C.WETH));
+    ERC20 public constant dai = ERC20(C.SDAI);
+    WETH public constant weth = WETH(payable(C.WETH));
 
     // Aave v3 pool contract
     IPool public constant pool = IPool(C.SPARK_POOL);

@@ -71,20 +71,4 @@ abstract contract MainnetDeployBase is CREATE3Script {
 
         amountOut = ISwapRouter(C.UNISWAP_V3_SWAP_ROUTER).exactInputSingle(params);
     }
-
-    function _swapWethForDai(uint256 _amount) internal returns (uint256 amountOut) {
-        weth.deposit{value: _amount}();
-
-        weth.approve(C.UNISWAP_V3_SWAP_ROUTER, _amount);
-
-        ISwapRouter.ExactInputParams memory params = ISwapRouter.ExactInputParams({
-            path: abi.encodePacked(C.WETH, uint24(500), C.USDC, uint24(100), C.DAI),
-            recipient: deployerAddress,
-            deadline: block.timestamp + 1000,
-            amountIn: _amount,
-            amountOutMinimum: 0
-        });
-
-        amountOut = ISwapRouter(C.UNISWAP_V3_SWAP_ROUTER).exactInput(params);
-    }
 }
