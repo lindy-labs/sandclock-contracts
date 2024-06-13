@@ -16,6 +16,7 @@ contract PriceConverterTest is Test {
 
     event UsdcToEthPriceFeedUpdated(address indexed admin, address newPriceFeed);
     event StEthToEthPriceFeedUpdated(address indexed admin, address newPriceFeed);
+    event DaiToEthPriceFeedUpdated(address indexed admin, address newPriceFeed);
 
     uint256 mainnetFork;
 
@@ -104,5 +105,33 @@ contract PriceConverterTest is Test {
         emit StEthToEthPriceFeedUpdated(address(this), address(_newPriceFeed));
 
         priceConverter.setStEThToEthPriceFeed(address(_newPriceFeed));
+    }
+
+    function test_setDaiToEthPriceFeed_FailsIfCallerIsNotAdmin() public {
+        vm.prank(alice);
+        vm.expectRevert(CallerNotAdmin.selector);
+        priceConverter.setDaiToEthPriceFeed(address(0));
+    }
+
+    function test_setDaiToEthPriceFeed_FailsIfNewPriceFeedIsZeroAddress() public {
+        vm.expectRevert(ZeroAddress.selector);
+        priceConverter.setDaiToEthPriceFeed(address(0));
+    }
+
+    function test_setDaiToEthPriceFeed_ChangesThePriceFeed() public {
+        AggregatorV3Interface _newPriceFeed = AggregatorV3Interface(address(0x1));
+
+        priceConverter.setDaiToEthPriceFeed(address(_newPriceFeed));
+
+        assertEq(address(priceConverter.daiToEthPriceFeed()), address(_newPriceFeed), "price feed has not changed");
+    }
+
+    function test_setDaiToEthPriceFeed_EmitsEvent() public {
+        AggregatorV3Interface _newPriceFeed = AggregatorV3Interface(address(0x1));
+
+        vm.expectEmit(true, true, true, true);
+        emit DaiToEthPriceFeedUpdated(address(this), address(_newPriceFeed));
+
+        priceConverter.setDaiToEthPriceFeed(address(_newPriceFeed));
     }
 }

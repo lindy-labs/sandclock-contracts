@@ -6,6 +6,8 @@ import {CREATE3Script} from "../base/CREATE3Script.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {WETH} from "solmate/tokens/WETH.sol";
 import {AccessControl} from "openzeppelin-contracts/access/AccessControl.sol";
+import {ERC4626} from "solmate/mixins/ERC4626.sol";
+import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 
 import {MainnetAddresses} from "./MainnetAddresses.sol";
 import {Constants as C} from "../../src/lib/Constants.sol";
@@ -16,6 +18,8 @@ import {sc4626} from "../../src/sc4626.sol";
  * Mainnet base deployment file that handles deployment.
  */
 abstract contract MainnetDeployBase is CREATE3Script {
+    using SafeTransferLib for ERC20;
+
     uint256 deployerPrivateKey;
     address deployerAddress;
     address keeper;

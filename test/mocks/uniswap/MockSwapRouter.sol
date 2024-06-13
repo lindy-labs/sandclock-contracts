@@ -40,4 +40,8 @@ contract MockSwapRouter is ISwapRouter {
     {
         revert("MockSwapRouter: NOT_IMPLEMENTED");
     }
+
+    function exactInput(ExactInputParams calldata params) external returns (uint256 amountOut) {}
+
+    function exactOutput(ExactOutputParams calldata params) external returns (uint256 amountIn) {}
 }

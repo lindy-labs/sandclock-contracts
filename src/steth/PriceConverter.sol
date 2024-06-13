@@ -3,6 +3,7 @@ pragma solidity ^0.8.19;
 
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 import {AccessControl} from "openzeppelin-contracts/access/AccessControl.sol";
+import {ERC4626} from "solmate/mixins/ERC4626.sol";
 
 import {ZeroAddress, CallerNotAdmin} from "../errors/scErrors.sol";
 import {Constants as C} from "../lib/Constants.sol";
@@ -17,12 +18,17 @@ contract PriceConverter is AccessControl {
     using FixedPointMathLib for uint256;
 
     IwstETH constant wstETH = IwstETH(C.WSTETH);
+    ERC4626 constant sDai = ERC4626(C.SDAI);
 
     event UsdcToEthPriceFeedUpdated(address indexed admin, address newPriceFeed);
     event StEthToEthPriceFeedUpdated(address indexed admin, address newPriceFeed);
+    event DaiToEthPriceFeedUpdated(address indexed admin, address newPriceFeed);
 
     // Chainlink price feed (USDC -> ETH)
     AggregatorV3Interface public usdcToEthPriceFeed = AggregatorV3Interface(C.CHAINLINK_USDC_ETH_PRICE_FEED);
+
+    // Chainlink price feed (DAI -> ETH)
+    AggregatorV3Interface public daiToEthPriceFeed = AggregatorV3Interface(C.CHAINLINK_DAI_ETH_PRICE_FEED);
 
     // Chainlink price feed (stETH -> ETH)
     AggregatorV3Interface public stEThToEthPriceFeed = AggregatorV3Interface(C.CHAINLINK_STETH_ETH_PRICE_FEED);
@@ -60,6 +66,17 @@ contract PriceConverter is AccessControl {
         emit StEthToEthPriceFeedUpdated(msg.sender, address(_newPriceFeed));
     }
 
+    /// @notice Set the chainlink price feed for dai -> eth
+    /// @param _newPriceFeed The new price feed
+    function setDaiToEthPriceFeed(address _newPriceFeed) external {
+        _onlyAdmin();
+        _zeroAddressCheck(_newPriceFeed);
+
+        daiToEthPriceFeed = AggregatorV3Interface(_newPriceFeed);
+
+        emit DaiToEthPriceFeedUpdated(msg.sender, _newPriceFeed);
+    }
+
     /**
      * @notice Returns the USDC fair value for the ETH amount provided.
      * @param _ethAmount The amount of ETH.
@@ -78,6 +95,18 @@ contract PriceConverter is AccessControl {
         (, int256 usdcPriceInEth,,,) = usdcToEthPriceFeed.latestRoundData();
 
         return (_usdcAmount * C.WETH_USDC_DECIMALS_DIFF).mulWadDown(uint256(usdcPriceInEth));
+    }
+
+    function ethTosDai(uint256 _ethAmount) public view returns (uint256) {
+        uint256 daiAmount = _ethToDai(_ethAmount);
+
+        return sDai.convertToShares(daiAmount);
+    }
+
+    function sDaiToEth(uint256 _sDaiAmount) public view returns (uint256) {
+        uint256 daiAmount = sDai.convertToAssets(_sDaiAmount);
+
+        return _daiToEth(daiAmount);
     }
 
     function ethToWstEth(uint256 ethAmount) public view returns (uint256) {
@@ -103,5 +132,17 @@ contract PriceConverter is AccessControl {
 
     function _zeroAddressCheck(address _address) internal pure {
         if (_address == address(0)) revert ZeroAddress();
+    }
+
+    function _ethToDai(uint256 _ethAmount) internal view returns (uint256) {
+        (, int256 daiPriceInEth,,,) = daiToEthPriceFeed.latestRoundData();
+
+        return _ethAmount.divWadDown(uint256(daiPriceInEth));
+    }
+
+    function _daiToEth(uint256 _daiAmount) internal view returns (uint256) {
+        (, int256 daiPriceInEth,,,) = daiToEthPriceFeed.latestRoundData();
+
+        return _daiAmount.mulWadDown(uint256(daiPriceInEth));
     }
 }

@@ -8,6 +8,7 @@ import {IwstETH} from "../interfaces/lido/IwstETH.sol";
 import {ICurvePool} from "../interfaces/curve/ICurvePool.sol";
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 import {Address} from "openzeppelin-contracts/utils/Address.sol";
+import {ERC4626} from "solmate/mixins/ERC4626.sol";
 
 import {AmountReceivedBelowMin} from "../errors/scErrors.sol";
 import {ISwapRouter} from "../interfaces/uniswap/ISwapRouter.sol";
@@ -31,6 +32,32 @@ contract Swapper {
     WETH public constant weth = WETH(payable(C.WETH));
     ILido public constant stEth = ILido(C.STETH);
     IwstETH public constant wstEth = IwstETH(C.WSTETH);
+
+    /**
+     * @notice Swap tokens on Uniswap V3 using exact input multi route
+     * @param _tokenIn Address of the token to swap
+     * @param _amountIn Amount of the token to swap
+     * @param _amountOutMin Minimum amount of the token to receive
+     * @param _path abi.encodePacked(_tokenIn, fees, ...middleTokens, ...fees, _tokenOut)
+     */
+    function uniswapSwapExactInputMultihop(
+        address _tokenIn,
+        uint256 _amountIn,
+        uint256 _amountOutMin,
+        bytes memory _path
+    ) public returns (uint256) {
+        ERC20(_tokenIn).safeApprove(address(swapRouter), _amountIn);
+
+        ISwapRouter.ExactInputParams memory params = ISwapRouter.ExactInputParams({
+            path: _path,
+            recipient: address(this),
+            deadline: block.timestamp,
+            amountIn: _amountIn,
+            amountOutMinimum: _amountOutMin
+        });
+
+        return swapRouter.exactInput(params);
+    }
 
     /**
      * @notice Swap tokens on Uniswap V3 using exact input single function.
@@ -65,6 +92,31 @@ contract Swapper {
     }
 
     /**
+     * @notice Swap tokens on Uniswap V3 using exact output multi route
+     * @param _tokenIn Address of the token to swap
+     * @param _amountOut Amount of the token to receive
+     * @param _amountInMaximum Maximum amount of the token to swap
+     * @param _path abi.encodePacked(_tokenOut, fees, ...middleTokens, ...fees, _tokenIn)
+     */
+    function uniswapSwapExactOutputMultihop(
+        address _tokenIn,
+        uint256 _amountOut,
+        uint256 _amountInMaximum,
+        bytes memory _path
+    ) public returns (uint256) {
+        ERC20(_tokenIn).safeApprove(address(swapRouter), _amountInMaximum);
+
+        ISwapRouter.ExactOutputParams memory params = ISwapRouter.ExactOutputParams({
+            path: _path,
+            recipient: address(this),
+            deadline: block.timestamp,
+            amountOut: _amountOut,
+            amountInMaximum: _amountInMaximum
+        });
+
+        return swapRouter.exactOutput(params);
+    }
+    /**
      * @notice Swap tokens on Uniswap V3 using exact output single function.
      * @param _tokenIn Address of the token to swap.
      * @param _tokenOut Address of the token to receive.
@@ -73,13 +125,14 @@ contract Swapper {
      * @param _poolFee Pool fee of the Uniswap V3 pool.
      * @return Amount of the token swapped.
      */
+
     function uniswapSwapExactOutput(
         ERC20 _tokenIn,
         ERC20 _tokenOut,
         uint256 _amountOut,
         uint256 _amountInMaximum,
         uint24 _poolFee
-    ) external returns (uint256) {
+    ) public returns (uint256) {
         ISwapRouter.ExactOutputSingleParams memory params = ISwapRouter.ExactOutputSingleParams({
             tokenIn: address(_tokenIn),
             tokenOut: address(_tokenOut),
@@ -101,7 +154,7 @@ contract Swapper {
     }
 
     /**
-     * @notice Swap tokens on 0x protocol.
+     * @notice Swap tokens on 0xswap.
      * @param _tokenIn Address of the token to swap.
      * @param _tokenOut Address of the token to receive.
      * @param _amountIn Amount of the token to swap.
@@ -172,5 +225,54 @@ contract Swapper {
 
         // eth to weth
         weth.deposit{value: address(this).balance}();
+    }
+
+    /**
+     * Swap exact amount  of Weth to sDai
+     * @param _wethAmount amount of weth to swap
+     * @param _sDaiAmountOutMin minimum amount of sDai to receive after the swap
+     * @return sDaiReceived amount of sDai received.
+     */
+    function swapWethToSdai(uint256 _wethAmount, uint256 _sDaiAmountOutMin) external returns (uint256 sDaiReceived) {
+        // weth => usdc => dai
+        uint256 daiAmount = uniswapSwapExactInputMultihop(
+            C.WETH, _wethAmount, 1, abi.encodePacked(C.WETH, uint24(500), C.USDC, uint24(100), C.DAI)
+        );
+
+        sDaiReceived = _swapDaiToSdai(daiAmount);
+
+        if (sDaiReceived < _sDaiAmountOutMin) revert AmountReceivedBelowMin();
+    }
+
+    /**
+     * Swap sdai to exact amount of weth
+     * @param _sDaiAmountOutMaximum maximum amount of sDai to swap for weth
+     * @param _wethAmountOut amount of weth to receive
+     */
+    function swapSdaiForExactWeth(uint256 _sDaiAmountOutMaximum, uint256 _wethAmountOut) external {
+        // sdai => dai
+        uint256 daiAmount = _swapSdaiToDai(_sDaiAmountOutMaximum);
+
+        // dai => usdc => weth
+        uniswapSwapExactOutputMultihop(
+            C.DAI, _wethAmountOut, daiAmount, abi.encodePacked(C.WETH, uint24(500), C.USDC, uint24(100), C.DAI)
+        );
+
+        // remaining dai to sdai
+        _swapDaiToSdai(_daiBalance());
+    }
+
+    ////////////////////////////////// INTERNAL FUNCTIONS //////////////////////////////////////////////////////
+
+    function _swapSdaiToDai(uint256 _sDaiAmount) internal returns (uint256) {
+        return ERC4626(C.SDAI).redeem(_sDaiAmount, address(this), address(this));
+    }
+
+    function _swapDaiToSdai(uint256 _daiAmount) internal returns (uint256) {
+        return ERC4626(C.SDAI).deposit(_daiAmount, address(this));
+    }
+
+    function _daiBalance() internal view returns (uint256) {
+        return ERC20(C.DAI).balanceOf(address(this));
     }
 }

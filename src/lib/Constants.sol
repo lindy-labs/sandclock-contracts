@@ -26,6 +26,10 @@ library Constants {
     address public constant STETH = 0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84;
     // address of the LUSD token contract
     address public constant LUSD = 0x5f98805A4E8be255a32880FDeC7F6728C6568bA0;
+    // address of the DAI token contract
+    address public constant DAI = 0x6B175474E89094C44Da98b954EedeAC495271d0F;
+    // address of the sDAI token contract
+    address public constant SDAI = 0x83F20F44975D03b1b09e64809B757c47f942BEeA;
 
     // address of the Curve pool for ETH-stETH
     address public constant CURVE_ETH_STETH_POOL = 0xDC24316b9AE028F1497c275EB9192a3Ea0f67022;
@@ -47,6 +51,12 @@ library Constants {
     // address of the Aave v3 "variableDebtEthWETH" token implementation contract (variable debt token)
     address public constant AAVE_V3_VAR_DEBT_IMPLEMENTATION_CONTRACT = 0xaC725CB59D16C81061BDeA61041a8A5e73DA9EC6;
 
+    address public constant SPARK_POOL = 0xC13e21B648A5Ee794902342038FF3aDAB66BE987;
+    address public constant SPARK_POOL_DATA_PROVIDER = 0xFc21d6d146E6086B8359705C8b28512a983db0cb;
+    address public constant SPARK_ADAI_TOKEN = 0x4DEDf26112B3Ec8eC46e7E31EA5e123490B05B8B;
+    address public constant SPARK_ASDAI_TOKEN = 0x78f897F0fE2d3B5690EbAe7f19862DEacedF10a7;
+    address public constant SPARK_VAR_DEBT_WETH_TOKEN = 0x2e7576042566f8D6990e07A1B61Ad1efd86Ae70d;
+
     // EULER Contracts
     address public constant EULER = 0x27182842E098f60e3D576794A5bFFb0777E025d3;
     address public constant EULER_MARKETS = 0x3520d5a913427E6F0D6A83E07ccD4A4da316e4d3;
@@ -61,6 +71,7 @@ library Constants {
 
     // adress of the Chainlink aggregator for the USDC/eth price feed
     address public constant CHAINLINK_USDC_ETH_PRICE_FEED = 0x986b5E1e1755e3C2440e960477f25201B0a8bbD4;
+    address public constant CHAINLINK_DAI_ETH_PRICE_FEED = 0x773616E4d11A78F511299002da57A0a94577F1f4;
     // Chainlink pricefeed (stETH -> ETH)
     address public constant CHAINLINK_STETH_ETH_PRICE_FEED = 0x86392dC19c0b719886221c78AB11eb8Cf5c52812;
     // Liquity pricefeed (USD -> ETH) with Chainlink as primary and Tellor as backup.
@@ -75,6 +86,9 @@ library Constants {
 
     // address of the 0x swap router contract
     address public constant ZERO_EX_ROUTER = 0xDef1C0ded9bec7F1a1670819833240f027b25EfF;
+
+    // address of Lifi swap router contract
+    address public constant LIFI = 0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE;
 
     // Compound v3
     address public constant COMPOUND_V3_COMET_WETH = 0xA17581A9E3356d9A858b789D68B4d866e593aE94;
