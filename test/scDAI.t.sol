@@ -36,6 +36,7 @@ contract scDAITest is Test {
     using FixedPointMathLib for uint256;
 
     event Disinvested(uint256 wethAmount);
+    event WethSwappedForAsset(uint256 wethAmount, uint256 assetAmountOut);
 
     uint256 mainnetFork;
 
@@ -423,11 +424,15 @@ contract scDAITest is Test {
         vm.expectRevert(CallerNotKeeper.selector);
         vault.swapWethForAsset(wethAmount, 0);
 
+        uint256 expectedSdaiAmount = 275666671437355728368239;
+
+        vm.expectEmit(true, true, true, true);
+        emit WethSwappedForAsset(wethAmount, expectedSdaiAmount);
         vm.prank(keeper);
         vault.swapWethForAsset(wethAmount, 0);
 
         assertEq(weth.balanceOf(address(vault)), 0, "weth not swapped");
-        assertEq(sDai.balanceOf(address(vault)), 275666671437355728368239, "sDai not got");
+        assertEq(sDai.balanceOf(address(vault)), expectedSdaiAmount, "sDai not got");
     }
 
     ///////////////////////////////// INTERNAL METHODS /////////////////////////////////

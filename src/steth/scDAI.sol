@@ -55,6 +55,7 @@ contract scDAI is BaseV2Vault {
     event Withdrawn(uint256 adapterId, uint256 amount);
     event Invested(uint256 wethAmount);
     event Disinvested(uint256 wethAmount);
+    event WethSwappedForAsset(uint256 wethAmount, uint256 assetAmountOut);
 
     constructor(address _admin, address _keeper, ERC4626 _scWETH, PriceConverter _priceConverter, Swapper _swapper)
         BaseV2Vault(_admin, _keeper, ERC20(C.SDAI), _priceConverter, _swapper, "Sandclock Yield DAI", "scDAI")
@@ -86,6 +87,21 @@ contract scDAI is BaseV2Vault {
         emit Deposit(msg.sender, receiver, assets, shares);
 
         afterDeposit(assets, shares);
+    }
+
+    /**
+     * @notice Swap Weth for sDAI
+     * @param _wethAmount Amount of weth to swap for sDAI
+     * @param _sDaiAmountOutMin Minimum amount of sDAI to remain after the swap
+     */
+    function swapWethForAsset(uint256 _wethAmount, uint256 _sDaiAmountOutMin)
+        external
+        returns (uint256 sDaiAmountOut)
+    {
+        _onlyKeeper();
+        sDaiAmountOut = _swapWethForAsset(_wethAmount, _sDaiAmountOutMin);
+
+        emit WethSwappedForAsset(_wethAmount, sDaiAmountOut);
     }
 
     /**
@@ -351,16 +367,6 @@ contract scDAI is BaseV2Vault {
      */
     function getProfit() public view returns (uint256) {
         return _calculateWethProfit(wethInvested(), totalDebt());
-    }
-
-    /**
-     * @notice Swap Weth for sDAI
-     * @param _wethAmount Amount of weth to swap for sDAI
-     * @param _sDaiAmountOutMin Minimum amount of sDAI to remain after the swap
-     */
-    function swapWethForAsset(uint256 _wethAmount, uint256 _sDaiAmountOutMin) external returns (uint256) {
-        _onlyKeeper();
-        return _swapWethForAsset(_wethAmount, _sDaiAmountOutMin);
     }
 
     /*//////////////////////////////////////////////////////////////
