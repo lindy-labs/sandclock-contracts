@@ -6,7 +6,7 @@ import {ERC4626} from "solmate/mixins/ERC4626.sol";
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 import {AccessControl} from "openzeppelin-contracts/access/AccessControl.sol";
-import {ReentrancyGuard} from "openzeppelin-contracts/security/ReentrancyGuard.sol";
+import {ReentrancyGuard} from "openzeppelin-contracts/utils/ReentrancyGuard.sol";
 import {BonusTracker} from "./BonusTracker.sol";
 import {DebtTracker} from "./DebtTracker.sol";
 import {CallerNotAdmin} from "../errors/scErrors.sol";
