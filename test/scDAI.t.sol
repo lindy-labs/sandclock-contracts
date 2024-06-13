@@ -414,6 +414,22 @@ contract scDAITest is Test {
         _assertCollateralAndDebt(spark.id(), initialBalance, totalDebt);
     }
 
+    function test_swapWethForAsset() public {
+        uint256 wethAmount = 100 ether;
+        deal(address(weth), address(vault), wethAmount);
+
+        // fails if not keeper
+        vm.prank(alice);
+        vm.expectRevert(CallerNotKeeper.selector);
+        vault.swapWethForAsset(wethAmount, 0);
+
+        vm.prank(keeper);
+        vault.swapWethForAsset(wethAmount, 0);
+
+        assertEq(weth.balanceOf(address(vault)), 0, "weth not swapped");
+        assertEq(sDai.balanceOf(address(vault)), 275666671437355728368239, "sDai not got");
+    }
+
     ///////////////////////////////// INTERNAL METHODS /////////////////////////////////
 
     function _deployScWeth() internal {

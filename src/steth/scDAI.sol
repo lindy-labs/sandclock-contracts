@@ -353,6 +353,16 @@ contract scDAI is BaseV2Vault {
         return _calculateWethProfit(wethInvested(), totalDebt());
     }
 
+    /**
+     * @notice Swap Weth for sDAI
+     * @param _wethAmount Amount of weth to swap for sDAI
+     * @param _sDaiAmountOutMin Minimum amount of sDAI to remain after the swap
+     */
+    function swapWethForAsset(uint256 _wethAmount, uint256 _sDaiAmountOutMin) external returns (uint256) {
+        _onlyKeeper();
+        return _swapWethForAsset(_wethAmount, _sDaiAmountOutMin);
+    }
+
     /*//////////////////////////////////////////////////////////////
                             INTERNAL API
     //////////////////////////////////////////////////////////////*/
