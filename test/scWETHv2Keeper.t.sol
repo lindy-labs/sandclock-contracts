@@ -226,9 +226,12 @@ contract scWETHv2KeeperTest is Test {
     /// #calculateInvestParams ///
 
     function test_calculateInvestParams_revertsIfThereIsNothingToInvest() public {
-        uint256[] memory adapterIds = new uint256[](0);
-        uint256[] memory allocations = new uint256[](0);
-        uint256[] memory targetLtvs = new uint256[](0);
+        uint256[] memory adapterIds = new uint256[](1);
+        adapterIds[0] = AAVEV3_ADAPTER_ID;
+        uint256[] memory allocations = new uint256[](1);
+        allocations[0] = 1e18;
+        uint256[] memory targetLtvs = new uint256[](1);
+        targetLtvs[0] = 0.9e18;
 
         // set min required float equal to the current target float to make sure there is nothing to invest
         uint256 currentFloat = weth.balanceOf(address(target));
