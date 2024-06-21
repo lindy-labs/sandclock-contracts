@@ -5,7 +5,7 @@ import "forge-std/console2.sol";
 import {MainnetAddresses} from "../base/MainnetAddresses.sol";
 import {MainnetDeployBase} from "../base/MainnetDeployBase.sol";
 import {scWETHv2} from "../../src/steth/scWETHv2.sol";
-import {scDAI} from "../../src/steth/scDAI.sol";
+import {scSDAI} from "../../src/steth/scSDAI.sol";
 import {Swapper} from "../../src/steth/Swapper.sol";
 import {PriceConverter} from "../../src/steth/PriceConverter.sol";
 import {SparkScDaiAdapter} from "../../src/steth/scDai-adapters/SparkScDaiAdapter.sol";
@@ -37,9 +37,9 @@ contract DeployScDaiMainnet is MainnetDeployBase {
         console2.log("sparkAdapter\t\t", address(sparkAdapter));
 
         // deploy vault
-        scDAI vault = new scDAI(deployerAddress, keeper, scWethV2, priceConverter, swapper);
+        scSDAI vault = new scSDAI(deployerAddress, keeper, scWethV2, priceConverter, swapper);
 
-        console2.log("scDAI\t\t", address(vault));
+        console2.log("scSDAI\t\t", address(vault));
 
         vault.addAdapter(sparkAdapter);
 

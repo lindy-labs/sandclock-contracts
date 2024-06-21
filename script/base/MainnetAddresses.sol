@@ -18,6 +18,7 @@ library MainnetAddresses {
     address public constant SCUSDCV2_AAVEV3_ADAPTER = 0xf59c324fF111D86894f175E22B70b0d54998ff3E;
 
     address public constant SCDAI = address(0x00); //todo: update after deployment
+    address public constant SCSDAI = address(0x00); //todo: update after deployment
     address public constant SCDAI_SPARK_ADAPTER = address(0x00); //TODO: update after deployment
 
     address public constant PRICE_CONVERTER = 0xD76B0Ff4A487CaFE4E19ed15B73f12f6A92095Ca;

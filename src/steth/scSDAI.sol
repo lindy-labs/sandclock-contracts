@@ -23,7 +23,7 @@ import {Swapper} from "./Swapper.sol";
  * @dev code mostly copied from scUSDCv2
  * @notice deposit tokens -> DAI & sDAI
  */
-contract scDAI is BaseV2Vault {
+contract scSDAI is BaseV2Vault {
     using SafeTransferLib for ERC20;
     using SafeTransferLib for WETH;
     using FixedPointMathLib for uint256;
