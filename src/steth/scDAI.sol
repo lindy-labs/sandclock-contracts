@@ -9,6 +9,11 @@ import {ERC4626} from "solmate/mixins/ERC4626.sol";
 import {Constants as C} from "../lib/Constants.sol";
 import {scSDAI} from "./scSDAI.sol";
 
+/**
+ * @title Sandclock Dai Vault
+ * @dev Wrapper ERC4626 contract to support DAI deposits & withdrawals on scSDAI
+ * @notice deposit token -> DAI
+ */
 contract scDAI is ERC4626 {
     using SafeTransferLib for ERC20;
     using FixedPointMathLib for uint256;

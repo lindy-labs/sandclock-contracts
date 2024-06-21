@@ -19,9 +19,9 @@ import {PriceConverter} from "./PriceConverter.sol";
 import {Swapper} from "./Swapper.sol";
 
 /**
- * @title Sandclock Dai Vault
+ * @title Sandclock sDai Vault
  * @dev code mostly copied from scUSDCv2
- * @notice deposit tokens -> DAI & sDAI
+ * @notice deposit token -> sDAI
  */
 contract scSDAI is BaseV2Vault {
     using SafeTransferLib for ERC20;
