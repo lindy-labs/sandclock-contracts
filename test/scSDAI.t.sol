@@ -79,17 +79,6 @@ contract scSDAITest is Test {
         assertEq(weth.allowance(address(vault), address(vault.scWETH())), type(uint256).max, "scWETH allowance");
     }
 
-    function test_depositDai(uint256 daiAmount) public {
-        daiAmount = bound(daiAmount, 1e18, 100_000_000e18);
-        deal(C.DAI, address(this), daiAmount);
-        dai.approve(address(vault), daiAmount);
-        vault.depositDai(daiAmount, address(this));
-
-        uint256 expectedShares = sDai.convertToShares(daiAmount);
-
-        assertEq(vault.balanceOf(address(this)), expectedShares, "shares dont match");
-    }
-
     function test_rebalance() public {
         uint256 initialBalance = 1_000_000e18;
         uint256 initialDebt = 100 ether;

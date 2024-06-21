@@ -6,6 +6,7 @@ import {MainnetAddresses} from "../base/MainnetAddresses.sol";
 import {MainnetDeployBase} from "../base/MainnetDeployBase.sol";
 import {scWETHv2} from "../../src/steth/scWETHv2.sol";
 import {scSDAI} from "../../src/steth/scSDAI.sol";
+import {scDAI} from "../../src/steth/scDAI.sol";
 import {Swapper} from "../../src/steth/Swapper.sol";
 import {PriceConverter} from "../../src/steth/PriceConverter.sol";
 import {SparkScDaiAdapter} from "../../src/steth/scDai-adapters/SparkScDaiAdapter.sol";
@@ -37,18 +38,20 @@ contract DeployScDaiMainnet is MainnetDeployBase {
         console2.log("sparkAdapter\t\t", address(sparkAdapter));
 
         // deploy vault
-        scSDAI vault = new scSDAI(deployerAddress, keeper, scWethV2, priceConverter, swapper);
+        scSDAI scSDAIVault = new scSDAI(deployerAddress, keeper, scWethV2, priceConverter, swapper);
+        scDAI scDAIVault = new scDAI(scSDAIVault);
 
-        console2.log("scSDAI\t\t", address(vault));
+        console2.log("scSDAI\t\t", address(scSDAIVault));
+        console2.log("scDAI\t\t", address(scDAIVault));
 
-        vault.addAdapter(sparkAdapter);
+        scSDAIVault.addAdapter(sparkAdapter);
 
         // initial deposit
         uint256 daiAmount = _swapWethForDai(0.01 ether);
-        ERC20(C.DAI).approve(address(vault), daiAmount);
-        vault.depositDai(daiAmount, deployerAddress); // 0.01 ether worth of sDAI
+        ERC20(C.DAI).approve(address(scDAIVault), daiAmount);
+        scDAIVault.deposit(daiAmount, deployerAddress); // 0.01 ether worth of dai
 
-        _transferAdminRoleToMultisig(vault, deployerAddress);
+        _transferAdminRoleToMultisig(scSDAIVault, deployerAddress);
 
         vm.stopBroadcast();
 
