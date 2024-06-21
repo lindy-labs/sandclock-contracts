@@ -16,7 +16,7 @@ import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 import {Constants as C} from "../../../src/lib/Constants.sol";
 import {MainnetAddresses} from "../../base/MainnetAddresses.sol";
 import {PriceConverter} from "../../../src/steth/PriceConverter.sol";
-import {scDAI} from "../../../src/steth/scDAI.sol";
+import {scSDAI} from "../../../src/steth/scSDAI.sol";
 import {SparkScDaiAdapter} from "../../../src/steth/scDai-adapters/SparkScDaiAdapter.sol";
 import {IAdapter} from "../../../src/steth/IAdapter.sol";
 
@@ -33,7 +33,7 @@ contract RebalanceScDAI is Script {
     // if keeper private key is not provided, use the default keeper address for running the script tests
     address keeper = keeperPrivateKey != 0 ? vm.addr(keeperPrivateKey) : MainnetAddresses.KEEPER;
 
-    scDAI public vault = scDAI(vm.envOr("SC_DAI", MainnetAddresses.SCDAI));
+    scSDAI public vault = scSDAI(vm.envOr("SC_SDAI", MainnetAddresses.SCSDAI));
 
     PriceConverter priceConverter = PriceConverter(vm.envOr("PRICE_CONVERTER", MainnetAddresses.PRICE_CONVERTER));
 
@@ -82,7 +82,7 @@ contract RebalanceScDAI is Script {
     bytes[] multicallData;
 
     function run() external {
-        console2.log("--RebalancescDAI script running--");
+        console2.log("--RebalancescsDAI script running--");
 
         require(vault.hasRole(vault.KEEPER_ROLE(), address(keeper)), "invalid keeper");
 
@@ -105,7 +105,7 @@ contract RebalanceScDAI is Script {
         vm.stopBroadcast();
 
         _logVaultInfo("state after rebalance");
-        console2.log("--RebalancescDAI script done--");
+        console2.log("--RebalancescsDAI script done--");
     }
 
     function _initializeAdapterSettings() internal {
@@ -127,7 +127,7 @@ contract RebalanceScDAI is Script {
         // if profit is too small, don't sell & reinvest
         if (minExpectedsDaiProfit < minSDaiProfitToReinvest) return 0;
 
-        multicallData.push(abi.encodeWithSelector(scDAI.sellProfit.selector, minExpectedsDaiProfit));
+        multicallData.push(abi.encodeWithSelector(scSDAI.sellProfit.selector, minExpectedsDaiProfit));
 
         return minExpectedsDaiProfit;
     }
@@ -191,30 +191,30 @@ contract RebalanceScDAI is Script {
 
     function _createRebalanceMulticallData() internal {
         if (disinvestAmount > 0) {
-            multicallData.push(abi.encodeWithSelector(scDAI.disinvest.selector, disinvestAmount));
+            multicallData.push(abi.encodeWithSelector(scSDAI.disinvest.selector, disinvestAmount));
         }
 
         for (uint256 i = 0; i < rebalanceDatas.length; i++) {
             RebalanceData memory rebalanceData = rebalanceDatas[i];
             if (rebalanceData.supplyAmount > 0) {
                 multicallData.push(
-                    abi.encodeWithSelector(scDAI.supply.selector, rebalanceData.adapterId, rebalanceData.supplyAmount)
+                    abi.encodeWithSelector(scSDAI.supply.selector, rebalanceData.adapterId, rebalanceData.supplyAmount)
                 );
             }
             if (rebalanceData.borrowAmount > 0) {
                 multicallData.push(
-                    abi.encodeWithSelector(scDAI.borrow.selector, rebalanceData.adapterId, rebalanceData.borrowAmount)
+                    abi.encodeWithSelector(scSDAI.borrow.selector, rebalanceData.adapterId, rebalanceData.borrowAmount)
                 );
             }
             if (rebalanceData.repayAmount > 0) {
                 multicallData.push(
-                    abi.encodeWithSelector(scDAI.repay.selector, rebalanceData.adapterId, rebalanceData.repayAmount)
+                    abi.encodeWithSelector(scSDAI.repay.selector, rebalanceData.adapterId, rebalanceData.repayAmount)
                 );
             }
             if (rebalanceData.withdrawAmount > 0) {
                 multicallData.push(
                     abi.encodeWithSelector(
-                        scDAI.withdraw.selector, rebalanceData.adapterId, rebalanceData.withdrawAmount
+                        scSDAI.withdraw.selector, rebalanceData.adapterId, rebalanceData.withdrawAmount
                     )
                 );
             }
@@ -224,7 +224,7 @@ contract RebalanceScDAI is Script {
     function _logScriptParams() internal view {
         console2.log("\t script params");
         console2.log("keeper\t\t", address(keeper));
-        console2.log("scDAI\t\t", address(vault));
+        console2.log("scSDAI\t\t", address(vault));
         console2.log("ltv diff tolerance\t", ltvDiffTolerance);
         console2.log("min sDai profit\t\t", minSDaiProfitToReinvest);
         console2.log("max profit sell slippage\t", maxProfitSellSlippage);
