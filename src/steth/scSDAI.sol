@@ -58,7 +58,7 @@ contract scSDAI is BaseV2Vault {
     event WethSwappedForAsset(uint256 wethAmount, uint256 assetAmountOut);
 
     constructor(address _admin, address _keeper, ERC4626 _scWETH, PriceConverter _priceConverter, Swapper _swapper)
-        BaseV2Vault(_admin, _keeper, ERC20(C.SDAI), _priceConverter, _swapper, "Sandclock Yield DAI", "scDAI")
+        BaseV2Vault(_admin, _keeper, ERC20(C.SDAI), _priceConverter, _swapper, "Sandclock Yield SDAI", "scSDAI")
     {
         _zeroAddressCheck(address(_scWETH));
 
