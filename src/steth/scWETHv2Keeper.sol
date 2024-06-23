@@ -7,7 +7,7 @@ import {AccessControl} from "openzeppelin-contracts/access/AccessControl.sol";
 
 import {scWETHv2} from "./scWETHv2.sol";
 import {Constants as C} from "../lib/Constants.sol";
-import {ZeroAddress, ProtocolNotSupported} from "../errors/scErrors.sol";
+import {ZeroAddress, ProtocolNotSupported, Check} from "../errors/scErrors.sol";
 
 /**
  * @title scWETHv2Keeper
@@ -77,9 +77,9 @@ contract scWETHv2Keeper is AccessControl {
      * - `ZeroAddress` if any of the provided addresses are zero.
      */
     constructor(scWETHv2 _target, address _admin, address _operator) {
-        _zeroAddressCheck(address(_target));
-        _zeroAddressCheck(_admin);
-        _zeroAddressCheck(_operator);
+        Check.isZeroAddress(address(_target));
+        Check.isZeroAddress(_admin);
+        Check.isZeroAddress(_operator);
 
         target = _target;
 
@@ -104,7 +104,7 @@ contract scWETHv2Keeper is AccessControl {
      * - Emits {TargetUpdated} event upon successful target update.
      */
     function setTarget(scWETHv2 _target) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        _zeroAddressCheck(address(_target));
+        Check.isZeroAddress(address(_target));
 
         target = _target;
 
@@ -130,8 +130,8 @@ contract scWETHv2Keeper is AccessControl {
      * - Emits {OperatorChanged} event upon successful operator change.
      */
     function changeOperator(address _from, address _to) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        _zeroAddressCheck(_to);
-        _zeroAddressCheck(_from);
+        Check.isZeroAddress(_to);
+        Check.isZeroAddress(_from);
 
         _revokeRole(OPERATOR_ROLE, _from);
         _grantRole(OPERATOR_ROLE, _to);
@@ -174,7 +174,7 @@ contract scWETHv2Keeper is AccessControl {
     }
 
     /**
-     * @notice Calculates the investment parameters for rebalancing.
+     * @notice Calculates the investment parameters for rebalancing. Intended to be called off-chain only because of the gas cost.
      * @dev This function performs various checks on the input parameters and calculates the necessary amounts for rebalancing.
      * @param _adapterIds The array of adapter IDs.
      * @param _allocations The array of allocations corresponding to each adapter ID.
@@ -222,10 +222,12 @@ contract scWETHv2Keeper is AccessControl {
 
         if (totalAllocation != C.ONE) revert AllocationsMustSumToOne();
 
+        totalInvestAmount = _calculateInvestAmount();
+        if (totalInvestAmount == 0) revert NoNeedToInvest();
+
         rebalanceMulticallData = new bytes[](_adapterIds.length + 1); // +1 for swapWethToWstEth
         // start at 1 because the first call is for swapping WETH to wstETH
         uint256 callDataIndex = 1;
-        totalInvestAmount = _calculateInvestAmount();
 
         for (uint256 i = 0; i < _adapterIds.length; i++) {
             uint256 adapterId = _adapterIds[i];
@@ -255,12 +257,6 @@ contract scWETHv2Keeper is AccessControl {
         uint256 float = target.asset().balanceOf(address(target));
         uint256 minRequiredFloat = target.minimumFloatAmount();
 
-        if (minRequiredFloat >= float) revert NoNeedToInvest();
-
-        return float - minRequiredFloat;
-    }
-
-    function _zeroAddressCheck(address _address) internal pure {
-        if (_address == address(0)) revert ZeroAddress();
+        return minRequiredFloat >= float ? 0 : float - minRequiredFloat;
     }
 }

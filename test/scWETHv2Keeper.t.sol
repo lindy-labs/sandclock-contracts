@@ -223,6 +223,30 @@ contract scWETHv2KeeperTest is Test {
         assertEq(wstEth.balanceOf(address(target)), 0, "wstEth balance");
     }
 
+    function test_invest_leftoverWstEthIsSentToCorrectAdapter() public {
+        // fact: at the block height of the fork, only aave v3 is used with target ltv of 0.9
+        // also at the block height of the fork, target has 45.831301954232015928 weth balance
+        assertEq(weth.balanceOf(address(target)), 45.831301954232015928e18, "initial weth balance");
+
+        assertTrue(target.isSupported(COMPOUNDV3_ADAPTER_ID), "compound v3 is not supported");
+        assertEq(target.getCollateral(COMPOUNDV3_ADAPTER_ID), 0, "initial compound v3 collateral");
+
+        // all values are in eth
+        uint256 investAmount = weth.balanceOf(address(target)) - target.minimumFloatAmount();
+        uint256 flashLoanAmount = investAmount.divWadDown(C.ONE - 0.9e18) - investAmount;
+        uint256 supplyWstEthAmount = priceConverter.ethToWstEth(investAmount + flashLoanAmount);
+
+        bytes[] memory multicallData = new bytes[](2);
+        multicallData[0] = abi.encodeCall(scWETHv2.swapWethToWstEth, investAmount + flashLoanAmount);
+        multicallData[1] = abi.encodeCall(scWETHv2.supplyAndBorrow, (1, supplyWstEthAmount, flashLoanAmount));
+
+        // next call is reverted because of compound v3 borrow too small restriction
+        // however, the test serves the purpose of checking if the leftover wstEth is sent to the correct adapter
+        vm.prank(operator);
+        vm.expectRevert(bytes4(keccak256("BorrowTooSmall()")));
+        keeper.invest(flashLoanAmount, multicallData, COMPOUNDV3_ADAPTER_ID);
+    }
+
     /// #calculateInvestParams ///
 
     function test_calculateInvestParams_revertsIfThereIsNothingToInvest() public {
@@ -347,8 +371,6 @@ contract scWETHv2KeeperTest is Test {
         uint256 collateral = priceConverter.wstEthToEth(target.getCollateral(AAVEV3_ADAPTER_ID));
         uint256 expectedColalteral = collateral + investAmount + flashLoanAmount;
         uint256 expectedDebt = targetLtvs[0].mulWadDown(expectedColalteral);
-
-        console2.log("pc.stEthToEth\t\t", priceConverter.stEthToEth(1e18));
 
         // execute rebalance
         vm.startPrank(operator);
