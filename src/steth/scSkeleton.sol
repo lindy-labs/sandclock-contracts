@@ -52,14 +52,14 @@ contract scSkeleton is BaseV2Vault {
     ERC20 public immutable targetToken;
 
     constructor(
-        address _admin,
-        address _keeper,
+        string memory _name,
+        string memory _symbol,
         ERC20 _asset,
         ERC4626 _targetVault,
+        address _admin,
+        address _keeper,
         PriceConverter _priceConverter,
-        Swapper _swapper,
-        string memory _name,
-        string memory _symbol
+        Swapper _swapper
     ) BaseV2Vault(_admin, _keeper, _asset, _priceConverter, _swapper, _name, _symbol) {
         _zeroAddressCheck(address(_targetVault));
 
