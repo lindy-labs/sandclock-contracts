@@ -261,6 +261,18 @@ contract Swapper {
         // remaining dai to sdai
         _swapDaiToSdai(_daiBalance());
     }
+    ////////////////////////////////// VIRTUAL FUNCTIONS ///////////////////////////////////////////////////////
+
+    function swapTargetTokenForAsset(uint256 _targetTokenAmount, uint256 _assetAmountOutMin)
+        external
+        virtual
+        returns (uint256)
+    {}
+
+    function swapAssetForExactTargetToken(uint256 _assetAmountOutMaximum, uint256 _targetTokenAmountOut)
+        external
+        virtual
+    {}
 
     ////////////////////////////////// INTERNAL FUNCTIONS //////////////////////////////////////////////////////
 

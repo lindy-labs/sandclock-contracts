@@ -145,4 +145,10 @@ contract PriceConverter is AccessControl {
 
         return _daiAmount.mulWadDown(uint256(daiPriceInEth));
     }
+
+    /////////////////////////////////// VIRTUAL FUNCTIONS ///////////////////////////////////////
+
+    function targetTokenToAsset(uint256 _amount) public view virtual returns (uint256) {}
+
+    function assetToTargetToken(uint256 _amount) public view virtual returns (uint256) {}
 }
