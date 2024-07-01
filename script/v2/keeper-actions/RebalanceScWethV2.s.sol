@@ -124,12 +124,19 @@ contract RebalanceScWethV2 is Script, scWETHv2Helper {
         if (totalFlashLoanAmount > minimumInvestAmount.mulWadDown(getLeverage())) {
             vm.startBroadcast(keeper);
 
-            vault.rebalance(investAmount, totalFlashLoanAmount, multicallData);
+            _executeRebalance(investAmount, totalFlashLoanAmount, multicallData);
 
             vm.stopBroadcast();
         }
 
         _logs("-------------------AFTER REBALANCE-------------------");
+    }
+
+    function _executeRebalance(uint256 _investAmount, uint256 _totalFlashLoanAmount, bytes[] memory _multicallData)
+        internal
+        virtual
+    {
+        vault.rebalance(_investAmount, _totalFlashLoanAmount, _multicallData);
     }
 
     function _initializeAdapterSettings() internal {

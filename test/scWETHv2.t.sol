@@ -86,7 +86,7 @@ contract scWETHv2Test is Test {
     uint256 flashLoanFeePercent;
 
     function _setUp(uint256 _blockNumber) internal {
-        vm.createFork(vm.envString("RPC_URL_MAINNET"));
+        mainnetFork = vm.createFork(vm.envString("RPC_URL_MAINNET"));
         vm.selectFork(mainnetFork);
         vm.rollFork(_blockNumber);
 
