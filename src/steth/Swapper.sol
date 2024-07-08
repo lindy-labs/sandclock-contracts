@@ -269,7 +269,7 @@ contract Swapper {
         returns (uint256)
     {}
 
-    function swapAssetForExactTargetToken(uint256 _assetAmountOutMaximum, uint256 _targetTokenAmountOut)
+    function swapAssetForExactTargetToken(uint256 _assetAmountInMaximum, uint256 _targetTokenAmountOut)
         external
         virtual
     {}
