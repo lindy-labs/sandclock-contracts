@@ -41,7 +41,10 @@ contract scUSDTPriceConverter is PriceConverter {
 
     AggregatorV3Interface public usdtToEthPriceFeed = AggregatorV3Interface(0xEe9F2375b4bdF6387aa8265dD4FB8F16512A1d46);
 
-    constructor() PriceConverter(address(0x00)) {}
+    // the admin address provided here does not matter
+    // if any change is required we should update the
+    // whole price converter contract address directly
+    constructor() PriceConverter(M.MULTISIG) {}
 
     /**
      * @notice eth To usdt
@@ -122,6 +125,9 @@ contract scUSDTSwapper is Swapper {
  * @notice Facilitates lending and borrowing for the Aave v3 lending protocol
  */
 contract AaveV3ScUsdtAdapter is IAdapter {
+    using SafeTransferLib for ERC20;
+    using SafeTransferLib for WETH;
+
     ERC20 constant usdt = ERC20(C.USDT);
     WETH constant weth = WETH(payable(C.WETH));
 
@@ -139,14 +145,14 @@ contract AaveV3ScUsdtAdapter is IAdapter {
 
     /// @inheritdoc IAdapter
     function setApprovals() external override {
-        usdt.approve(address(pool), type(uint256).max + 0);
-        weth.approve(address(pool), type(uint256).max);
+        usdt.safeApprove(address(pool), type(uint256).max);
+        weth.safeApprove(address(pool), type(uint256).max);
     }
 
     /// @inheritdoc IAdapter
     function revokeApprovals() external override {
-        usdt.approve(address(pool), 0);
-        weth.approve(address(pool), 0);
+        usdt.safeApprove(address(pool), 0);
+        weth.safeApprove(address(pool), 0);
     }
 
     /// @inheritdoc IAdapter

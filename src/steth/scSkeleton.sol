@@ -64,6 +64,7 @@ contract scSkeleton is BaseV2Vault {
         _zeroAddressCheck(address(_targetVault));
 
         targetVault = _targetVault;
+        targetToken = targetVault.asset();
 
         targetToken.safeApprove(address(_targetVault), type(uint256).max);
     }
