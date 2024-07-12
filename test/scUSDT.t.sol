@@ -20,6 +20,7 @@ import {SparkScDaiAdapter} from "../src/steth/scDai-adapters/SparkScDaiAdapter.s
 import {scUSDT, scUSDTPriceConverter, scUSDTSwapper, AaveV3ScUsdtAdapter} from "../src/steth/scUSDT.sol";
 
 import {scWETH} from "../src/steth/scWETH.sol";
+import {scSkeleton} from "../src/steth/scSkeleton.sol";
 import {ISwapRouter} from "../src/interfaces/uniswap/ISwapRouter.sol";
 import {AggregatorV3Interface} from "../src/interfaces/chainlink/AggregatorV3Interface.sol";
 import {PriceConverter} from "../src/steth/PriceConverter.sol";
@@ -36,6 +37,8 @@ contract scUSDTTest is Test {
     using Address for address;
     using FixedPointMathLib for uint256;
 
+    event Disinvested(uint256 targetTokenAmount);
+
     uint256 mainnetFork;
 
     address constant keeper = address(0x05);
@@ -51,6 +54,8 @@ contract scUSDTTest is Test {
     Swapper swapper;
     PriceConverter priceConverter;
 
+    uint256 pps;
+
     function setUp() public {
         mainnetFork = vm.createFork(vm.envString("RPC_URL_MAINNET"));
         vm.selectFork(mainnetFork);
@@ -59,6 +64,8 @@ contract scUSDTTest is Test {
         usdt = ERC20(C.USDT);
         weth = WETH(payable(C.WETH));
         aaveV3Adapter = new AaveV3ScUsdtAdapter();
+
+        pps = wethVault.totalAssets().divWadDown(wethVault.totalSupply());
 
         _deployAndSetUpVault();
     }
@@ -71,6 +78,166 @@ contract scUSDTTest is Test {
         assertEq(address(vault.swapper()), address(swapper), "swapper");
 
         assertEq(weth.allowance(address(vault), address(vault.targetVault())), type(uint256).max, "scWETH allowance");
+    }
+
+    function test_rebalance() public {
+        uint256 initialBalance = 1_000_000e6;
+        uint256 initialDebt = 100 ether;
+        deal(address(usdt), address(vault), initialBalance);
+
+        bytes[] memory callData = new bytes[](2);
+        callData[0] = abi.encodeWithSelector(scSkeleton.supply.selector, aaveV3Adapter.id(), initialBalance);
+        callData[1] = abi.encodeWithSelector(scSkeleton.borrow.selector, aaveV3Adapter.id(), initialDebt);
+
+        vault.rebalance(callData);
+
+        assertEq(vault.totalDebt(), initialDebt, "total debt");
+        assertEq(vault.totalCollateral(), initialBalance, "total collateral");
+
+        _assertCollateralAndDebt(aaveV3Adapter.id(), initialBalance, initialDebt);
+
+        assertApproxEqRel(wethVault.balanceOf(address(vault)), initialDebt.divWadDown(pps), 1e5, "scETH shares");
+    }
+
+    function testFuzz_rebalance(uint256 supplyOnAaveV3, uint256 borrowOnAaveV3) public {
+        uint256 floatPercentage = 0.01e18;
+        // -10 to account for rounding error difference between debt vs invested amounts
+        vault.setFloatPercentage(floatPercentage - 10);
+
+        supplyOnAaveV3 = bound(supplyOnAaveV3, 100e6, 1_000_000e6);
+        borrowOnAaveV3 = bound(
+            borrowOnAaveV3,
+            1e10,
+            priceConverter.assetToTargetToken(supplyOnAaveV3).mulWadDown(aaveV3Adapter.getMaxLtv() - 0.005e18) // -0.5% to avoid borrowing at max ltv
+        );
+
+        uint256 initialBalance = supplyOnAaveV3.divWadDown(1e18 - floatPercentage);
+        uint256 minFloat = supplyOnAaveV3.mulWadDown(floatPercentage);
+
+        deal(address(usdt), address(vault), initialBalance);
+
+        bytes[] memory callData = new bytes[](2);
+        callData[0] = abi.encodeWithSelector(scSkeleton.supply.selector, aaveV3Adapter.id(), supplyOnAaveV3);
+        callData[1] = abi.encodeWithSelector(scSkeleton.borrow.selector, aaveV3Adapter.id(), borrowOnAaveV3);
+
+        vault.rebalance(callData);
+
+        _assertCollateralAndDebt(aaveV3Adapter.id(), supplyOnAaveV3, borrowOnAaveV3);
+        assertApproxEqAbs(vault.totalAssets(), initialBalance, 1e10, "total assets");
+        assertApproxEqRel(vault.assetBalance(), minFloat, 0.05e18, "float");
+    }
+
+    function test_disinvest() public {
+        uint256 initialBalance = 1_000_000e6;
+        uint256 initialDebt = 100 ether;
+        deal(address(usdt), address(vault), initialBalance);
+        bytes[] memory callData = new bytes[](2);
+        callData[0] = abi.encodeWithSelector(scSkeleton.supply.selector, aaveV3Adapter.id(), initialBalance);
+        callData[1] = abi.encodeWithSelector(scSkeleton.borrow.selector, aaveV3Adapter.id(), initialDebt);
+        vault.rebalance(callData);
+
+        uint256 disinvestAmount = vault.targetAssetInvested() / 2;
+        vm.expectEmit(true, true, true, true);
+        emit Disinvested(disinvestAmount - 1);
+
+        vault.disinvest(disinvestAmount);
+
+        assertApproxEqRel(weth.balanceOf(address(vault)), disinvestAmount, 1e2, "weth balance");
+        assertApproxEqRel(vault.targetAssetInvested(), initialDebt - disinvestAmount, 1e2, "weth invested");
+    }
+
+    function test_sellProfit() public {
+        uint256 initialBalance = 100000e6;
+        uint256 initialDebt = 10 ether;
+        deal(address(usdt), address(vault), initialBalance);
+
+        bytes[] memory callData = new bytes[](2);
+        callData[0] = abi.encodeWithSelector(scSkeleton.supply.selector, aaveV3Adapter.id(), initialBalance);
+        callData[1] = abi.encodeWithSelector(scSkeleton.borrow.selector, aaveV3Adapter.id(), initialDebt);
+
+        vault.rebalance(callData);
+
+        // add 100% profit to the weth vault
+        uint256 initialWethInvested = vault.targetAssetInvested();
+        deal(address(weth), address(wethVault), initialWethInvested * 2);
+
+        uint256 assetBalanceBefore = vault.assetBalance();
+        uint256 profit = vault.getProfit();
+
+        vm.prank(keeper);
+        vault.sellProfit(0);
+
+        uint256 expectedDaiBalance = assetBalanceBefore + priceConverter.targetTokenToAsset(profit);
+        _assertCollateralAndDebt(aaveV3Adapter.id(), initialBalance, initialDebt);
+        assertApproxEqRel(vault.assetBalance(), expectedDaiBalance, 0.01e18, "asset balance");
+        assertApproxEqRel(vault.targetAssetInvested(), initialWethInvested, 0.001e18, "sold more than actual profit");
+    }
+
+    function test_withdrawFunds() public {
+        uint256 initialBalance = 1_000_000e6;
+        deal(address(usdt), alice, initialBalance);
+
+        vm.startPrank(alice);
+        usdt.approve(address(vault), initialBalance);
+        vault.deposit(initialBalance, alice);
+        vm.stopPrank();
+
+        bytes[] memory callData = new bytes[](2);
+        callData[0] = abi.encodeWithSelector(scSkeleton.supply.selector, aaveV3Adapter.id(), initialBalance);
+        callData[1] = abi.encodeWithSelector(scSkeleton.borrow.selector, aaveV3Adapter.id(), 100 ether);
+
+        vault.rebalance(callData);
+
+        uint256 withdrawAmount = vault.convertToAssets(vault.balanceOf(alice));
+        vm.prank(alice);
+        vault.withdraw(withdrawAmount, alice, alice);
+
+        assertEq(usdt.balanceOf(alice), withdrawAmount, "alice asset balance");
+    }
+
+    function testFuzz_withdraw(uint256 _amount, uint256 _withdrawAmount) public {
+        // _amount = 36072990718134180857610733478 * 1e12;
+        _withdrawAmount = 0;
+        _amount = bound(_amount, 1e6, 10_000_000e6); // upper limit constrained by weth available on aave v3
+        deal(address(usdt), alice, _amount);
+        // console2.log("amount", _amount);
+
+        vm.startPrank(alice);
+        usdt.approve(address(vault), type(uint256).max);
+        vault.deposit(_amount, alice);
+        vm.stopPrank();
+
+        uint256 borrowAmount = priceConverter.assetToTargetToken(_amount.mulWadDown(0.7e18));
+
+        bytes[] memory callData = new bytes[](2);
+        callData[0] = abi.encodeWithSelector(scSkeleton.supply.selector, aaveV3Adapter.id(), _amount);
+        callData[1] = abi.encodeWithSelector(scSkeleton.borrow.selector, aaveV3Adapter.id(), borrowAmount);
+
+        vault.rebalance(callData);
+
+        uint256 total = vault.totalAssets();
+        _withdrawAmount = bound(_withdrawAmount, 1e18, total);
+        vm.startPrank(alice);
+        vault.withdraw(_withdrawAmount, alice, alice);
+
+        assertApproxEqAbs(vault.totalAssets(), total - _withdrawAmount, 0.0001e18, "total assets");
+        assertApproxEqAbs(usdt.balanceOf(alice), _withdrawAmount, 0.01e18, "sdai balance");
+    }
+
+    /////////////////////////////////// SWAPPER TESTS //////////////////////////////
+
+    function test_swapTargetTokenForAsset() public {
+        // weth to usdt
+        uint256 wethAmount = 1000 ether;
+        deal(C.WETH, address(this), wethAmount);
+
+        bytes memory result = address(swapper).functionDelegateCall(
+            abi.encodeWithSelector(swapper.swapTargetTokenForAsset.selector, wethAmount, 1)
+        );
+
+        uint256 usdtReceived = abi.decode(result, (uint256));
+
+        assertEq(usdtReceived, 3065452807710, "usdt received");
     }
 
     /////////////////////////////////// INTERNAL METHODS ////////////////////

@@ -71,7 +71,7 @@ contract scUSDTSwapper is Swapper {
     using SafeTransferLib for ERC20;
 
     /**
-     * @notice swap eth to usdt
+     * @notice swap weth to usdt
      */
     function swapTargetTokenForAsset(uint256 _targetTokenAmount, uint256 _assetAmountOutMin)
         external
@@ -83,7 +83,7 @@ contract scUSDTSwapper is Swapper {
         ISwapRouter.ExactInputSingleParams memory params = ISwapRouter.ExactInputSingleParams({
             tokenIn: address(C.WETH),
             tokenOut: address(C.USDT),
-            fee: 300,
+            fee: 500,
             recipient: address(this),
             deadline: block.timestamp,
             amountIn: _targetTokenAmount,
@@ -95,7 +95,7 @@ contract scUSDTSwapper is Swapper {
     }
 
     /**
-     * @notice swap usdt to eth
+     * @notice swap usdt to weth
      */
     function swapAssetForExactTargetToken(uint256 _assetAmountInMaximum, uint256 _targetTokenAmountOut)
         external
@@ -104,7 +104,7 @@ contract scUSDTSwapper is Swapper {
         ISwapRouter.ExactOutputSingleParams memory params = ISwapRouter.ExactOutputSingleParams({
             tokenIn: address(C.USDT),
             tokenOut: address(C.WETH),
-            fee: 300,
+            fee: 500,
             recipient: address(this),
             deadline: block.timestamp,
             amountOut: _targetTokenAmountOut,
