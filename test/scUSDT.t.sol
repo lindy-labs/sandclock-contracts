@@ -6,6 +6,7 @@ import "forge-std/Test.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {WETH} from "solmate/tokens/WETH.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
+import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 import {IPool} from "aave-v3/interfaces/IPool.sol";
 import {IAToken} from "aave-v3/interfaces/IAToken.sol";
 import {IVariableDebtToken} from "aave-v3/interfaces/IVariableDebtToken.sol";
@@ -36,6 +37,7 @@ import {MainnetAddresses as M} from "../script/base/MainnetAddresses.sol";
 contract scUSDTTest is Test {
     using Address for address;
     using FixedPointMathLib for uint256;
+    using SafeTransferLib for ERC20;
 
     event Disinvested(uint256 targetTokenAmount);
 
@@ -178,9 +180,11 @@ contract scUSDTTest is Test {
         deal(address(usdt), alice, initialBalance);
 
         vm.startPrank(alice);
-        usdt.approve(address(vault), initialBalance);
+        usdt.safeApprove(address(vault), initialBalance);
         vault.deposit(initialBalance, alice);
         vm.stopPrank();
+
+        assertEq(usdt.balanceOf(alice), 0, "alice deposit not transferred");
 
         bytes[] memory callData = new bytes[](2);
         callData[0] = abi.encodeWithSelector(scSkeleton.supply.selector, aaveV3Adapter.id(), initialBalance);
@@ -193,21 +197,20 @@ contract scUSDTTest is Test {
         vault.withdraw(withdrawAmount, alice, alice);
 
         assertEq(usdt.balanceOf(alice), withdrawAmount, "alice asset balance");
+        assertEq(vault.totalAssets(), initialBalance - withdrawAmount, "vault asset balance");
     }
 
     function testFuzz_withdraw(uint256 _amount, uint256 _withdrawAmount) public {
-        // _amount = 36072990718134180857610733478 * 1e12;
         _withdrawAmount = 0;
         _amount = bound(_amount, 1e6, 10_000_000e6); // upper limit constrained by weth available on aave v3
         deal(address(usdt), alice, _amount);
-        // console2.log("amount", _amount);
 
         vm.startPrank(alice);
-        usdt.approve(address(vault), type(uint256).max);
+        usdt.safeApprove(address(vault), type(uint256).max);
         vault.deposit(_amount, alice);
         vm.stopPrank();
 
-        uint256 borrowAmount = priceConverter.assetToTargetToken(_amount.mulWadDown(0.7e18));
+        uint256 borrowAmount = priceConverter.assetToTargetToken(_amount.mulWadDown(0.6e18));
 
         bytes[] memory callData = new bytes[](2);
         callData[0] = abi.encodeWithSelector(scSkeleton.supply.selector, aaveV3Adapter.id(), _amount);
@@ -216,7 +219,7 @@ contract scUSDTTest is Test {
         vault.rebalance(callData);
 
         uint256 total = vault.totalAssets();
-        _withdrawAmount = bound(_withdrawAmount, 1e18, total);
+        _withdrawAmount = bound(_withdrawAmount, 1e6, total);
         vm.startPrank(alice);
         vault.withdraw(_withdrawAmount, alice, alice);
 
