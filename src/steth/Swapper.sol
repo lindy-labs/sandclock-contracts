@@ -227,40 +227,6 @@ contract Swapper {
         weth.deposit{value: address(this).balance}();
     }
 
-    /**
-     * Swap exact amount  of Weth to sDai
-     * @param _wethAmount amount of weth to swap
-     * @param _sDaiAmountOutMin minimum amount of sDai to receive after the swap
-     * @return sDaiReceived amount of sDai received.
-     */
-    function swapWethToSdai(uint256 _wethAmount, uint256 _sDaiAmountOutMin) external returns (uint256 sDaiReceived) {
-        // weth => usdc => dai
-        uint256 daiAmount = uniswapSwapExactInputMultihop(
-            C.WETH, _wethAmount, 1, abi.encodePacked(C.WETH, uint24(500), C.USDC, uint24(100), C.DAI)
-        );
-
-        sDaiReceived = _swapDaiToSdai(daiAmount);
-
-        if (sDaiReceived < _sDaiAmountOutMin) revert AmountReceivedBelowMin();
-    }
-
-    /**
-     * Swap sdai to exact amount of weth
-     * @param _sDaiAmountOutMaximum maximum amount of sDai to swap for weth
-     * @param _wethAmountOut amount of weth to receive
-     */
-    function swapSdaiForExactWeth(uint256 _sDaiAmountOutMaximum, uint256 _wethAmountOut) external {
-        // sdai => dai
-        uint256 daiAmount = _swapSdaiToDai(_sDaiAmountOutMaximum);
-
-        // dai => usdc => weth
-        uniswapSwapExactOutputMultihop(
-            C.DAI, _wethAmountOut, daiAmount, abi.encodePacked(C.WETH, uint24(500), C.USDC, uint24(100), C.DAI)
-        );
-
-        // remaining dai to sdai
-        _swapDaiToSdai(_daiBalance());
-    }
     ////////////////////////////////// VIRTUAL FUNCTIONS ///////////////////////////////////////////////////////
 
     function swapTargetTokenForAsset(uint256 _targetTokenAmount, uint256 _assetAmountOutMin)
@@ -273,18 +239,4 @@ contract Swapper {
         external
         virtual
     {}
-
-    ////////////////////////////////// INTERNAL FUNCTIONS //////////////////////////////////////////////////////
-
-    function _swapSdaiToDai(uint256 _sDaiAmount) internal returns (uint256) {
-        return ERC4626(C.SDAI).redeem(_sDaiAmount, address(this), address(this));
-    }
-
-    function _swapDaiToSdai(uint256 _daiAmount) internal returns (uint256) {
-        return ERC4626(C.SDAI).deposit(_daiAmount, address(this));
-    }
-
-    function _daiBalance() internal view returns (uint256) {
-        return ERC20(C.DAI).balanceOf(address(this));
-    }
 }

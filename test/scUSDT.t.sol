@@ -201,7 +201,6 @@ contract scUSDTTest is Test {
     }
 
     function testFuzz_withdraw(uint256 _amount, uint256 _withdrawAmount) public {
-        _withdrawAmount = 0;
         _amount = bound(_amount, 1e6, 10_000_000e6); // upper limit constrained by weth available on aave v3
         deal(address(usdt), alice, _amount);
 
