@@ -12,9 +12,9 @@ import {Constants as C} from "../lib/Constants.sol";
 import {IVault} from "../interfaces/balancer/IVault.sol";
 import {IFlashLoanRecipient} from "../interfaces/balancer/IFlashLoanRecipient.sol";
 import {IAdapter} from "./IAdapter.sol";
-import {PriceConverter} from "./PriceConverter.sol";
 import {Swapper} from "./Swapper.sol";
 import {sc4626} from "../sc4626.sol";
+import {PriceConverter} from "./PriceConverter.sol";
 
 /**
  * @title BaseV2Vault
@@ -25,6 +25,7 @@ abstract contract BaseV2Vault is sc4626, IFlashLoanRecipient {
     using EnumerableMap for EnumerableMap.UintToAddressMap;
 
     event SwapperUpdated(address indexed admin, address newSwapper);
+    event PriceConverterUpdated(address indexed admin, address newPriceConverter);
     event ProtocolAdapterAdded(address indexed admin, uint256 adapterId, address adapter);
     event ProtocolAdapterRemoved(address indexed admin, uint256 adapterId);
     event RewardsClaimed(uint256 adapterId);
@@ -35,7 +36,7 @@ abstract contract BaseV2Vault is sc4626, IFlashLoanRecipient {
     IVault public constant balancerVault = IVault(C.BALANCER_VAULT);
 
     // price converter contract
-    PriceConverter public immutable priceConverter;
+    PriceConverter public priceConverter;
 
     // swapper contract for facilitating token swaps
     Swapper public swapper;
@@ -91,6 +92,20 @@ abstract contract BaseV2Vault is sc4626, IFlashLoanRecipient {
         swapper = _newSwapper;
 
         emit SwapperUpdated(msg.sender, address(_newSwapper));
+    }
+
+    /**
+     * @notice Set the price converter contract used for executing token swaps.
+     * @param _newPriceConverter The new price converter contract.
+     */
+    function setPriceConverter(PriceConverter _newPriceConverter) external {
+        _onlyAdmin();
+
+        if (address(_newPriceConverter) == address(0)) revert ZeroAddress();
+
+        priceConverter = _newPriceConverter;
+
+        emit PriceConverterUpdated(msg.sender, address(_newPriceConverter));
     }
 
     /**
