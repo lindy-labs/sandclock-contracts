@@ -34,7 +34,7 @@ abstract contract MainnetDeployBase is CREATE3Script {
 
     function _init() internal virtual {
         deployerPrivateKey = uint256(vm.envBytes32("PRIVATE_KEY"));
-        deployerAddress = vm.addr(deployerPrivateKey);
+        deployerAddress = vm.rememberKey(deployerPrivateKey);
         keeper = vm.envAddress("KEEPER");
         multisig = vm.envAddress("MULTISIG");
     }

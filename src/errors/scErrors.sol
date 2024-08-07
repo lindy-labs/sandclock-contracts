@@ -24,3 +24,9 @@ error ProtocolNotSupported(uint256 adapterId);
 error ProtocolInUse(uint256 adapterId);
 error FloatBalanceTooLow(uint256 actual, uint256 required);
 error TokenOutNotAllowed(address token);
+
+library Check {
+    function isZeroAddress(address _address) internal pure {
+        if (_address == address(0)) revert ZeroAddress();
+    }
+}

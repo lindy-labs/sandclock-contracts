@@ -19,6 +19,7 @@ import {MainnetAddresses} from "../../script/base/MainnetAddresses.sol";
 import {RebalanceScWethV2} from "../../script/v2/keeper-actions/RebalanceScWethV2.s.sol";
 import {scWETHv2} from "../../src/steth/scWETHv2.sol";
 import {IAdapter} from "../../src/steth/IAdapter.sol";
+import {scWETHv2Keeper} from "../../src/steth/scWETHv2Keeper.sol";
 
 contract RebalanceScWethV2Test is Test {
     using FixedPointMathLib for uint256;
@@ -29,6 +30,7 @@ contract RebalanceScWethV2Test is Test {
     RebalanceScWethV2TestHarness script;
     scWETHv2 vault;
     WETH weth = WETH(payable(C.WETH));
+    ERC20 wstETH = ERC20(C.WSTETH);
 
     IAdapter morphoAdapter;
     IAdapter compoundV3Adapter;
@@ -447,6 +449,49 @@ contract RebalanceScWethV2Test is Test {
         _assertAllocations(0, 0, 1e18);
     }
 
+    function testDisinvestOneAdapterThruKeeperContract() public {
+        uint256 amount = 10 ether;
+        vault.deposit{value: amount}(address(this));
+        uint256 investAmount = _investAmount();
+
+        // change allocation percents
+        script.setMorphoInvestableAmountPercent(0);
+        script.setCompoundV3InvestableAmountPercent(0);
+        script.setAaveV3InvestableAmountPercent(1e18);
+
+        script.run();
+
+        uint256 assets = vault.totalAssets();
+
+        script = new RebalanceScWethV2TestHarness(); // reset script state
+
+        // setup keeper contract & assign the OPERATOR_ROLE to MainnetAddresses.Keeper
+        scWETHv2Keeper keeper = new scWETHv2Keeper(vault, address(this), MainnetAddresses.KEEPER);
+        script.setKeeperContract(keeper);
+
+        // update roles to latest accounts
+        vm.startPrank(MainnetAddresses.OLD_MULTISIG);
+        vault.grantRole(vault.KEEPER_ROLE(), address(keeper));
+        vm.stopPrank();
+
+        uint256 updatedAaveTargetLtv = script.aaveV3TargetLtv() - 0.04e18;
+
+        // now decrease target ltvs to simulate loss
+        script.updateAaveV3TargetLtv(updatedAaveTargetLtv);
+
+        script.run();
+
+        // expect a call on the keeper contract
+        assertEq(script.keeperCallReceived(), true, "call didn't go thru keeper contract");
+        assertEq(vault.totalInvested(), investAmount, "totalInvested must not change");
+
+        assertApproxEqRel(vault.totalAssets(), assets, 0.0015e18, "must not change total assets");
+
+        _assertLtvs(0, 0, updatedAaveTargetLtv);
+        _assertAllocations(0, 0, 1e18);
+        assertEq(wstETH.balanceOf(address(vault)), 0, "vault's wstETH balance");
+    }
+
     function testRevertsIfLtvForUnsupportedAdapterNot0() public {
         // the script must revert in case of an unsupported adapter
         vault.deposit{value: 10 ether}(address(this));
@@ -624,6 +669,25 @@ contract RebalanceScWethV2Test is Test {
 
 contract RebalanceScWethV2TestHarness is RebalanceScWethV2 {
     bytes testSwapData;
+
+    scWETHv2Keeper keeperContract;
+    bool public keeperCallReceived;
+
+    function setKeeperContract(scWETHv2Keeper _keeper) external {
+        keeperContract = _keeper;
+    }
+
+    function _executeRebalance(uint256 _investAmount, uint256 _totalFlashLoanAmount, bytes[] memory _multicallData)
+        internal
+        override
+    {
+        if (address(keeperContract) == address(0)) {
+            super._executeRebalance(_investAmount, _totalFlashLoanAmount, _multicallData);
+        } else {
+            keeperContract.invest(_totalFlashLoanAmount, _multicallData, aaveV3Adapter.id());
+            keeperCallReceived = true;
+        }
+    }
 
     function setUseZeroEx(bool _useZeroEx) external {
         useZeroEx = _useZeroEx;
