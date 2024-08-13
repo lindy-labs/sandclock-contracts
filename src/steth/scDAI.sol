@@ -2,7 +2,6 @@
 pragma solidity ^0.8.19;
 
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
-import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {ERC4626} from "solmate/mixins/ERC4626.sol";
 
@@ -16,7 +15,6 @@ import {scSDAI} from "./scSDAI.sol";
  */
 contract scDAI is ERC4626 {
     using SafeTransferLib for ERC20;
-    using FixedPointMathLib for uint256;
 
     ERC4626 public constant sdai = ERC4626(C.SDAI);
 
@@ -53,13 +51,11 @@ contract scDAI is ERC4626 {
             if (allowed != type(uint256).max) allowance[owner][msg.sender] = allowed - shares;
         }
 
-        assets = _beforeWithdraw(assets, shares);
-
         _burn(owner, shares);
 
-        emit Withdraw(msg.sender, receiver, owner, assets, shares);
+        assets = _withdrawDAIFromScSDAI(assets, shares, receiver);
 
-        asset.safeTransfer(receiver, assets);
+        emit Withdraw(msg.sender, receiver, owner, assets, shares);
     }
 
     function redeem(uint256 shares, address receiver, address owner) public override returns (uint256 assets) {
@@ -72,19 +68,14 @@ contract scDAI is ERC4626 {
         // Check for rounding error since we round down in previewRedeem.
         require((assets = previewRedeem(shares)) != 0, "ZERO_ASSETS");
 
-        assets = _beforeWithdraw(assets, shares);
-
         _burn(owner, shares);
 
-        emit Withdraw(msg.sender, receiver, owner, assets, shares);
+        assets = _withdrawDAIFromScSDAI(assets, shares, receiver);
 
-        asset.safeTransfer(receiver, assets);
+        emit Withdraw(msg.sender, receiver, owner, assets, shares);
     }
 
-    //////////////////////////////////// INTERNAL METHODS ///////////////////////////////
-
-    /// @return returns the amount of dai to be withdrawn
-    function _beforeWithdraw(uint256 assets, uint256) internal returns (uint256) {
+    function _withdrawDAIFromScSDAI(uint256 assets, uint256, address receiver) internal returns (uint256) {
         // assets is in DAI, we need it in SDAI
         uint256 assetsInSdai = sdai.convertToShares(assets);
 
@@ -92,6 +83,6 @@ contract scDAI is ERC4626 {
         scsDAI.withdraw(assetsInSdai, address(this), address(this));
 
         // swap sDAI to DAI
-        return sdai.redeem(assetsInSdai, address(this), address(this));
+        return sdai.redeem(assetsInSdai, receiver, address(this));
     }
 }

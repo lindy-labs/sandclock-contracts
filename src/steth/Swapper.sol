@@ -8,7 +8,6 @@ import {IwstETH} from "../interfaces/lido/IwstETH.sol";
 import {ICurvePool} from "../interfaces/curve/ICurvePool.sol";
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 import {Address} from "openzeppelin-contracts/utils/Address.sol";
-import {ERC4626} from "solmate/mixins/ERC4626.sol";
 
 import {AmountReceivedBelowMin} from "../errors/scErrors.sol";
 import {ISwapRouter} from "../interfaces/uniswap/ISwapRouter.sol";
@@ -226,17 +225,4 @@ contract Swapper {
         // eth to weth
         weth.deposit{value: address(this).balance}();
     }
-
-    ////////////////////////////////// VIRTUAL FUNCTIONS ///////////////////////////////////////////////////////
-
-    function swapTargetTokenForAsset(uint256 _targetTokenAmount, uint256 _assetAmountOutMin)
-        external
-        virtual
-        returns (uint256)
-    {}
-
-    function swapAssetForExactTargetToken(uint256 _assetAmountInMaximum, uint256 _targetTokenAmountOut)
-        external
-        virtual
-    {}
 }

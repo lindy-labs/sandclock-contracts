@@ -18,7 +18,7 @@ import {ILendingPool} from "../src/interfaces/aave-v2/ILendingPool.sol";
 import {IProtocolDataProvider} from "../src/interfaces/aave-v2/IProtocolDataProvider.sol";
 import {IAdapter} from "../src/steth/IAdapter.sol";
 import {SparkScDaiAdapter} from "../src/steth/scDai-adapters/SparkScDaiAdapter.sol";
-import {scUSDT, scUSDTPriceConverter, scUSDTSwapper, AaveV3ScUsdtAdapter} from "../src/steth/scUSDT.sol";
+import {scUSDT, scUSDTPriceConverter, AaveV3ScUsdtAdapter} from "../src/steth/scUSDT.sol";
 
 import {scWETH} from "../src/steth/scWETH.sol";
 import {scSkeleton} from "../src/steth/scSkeleton.sol";
@@ -226,27 +226,11 @@ contract scUSDTTest is Test {
         assertApproxEqAbs(usdt.balanceOf(alice), _withdrawAmount, 0.01e18, "sdai balance");
     }
 
-    /////////////////////////////////// SWAPPER TESTS //////////////////////////////
-
-    function test_swapTargetTokenForAsset() public {
-        // weth to usdt
-        uint256 wethAmount = 1000 ether;
-        deal(C.WETH, address(this), wethAmount);
-
-        bytes memory result = address(swapper).functionDelegateCall(
-            abi.encodeWithSelector(swapper.swapTargetTokenForAsset.selector, wethAmount, 1)
-        );
-
-        uint256 usdtReceived = abi.decode(result, (uint256));
-
-        assertEq(usdtReceived, 3065452807710, "usdt received");
-    }
-
     /////////////////////////////////// INTERNAL METHODS ////////////////////
 
     function _deployAndSetUpVault() internal {
         priceConverter = new scUSDTPriceConverter();
-        swapper = new scUSDTSwapper();
+        swapper = new Swapper();
 
         vault = new scUSDT(address(this), keeper, priceConverter, swapper);
 

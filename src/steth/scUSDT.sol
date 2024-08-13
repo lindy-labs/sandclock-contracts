@@ -7,33 +7,56 @@ import {ERC4626} from "solmate/mixins/ERC4626.sol";
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 import {Address} from "openzeppelin-contracts/utils/Address.sol";
-import {EnumerableMap} from "openzeppelin-contracts/utils/structs/EnumerableMap.sol";
 import {IPool} from "aave-v3/interfaces/IPool.sol";
 import {IPoolDataProvider} from "aave-v3/interfaces/IPoolDataProvider.sol";
 
 import {scSkeleton} from "./scSkeleton.sol";
 import {Constants as C} from "../lib/Constants.sol";
-import {BaseV2Vault} from "./BaseV2Vault.sol";
 import {AggregatorV3Interface} from "../interfaces/chainlink/AggregatorV3Interface.sol";
-import {ISwapRouter} from "../interfaces/uniswap/ISwapRouter.sol";
 import {IAdapter} from "./IAdapter.sol";
 import {Swapper} from "./Swapper.sol";
 import {PriceConverter} from "./PriceConverter.sol";
-import {MainnetAddresses as M} from "../../script/base/MainnetAddresses.sol";
+import {MainnetAddresses as MA} from "../../script/base/MainnetAddresses.sol";
 
+// TODO: reorder constructor params
 contract scUSDT is scSkeleton {
+    using Address for address;
+
     constructor(address _admin, address _keeper, PriceConverter _priceConverter, Swapper _swapper)
         scSkeleton(
             "Sandclock USDT Vault",
             "scUSDT",
             ERC20(C.USDT),
-            ERC4626(M.SCWETHV2),
+            ERC4626(MA.SCWETHV2),
             _admin,
             _keeper,
             _priceConverter,
             _swapper
         )
     {}
+
+    function _swapTargetTokenForAsset(uint256 _wethAmount, uint256 _usdtAmountOutMin)
+        internal
+        virtual
+        override
+        returns (uint256 usdtReceived)
+    {
+        bytes memory result = address(swapper).functionDelegateCall(
+            abi.encodeWithSelector(
+                Swapper.uniswapSwapExactInput.selector, C.WETH, C.USDT, _wethAmount, _usdtAmountOutMin, 500
+            )
+        );
+
+        usdtReceived = abi.decode(result, (uint256));
+    }
+
+    function _swapAssetForExactTargetToken(uint256 _targetTokenAmountOut) internal virtual override {
+        address(swapper).functionDelegateCall(
+            abi.encodeWithSelector(
+                Swapper.uniswapSwapExactOutput.selector, C.USDT, C.WETH, _targetTokenAmountOut, type(uint256).max, 500
+            )
+        );
+    }
 }
 
 contract scUSDTPriceConverter is PriceConverter {
@@ -44,7 +67,7 @@ contract scUSDTPriceConverter is PriceConverter {
     // the admin address provided here does not matter
     // if any change is required we should update the
     // whole price converter contract address directly
-    constructor() PriceConverter(M.MULTISIG) {}
+    constructor() PriceConverter(MA.MULTISIG) {}
 
     /**
      * @notice eth To usdt
@@ -64,59 +87,6 @@ contract scUSDTPriceConverter is PriceConverter {
         (, int256 usdtPriceInEth,,,) = usdtToEthPriceFeed.latestRoundData();
 
         return uint256(usdtPriceInEth);
-    }
-}
-
-contract scUSDTSwapper is Swapper {
-    using SafeTransferLib for ERC20;
-
-    /**
-     * @notice swap weth to usdt
-     */
-    function swapTargetTokenForAsset(uint256 _targetTokenAmount, uint256 _assetAmountOutMin)
-        external
-        override
-        returns (uint256)
-    {
-        ERC20(C.WETH).safeApprove(address(swapRouter), _targetTokenAmount);
-
-        ISwapRouter.ExactInputSingleParams memory params = ISwapRouter.ExactInputSingleParams({
-            tokenIn: address(C.WETH),
-            tokenOut: address(C.USDT),
-            fee: 500,
-            recipient: address(this),
-            deadline: block.timestamp,
-            amountIn: _targetTokenAmount,
-            amountOutMinimum: _assetAmountOutMin,
-            sqrtPriceLimitX96: 0
-        });
-
-        return swapRouter.exactInputSingle(params);
-    }
-
-    /**
-     * @notice swap usdt to weth
-     */
-    function swapAssetForExactTargetToken(uint256 _assetAmountInMaximum, uint256 _targetTokenAmountOut)
-        external
-        override
-    {
-        ISwapRouter.ExactOutputSingleParams memory params = ISwapRouter.ExactOutputSingleParams({
-            tokenIn: address(C.USDT),
-            tokenOut: address(C.WETH),
-            fee: 500,
-            recipient: address(this),
-            deadline: block.timestamp,
-            amountOut: _targetTokenAmountOut,
-            amountInMaximum: _assetAmountInMaximum,
-            sqrtPriceLimitX96: 0
-        });
-
-        ERC20(C.USDT).safeApprove(address(swapRouter), _assetAmountInMaximum);
-
-        swapRouter.exactOutputSingle(params);
-
-        ERC20(C.USDT).safeApprove(address(swapRouter), 0);
     }
 }
 

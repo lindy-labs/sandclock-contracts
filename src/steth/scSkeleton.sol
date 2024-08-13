@@ -4,7 +4,6 @@ pragma solidity ^0.8.19;
 import {NoProfitsToSell, FlashLoanAmountZero, EndAssetBalanceTooLow, FloatBalanceTooLow} from "../errors/scErrors.sol";
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
-import {WETH} from "solmate/tokens/WETH.sol";
 import {ERC4626} from "solmate/mixins/ERC4626.sol";
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
@@ -13,7 +12,6 @@ import {EnumerableMap} from "openzeppelin-contracts/utils/structs/EnumerableMap.
 
 import {Constants as C} from "../lib/Constants.sol";
 import {BaseV2Vault} from "./BaseV2Vault.sol";
-import {AggregatorV3Interface} from "../interfaces/chainlink/AggregatorV3Interface.sol";
 import {IAdapter} from "./IAdapter.sol";
 import {Swapper} from "./Swapper.sol";
 import {PriceConverter} from "./PriceConverter.sol";
@@ -21,7 +19,7 @@ import {PriceConverter} from "./PriceConverter.sol";
 /**
  * @dev A separate swapper and priceConverter contract for each vault
  */
-contract scSkeleton is BaseV2Vault {
+abstract contract scSkeleton is BaseV2Vault {
     using SafeTransferLib for ERC20;
     using FixedPointMathLib for uint256;
     using Address for address;
@@ -505,19 +503,7 @@ contract scSkeleton is BaseV2Vault {
     function _swapTargetTokenForAsset(uint256 _targetTokenAmount, uint256 _assetAmountOutMin)
         internal
         virtual
-        returns (uint256)
-    {
-        // weth => usdc => dai
-        bytes memory result = address(swapper).functionDelegateCall(
-            abi.encodeWithSelector(Swapper.swapTargetTokenForAsset.selector, _targetTokenAmount, _assetAmountOutMin)
-        );
+        returns (uint256);
 
-        return abi.decode(result, (uint256));
-    }
-
-    function _swapAssetForExactTargetToken(uint256 _targetTokenAmountOut) internal virtual {
-        address(swapper).functionDelegateCall(
-            abi.encodeWithSelector(Swapper.swapAssetForExactTargetToken.selector, assetBalance(), _targetTokenAmountOut)
-        );
-    }
+    function _swapAssetForExactTargetToken(uint256 _targetTokenAmountOut) internal virtual;
 }

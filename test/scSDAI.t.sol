@@ -17,7 +17,7 @@ import {ILendingPool} from "../src/interfaces/aave-v2/ILendingPool.sol";
 import {IProtocolDataProvider} from "../src/interfaces/aave-v2/IProtocolDataProvider.sol";
 import {IAdapter} from "../src/steth/IAdapter.sol";
 import {SparkScDaiAdapter} from "../src/steth/scDai-adapters/SparkScDaiAdapter.sol";
-import {scSDAI, scSDAIPriceConverter, scSDAISwapper} from "../src/steth/scSDAI.sol";
+import {scSDAI, scSDAIPriceConverter} from "../src/steth/scSDAI.sol";
 import {scSkeleton} from "../src/steth/scSkeleton.sol";
 
 import {scWETH} from "../src/steth/scWETH.sol";
@@ -410,7 +410,7 @@ contract scSDAITest is Test {
 
     function _deployAndSetUpVault() internal {
         priceConverter = new scSDAIPriceConverter();
-        swapper = new scSDAISwapper();
+        swapper = new Swapper();
 
         vault = new scSDAI(address(this), keeper, priceConverter, swapper);
 
