@@ -16,8 +16,9 @@ import {Constants as C} from "../src/lib/Constants.sol";
 import {ILendingPool} from "../src/interfaces/aave-v2/ILendingPool.sol";
 import {IProtocolDataProvider} from "../src/interfaces/aave-v2/IProtocolDataProvider.sol";
 import {IAdapter} from "../src/steth/IAdapter.sol";
-import {SparkScDaiAdapter} from "../src/steth/scDai-adapters/SparkScDaiAdapter.sol";
-import {scSDAI, scSDAIPriceConverter} from "../src/steth/scSDAI.sol";
+import {SparkScDaiAdapter} from "../src/steth/scSDai-adapters/SparkScDaiAdapter.sol";
+import {scSDAI} from "../src/steth/scSDAI.sol";
+import {scSDAIPriceConverter} from "../src/steth/priceConverter/ScSDAIPriceConverter.sol";
 import {scSkeleton} from "../src/steth/scSkeleton.sol";
 
 import {scWETH} from "../src/steth/scWETH.sol";
@@ -32,6 +33,7 @@ import {IwstETH} from "../src/interfaces/lido/IwstETH.sol";
 import "../src/errors/scErrors.sol";
 import {Address} from "openzeppelin-contracts/utils/Address.sol";
 import {MainnetAddresses as M} from "../script/base/MainnetAddresses.sol";
+import {ISinglePairPriceConverter} from "../src/steth/priceConverter/IPriceConverter.sol";
 
 contract scSDAITest is Test {
     using Address for address;
@@ -54,7 +56,7 @@ contract scSDAITest is Test {
 
     SparkScDaiAdapter spark;
     Swapper swapper;
-    PriceConverter priceConverter;
+    ISinglePairPriceConverter priceConverter;
 
     uint256 pps;
 
@@ -112,7 +114,7 @@ contract scSDAITest is Test {
         borrowOnSpark = bound(
             borrowOnSpark,
             1e10,
-            priceConverter.assetToTargetToken(supplyOnSpark).mulWadDown(spark.getMaxLtv() - 0.005e18) // -0.5% to avoid borrowing at max ltv
+            priceConverter.baseAssetToToken(supplyOnSpark).mulWadDown(spark.getMaxLtv() - 0.005e18) // -0.5% to avoid borrowing at max ltv
         );
 
         uint256 initialBalance = supplyOnSpark.divWadDown(1e18 - floatPercentage);
@@ -168,7 +170,7 @@ contract scSDAITest is Test {
         vm.prank(keeper);
         vault.sellProfit(0);
 
-        uint256 expectedDaiBalance = sDaiBalanceBefore + priceConverter.targetTokenToAsset(profit);
+        uint256 expectedDaiBalance = sDaiBalanceBefore + priceConverter.tokenToBaseAsset(profit);
         _assertCollateralAndDebt(spark.id(), initialBalance, initialDebt);
         assertApproxEqRel(vault.assetBalance(), expectedDaiBalance, 0.01e18, "sDai balance");
         assertApproxEqRel(vault.targetAssetInvested(), initialWethInvested, 0.001e18, "sold more than actual profit");
@@ -228,7 +230,7 @@ contract scSDAITest is Test {
         vault.deposit(_amount, alice);
         vm.stopPrank();
 
-        uint256 borrowAmount = priceConverter.assetToTargetToken(_amount.mulWadDown(0.7e18));
+        uint256 borrowAmount = priceConverter.baseAssetToToken(_amount.mulWadDown(0.7e18));
 
         bytes[] memory callData = new bytes[](2);
         callData[0] = abi.encodeWithSelector(scSkeleton.supply.selector, spark.id(), _amount);
@@ -256,7 +258,7 @@ contract scSDAITest is Test {
         vault.deposit(_amount, alice);
         vm.stopPrank();
 
-        uint256 borrowAmount = priceConverter.assetToTargetToken(_amount.mulWadDown(0.7e18));
+        uint256 borrowAmount = priceConverter.baseAssetToToken(_amount.mulWadDown(0.7e18));
 
         bytes[] memory callData = new bytes[](2);
         callData[0] = abi.encodeWithSelector(scSkeleton.supply.selector, spark.id(), _amount);

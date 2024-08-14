@@ -8,7 +8,7 @@ import {WETH} from "solmate/tokens/WETH.sol";
 
 import {Constants as C} from "../../src/lib/Constants.sol";
 import {IAdapter} from "../../src/steth/IAdapter.sol";
-import {SparkScDaiAdapter} from "../../src/steth/scDai-adapters/SparkScDaiAdapter.sol";
+import {SparkScDaiAdapter} from "../../src/steth/scSDai-adapters/SparkScDaiAdapter.sol";
 
 contract SparkScDaiAdapterTest is Test {
     SparkScDaiAdapter adapter;

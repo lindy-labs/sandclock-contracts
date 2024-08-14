@@ -13,6 +13,7 @@ import {AaveV3ScUsdcAdapter} from "../../src/steth/scUsdcV2-adapters/AaveV3ScUsd
 import {MorphoAaveV3ScUsdcAdapter} from "../../src/steth/scUsdcV2-adapters/MorphoAaveV3ScUsdcAdapter.sol";
 import {ReallocateScUsdcV2} from "../../script/v2/keeper-actions/ReallocateScUsdcV2.s.sol";
 import {MainnetAddresses} from "../../script/base/MainnetAddresses.sol";
+import {IScUSDCPriceConverter} from "../../src/steth/priceConverter/IPriceConverter.sol";
 
 contract ReallocateScUsdcV2Test is Test {
     using FixedPointMathLib for uint256;
@@ -23,7 +24,7 @@ contract ReallocateScUsdcV2Test is Test {
     AaveV3ScUsdcAdapter aaveV3;
     AaveV2ScUsdcAdapter aaveV2;
     MorphoAaveV3ScUsdcAdapter morpho;
-    PriceConverter priceConverter;
+    IScUSDCPriceConverter priceConverter;
     ReallocateScUsdcV2TestHarness script;
 
     function setUp() public {
@@ -34,7 +35,7 @@ contract ReallocateScUsdcV2Test is Test {
         script = new ReallocateScUsdcV2TestHarness();
 
         vault = scUSDCv2(MainnetAddresses.SCUSDCV2);
-        priceConverter = vault.priceConverter();
+        priceConverter = vault.converter();
         morpho = script.morphoAdapter();
         aaveV2 = script.aaveV2Adapter();
         aaveV3 = script.aaveV3Adapter();

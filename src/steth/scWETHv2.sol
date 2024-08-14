@@ -21,6 +21,7 @@ import {IAdapter} from "./IAdapter.sol";
 import {IwstETH} from "../interfaces/lido/IwstETH.sol";
 import {PriceConverter} from "./PriceConverter.sol";
 import {Swapper} from "./Swapper.sol";
+import {IScETHPriceConverter} from "./priceConverter/IPriceConverter.sol";
 
 /**
  * @title Sandclock WETH Vault version 2
@@ -58,7 +59,7 @@ contract scWETHv2 is BaseV2Vault {
 
     IwstETH constant wstETH = IwstETH(C.WSTETH);
 
-    constructor(address _admin, address _keeper, WETH _weth, Swapper _swapper, PriceConverter _priceConverter)
+    constructor(address _admin, address _keeper, WETH _weth, Swapper _swapper, IScETHPriceConverter _priceConverter)
         BaseV2Vault(_admin, _keeper, _weth, _priceConverter, _swapper, "Sandclock Yield ETH", "scETH")
     {
         zeroExSwapWhitelist[ERC20(C.WSTETH)] = true;
@@ -131,7 +132,7 @@ contract scWETHv2 is BaseV2Vault {
 
         uint256 stEthAmount = wstETH.unwrap(_wstEthAmount);
 
-        uint256 wethAmountOutMin = priceConverter.stEthToEth(stEthAmount).mulWadDown(_slippageTolerance);
+        uint256 wethAmountOutMin = converter().stEthToEth(stEthAmount).mulWadDown(_slippageTolerance);
 
         address(swapper).functionDelegateCall(
             abi.encodeWithSelector(Swapper.curveSwapStEthToWeth.selector, stEthAmount, wethAmountOutMin)
@@ -346,7 +347,7 @@ contract scWETHv2 is BaseV2Vault {
             if (collateral == 0) continue;
 
             uint256 debt = IAdapter(adapter).getDebt(address(this));
-            uint256 assets = priceConverter.wstEthToEth(collateral) - debt;
+            uint256 assets = converter().wstEthToEth(collateral) - debt;
 
             // withdraw from each protocol in equal weight (based on the relative allocation)
             withdrawPerProtocol = _amount.mulDivDown(assets, totalInvested_);
@@ -357,7 +358,7 @@ contract scWETHv2 is BaseV2Vault {
                 this.repayAndWithdraw.selector,
                 id,
                 repayPerProtocol,
-                priceConverter.ethToWstEth(repayPerProtocol + withdrawPerProtocol)
+                converter().ethToWstEth(repayPerProtocol + withdrawPerProtocol)
             );
         }
 
@@ -424,6 +425,10 @@ contract scWETHv2 is BaseV2Vault {
     }
 
     function _totalCollateralInWeth() internal view returns (uint256) {
-        return priceConverter.wstEthToEth(totalCollateral());
+        return converter().wstEthToEth(totalCollateral());
+    }
+
+    function converter() public view returns (IScETHPriceConverter) {
+        return IScETHPriceConverter(address(priceConverter));
     }
 }

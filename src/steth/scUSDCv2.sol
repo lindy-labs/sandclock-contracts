@@ -13,10 +13,10 @@ import {EnumerableMap} from "openzeppelin-contracts/utils/structs/EnumerableMap.
 
 import {Constants as C} from "../lib/Constants.sol";
 import {BaseV2Vault} from "./BaseV2Vault.sol";
-import {AggregatorV3Interface} from "../interfaces/chainlink/AggregatorV3Interface.sol";
 import {IAdapter} from "./IAdapter.sol";
 import {PriceConverter} from "./PriceConverter.sol";
 import {Swapper} from "./Swapper.sol";
+import {IScUSDCPriceConverter} from "./priceConverter/IPriceConverter.sol";
 
 /**
  * @title Sandclock USDC Vault version 2
@@ -418,7 +418,7 @@ contract scUSDCv2 is BaseV2Vault {
         // first try to sell profits to cover withdrawal amount
         if (profit != 0) {
             uint256 withdrawn = _disinvest(profit);
-            uint256 usdcAmountOutMin = priceConverter.ethToUsdc(withdrawn).mulWadDown(slippageTolerance);
+            uint256 usdcAmountOutMin = converter().ethToUsdc(withdrawn).mulWadDown(slippageTolerance);
             uint256 usdcReceived = _swapWethForUsdc(withdrawn, usdcAmountOutMin);
 
             if (initialBalance + usdcReceived >= _assets) return;
@@ -485,9 +485,9 @@ contract scUSDCv2 is BaseV2Vault {
 
         if (profit != 0) {
             // account for slippage when selling weth profits
-            total += priceConverter.ethToUsdc(profit).mulWadDown(slippageTolerance);
+            total += converter().ethToUsdc(profit).mulWadDown(slippageTolerance);
         } else {
-            total -= priceConverter.ethToUsdc(_debt - _invested);
+            total -= converter().ethToUsdc(_debt - _invested);
         }
     }
 
@@ -520,5 +520,9 @@ contract scUSDCv2 is BaseV2Vault {
                 500 // pool fee
             )
         );
+    }
+
+    function converter() public view returns (IScUSDCPriceConverter) {
+        return IScUSDCPriceConverter(address(priceConverter));
     }
 }

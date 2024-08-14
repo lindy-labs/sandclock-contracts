@@ -15,6 +15,7 @@ import {BaseV2Vault} from "./BaseV2Vault.sol";
 import {IAdapter} from "./IAdapter.sol";
 import {Swapper} from "./Swapper.sol";
 import {PriceConverter} from "./PriceConverter.sol";
+import {ISinglePairPriceConverter} from "./priceConverter/IPriceConverter.sol";
 
 /**
  * @dev A separate swapper and priceConverter contract for each vault
@@ -56,7 +57,7 @@ abstract contract scSkeleton is BaseV2Vault {
         ERC4626 _targetVault,
         address _admin,
         address _keeper,
-        PriceConverter _priceConverter,
+        ISinglePairPriceConverter _priceConverter,
         Swapper _swapper
     ) BaseV2Vault(_admin, _keeper, _asset, _priceConverter, _swapper, _name, _symbol) {
         _zeroAddressCheck(address(_targetVault));
@@ -419,7 +420,7 @@ abstract contract scSkeleton is BaseV2Vault {
         // first try to sell profits to cover withdrawal amount
         if (profit != 0) {
             uint256 withdrawn = _disinvest(profit);
-            uint256 assetAmountOutMin = priceConverter.targetTokenToAsset(withdrawn).mulWadDown(slippageTolerance);
+            uint256 assetAmountOutMin = converter().tokenToBaseAsset(withdrawn).mulWadDown(slippageTolerance);
             uint256 assetReceived = _swapTargetTokenForAsset(withdrawn, assetAmountOutMin);
 
             if (initialBalance + assetReceived >= _assets) return;
@@ -486,9 +487,9 @@ abstract contract scSkeleton is BaseV2Vault {
 
         if (profit != 0) {
             // account for slippage when selling targetToken profits
-            total += priceConverter.targetTokenToAsset(profit).mulWadDown(slippageTolerance);
+            total += converter().tokenToBaseAsset(profit).mulWadDown(slippageTolerance);
         } else {
-            total -= priceConverter.targetTokenToAsset(_debt - _invested);
+            total -= converter().tokenToBaseAsset(_debt - _invested);
         }
     }
 
@@ -498,6 +499,10 @@ abstract contract scSkeleton is BaseV2Vault {
 
     function _targetTokenBalance() internal view returns (uint256) {
         return targetToken.balanceOf(address(this));
+    }
+
+    function converter() public view returns (ISinglePairPriceConverter) {
+        return ISinglePairPriceConverter(address(priceConverter));
     }
 
     function _swapTargetTokenForAsset(uint256 _targetTokenAmount, uint256 _assetAmountOutMin)

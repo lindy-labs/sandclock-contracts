@@ -11,6 +11,7 @@ import {MainnetAddresses} from "../../base/MainnetAddresses.sol";
 import {scWETHv2Keeper} from "src/steth/scWETHv2Keeper.sol";
 import {scWETHv2} from "src/steth/scWETHv2.sol";
 import {PriceConverter} from "src/steth/PriceConverter.sol";
+import {IScETHPriceConverter} from "src/steth/priceConverter/IPriceConverter.sol";
 import {Constants as C} from "src/lib/Constants.sol";
 
 contract InvestScWETHv2Keeper is Script {
@@ -36,7 +37,7 @@ contract InvestScWETHv2Keeper is Script {
 
     scWETHv2 vault;
     scWETHv2Keeper keeper;
-    PriceConverter priceConverter;
+    IScETHPriceConverter priceConverter;
     address operator;
 
     function run() external {
@@ -65,7 +66,7 @@ contract InvestScWETHv2Keeper is Script {
         // vm.envOr("SCWETHV2_KEEPER", MainnetAddresses.SCWETHV2_KEEPER)
         keeper = scWETHv2Keeper(vm.envAddress("SCWETHV2_KEEPER"));
         vault = keeper.target();
-        priceConverter = vault.priceConverter();
+        priceConverter = vault.converter();
         uint256 operatorKey = vm.envUint("OPERATOR_PRIVATE_KEY");
         operator = vm.rememberKey(operatorKey);
     }

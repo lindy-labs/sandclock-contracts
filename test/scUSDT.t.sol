@@ -17,14 +17,16 @@ import {Constants as C} from "../src/lib/Constants.sol";
 import {ILendingPool} from "../src/interfaces/aave-v2/ILendingPool.sol";
 import {IProtocolDataProvider} from "../src/interfaces/aave-v2/IProtocolDataProvider.sol";
 import {IAdapter} from "../src/steth/IAdapter.sol";
-import {SparkScDaiAdapter} from "../src/steth/scDai-adapters/SparkScDaiAdapter.sol";
-import {scUSDT, scUSDTPriceConverter, AaveV3ScUsdtAdapter} from "../src/steth/scUSDT.sol";
+import {scUSDT} from "../src/steth/scUSDT.sol";
+import {AaveV3ScUsdtAdapter} from "../src/steth/scUsdt-adapters/AaveV3ScUsdtAdapter.sol";
+import {scUSDTPriceConverter} from "../src/steth/priceConverter/ScUSDTPriceConverter.sol";
 
 import {scWETH} from "../src/steth/scWETH.sol";
 import {scSkeleton} from "../src/steth/scSkeleton.sol";
 import {ISwapRouter} from "../src/interfaces/uniswap/ISwapRouter.sol";
 import {AggregatorV3Interface} from "../src/interfaces/chainlink/AggregatorV3Interface.sol";
 import {PriceConverter} from "../src/steth/PriceConverter.sol";
+import {ISinglePairPriceConverter} from "../src/steth/priceConverter/IPriceConverter.sol";
 import {Swapper} from "../src/steth/Swapper.sol";
 import {IVault} from "../src/interfaces/balancer/IVault.sol";
 import {ICurvePool} from "../src/interfaces/curve/ICurvePool.sol";
@@ -54,7 +56,7 @@ contract scUSDTTest is Test {
 
     AaveV3ScUsdtAdapter aaveV3Adapter;
     Swapper swapper;
-    PriceConverter priceConverter;
+    ISinglePairPriceConverter priceConverter;
 
     uint256 pps;
 
@@ -110,7 +112,7 @@ contract scUSDTTest is Test {
         borrowOnAaveV3 = bound(
             borrowOnAaveV3,
             1e10,
-            priceConverter.assetToTargetToken(supplyOnAaveV3).mulWadDown(aaveV3Adapter.getMaxLtv() - 0.005e18) // -0.5% to avoid borrowing at max ltv
+            priceConverter.baseAssetToToken(supplyOnAaveV3).mulWadDown(aaveV3Adapter.getMaxLtv() - 0.005e18) // -0.5% to avoid borrowing at max ltv
         );
 
         uint256 initialBalance = supplyOnAaveV3.divWadDown(1e18 - floatPercentage);
@@ -169,7 +171,7 @@ contract scUSDTTest is Test {
         vm.prank(keeper);
         vault.sellProfit(0);
 
-        uint256 expectedDaiBalance = assetBalanceBefore + priceConverter.targetTokenToAsset(profit);
+        uint256 expectedDaiBalance = assetBalanceBefore + priceConverter.tokenToBaseAsset(profit);
         _assertCollateralAndDebt(aaveV3Adapter.id(), initialBalance, initialDebt);
         assertApproxEqRel(vault.assetBalance(), expectedDaiBalance, 0.01e18, "asset balance");
         assertApproxEqRel(vault.targetAssetInvested(), initialWethInvested, 0.001e18, "sold more than actual profit");
@@ -209,7 +211,7 @@ contract scUSDTTest is Test {
         vault.deposit(_amount, alice);
         vm.stopPrank();
 
-        uint256 borrowAmount = priceConverter.assetToTargetToken(_amount.mulWadDown(0.6e18));
+        uint256 borrowAmount = priceConverter.baseAssetToToken(_amount.mulWadDown(0.6e18));
 
         bytes[] memory callData = new bytes[](2);
         callData[0] = abi.encodeWithSelector(scSkeleton.supply.selector, aaveV3Adapter.id(), _amount);

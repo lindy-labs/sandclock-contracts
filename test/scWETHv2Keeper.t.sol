@@ -9,6 +9,7 @@ import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 import {scWETHv2Keeper} from "src/steth/scWETHv2Keeper.sol";
 import {scWETHv2} from "src/steth/scWETHv2.sol";
 import {PriceConverter} from "src/steth/scWETHv2.sol";
+import {IScETHPriceConverter} from "src/steth/priceConverter/IPriceConverter.sol";
 import {Constants as C} from "src/lib/Constants.sol";
 import {ZeroAddress, ProtocolNotSupported} from "src/errors/scErrors.sol";
 import {MainnetAddresses} from "script/base/MainnetAddresses.sol";
@@ -28,7 +29,7 @@ contract scWETHv2KeeperTest is Test {
 
     scWETHv2 target;
     scWETHv2Keeper keeper;
-    PriceConverter priceConverter;
+    IScETHPriceConverter priceConverter;
     IERC20 weth = IERC20(C.WETH);
     IERC20 wstEth = IERC20(C.WSTETH);
 
@@ -38,7 +39,7 @@ contract scWETHv2KeeperTest is Test {
         vm.rollFork(20068274);
 
         target = scWETHv2(payable(MainnetAddresses.SCWETHV2));
-        priceConverter = target.priceConverter();
+        priceConverter = target.converter();
 
         keeper = new scWETHv2Keeper(target, admin, operator);
 

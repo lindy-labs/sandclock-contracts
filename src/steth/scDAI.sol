@@ -15,31 +15,32 @@ import {scSDAI} from "./scSDAI.sol";
  */
 contract scDAI is ERC4626 {
     using SafeTransferLib for ERC20;
+    using SafeTransferLib for ERC4626;
 
-    ERC4626 public constant sdai = ERC4626(C.SDAI);
+    ERC20 public constant dai = ERC20(C.DAI);
+    ERC4626 public constant sDai = ERC4626(C.SDAI);
+    ERC4626 public immutable scsDai;
 
-    ERC4626 public immutable scsDAI;
+    constructor(ERC4626 _scsDAI) ERC4626(dai, "Sandclock Yield DAI", "scDAI") {
+        scsDai = _scsDAI;
 
-    constructor(ERC4626 _scsDAI) ERC4626(ERC20(C.DAI), "Sandclock Yield DAI", "scDAI") {
-        scsDAI = _scsDAI;
-
-        ERC20(C.DAI).safeApprove(C.SDAI, type(uint256).max);
-        ERC20(C.SDAI).safeApprove(address(_scsDAI), type(uint256).max);
+        dai.safeApprove(C.SDAI, type(uint256).max);
+        sDai.safeApprove(address(_scsDAI), type(uint256).max);
     }
 
     function totalAssets() public view override returns (uint256) {
         // balance in sDAI
-        uint256 balance = scsDAI.convertToAssets(scsDAI.balanceOf(address(this)));
+        uint256 balance = scsDai.convertToAssets(scsDai.balanceOf(address(this)));
 
-        return sdai.convertToAssets(balance);
+        return sDai.convertToAssets(balance);
     }
 
     function afterDeposit(uint256 assets, uint256) internal override {
         // dai => sdai
-        assets = sdai.deposit(assets, address(this));
+        assets = sDai.deposit(assets, address(this));
 
         // depost sDAI to scSDAI
-        scsDAI.deposit(assets, address(this));
+        scsDai.deposit(assets, address(this));
     }
 
     function withdraw(uint256 assets, address receiver, address owner) public override returns (uint256 shares) {
@@ -53,7 +54,7 @@ contract scDAI is ERC4626 {
 
         _burn(owner, shares);
 
-        assets = _withdrawDAIFromScSDAI(assets, shares, receiver);
+        assets = _withdrawDaiFromScSDai(assets, shares, receiver);
 
         emit Withdraw(msg.sender, receiver, owner, assets, shares);
     }
@@ -70,19 +71,19 @@ contract scDAI is ERC4626 {
 
         _burn(owner, shares);
 
-        assets = _withdrawDAIFromScSDAI(assets, shares, receiver);
+        assets = _withdrawDaiFromScSDai(assets, shares, receiver);
 
         emit Withdraw(msg.sender, receiver, owner, assets, shares);
     }
 
-    function _withdrawDAIFromScSDAI(uint256 assets, uint256, address receiver) internal returns (uint256) {
+    function _withdrawDaiFromScSDai(uint256 assets, uint256, address receiver) internal returns (uint256) {
         // assets is in DAI, we need it in SDAI
-        uint256 assetsInSdai = sdai.convertToShares(assets);
+        uint256 assetsInSdai = sDai.convertToShares(assets);
 
         // withdraw required sDAI from scSDAI vault
-        scsDAI.withdraw(assetsInSdai, address(this), address(this));
+        scsDai.withdraw(assetsInSdai, address(this), address(this));
 
         // swap sDAI to DAI
-        return sdai.redeem(assetsInSdai, receiver, address(this));
+        return sDai.redeem(assetsInSdai, receiver, address(this));
     }
 }

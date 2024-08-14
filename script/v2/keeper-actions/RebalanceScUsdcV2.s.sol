@@ -135,7 +135,7 @@ contract RebalanceScUsdcV2 is ScUsdcV2ScriptBase {
         uint256 wethProfit = scUsdcV2.getProfit();
         // account for slippage when selling weth profit for usdc
         uint256 minExpectedUsdcProfit =
-            scUsdcV2.priceConverter().ethToUsdc(wethProfit).mulWadDown(1e18 - maxProfitSellSlippage);
+            scUsdcV2.converter().ethToUsdc(wethProfit).mulWadDown(1e18 - maxProfitSellSlippage);
 
         // if profit is too small, don't sell & reinvest
         if (minExpectedUsdcProfit < minUsdcProfitToReinvest) return 0;
@@ -177,7 +177,7 @@ contract RebalanceScUsdcV2 is ScUsdcV2ScriptBase {
         uint256 debt = scUsdcV2.getDebt(_adapterId);
 
         uint256 targetCollateral = collateral + _investableAmount - _missingFloat;
-        uint256 targetDebt = scUsdcV2.priceConverter().usdcToEth(targetCollateral).mulWadDown(_targetLtv);
+        uint256 targetDebt = scUsdcV2.converter().usdcToEth(targetCollateral).mulWadDown(_targetLtv);
 
         RebalanceData memory rebalanceData;
         rebalanceData.adapterId = _adapterId;

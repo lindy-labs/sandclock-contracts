@@ -15,6 +15,7 @@ import {IAdapter} from "./IAdapter.sol";
 import {Swapper} from "./Swapper.sol";
 import {sc4626} from "../sc4626.sol";
 import {PriceConverter} from "./PriceConverter.sol";
+import {IPriceConverter} from "./priceConverter/IPriceConverter.sol";
 
 /**
  * @title BaseV2Vault
@@ -36,7 +37,7 @@ abstract contract BaseV2Vault is sc4626, IFlashLoanRecipient {
     IVault public constant balancerVault = IVault(C.BALANCER_VAULT);
 
     // price converter contract
-    PriceConverter public priceConverter;
+    IPriceConverter public priceConverter;
 
     // swapper contract for facilitating token swaps
     Swapper public swapper;
@@ -51,7 +52,7 @@ abstract contract BaseV2Vault is sc4626, IFlashLoanRecipient {
         address _admin,
         address _keeper,
         ERC20 _asset,
-        PriceConverter _priceConverter,
+        IPriceConverter _priceConverter,
         Swapper _swapper,
         string memory _name,
         string memory _symbol
@@ -98,7 +99,7 @@ abstract contract BaseV2Vault is sc4626, IFlashLoanRecipient {
      * @notice Set the price converter contract used for executing token swaps.
      * @param _newPriceConverter The new price converter contract.
      */
-    function setPriceConverter(PriceConverter _newPriceConverter) external {
+    function setPriceConverter(IPriceConverter _newPriceConverter) external {
         _onlyAdmin();
 
         if (address(_newPriceConverter) == address(0)) revert ZeroAddress();

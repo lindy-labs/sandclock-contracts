@@ -243,7 +243,7 @@ contract scWETHv2Keeper is AccessControl {
             uint256 flashLoanAmount = investAmount.divWadDown(C.ONE - targetLtv) - investAmount;
             totalFlashLoanAmount += flashLoanAmount;
 
-            uint256 supplyWstEthAmount = target.priceConverter().ethToWstEth(investAmount + flashLoanAmount);
+            uint256 supplyWstEthAmount = target.converter().ethToWstEth(investAmount + flashLoanAmount);
 
             rebalanceMulticallData[callDataIndex] =
                 abi.encodeCall(scWETHv2.supplyAndBorrow, (callDataIndex, supplyWstEthAmount, flashLoanAmount));
