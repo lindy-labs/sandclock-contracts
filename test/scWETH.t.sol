@@ -49,9 +49,11 @@ contract scWETHTest is Test {
     uint256 maxLtv;
     uint256 targetLtv = 0.7e18;
 
+    constructor() Test() {
+        vm.createSelectFork(vm.envString("RPC_URL_MAINNET"));
+    }
+
     function setUp() public {
-        vm.createFork(vm.envString("RPC_URL_MAINNET"));
-        vm.selectFork(mainnetFork);
         vm.rollFork(16784444);
 
         scWETH.ConstructorParams memory params = _createDefaultWethVaultConstructorParams();

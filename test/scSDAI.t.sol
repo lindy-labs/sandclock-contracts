@@ -59,8 +59,9 @@ contract scSDAITest is Test {
     ISinglePairPriceConverter priceConverter;
 
     uint256 pps;
+    uint256 cleanStateSnapshot;
 
-    function setUp() public {
+    constructor() Test() {
         mainnetFork = vm.createFork(vm.envString("RPC_URL_MAINNET"));
         vm.selectFork(mainnetFork);
         vm.rollFork(19832667);
@@ -73,6 +74,12 @@ contract scSDAITest is Test {
         pps = wethVault.totalAssets().divWadDown(wethVault.totalSupply());
 
         _deployAndSetUpVault();
+
+        cleanStateSnapshot = vm.snapshot();
+    }
+
+    function setUp() public {
+        vm.revertTo(cleanStateSnapshot);
     }
 
     /// #constructor ///

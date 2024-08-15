@@ -88,9 +88,11 @@ contract scUSDCv2Test is Test {
     Swapper swapper;
     PriceConverter priceConverter;
 
+    constructor() Test() {
+        mainnetFork = vm.createSelectFork(vm.envString("RPC_URL_MAINNET"));
+    }
+
     function _setUpForkAtBlock(uint256 _forkAtBlock) internal {
-        mainnetFork = vm.createFork(vm.envString("RPC_URL_MAINNET"));
-        vm.selectFork(mainnetFork);
         vm.rollFork(_forkAtBlock);
 
         usdc = ERC20(C.USDC);

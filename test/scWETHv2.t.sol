@@ -85,9 +85,11 @@ contract scWETHv2Test is Test {
 
     uint256 flashLoanFeePercent;
 
+    constructor() Test() {
+        mainnetFork = vm.createSelectFork(vm.envString("RPC_URL_MAINNET"));
+    }
+
     function _setUp(uint256 _blockNumber) internal {
-        mainnetFork = vm.createFork(vm.envString("RPC_URL_MAINNET"));
-        vm.selectFork(mainnetFork);
         vm.rollFork(_blockNumber);
 
         priceConverter = new PriceConverter(address(this));

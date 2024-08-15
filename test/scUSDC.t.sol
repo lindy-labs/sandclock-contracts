@@ -59,9 +59,11 @@ contract scUSDCTest is Test {
     WETH weth;
     ERC20 usdc;
 
+    constructor() Test() {
+        vm.createSelectFork(vm.envString("RPC_URL_MAINNET"));
+    }
+
     function setUp() public {
-        vm.createFork(vm.envString("RPC_URL_MAINNET"));
-        vm.selectFork(mainnetFork);
         vm.rollFork(16643381);
 
         usdc = ERC20(C.USDC);
