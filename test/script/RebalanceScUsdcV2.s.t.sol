@@ -25,7 +25,7 @@ contract RebalanceScUsdcV2Test is Test {
     AaveV3ScUsdcAdapter aaveV3;
     AaveV2ScUsdcAdapter aaveV2;
     MorphoAaveV3ScUsdcAdapter morpho;
-    IScUSDCPriceConverter priceConverter;
+    PriceConverter priceConverter;
     RebalanceScUsdcV2TestHarness script;
 
     function setUp() public {
@@ -36,7 +36,7 @@ contract RebalanceScUsdcV2Test is Test {
         script = new RebalanceScUsdcV2TestHarness();
 
         vault = scUSDCv2(MainnetAddresses.SCUSDCV2);
-        priceConverter = vault.converter();
+        priceConverter = PriceConverter(address(vault.priceConverter()));
         morpho = script.morphoAdapter();
         aaveV2 = script.aaveV2Adapter();
         aaveV3 = script.aaveV3Adapter();
@@ -466,7 +466,7 @@ contract RebalanceScUsdcV2Test is Test {
 
         uint256 wethProfit = vault.getProfit();
         // set min profit to reinvest to 2x the actual profit
-        script.setMinUsdcProfitToReinvest(vault.converter().ethToUsdc(wethProfit * 2));
+        script.setMinUsdcProfitToReinvest(priceConverter.ethToUsdc(wethProfit * 2));
 
         uint256 wethInvested = vault.wethInvested();
         uint256 expectedFloat = vault.totalAssets().mulWadDown(vault.floatPercentage());
@@ -474,7 +474,7 @@ contract RebalanceScUsdcV2Test is Test {
         uint256 initialDebt = vault.totalDebt();
 
         uint256 missingFloat = expectedFloat - vault.usdcBalance();
-        uint256 wethDisinvested = vault.converter().usdcToEth(missingFloat);
+        uint256 wethDisinvested = priceConverter.usdcToEth(missingFloat);
 
         script.run();
 
@@ -535,7 +535,7 @@ contract RebalanceScUsdcV2Test is Test {
         assertTrue(vault.totalCollateral() > initialCollateral, "total collateral not increased");
         assertTrue(vault.totalDebt() >= initialDebt, "total debt decreased");
 
-        uint256 currentLtv = vault.converter().ethToUsdc(vault.totalDebt()).divWadDown(vault.totalCollateral());
+        uint256 currentLtv = priceConverter.ethToUsdc(vault.totalDebt()).divWadDown(vault.totalCollateral());
         assertApproxEqAbs(currentLtv, targetLtv, 0.05e18, "current ltv");
     }
 

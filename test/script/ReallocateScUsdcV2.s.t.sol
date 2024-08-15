@@ -35,7 +35,7 @@ contract ReallocateScUsdcV2Test is Test {
         script = new ReallocateScUsdcV2TestHarness();
 
         vault = scUSDCv2(MainnetAddresses.SCUSDCV2);
-        priceConverter = vault.converter();
+        priceConverter = IScUSDCPriceConverter(address(vault.priceConverter()));
         morpho = script.morphoAdapter();
         aaveV2 = script.aaveV2Adapter();
         aaveV3 = script.aaveV3Adapter();

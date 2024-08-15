@@ -39,7 +39,7 @@ contract scWETHv2KeeperTest is Test {
         vm.rollFork(20068274);
 
         target = scWETHv2(payable(MainnetAddresses.SCWETHV2));
-        priceConverter = target.converter();
+        priceConverter = IScETHPriceConverter(address(target.priceConverter()));
 
         keeper = new scWETHv2Keeper(target, admin, operator);
 

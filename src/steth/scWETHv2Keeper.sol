@@ -8,6 +8,7 @@ import {AccessControl} from "openzeppelin-contracts/access/AccessControl.sol";
 import {scWETHv2} from "./scWETHv2.sol";
 import {Constants as C} from "../lib/Constants.sol";
 import {ZeroAddress, ProtocolNotSupported, Check} from "../errors/scErrors.sol";
+import {IScETHPriceConverter} from "./priceConverter/IPriceConverter.sol";
 
 /**
  * @title scWETHv2Keeper
@@ -243,7 +244,8 @@ contract scWETHv2Keeper is AccessControl {
             uint256 flashLoanAmount = investAmount.divWadDown(C.ONE - targetLtv) - investAmount;
             totalFlashLoanAmount += flashLoanAmount;
 
-            uint256 supplyWstEthAmount = target.converter().ethToWstEth(investAmount + flashLoanAmount);
+            uint256 supplyWstEthAmount =
+                IScETHPriceConverter(address(target.priceConverter())).ethToWstEth(investAmount + flashLoanAmount);
 
             rebalanceMulticallData[callDataIndex] =
                 abi.encodeCall(scWETHv2.supplyAndBorrow, (callDataIndex, supplyWstEthAmount, flashLoanAmount));

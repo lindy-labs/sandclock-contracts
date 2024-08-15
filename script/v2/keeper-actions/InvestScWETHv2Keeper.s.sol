@@ -66,7 +66,7 @@ contract InvestScWETHv2Keeper is Script {
         // vm.envOr("SCWETHV2_KEEPER", MainnetAddresses.SCWETHV2_KEEPER)
         keeper = scWETHv2Keeper(vm.envAddress("SCWETHV2_KEEPER"));
         vault = keeper.target();
-        priceConverter = vault.converter();
+        priceConverter = IScETHPriceConverter(address(vault.priceConverter()));
         uint256 operatorKey = vm.envUint("OPERATOR_PRIVATE_KEY");
         operator = vm.rememberKey(operatorKey);
     }
