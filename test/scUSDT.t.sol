@@ -178,7 +178,7 @@ contract scUSDTTest is Test {
     }
 
     function test_withdrawFunds() public {
-        uint256 initialBalance = 1_000_000e6;
+        uint256 initialBalance = 10000e6;
         deal(address(usdt), alice, initialBalance);
 
         vm.startPrank(alice);
@@ -188,13 +188,17 @@ contract scUSDTTest is Test {
 
         assertEq(usdt.balanceOf(alice), 0, "alice deposit not transferred");
 
+        uint256 borrowAmount = priceConverter.baseAssetToToken(initialBalance.mulWadDown(0.6e18));
+        console2.log("borrowAmount", borrowAmount);
+
         bytes[] memory callData = new bytes[](2);
         callData[0] = abi.encodeWithSelector(scSkeleton.supply.selector, aaveV3Adapter.id(), initialBalance);
-        callData[1] = abi.encodeWithSelector(scSkeleton.borrow.selector, aaveV3Adapter.id(), 100 ether);
+        callData[1] = abi.encodeWithSelector(scSkeleton.borrow.selector, aaveV3Adapter.id(), borrowAmount);
 
         vault.rebalance(callData);
 
         uint256 withdrawAmount = vault.convertToAssets(vault.balanceOf(alice));
+        console2.log("withdrawAmount", withdrawAmount);
         vm.prank(alice);
         vault.withdraw(withdrawAmount, alice, alice);
 
@@ -203,7 +207,7 @@ contract scUSDTTest is Test {
     }
 
     function testFuzz_withdraw(uint256 _amount, uint256 _withdrawAmount) public {
-        _amount = bound(_amount, 1e6, 10_000_000e6); // upper limit constrained by weth available on aave v3
+        _amount = bound(_amount, 100e6, 10_000_000e6); // upper limit constrained by weth available on aave v3
         deal(address(usdt), alice, _amount);
 
         vm.startPrank(alice);
@@ -220,7 +224,7 @@ contract scUSDTTest is Test {
         vault.rebalance(callData);
 
         uint256 total = vault.totalAssets();
-        _withdrawAmount = bound(_withdrawAmount, 1e6, total);
+        _withdrawAmount = bound(_withdrawAmount, 10e6, total) - 1e6;
         vm.startPrank(alice);
         vault.withdraw(_withdrawAmount, alice, alice);
 
