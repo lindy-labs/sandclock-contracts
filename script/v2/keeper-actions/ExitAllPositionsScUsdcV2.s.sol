@@ -9,11 +9,13 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 import {WETH} from "solmate/tokens/WETH.sol";
 import {AccessControl} from "openzeppelin-contracts/access/AccessControl.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
+import {Address} from "openzeppelin-contracts/utils/Address.sol";
 
 import {ScUsdcV2ScriptBase} from "../../base/ScUsdcV2ScriptBase.sol";
 import {MainnetAddresses} from "../../base/MainnetAddresses.sol";
 import {PriceConverter} from "../../../src/steth/PriceConverter.sol";
 import {scUSDCv2} from "../../../src/steth/scUSDCv2.sol";
+import {scWETHv2} from "../../../src/steth/scWETHv2.sol";
 import {MorphoAaveV3ScUsdcAdapter} from "../../../src/steth/scUsdcV2-adapters/MorphoAaveV3ScUsdcAdapter.sol";
 import {AaveV2ScUsdcAdapter} from "../../../src/steth/scUsdcV2-adapters/AaveV2ScUsdcAdapter.sol";
 import {AaveV3ScUsdcAdapter} from "../../../src/steth/scUsdcV2-adapters/AaveV3ScUsdcAdapter.sol";
@@ -24,6 +26,7 @@ import {IAdapter} from "../../../src/steth/IAdapter.sol";
  * This results in withdrawing all WETH invested into  leveraged staking (scWETH vault), repaying all WETH debt (using a flashloan if necessary) and withdrawing all USDC collateral to the vault.
  */
 contract ExitAllPositionsScUsdcV2 is ScUsdcV2ScriptBase {
+    using Address for address;
     using FixedPointMathLib for uint256;
 
     /*//////////////////////////////////////////////////////////////
@@ -65,9 +68,9 @@ contract ExitAllPositionsScUsdcV2 is ScUsdcV2ScriptBase {
         console2.log("\t", message);
         console2.log("total assets\t\t", scUsdcV2.totalAssets());
         console2.log("weth profit\t\t", scUsdcV2.getProfit());
-        console2.log("float\t\t\t", scUsdcV2.usdcBalance());
+        console2.log("float\t\t\t", usdcBalance());
         console2.log("total collateral\t", scUsdcV2.totalCollateral());
         console2.log("total debt\t\t", scUsdcV2.totalDebt());
-        console2.log("weth invested\t\t", scUsdcV2.wethInvested());
+        console2.log("weth invested\t\t", wethInvested());
     }
 }

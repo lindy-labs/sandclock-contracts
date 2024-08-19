@@ -17,6 +17,7 @@ import {MorphoAaveV3ScUsdcAdapter} from "../../../src/steth/scUsdcV2-adapters/Mo
 import {AaveV2ScUsdcAdapter} from "../../../src/steth/scUsdcV2-adapters/AaveV2ScUsdcAdapter.sol";
 import {AaveV3ScUsdcAdapter} from "../../../src/steth/scUsdcV2-adapters/AaveV3ScUsdcAdapter.sol";
 import {IAdapter} from "../../../src/steth/IAdapter.sol";
+import {scSkeleton} from "../../../src/steth/scSkeleton.sol";
 
 /**
  * A script for executing reallocate functionality for scUsdcV2 vaults.
@@ -155,9 +156,9 @@ contract ReallocateScUsdcV2 is ScUsdcV2ScriptBase {
             if (data.withdrawAmount > 0) {
                 flashLoanAmount += data.repayAmount;
 
-                multicallData.push(abi.encodeWithSelector(scUsdcV2.repay.selector, data.adapterId, data.repayAmount));
+                multicallData.push(abi.encodeWithSelector(scSkeleton.repay.selector, data.adapterId, data.repayAmount));
                 multicallData.push(
-                    abi.encodeWithSelector(scUSDCv2.withdraw.selector, data.adapterId, data.withdrawAmount)
+                    abi.encodeWithSelector(scSkeleton.withdraw.selector, data.adapterId, data.withdrawAmount)
                 );
             }
         }
@@ -168,8 +169,10 @@ contract ReallocateScUsdcV2 is ScUsdcV2ScriptBase {
             if (data.supplyAmount > 0) {
                 uint256 borrowAmount = data.borrowAmount.mulWadDown(1e18 - flashloanFeePercent);
 
-                multicallData.push(abi.encodeWithSelector(scUsdcV2.supply.selector, data.adapterId, data.supplyAmount));
-                multicallData.push(abi.encodeWithSelector(scUsdcV2.borrow.selector, data.adapterId, borrowAmount));
+                multicallData.push(
+                    abi.encodeWithSelector(scSkeleton.supply.selector, data.adapterId, data.supplyAmount)
+                );
+                multicallData.push(abi.encodeWithSelector(scSkeleton.borrow.selector, data.adapterId, borrowAmount));
             }
         }
     }

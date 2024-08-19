@@ -14,6 +14,7 @@ import {scWETHv2} from "../../src/steth/scWETHv2.sol";
 import {scUSDCv2} from "../../src/steth/scUSDCv2.sol";
 import {Swapper} from "../../src/steth/Swapper.sol";
 import {PriceConverter} from "../../src/steth/PriceConverter.sol";
+import {scUSDCPriceConverter} from "../../src/steth/priceConverter/ScUSDCPriceConverter.sol";
 import {AaveV3ScWethAdapter} from "../../src/steth/scWethV2-adapters/AaveV3ScWethAdapter.sol";
 import {CompoundV3ScWethAdapter} from "../../src/steth/scWethV2-adapters/CompoundV3ScWethAdapter.sol";
 import {MorphoAaveV3ScWethAdapter} from "../../src/steth/scWethV2-adapters/MorphoAaveV3ScWethAdapter.sol";
@@ -29,13 +30,14 @@ contract DeployScript is MainnetDeployBase {
         Swapper swapper = new Swapper();
         console2.log("Swapper:", address(swapper));
         PriceConverter priceConverter = new PriceConverter(deployerAddress);
+        scUSDCPriceConverter usdcPriceConverter = new scUSDCPriceConverter();
         console2.log("PriceConverter:", address(priceConverter));
 
         _transferAdminRoleToMultisig(priceConverter, deployerAddress);
 
         scWethV2 = _deployScWethV2(priceConverter, swapper);
 
-        scUsdcV2 = _deployScUsdcV2(scWethV2, priceConverter, swapper);
+        scUsdcV2 = _deployScUsdcV2(scWethV2, usdcPriceConverter, swapper);
 
         vm.stopBroadcast();
     }
@@ -64,7 +66,7 @@ contract DeployScript is MainnetDeployBase {
         console2.log("scWethV2 MorphoAdapter:", address(morphoAdapter));
     }
 
-    function _deployScUsdcV2(scWETHv2 _wethVault, PriceConverter _priceConveter, Swapper _swapper)
+    function _deployScUsdcV2(scWETHv2 _wethVault, scUSDCPriceConverter _priceConveter, Swapper _swapper)
         internal
         returns (scUSDCv2 vault)
     {

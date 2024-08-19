@@ -18,6 +18,7 @@ import {Constants} from "../../src/lib/Constants.sol";
 
 import {RedeployScript} from "../../script/v2/RedeployScUsdcV2EthMainnet.s.sol";
 import {ExitAllPositionsScUsdcV2} from "../../script/v2/keeper-actions/ExitAllPositionsScUsdcV2.s.sol";
+import {scSkeleton} from "../../src/steth/scSkeleton.sol";
 
 contract ExitAllPositionsScUsdcV2Test is Test {
     using FixedPointMathLib for uint256;
@@ -43,10 +44,10 @@ contract ExitAllPositionsScUsdcV2Test is Test {
     }
 
     function test_run_exitsAllPositions() public {
-        assertEq(vault.wethInvested(), 0, "weth invested");
+        assertEq(script.wethInvested(), 0, "weth invested");
         assertEq(vault.totalDebt(), 0, "total debt");
         assertEq(vault.totalCollateral(), 0, "total collateral");
-        assertTrue(vault.usdcBalance() > 0, "usdc balance");
+        assertTrue(vault.asset().balanceOf(address(vault)) > 0, "usdc balance");
 
         // deposit
         deal(address(vault.asset()), address(this), 1000e6);
@@ -62,14 +63,14 @@ contract ExitAllPositionsScUsdcV2Test is Test {
         uint256 totalAssetsBefore = vault.totalAssets();
         uint256 maxLossPercent = script.maxAceeptableLossPercent();
 
-        assertApproxEqAbs(vault.wethInvested(), debtAmount, 1, "weth invested");
+        assertApproxEqAbs(script.wethInvested(), debtAmount, 1, "weth invested");
         assertApproxEqAbs(vault.totalDebt(), debtAmount, 1, "total debt");
         assertApproxEqAbs(vault.totalCollateral(), investAmount, 1, "total collateral");
 
         // exit
         script.run();
 
-        assertEq(vault.wethInvested(), 0, "weth invested");
+        assertEq(script.wethInvested(), 0, "weth invested");
         assertEq(vault.totalDebt(), 0, "total debt");
         assertEq(vault.totalCollateral(), 0, "total collateral");
         assertApproxEqRel(vault.totalAssets(), totalAssetsBefore, maxLossPercent, "total assets");
@@ -78,10 +79,10 @@ contract ExitAllPositionsScUsdcV2Test is Test {
     function _rebalance(uint256 investAmount, uint256 debtAmount) internal {
         bytes[] memory callData = new bytes[](4);
 
-        callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, 1, investAmount / 2);
-        callData[1] = abi.encodeWithSelector(scUSDCv2.supply.selector, 4, investAmount / 2);
-        callData[2] = abi.encodeWithSelector(scUSDCv2.borrow.selector, 1, debtAmount / 2);
-        callData[3] = abi.encodeWithSelector(scUSDCv2.borrow.selector, 4, debtAmount / 2);
+        callData[0] = abi.encodeWithSelector(scSkeleton.supply.selector, 1, investAmount / 2);
+        callData[1] = abi.encodeWithSelector(scSkeleton.supply.selector, 4, investAmount / 2);
+        callData[2] = abi.encodeWithSelector(scSkeleton.borrow.selector, 1, debtAmount / 2);
+        callData[3] = abi.encodeWithSelector(scSkeleton.borrow.selector, 4, debtAmount / 2);
 
         vm.prank(MainnetAddresses.KEEPER);
         vault.rebalance(callData);

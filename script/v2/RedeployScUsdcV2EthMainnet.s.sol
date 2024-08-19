@@ -8,6 +8,7 @@ import {scWETHv2} from "../../src/steth/scWETHv2.sol";
 import {scUSDCv2} from "../../src/steth/scUSDCv2.sol";
 import {Swapper} from "../../src/steth/Swapper.sol";
 import {PriceConverter} from "../../src/steth/PriceConverter.sol";
+import {scUSDCPriceConverter} from "../../src/steth/priceConverter/ScUSDCPriceConverter.sol";
 import {AaveV3ScUsdcAdapter} from "../../src/steth/scUsdcV2-adapters/AaveV3ScUsdcAdapter.sol";
 import {MorphoAaveV3ScUsdcAdapter} from "../../src/steth/scUsdcV2-adapters/MorphoAaveV3ScUsdcAdapter.sol";
 import {AaveV2ScUsdcAdapter} from "../../src/steth/scUsdcV2-adapters/AaveV2ScUsdcAdapter.sol";
@@ -17,7 +18,8 @@ contract RedeployScript is MainnetDeployBase {
     scWETHv2 scWethV2 = scWETHv2(payable(vm.envOr("SC_WETH_V2", address(0))));
 
     Swapper swapper = Swapper(MainnetAddresses.SWAPPER);
-    PriceConverter priceConverter = PriceConverter(MainnetAddresses.PRICE_CONVERTER);
+    // TODO: add address of scUSDCPriceConverter and not create a new instance
+    scUSDCPriceConverter priceConverter = new scUSDCPriceConverter();
     MorphoAaveV3ScUsdcAdapter morphoAdapter = MorphoAaveV3ScUsdcAdapter(MainnetAddresses.SCUSDCV2_MORPHO_ADAPTER);
     AaveV2ScUsdcAdapter aaveV2Adapter = AaveV2ScUsdcAdapter(MainnetAddresses.SCUSDCV2_AAVEV2_ADAPTER);
     AaveV3ScUsdcAdapter aaveV3Adapter = AaveV3ScUsdcAdapter(MainnetAddresses.SCUSDCV2_AAVEV3_ADAPTER);
