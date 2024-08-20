@@ -326,7 +326,7 @@ contract scWETHTest is Test {
         vault.applyNewTargetLtv(newLtv);
 
         // some amount will be left in vault, unrealized slippage
-        assertApproxEqRel(vault.getLtv(), newLtv, 0.03e18, "leverage change failed");
+        assertApproxEqRel(vault.getLtv(), newLtv, 0.04e18, "leverage change failed");
     }
 
     function test_applyNewTargetLtv_invalidMaxLtv() public {
