@@ -234,6 +234,86 @@ contract scUSDTTest is Test {
         assertApproxEqAbs(usdt.balanceOf(alice), _withdrawAmount, 0.01e18, "sdai balance");
     }
 
+    function test_exitAllPositions_RepaysDebtAndReleasesCollateralOnOneProtocolAndNoProfit() public {
+        uint256 initialBalance = 1_000_000e6;
+        deal(address(usdt), address(vault), initialBalance);
+
+        bytes[] memory callData = new bytes[](2);
+        callData[0] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, aaveV3Adapter.id(), initialBalance);
+        callData[1] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, aaveV3Adapter.id(), 200 ether);
+
+        vault.rebalance(callData);
+
+        assertEq(vault.getProfit(), 0, "profit");
+
+        uint256 totalBefore = vault.totalAssets();
+
+        vault.exitAllPositions(0);
+
+        assertApproxEqRel(usdt.balanceOf(address(vault)), totalBefore, 0.001e18, "vault usdt balance");
+        assertEq(weth.balanceOf(address(vault)), 0, "weth balance");
+        assertEq(vault.targetTokenInvestedAmount(), 0, "weth invested");
+        assertEq(vault.totalCollateral(), 0, "total collateral");
+        assertEq(vault.totalDebt(), 0, "total debt");
+    }
+
+    function test_exitAllPositions_RepaysDebtAndReleasesCollateralOnOneProtocolWhenUnderwater() public {
+        uint256 initialBalance = 1_000_000e6;
+        deal(address(usdt), address(vault), initialBalance);
+
+        bytes[] memory callData = new bytes[](2);
+        callData[0] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, aaveV3Adapter.id(), initialBalance);
+        callData[1] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, aaveV3Adapter.id(), 200 ether);
+
+        vault.rebalance(callData);
+
+        // simulate 50% loss
+        uint256 wethInvested = weth.balanceOf(address(wethVault));
+        deal(address(weth), address(wethVault), wethInvested / 2);
+
+        uint256 totalBefore = vault.totalAssets();
+
+        assertFalse(vault.flashLoanInitiated(), "flash loan initiated");
+
+        vault.exitAllPositions(0);
+
+        assertFalse(vault.flashLoanInitiated(), "flash loan initiated");
+
+        assertApproxEqRel(usdt.balanceOf(address(vault)), totalBefore, 0.01e18, "vault usdt balance");
+        assertEq(vault.totalCollateral(), 0, "vault collateral");
+        assertEq(vault.totalDebt(), 0, "vault debt");
+        assertEq(weth.balanceOf(address(vault)), 0, "weth balance");
+        assertEq(vault.targetTokenInvestedAmount(), 0, "weth invested");
+    }
+
+    function test_exitAllPositions_RepaysDebtAndReleasesCollateralOnOneProtocolWhenInProfit() public {
+        uint256 initialBalance = 1_000_000e6;
+        deal(address(usdt), address(vault), initialBalance);
+
+        bytes[] memory callData = new bytes[](2);
+        callData[0] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, aaveV3Adapter.id(), initialBalance);
+        callData[1] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, aaveV3Adapter.id(), 200 ether);
+
+        vault.rebalance(callData);
+
+        // simulate 50% profit
+        uint256 wethInvested = weth.balanceOf(address(wethVault));
+        console2.log("wethInvested", wethInvested);
+        deal(address(weth), address(wethVault), wethInvested.mulWadUp(1.5e18));
+
+        // assertEq(vault.getProfit(), 100 ether, "profit");
+
+        uint256 totalBefore = vault.totalAssets();
+
+        vault.exitAllPositions(0);
+
+        assertApproxEqRel(usdt.balanceOf(address(vault)), totalBefore, 0.005e18, "vault usdt balance");
+        assertEq(vault.totalCollateral(), 0, "vault collateral");
+        assertEq(vault.totalDebt(), 0, "vault debt");
+        assertEq(weth.balanceOf(address(vault)), 0, "weth balance");
+        assertEq(vault.targetTokenInvestedAmount(), 0, "weth invested");
+    }
+
     /////////////////////////////////// INTERNAL METHODS ////////////////////
 
     function _deployAndSetUpVault() internal {

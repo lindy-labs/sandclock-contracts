@@ -91,6 +91,7 @@ contract scSDAITest is Test {
         assertEq(address(vault.swapper()), address(swapper), "swapper");
 
         assertEq(weth.allowance(address(vault), address(vault.targetVault())), type(uint256).max, "scWETH allowance");
+        assertEq(dai.allowance(address(vault), address(sDai)), type(uint256).max, "dai allowance");
     }
 
     function test_rebalance() public {
