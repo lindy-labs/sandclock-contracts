@@ -51,14 +51,14 @@ abstract contract scCrossAssetYieldVault is BaseV2Vault {
     ERC20 public immutable targetToken;
 
     constructor(
-        string memory _name,
-        string memory _symbol,
-        ERC20 _asset,
-        ERC4626 _targetVault,
         address _admin,
         address _keeper,
+        ERC20 _asset,
+        ERC4626 _targetVault,
         ISinglePairPriceConverter _priceConverter,
-        Swapper _swapper
+        Swapper _swapper,
+        string memory _name,
+        string memory _symbol
     ) BaseV2Vault(_admin, _keeper, _asset, _priceConverter, _swapper, _name, _symbol) {
         _zeroAddressCheck(address(_targetVault));
 
@@ -128,7 +128,7 @@ abstract contract scCrossAssetYieldVault is BaseV2Vault {
     function sellProfit(uint256 _assetAmountOutMin) external {
         _onlyKeeper();
 
-        uint256 profit = _calculateTargetTokenProfit(targetAssetInvested(), totalDebt());
+        uint256 profit = _calculateProfitInTargetToken(targetTokenInvestedAmount(), totalDebt());
 
         if (profit == 0) revert NoProfitsToSell();
 
@@ -269,7 +269,7 @@ abstract contract scCrossAssetYieldVault is BaseV2Vault {
      * @notice total claimable assets of the vault in asset.
      */
     function totalAssets() public view override returns (uint256) {
-        return _calculateTotalAssets(assetBalance(), totalCollateral(), targetAssetInvested(), totalDebt());
+        return _calculateTotalAssets(assetBalance(), totalCollateral(), targetTokenInvestedAmount(), totalDebt());
     }
 
     /**
@@ -326,7 +326,7 @@ abstract contract scCrossAssetYieldVault is BaseV2Vault {
     /**
      * @notice Returns the amount of WETH invested (staked) in the leveraged WETH vault.
      */
-    function targetAssetInvested() public view returns (uint256) {
+    function targetTokenInvestedAmount() public view returns (uint256) {
         return targetVault.convertToAssets(targetVault.balanceOf(address(this)));
     }
 
@@ -335,7 +335,7 @@ abstract contract scCrossAssetYieldVault is BaseV2Vault {
      * @dev The profit is calculated as the difference between the current WETH staked and the WETH owed.
      */
     function getProfit() public view returns (uint256) {
-        return _calculateTargetTokenProfit(targetAssetInvested(), totalDebt());
+        return _calculateProfitInTargetToken(targetTokenInvestedAmount(), totalDebt());
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -411,9 +411,9 @@ abstract contract scCrossAssetYieldVault is BaseV2Vault {
 
         uint256 collateral = totalCollateral();
         uint256 debt = totalDebt();
-        uint256 invested = targetAssetInvested();
+        uint256 invested = targetTokenInvestedAmount();
         uint256 total = _calculateTotalAssets(initialBalance, collateral, invested, debt);
-        uint256 profit = _calculateTargetTokenProfit(invested, debt);
+        uint256 profit = _calculateProfitInTargetToken(invested, debt);
         uint256 floatRequired = total > _assets ? (total - _assets).mulWadUp(floatPercentage) : 0;
         uint256 assetNeeded = _assets + floatRequired - initialBalance;
 
@@ -483,7 +483,7 @@ abstract contract scCrossAssetYieldVault is BaseV2Vault {
     {
         total = _float + _collateral;
 
-        uint256 profit = _calculateTargetTokenProfit(_invested, _debt);
+        uint256 profit = _calculateProfitInTargetToken(_invested, _debt);
 
         if (profit != 0) {
             // account for slippage when selling targetToken profits
@@ -493,7 +493,7 @@ abstract contract scCrossAssetYieldVault is BaseV2Vault {
         }
     }
 
-    function _calculateTargetTokenProfit(uint256 _invested, uint256 _debt) internal pure returns (uint256) {
+    function _calculateProfitInTargetToken(uint256 _invested, uint256 _debt) internal pure returns (uint256) {
         return _invested > _debt ? _invested - _debt : 0;
     }
 

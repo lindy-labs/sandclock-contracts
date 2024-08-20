@@ -224,7 +224,7 @@ contract scUSDCv2Rebalance is MainnetDeployBase, Test {
         console2.log("total assets\t\t", scUsdcV2.totalAssets());
         console2.log("total collateral\t", scUsdcV2.totalCollateral());
         console2.log("total debt\t\t", scUsdcV2.totalDebt());
-        console2.log("weth invested\t\t", scUsdcV2.targetAssetInvested());
+        console2.log("weth invested\t\t", scUsdcV2.targetTokenInvestedAmount());
     }
 
     function _usdcBalance() internal view returns (uint256) {

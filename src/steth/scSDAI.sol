@@ -26,14 +26,14 @@ contract scSDAI is scCrossAssetYieldVault {
 
     constructor(address _admin, address _keeper, ISinglePairPriceConverter _priceConverter, Swapper _swapper)
         scCrossAssetYieldVault(
-            "Sandclock SDAI Vault",
-            "scSDAI",
-            sDai,
-            ERC4626(MA.SCWETHV2),
             _admin,
             _keeper,
+            sDai,
+            ERC4626(MA.SCWETHV2),
             _priceConverter,
-            _swapper
+            _swapper,
+            "Sandclock SDAI Vault",
+            "scSDAI"
         )
     {
         dai.safeApprove(address(sDai), type(uint256).max);

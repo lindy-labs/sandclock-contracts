@@ -149,11 +149,11 @@ contract scSDAITest is Test {
         callData[1] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, spark.id(), initialDebt);
         vault.rebalance(callData);
 
-        uint256 disinvestAmount = vault.targetAssetInvested() / 2;
+        uint256 disinvestAmount = vault.targetTokenInvestedAmount() / 2;
         vault.disinvest(disinvestAmount);
 
         assertApproxEqRel(weth.balanceOf(address(vault)), disinvestAmount, 1e2, "weth balance");
-        assertEq(vault.targetAssetInvested(), initialDebt - disinvestAmount, "weth invested");
+        assertEq(vault.targetTokenInvestedAmount(), initialDebt - disinvestAmount, "weth invested");
     }
 
     function test_sellProfit() public {
@@ -168,7 +168,7 @@ contract scSDAITest is Test {
         vault.rebalance(callData);
 
         // add 100% profit to the weth vault
-        uint256 initialWethInvested = vault.targetAssetInvested();
+        uint256 initialWethInvested = vault.targetTokenInvestedAmount();
         deal(address(weth), address(wethVault), initialWethInvested * 2);
 
         uint256 sDaiBalanceBefore = vault.assetBalance();
@@ -180,7 +180,9 @@ contract scSDAITest is Test {
         uint256 expectedDaiBalance = sDaiBalanceBefore + priceConverter.tokenToBaseAsset(profit);
         _assertCollateralAndDebt(spark.id(), initialBalance, initialDebt);
         assertApproxEqRel(vault.assetBalance(), expectedDaiBalance, 0.01e18, "sDai balance");
-        assertApproxEqRel(vault.targetAssetInvested(), initialWethInvested, 0.001e18, "sold more than actual profit");
+        assertApproxEqRel(
+            vault.targetTokenInvestedAmount(), initialWethInvested, 0.001e18, "sold more than actual profit"
+        );
     }
 
     function test_lifi() public {
@@ -304,7 +306,7 @@ contract scSDAITest is Test {
 
         assertApproxEqRel(vault.assetBalance(), totalBefore, 0.001e18, "vault asset balance");
         assertEq(weth.balanceOf(address(vault)), 0, "weth balance");
-        assertEq(vault.targetAssetInvested(), 0, "weth invested");
+        assertEq(vault.targetTokenInvestedAmount(), 0, "weth invested");
         assertEq(vault.totalCollateral(), 0, "total collateral");
         assertEq(vault.totalDebt(), 0, "total debt");
     }
@@ -334,7 +336,7 @@ contract scSDAITest is Test {
         assertEq(vault.totalCollateral(), 0, "vault collateral");
         assertEq(vault.totalDebt(), 0, "vault debt");
         assertEq(weth.balanceOf(address(vault)), 0, "weth balance");
-        assertEq(vault.targetAssetInvested(), 0, "weth invested");
+        assertEq(vault.targetTokenInvestedAmount(), 0, "weth invested");
     }
 
     function test_exitAllPositions_RepaysDebtAndReleasesCollateralOnOneProtocolWhenInProfit() public {
@@ -361,7 +363,7 @@ contract scSDAITest is Test {
         assertEq(vault.totalCollateral(), 0, "vault collateral");
         assertEq(vault.totalDebt(), 0, "vault debt");
         assertEq(weth.balanceOf(address(vault)), 0, "weth balance");
-        assertEq(vault.targetAssetInvested(), 0, "weth invested");
+        assertEq(vault.targetTokenInvestedAmount(), 0, "weth invested");
     }
 
     function test_repay() public {

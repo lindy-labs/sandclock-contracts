@@ -20,9 +20,6 @@ import {scCrossAssetYieldVault} from "./scCrossAssetYieldVault.sol";
 contract scUSDCv2 is scCrossAssetYieldVault {
     using Address for address;
 
-    // leveraged (w)eth vault
-    // ERC4626 public immutable scWETH;
-
     constructor(
         address _admin,
         address _keeper,
@@ -31,18 +28,16 @@ contract scUSDCv2 is scCrossAssetYieldVault {
         Swapper _swapper
     )
         scCrossAssetYieldVault(
-            "Sandclock Yield USDC",
-            "scUSDC",
-            ERC20(C.USDC),
-            _scWETH,
             _admin,
             _keeper,
+            ERC20(C.USDC),
+            _scWETH,
             _priceConverter,
-            _swapper
+            _swapper,
+            "Sandclock Yield USDC",
+            "scUSDC"
         )
-    {
-        // scWETH = _scWETH;
-    }
+    {}
 
     function _swapTargetTokenForAsset(uint256 _wethAmount, uint256 _usdcAmountOutMin)
         internal

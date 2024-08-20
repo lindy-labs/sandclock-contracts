@@ -19,20 +19,19 @@ import {PriceConverter} from "./PriceConverter.sol";
 import {MainnetAddresses as MA} from "../../script/base/MainnetAddresses.sol";
 import {ISinglePairPriceConverter} from "./priceConverter/IPriceConverter.sol";
 
-// TODO: reorder constructor params
 contract scUSDT is scCrossAssetYieldVault {
     using Address for address;
 
     constructor(address _admin, address _keeper, ISinglePairPriceConverter _priceConverter, Swapper _swapper)
         scCrossAssetYieldVault(
-            "Sandclock USDT Vault",
-            "scUSDT",
-            ERC20(C.USDT),
-            ERC4626(MA.SCWETHV2),
             _admin,
             _keeper,
+            ERC20(C.USDT),
+            ERC4626(MA.SCWETHV2),
             _priceConverter,
-            _swapper
+            _swapper,
+            "Sandclock USDT Vault",
+            "scUSDT"
         )
     {}
 

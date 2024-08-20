@@ -140,14 +140,14 @@ contract scUSDTTest is Test {
         callData[1] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, aaveV3Adapter.id(), initialDebt);
         vault.rebalance(callData);
 
-        uint256 disinvestAmount = vault.targetAssetInvested() / 2;
+        uint256 disinvestAmount = vault.targetTokenInvestedAmount() / 2;
         vm.expectEmit(true, true, true, true);
         emit Disinvested(disinvestAmount - 1);
 
         vault.disinvest(disinvestAmount);
 
         assertApproxEqRel(weth.balanceOf(address(vault)), disinvestAmount, 1e2, "weth balance");
-        assertApproxEqRel(vault.targetAssetInvested(), initialDebt - disinvestAmount, 1e2, "weth invested");
+        assertApproxEqRel(vault.targetTokenInvestedAmount(), initialDebt - disinvestAmount, 1e2, "weth invested");
     }
 
     function test_sellProfit() public {
@@ -162,7 +162,7 @@ contract scUSDTTest is Test {
         vault.rebalance(callData);
 
         // add 100% profit to the weth vault
-        uint256 initialWethInvested = vault.targetAssetInvested();
+        uint256 initialWethInvested = vault.targetTokenInvestedAmount();
         deal(address(weth), address(wethVault), initialWethInvested * 2);
 
         uint256 assetBalanceBefore = vault.assetBalance();
@@ -174,7 +174,9 @@ contract scUSDTTest is Test {
         uint256 expectedDaiBalance = assetBalanceBefore + priceConverter.tokenToBaseAsset(profit);
         _assertCollateralAndDebt(aaveV3Adapter.id(), initialBalance, initialDebt);
         assertApproxEqRel(vault.assetBalance(), expectedDaiBalance, 0.01e18, "asset balance");
-        assertApproxEqRel(vault.targetAssetInvested(), initialWethInvested, 0.001e18, "sold more than actual profit");
+        assertApproxEqRel(
+            vault.targetTokenInvestedAmount(), initialWethInvested, 0.001e18, "sold more than actual profit"
+        );
     }
 
     function test_withdrawFunds() public {

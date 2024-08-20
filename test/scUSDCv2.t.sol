@@ -545,11 +545,11 @@ contract scUSDCv2Test is Test {
         callData[1] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, aaveV3.id(), initialDebt);
         vault.rebalance(callData);
 
-        uint256 disinvestAmount = vault.targetAssetInvested() / 2;
+        uint256 disinvestAmount = vault.targetTokenInvestedAmount() / 2;
         vault.disinvest(disinvestAmount);
 
         assertEq(weth.balanceOf(address(vault)), disinvestAmount, "weth balance");
-        assertEq(vault.targetAssetInvested(), initialDebt - disinvestAmount, "weth invested");
+        assertEq(vault.targetTokenInvestedAmount(), initialDebt - disinvestAmount, "weth invested");
     }
 
     function test_disinvest_EmitsEvent() public {
@@ -1069,9 +1069,9 @@ contract scUSDCv2Test is Test {
 
         // add 10% profit to the weth vault
         uint256 totalBefore = vault.totalAssets();
-        uint256 wethProfit = vault.targetAssetInvested().mulWadUp(0.1e18);
+        uint256 wethProfit = vault.targetTokenInvestedAmount().mulWadUp(0.1e18);
         uint256 usdcProfit = priceConverter.tokenToBaseAsset(wethProfit);
-        deal(address(weth), address(wethVault), vault.targetAssetInvested() + wethProfit);
+        deal(address(weth), address(wethVault), vault.targetTokenInvestedAmount() + wethProfit);
 
         assertApproxEqRel(vault.totalAssets(), totalBefore + usdcProfit, 0.01e18, "total assets before reinvest");
 
@@ -1087,7 +1087,9 @@ contract scUSDCv2Test is Test {
         assertApproxEqRel(vault.totalAssets(), totalBefore + usdcProfit, 0.01e18, "total assets after reinvest");
         assertApproxEqAbs(vault.getCollateral(aaveV2.id()), initialBalance + minUsdcAmountOut, 1, "collateral");
         assertTrue(vault.getDebt(aaveV2.id()) > initialDebt + wethToReinvest, "debt");
-        assertApproxEqAbs(vault.getDebt(aaveV2.id()), vault.targetAssetInvested(), 1, "debt and weth invested mismatch");
+        assertApproxEqAbs(
+            vault.getDebt(aaveV2.id()), vault.targetTokenInvestedAmount(), 1, "debt and weth invested mismatch"
+        );
     }
 
     function testFuzz_rebalance(
@@ -1483,7 +1485,7 @@ contract scUSDCv2Test is Test {
         vault.rebalance(callData);
 
         // add 100% profit to the weth vault
-        uint256 initialWethInvested = vault.targetAssetInvested();
+        uint256 initialWethInvested = vault.targetTokenInvestedAmount();
         deal(address(weth), address(wethVault), initialWethInvested * 2);
 
         uint256 usdcBalanceBefore = _usdcBalance();
@@ -1496,7 +1498,9 @@ contract scUSDCv2Test is Test {
         _assertCollateralAndDebt(aaveV3.id(), initialBalance / 2, 50 ether);
         _assertCollateralAndDebt(euler.id(), initialBalance / 2, 50 ether);
         assertApproxEqRel(_usdcBalance(), expectedUsdcBalance, 0.01e18, "usdc balance");
-        assertApproxEqRel(vault.targetAssetInvested(), initialWethInvested, 0.001e18, "sold more than actual profit");
+        assertApproxEqRel(
+            vault.targetTokenInvestedAmount(), initialWethInvested, 0.001e18, "sold more than actual profit"
+        );
     }
 
     function test_sellProfit_EmitsEvent() public {
@@ -1518,7 +1522,7 @@ contract scUSDCv2Test is Test {
         // add 100% profit to the weth vault
         uint256 wethInvested = weth.balanceOf(address(wethVault));
         deal(address(weth), address(wethVault), wethInvested * 2);
-        uint256 profit = vault.targetAssetInvested() - vault.totalDebt();
+        uint256 profit = vault.targetTokenInvestedAmount() - vault.totalDebt();
 
         vm.expectEmit(true, true, true, true);
         emit ProfitSold(profit, 161501_703508);
@@ -1631,7 +1635,7 @@ contract scUSDCv2Test is Test {
         vault.rebalance(callData);
 
         // add 100% profit to the weth vault
-        uint256 initialWethInvested = vault.targetAssetInvested();
+        uint256 initialWethInvested = vault.targetTokenInvestedAmount();
         deal(address(weth), address(wethVault), initialWethInvested * 2);
 
         uint256 collateralBefore = vault.totalCollateral();
@@ -1673,7 +1677,7 @@ contract scUSDCv2Test is Test {
         vault.rebalance(callData);
 
         // add 50% profit to the weth vault
-        uint256 initialWethInvested = vault.targetAssetInvested();
+        uint256 initialWethInvested = vault.targetTokenInvestedAmount();
         deal(address(weth), address(wethVault), initialWethInvested.mulWadDown(1.5e18));
 
         uint256 totalAssetsBefore = vault.totalAssets();
@@ -1852,7 +1856,7 @@ contract scUSDCv2Test is Test {
 
         assertApproxEqRel(_usdcBalance(), totalBefore, 0.001e18, "vault usdc balance");
         assertEq(weth.balanceOf(address(vault)), 0, "weth balance");
-        assertEq(vault.targetAssetInvested(), 0, "weth invested");
+        assertEq(vault.targetTokenInvestedAmount(), 0, "weth invested");
         assertEq(vault.totalCollateral(), 0, "total collateral");
         assertEq(vault.totalDebt(), 0, "total debt");
     }
@@ -1884,7 +1888,7 @@ contract scUSDCv2Test is Test {
         assertEq(vault.totalCollateral(), 0, "vault collateral");
         assertEq(vault.totalDebt(), 0, "vault debt");
         assertEq(weth.balanceOf(address(vault)), 0, "weth balance");
-        assertEq(vault.targetAssetInvested(), 0, "weth invested");
+        assertEq(vault.targetTokenInvestedAmount(), 0, "weth invested");
     }
 
     function test_exitAllPositions_RepaysDebtAndReleasesCollateralOnOneProtocolWhenInProfit() public {
@@ -1912,7 +1916,7 @@ contract scUSDCv2Test is Test {
         assertEq(vault.totalCollateral(), 0, "vault collateral");
         assertEq(vault.totalDebt(), 0, "vault debt");
         assertEq(weth.balanceOf(address(vault)), 0, "weth balance");
-        assertEq(vault.targetAssetInvested(), 0, "weth invested");
+        assertEq(vault.targetTokenInvestedAmount(), 0, "weth invested");
     }
 
     function test_exitAllPositions_RepaysDebtAndReleasesCollateralOnAllProtocols() public {
@@ -1974,7 +1978,7 @@ contract scUSDCv2Test is Test {
 
         vault.rebalance(callData);
 
-        uint256 invested = vault.targetAssetInvested();
+        uint256 invested = vault.targetTokenInvestedAmount();
         uint256 debt = vault.totalDebt();
         uint256 collateral = vault.totalCollateral();
 
