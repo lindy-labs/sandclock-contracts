@@ -12,6 +12,7 @@ import {IAToken} from "aave-v3/interfaces/IAToken.sol";
 import {IVariableDebtToken} from "aave-v3/interfaces/IVariableDebtToken.sol";
 import {IPoolDataProvider} from "aave-v3/interfaces/IPoolDataProvider.sol";
 import {ERC4626} from "solmate/mixins/ERC4626.sol";
+import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 
 import {Constants as C} from "../src/lib/Constants.sol";
 import {ILendingPool} from "../src/interfaces/aave-v2/ILendingPool.sol";
@@ -37,6 +38,7 @@ import {ISinglePairPriceConverter} from "../src/steth/priceConverter/IPriceConve
 import {scSDAIPriceConverter} from "../src/steth/priceConverter/ScSDAIPriceConverter.sol";
 
 contract scDAITest is Test {
+    using SafeTransferLib for ERC20;
     using Address for address;
     using FixedPointMathLib for uint256;
 
@@ -70,6 +72,12 @@ contract scDAITest is Test {
         _deployAndSetUpScsDai();
 
         vault = new scDAI(scsDAI);
+    }
+
+    function testConstructor() public {
+        assertEq(address(vault.scsDai()), address(scsDAI), "scsDAI not updated");
+        assertEq(dai.allowance(address(vault), C.SDAI), type(uint256).max, "dai allowance error");
+        assertEq(sDai.allowance(address(vault), address(scsDAI)), type(uint256).max, "sDai allowance error");
     }
 
     function testDeposit(uint256 amount) public {
