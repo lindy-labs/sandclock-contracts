@@ -9,7 +9,7 @@ import {Address} from "openzeppelin-contracts/utils/Address.sol";
 import {Constants as C} from "../lib/Constants.sol";
 import {Swapper} from "./Swapper.sol";
 import {scUSDCPriceConverter} from "./priceConverter/ScUSDCPriceConverter.sol";
-import {scSkeleton} from "./scSkeleton.sol";
+import {scCrossAssetYieldVault} from "./scCrossAssetYieldVault.sol";
 
 /**
  * @title Sandclock USDC Vault version 2
@@ -17,7 +17,7 @@ import {scSkeleton} from "./scSkeleton.sol";
  * @notice The v2 vault uses multiple lending markets to earn yield on USDC deposits and borrow WETH to stake.
  * @dev This vault uses Sandclock's leveraged WETH staking vault - scWETH.
  */
-contract scUSDCv2 is scSkeleton {
+contract scUSDCv2 is scCrossAssetYieldVault {
     using Address for address;
 
     // leveraged (w)eth vault
@@ -30,7 +30,16 @@ contract scUSDCv2 is scSkeleton {
         scUSDCPriceConverter _priceConverter,
         Swapper _swapper
     )
-        scSkeleton("Sandclock Yield USDC", "scUSDC", ERC20(C.USDC), _scWETH, _admin, _keeper, _priceConverter, _swapper)
+        scCrossAssetYieldVault(
+            "Sandclock Yield USDC",
+            "scUSDC",
+            ERC20(C.USDC),
+            _scWETH,
+            _admin,
+            _keeper,
+            _priceConverter,
+            _swapper
+        )
     {
         // scWETH = _scWETH;
     }

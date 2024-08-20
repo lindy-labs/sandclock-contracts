@@ -7,7 +7,7 @@ import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 import {Address} from "openzeppelin-contracts/utils/Address.sol";
 
-import {scSkeleton} from "./scSkeleton.sol";
+import {scCrossAssetYieldVault} from "./scCrossAssetYieldVault.sol";
 import {Constants as C} from "../lib/Constants.sol";
 import {AggregatorV3Interface} from "../interfaces/chainlink/AggregatorV3Interface.sol";
 import {Swapper} from "./Swapper.sol";
@@ -15,7 +15,7 @@ import {PriceConverter} from "./PriceConverter.sol";
 import {ISinglePairPriceConverter} from "./priceConverter/IPriceConverter.sol";
 import {MainnetAddresses as MA} from "../../script/base/MainnetAddresses.sol";
 
-contract scSDAI is scSkeleton {
+contract scSDAI is scCrossAssetYieldVault {
     using Address for address;
     using SafeTransferLib for ERC20;
 
@@ -25,7 +25,16 @@ contract scSDAI is scSkeleton {
     bytes constant SWAP_PATH = abi.encodePacked(C.WETH, uint24(500), C.USDC, uint24(100), C.DAI);
 
     constructor(address _admin, address _keeper, ISinglePairPriceConverter _priceConverter, Swapper _swapper)
-        scSkeleton("Sandclock SDAI Vault", "scSDAI", sDai, ERC4626(MA.SCWETHV2), _admin, _keeper, _priceConverter, _swapper)
+        scCrossAssetYieldVault(
+            "Sandclock SDAI Vault",
+            "scSDAI",
+            sDai,
+            ERC4626(MA.SCWETHV2),
+            _admin,
+            _keeper,
+            _priceConverter,
+            _swapper
+        )
     {
         dai.safeApprove(address(sDai), type(uint256).max);
     }

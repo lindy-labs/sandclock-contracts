@@ -18,7 +18,7 @@ import {MorphoAaveV3ScUsdcAdapter} from "../../../src/steth/scUsdcV2-adapters/Mo
 import {AaveV2ScUsdcAdapter} from "../../../src/steth/scUsdcV2-adapters/AaveV2ScUsdcAdapter.sol";
 import {AaveV3ScUsdcAdapter} from "../../../src/steth/scUsdcV2-adapters/AaveV3ScUsdcAdapter.sol";
 import {IAdapter} from "../../../src/steth/IAdapter.sol";
-import {scSkeleton} from "../../../src/steth/scSkeleton.sol";
+import {scCrossAssetYieldVault} from "../../../src/steth/scCrossAssetYieldVault.sol";
 
 /**
  * A script for executing rebalance functionality for scUsdcV2 vaults.
@@ -140,7 +140,7 @@ contract RebalanceScUsdcV2 is ScUsdcV2ScriptBase {
         // if profit is too small, don't sell & reinvest
         if (minExpectedUsdcProfit < minUsdcProfitToReinvest) return 0;
 
-        multicallData.push(abi.encodeWithSelector(scSkeleton.sellProfit.selector, minExpectedUsdcProfit));
+        multicallData.push(abi.encodeWithSelector(scCrossAssetYieldVault.sellProfit.selector, minExpectedUsdcProfit));
 
         return minExpectedUsdcProfit;
     }
@@ -204,7 +204,7 @@ contract RebalanceScUsdcV2 is ScUsdcV2ScriptBase {
 
     function _createRebalanceMulticallData() internal {
         if (disinvestAmount > 0) {
-            multicallData.push(abi.encodeWithSelector(scSkeleton.disinvest.selector, disinvestAmount));
+            multicallData.push(abi.encodeWithSelector(scCrossAssetYieldVault.disinvest.selector, disinvestAmount));
         }
 
         for (uint256 i = 0; i < rebalanceDatas.length; i++) {
@@ -212,28 +212,28 @@ contract RebalanceScUsdcV2 is ScUsdcV2ScriptBase {
             if (rebalanceData.supplyAmount > 0) {
                 multicallData.push(
                     abi.encodeWithSelector(
-                        scSkeleton.supply.selector, rebalanceData.adapterId, rebalanceData.supplyAmount
+                        scCrossAssetYieldVault.supply.selector, rebalanceData.adapterId, rebalanceData.supplyAmount
                     )
                 );
             }
             if (rebalanceData.borrowAmount > 0) {
                 multicallData.push(
                     abi.encodeWithSelector(
-                        scSkeleton.borrow.selector, rebalanceData.adapterId, rebalanceData.borrowAmount
+                        scCrossAssetYieldVault.borrow.selector, rebalanceData.adapterId, rebalanceData.borrowAmount
                     )
                 );
             }
             if (rebalanceData.repayAmount > 0) {
                 multicallData.push(
                     abi.encodeWithSelector(
-                        scSkeleton.repay.selector, rebalanceData.adapterId, rebalanceData.repayAmount
+                        scCrossAssetYieldVault.repay.selector, rebalanceData.adapterId, rebalanceData.repayAmount
                     )
                 );
             }
             if (rebalanceData.withdrawAmount > 0) {
                 multicallData.push(
                     abi.encodeWithSelector(
-                        scSkeleton.withdraw.selector, rebalanceData.adapterId, rebalanceData.withdrawAmount
+                        scCrossAssetYieldVault.withdraw.selector, rebalanceData.adapterId, rebalanceData.withdrawAmount
                     )
                 );
             }

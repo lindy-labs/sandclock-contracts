@@ -20,7 +20,7 @@ import {ISinglePairPriceConverter} from "./priceConverter/IPriceConverter.sol";
 /**
  * @dev A separate swapper and priceConverter contract for each vault
  */
-abstract contract scSkeleton is BaseV2Vault {
+abstract contract scCrossAssetYieldVault is BaseV2Vault {
     using SafeTransferLib for ERC20;
     using FixedPointMathLib for uint256;
     using Address for address;

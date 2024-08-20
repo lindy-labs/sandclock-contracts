@@ -19,7 +19,7 @@ import {AaveV2ScUsdcAdapter} from "../../../src/steth/scUsdcV2-adapters/AaveV2Sc
 import {AaveV3ScUsdcAdapter} from "../../../src/steth/scUsdcV2-adapters/AaveV3ScUsdcAdapter.sol";
 import {MainnetDeployBase} from "../../base/MainnetDeployBase.sol";
 import {IAdapter} from "../../../src/steth/IAdapter.sol";
-import {scSkeleton} from "../../../src/steth/scSkeleton.sol";
+import {scCrossAssetYieldVault} from "../../../src/steth/scCrossAssetYieldVault.sol";
 
 /**
  * A script exercising the rebalance functionality of scUSDCv2 in different situations on a forked mainnet.
@@ -149,10 +149,14 @@ contract scUSDCv2Rebalance is MainnetDeployBase, Test {
         uint256 aaveV2TargetDebt = priceConverter.usdcToEth(aaveV2Collaateral.mulWadDown(aaveV2TargetLtv));
 
         bytes[] memory callData = new bytes[](4);
-        callData[0] = abi.encodeWithSelector(scSkeleton.supply.selector, aaveV3Adapter.id(), aaveV3Collaateral);
-        callData[1] = abi.encodeWithSelector(scSkeleton.borrow.selector, aaveV3Adapter.id(), aaveV3TargetDebt);
-        callData[2] = abi.encodeWithSelector(scSkeleton.supply.selector, aaveV2Adapter.id(), aaveV2Collaateral);
-        callData[3] = abi.encodeWithSelector(scSkeleton.borrow.selector, aaveV2Adapter.id(), aaveV2TargetDebt);
+        callData[0] =
+            abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, aaveV3Adapter.id(), aaveV3Collaateral);
+        callData[1] =
+            abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, aaveV3Adapter.id(), aaveV3TargetDebt);
+        callData[2] =
+            abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, aaveV2Adapter.id(), aaveV2Collaateral);
+        callData[3] =
+            abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, aaveV2Adapter.id(), aaveV2TargetDebt);
 
         scUsdcV2.rebalance(callData);
     }
@@ -177,11 +181,15 @@ contract scUSDCv2Rebalance is MainnetDeployBase, Test {
 
         // create the multicall data for the rebalance, i.e. disinvest from scWETH, repay debt, and withdraw collateral maintain min float
         bytes[] memory callData = new bytes[](5);
-        callData[0] = abi.encodeWithSelector(scSkeleton.disinvest.selector, repayAmount);
-        callData[1] = abi.encodeWithSelector(scSkeleton.repay.selector, aaveV3Adapter.id(), aaveV3repayAmount);
-        callData[2] = abi.encodeWithSelector(scSkeleton.withdraw.selector, aaveV3Adapter.id(), floatDelta / 2);
-        callData[3] = abi.encodeWithSelector(scSkeleton.repay.selector, aaveV2Adapter.id(), aaveV2repayAmount);
-        callData[4] = abi.encodeWithSelector(scSkeleton.withdraw.selector, aaveV2Adapter.id(), floatDelta / 2);
+        callData[0] = abi.encodeWithSelector(scCrossAssetYieldVault.disinvest.selector, repayAmount);
+        callData[1] =
+            abi.encodeWithSelector(scCrossAssetYieldVault.repay.selector, aaveV3Adapter.id(), aaveV3repayAmount);
+        callData[2] =
+            abi.encodeWithSelector(scCrossAssetYieldVault.withdraw.selector, aaveV3Adapter.id(), floatDelta / 2);
+        callData[3] =
+            abi.encodeWithSelector(scCrossAssetYieldVault.repay.selector, aaveV2Adapter.id(), aaveV2repayAmount);
+        callData[4] =
+            abi.encodeWithSelector(scCrossAssetYieldVault.withdraw.selector, aaveV2Adapter.id(), floatDelta / 2);
 
         scUsdcV2.rebalance(callData);
     }

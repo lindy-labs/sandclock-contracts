@@ -22,7 +22,7 @@ import {AaveV3ScUsdtAdapter} from "../src/steth/scUsdt-adapters/AaveV3ScUsdtAdap
 import {scUSDTPriceConverter} from "../src/steth/priceConverter/ScUSDTPriceConverter.sol";
 
 import {scWETH} from "../src/steth/scWETH.sol";
-import {scSkeleton} from "../src/steth/scSkeleton.sol";
+import {scCrossAssetYieldVault} from "../src/steth/scCrossAssetYieldVault.sol";
 import {ISwapRouter} from "../src/interfaces/uniswap/ISwapRouter.sol";
 import {AggregatorV3Interface} from "../src/interfaces/chainlink/AggregatorV3Interface.sol";
 import {PriceConverter} from "../src/steth/PriceConverter.sol";
@@ -90,8 +90,8 @@ contract scUSDTTest is Test {
         deal(address(usdt), address(vault), initialBalance);
 
         bytes[] memory callData = new bytes[](2);
-        callData[0] = abi.encodeWithSelector(scSkeleton.supply.selector, aaveV3Adapter.id(), initialBalance);
-        callData[1] = abi.encodeWithSelector(scSkeleton.borrow.selector, aaveV3Adapter.id(), initialDebt);
+        callData[0] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, aaveV3Adapter.id(), initialBalance);
+        callData[1] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, aaveV3Adapter.id(), initialDebt);
 
         vault.rebalance(callData);
 
@@ -121,8 +121,8 @@ contract scUSDTTest is Test {
         deal(address(usdt), address(vault), initialBalance);
 
         bytes[] memory callData = new bytes[](2);
-        callData[0] = abi.encodeWithSelector(scSkeleton.supply.selector, aaveV3Adapter.id(), supplyOnAaveV3);
-        callData[1] = abi.encodeWithSelector(scSkeleton.borrow.selector, aaveV3Adapter.id(), borrowOnAaveV3);
+        callData[0] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, aaveV3Adapter.id(), supplyOnAaveV3);
+        callData[1] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, aaveV3Adapter.id(), borrowOnAaveV3);
 
         vault.rebalance(callData);
 
@@ -136,8 +136,8 @@ contract scUSDTTest is Test {
         uint256 initialDebt = 100 ether;
         deal(address(usdt), address(vault), initialBalance);
         bytes[] memory callData = new bytes[](2);
-        callData[0] = abi.encodeWithSelector(scSkeleton.supply.selector, aaveV3Adapter.id(), initialBalance);
-        callData[1] = abi.encodeWithSelector(scSkeleton.borrow.selector, aaveV3Adapter.id(), initialDebt);
+        callData[0] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, aaveV3Adapter.id(), initialBalance);
+        callData[1] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, aaveV3Adapter.id(), initialDebt);
         vault.rebalance(callData);
 
         uint256 disinvestAmount = vault.targetAssetInvested() / 2;
@@ -156,8 +156,8 @@ contract scUSDTTest is Test {
         deal(address(usdt), address(vault), initialBalance);
 
         bytes[] memory callData = new bytes[](2);
-        callData[0] = abi.encodeWithSelector(scSkeleton.supply.selector, aaveV3Adapter.id(), initialBalance);
-        callData[1] = abi.encodeWithSelector(scSkeleton.borrow.selector, aaveV3Adapter.id(), initialDebt);
+        callData[0] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, aaveV3Adapter.id(), initialBalance);
+        callData[1] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, aaveV3Adapter.id(), initialDebt);
 
         vault.rebalance(callData);
 
@@ -192,8 +192,8 @@ contract scUSDTTest is Test {
         console2.log("borrowAmount", borrowAmount);
 
         bytes[] memory callData = new bytes[](2);
-        callData[0] = abi.encodeWithSelector(scSkeleton.supply.selector, aaveV3Adapter.id(), initialBalance);
-        callData[1] = abi.encodeWithSelector(scSkeleton.borrow.selector, aaveV3Adapter.id(), borrowAmount);
+        callData[0] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, aaveV3Adapter.id(), initialBalance);
+        callData[1] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, aaveV3Adapter.id(), borrowAmount);
 
         vault.rebalance(callData);
 
@@ -218,8 +218,8 @@ contract scUSDTTest is Test {
         uint256 borrowAmount = priceConverter.baseAssetToToken(_amount.mulWadDown(0.6e18));
 
         bytes[] memory callData = new bytes[](2);
-        callData[0] = abi.encodeWithSelector(scSkeleton.supply.selector, aaveV3Adapter.id(), _amount);
-        callData[1] = abi.encodeWithSelector(scSkeleton.borrow.selector, aaveV3Adapter.id(), borrowAmount);
+        callData[0] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, aaveV3Adapter.id(), _amount);
+        callData[1] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, aaveV3Adapter.id(), borrowAmount);
 
         vault.rebalance(callData);
 

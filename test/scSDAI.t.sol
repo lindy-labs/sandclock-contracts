@@ -19,7 +19,7 @@ import {IAdapter} from "../src/steth/IAdapter.sol";
 import {SparkScDaiAdapter} from "../src/steth/scSDai-adapters/SparkScDaiAdapter.sol";
 import {scSDAI} from "../src/steth/scSDAI.sol";
 import {scSDAIPriceConverter} from "../src/steth/priceConverter/ScSDAIPriceConverter.sol";
-import {scSkeleton} from "../src/steth/scSkeleton.sol";
+import {scCrossAssetYieldVault} from "../src/steth/scCrossAssetYieldVault.sol";
 
 import {scWETH} from "../src/steth/scWETH.sol";
 import {PriceConverter} from "../src/steth/PriceConverter.sol";
@@ -99,8 +99,8 @@ contract scSDAITest is Test {
         deal(address(sDai), address(vault), initialBalance);
 
         bytes[] memory callData = new bytes[](2);
-        callData[0] = abi.encodeWithSelector(scSkeleton.supply.selector, spark.id(), initialBalance);
-        callData[1] = abi.encodeWithSelector(scSkeleton.borrow.selector, spark.id(), initialDebt);
+        callData[0] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, spark.id(), initialBalance);
+        callData[1] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, spark.id(), initialDebt);
 
         vault.rebalance(callData);
 
@@ -130,8 +130,8 @@ contract scSDAITest is Test {
         deal(address(sDai), address(vault), initialBalance);
 
         bytes[] memory callData = new bytes[](2);
-        callData[0] = abi.encodeWithSelector(scSkeleton.supply.selector, spark.id(), supplyOnSpark);
-        callData[1] = abi.encodeWithSelector(scSkeleton.borrow.selector, spark.id(), borrowOnSpark);
+        callData[0] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, spark.id(), supplyOnSpark);
+        callData[1] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, spark.id(), borrowOnSpark);
 
         vault.rebalance(callData);
 
@@ -145,8 +145,8 @@ contract scSDAITest is Test {
         uint256 initialDebt = 100 ether;
         deal(address(sDai), address(vault), initialBalance);
         bytes[] memory callData = new bytes[](2);
-        callData[0] = abi.encodeWithSelector(scSkeleton.supply.selector, spark.id(), initialBalance);
-        callData[1] = abi.encodeWithSelector(scSkeleton.borrow.selector, spark.id(), initialDebt);
+        callData[0] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, spark.id(), initialBalance);
+        callData[1] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, spark.id(), initialDebt);
         vault.rebalance(callData);
 
         uint256 disinvestAmount = vault.targetAssetInvested() / 2;
@@ -162,8 +162,8 @@ contract scSDAITest is Test {
         deal(address(sDai), address(vault), initialBalance);
 
         bytes[] memory callData = new bytes[](2);
-        callData[0] = abi.encodeWithSelector(scSkeleton.supply.selector, spark.id(), initialBalance);
-        callData[1] = abi.encodeWithSelector(scSkeleton.borrow.selector, spark.id(), initialDebt);
+        callData[0] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, spark.id(), initialBalance);
+        callData[1] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, spark.id(), initialDebt);
 
         vault.rebalance(callData);
 
@@ -213,8 +213,8 @@ contract scSDAITest is Test {
         vm.stopPrank();
 
         bytes[] memory callData = new bytes[](2);
-        callData[0] = abi.encodeWithSelector(scSkeleton.supply.selector, spark.id(), initialBalance);
-        callData[1] = abi.encodeWithSelector(scSkeleton.borrow.selector, spark.id(), 100 ether);
+        callData[0] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, spark.id(), initialBalance);
+        callData[1] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, spark.id(), 100 ether);
 
         vault.rebalance(callData);
 
@@ -240,8 +240,8 @@ contract scSDAITest is Test {
         uint256 borrowAmount = priceConverter.baseAssetToToken(_amount.mulWadDown(0.7e18));
 
         bytes[] memory callData = new bytes[](2);
-        callData[0] = abi.encodeWithSelector(scSkeleton.supply.selector, spark.id(), _amount);
-        callData[1] = abi.encodeWithSelector(scSkeleton.borrow.selector, spark.id(), borrowAmount);
+        callData[0] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, spark.id(), _amount);
+        callData[1] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, spark.id(), borrowAmount);
 
         vault.rebalance(callData);
 
@@ -268,8 +268,8 @@ contract scSDAITest is Test {
         uint256 borrowAmount = priceConverter.baseAssetToToken(_amount.mulWadDown(0.7e18));
 
         bytes[] memory callData = new bytes[](2);
-        callData[0] = abi.encodeWithSelector(scSkeleton.supply.selector, spark.id(), _amount);
-        callData[1] = abi.encodeWithSelector(scSkeleton.borrow.selector, spark.id(), borrowAmount);
+        callData[0] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, spark.id(), _amount);
+        callData[1] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, spark.id(), borrowAmount);
 
         vault.rebalance(callData);
 
@@ -291,8 +291,8 @@ contract scSDAITest is Test {
         deal(address(sDai), address(vault), initialBalance);
 
         bytes[] memory callData = new bytes[](2);
-        callData[0] = abi.encodeWithSelector(scSkeleton.supply.selector, spark.id(), initialBalance);
-        callData[1] = abi.encodeWithSelector(scSkeleton.borrow.selector, spark.id(), 100 ether);
+        callData[0] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, spark.id(), initialBalance);
+        callData[1] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, spark.id(), 100 ether);
 
         vault.rebalance(callData);
 
@@ -314,8 +314,8 @@ contract scSDAITest is Test {
         deal(address(sDai), address(vault), initialBalance);
 
         bytes[] memory callData = new bytes[](2);
-        callData[0] = abi.encodeWithSelector(scSkeleton.supply.selector, spark.id(), initialBalance);
-        callData[1] = abi.encodeWithSelector(scSkeleton.borrow.selector, spark.id(), 100 ether);
+        callData[0] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, spark.id(), initialBalance);
+        callData[1] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, spark.id(), 100 ether);
 
         vault.rebalance(callData);
 
@@ -342,8 +342,8 @@ contract scSDAITest is Test {
         deal(address(sDai), address(vault), initialBalance);
 
         bytes[] memory callData = new bytes[](2);
-        callData[0] = abi.encodeWithSelector(scSkeleton.supply.selector, spark.id(), initialBalance);
-        callData[1] = abi.encodeWithSelector(scSkeleton.borrow.selector, spark.id(), 100 ether);
+        callData[0] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, spark.id(), initialBalance);
+        callData[1] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, spark.id(), 100 ether);
 
         vault.rebalance(callData);
 
@@ -402,8 +402,8 @@ contract scSDAITest is Test {
         uint256 totalDebt = 100 ether;
 
         bytes[] memory callData = new bytes[](2);
-        callData[0] = abi.encodeWithSelector(scSkeleton.supply.selector, spark.id(), initialBalance);
-        callData[1] = abi.encodeWithSelector(scSkeleton.borrow.selector, spark.id(), totalDebt);
+        callData[0] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, spark.id(), initialBalance);
+        callData[1] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, spark.id(), totalDebt);
 
         vault.reallocate(50 ether, callData);
 

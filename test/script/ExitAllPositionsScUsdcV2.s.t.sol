@@ -18,7 +18,7 @@ import {Constants} from "../../src/lib/Constants.sol";
 
 import {RedeployScript} from "../../script/v2/RedeployScUsdcV2EthMainnet.s.sol";
 import {ExitAllPositionsScUsdcV2} from "../../script/v2/keeper-actions/ExitAllPositionsScUsdcV2.s.sol";
-import {scSkeleton} from "../../src/steth/scSkeleton.sol";
+import {scCrossAssetYieldVault} from "../../src/steth/scCrossAssetYieldVault.sol";
 
 contract ExitAllPositionsScUsdcV2Test is Test {
     using FixedPointMathLib for uint256;
@@ -79,10 +79,10 @@ contract ExitAllPositionsScUsdcV2Test is Test {
     function _rebalance(uint256 investAmount, uint256 debtAmount) internal {
         bytes[] memory callData = new bytes[](4);
 
-        callData[0] = abi.encodeWithSelector(scSkeleton.supply.selector, 1, investAmount / 2);
-        callData[1] = abi.encodeWithSelector(scSkeleton.supply.selector, 4, investAmount / 2);
-        callData[2] = abi.encodeWithSelector(scSkeleton.borrow.selector, 1, debtAmount / 2);
-        callData[3] = abi.encodeWithSelector(scSkeleton.borrow.selector, 4, debtAmount / 2);
+        callData[0] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, 1, investAmount / 2);
+        callData[1] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, 4, investAmount / 2);
+        callData[2] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, 1, debtAmount / 2);
+        callData[3] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, 4, debtAmount / 2);
 
         vm.prank(MainnetAddresses.KEEPER);
         vault.rebalance(callData);

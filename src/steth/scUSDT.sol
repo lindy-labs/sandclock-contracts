@@ -10,7 +10,7 @@ import {Address} from "openzeppelin-contracts/utils/Address.sol";
 import {IPool} from "aave-v3/interfaces/IPool.sol";
 import {IPoolDataProvider} from "aave-v3/interfaces/IPoolDataProvider.sol";
 
-import {scSkeleton} from "./scSkeleton.sol";
+import {scCrossAssetYieldVault} from "./scCrossAssetYieldVault.sol";
 import {Constants as C} from "../lib/Constants.sol";
 import {AggregatorV3Interface} from "../interfaces/chainlink/AggregatorV3Interface.sol";
 import {IAdapter} from "./IAdapter.sol";
@@ -20,11 +20,11 @@ import {MainnetAddresses as MA} from "../../script/base/MainnetAddresses.sol";
 import {ISinglePairPriceConverter} from "./priceConverter/IPriceConverter.sol";
 
 // TODO: reorder constructor params
-contract scUSDT is scSkeleton {
+contract scUSDT is scCrossAssetYieldVault {
     using Address for address;
 
     constructor(address _admin, address _keeper, ISinglePairPriceConverter _priceConverter, Swapper _swapper)
-        scSkeleton(
+        scCrossAssetYieldVault(
             "Sandclock USDT Vault",
             "scUSDT",
             ERC20(C.USDT),
