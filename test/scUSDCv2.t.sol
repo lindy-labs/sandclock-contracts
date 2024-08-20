@@ -59,6 +59,7 @@ contract scUSDCv2Test is Test {
     event Disinvested(uint256 wethAmount);
     event RewardsClaimed(uint256 adapterId);
     event SwapperUpdated(address indexed admin, Swapper newSwapper);
+    event PriceConverterUpdated(address indexed admin, address newPriceConverter);
 
     // after the exploit, the euler protocol was disabled. At one point it should work again, so having the
     // tests run in both cases (when protocol is working and not) requires two blocks to fork from
@@ -142,6 +143,42 @@ contract scUSDCv2Test is Test {
 
         vm.expectRevert(ZeroAddress.selector);
         new scUSDCv2(address(this), keeper, wethVault, priceConverter, swapper);
+    }
+
+    /// #setPriceConverter ///
+
+    function test_setPriceConverter_FailsIfCallerIsNotAdmin() public {
+        _setUpForkAtBlock(BLOCK_BEFORE_EULER_EXPLOIT);
+
+        vm.prank(alice);
+        vm.expectRevert(CallerNotAdmin.selector);
+        vault.setPriceConverter(PriceConverter(address(0x1)));
+    }
+
+    function test_setPriceConverter_FailsIfAddressIs0() public {
+        _setUpForkAtBlock(BLOCK_BEFORE_EULER_EXPLOIT);
+
+        vm.expectRevert(ZeroAddress.selector);
+        vault.setPriceConverter(PriceConverter(address(0x0)));
+    }
+
+    function test_setPriceConverter_UpdatesThePriceConverterToNewAddress() public {
+        _setUpForkAtBlock(BLOCK_BEFORE_EULER_EXPLOIT);
+        PriceConverter newPriceConverter = PriceConverter(address(0x09));
+
+        vault.setPriceConverter(newPriceConverter);
+
+        assertEq(address(vault.priceConverter()), address(newPriceConverter), "price converter not updated");
+    }
+
+    function test_setPriceConverter_EmitsEvent() public {
+        _setUpForkAtBlock(BLOCK_BEFORE_EULER_EXPLOIT);
+        PriceConverter newPriceConverter = PriceConverter(address(0x09));
+
+        vm.expectEmit(true, true, true, true);
+        emit PriceConverterUpdated(address(this), address(newPriceConverter));
+
+        vault.setPriceConverter(newPriceConverter);
     }
 
     /// #setSwapper ///
