@@ -16,7 +16,6 @@ import {MorphoAaveV3ScUsdcAdapter} from "../../src/steth/scUsdcV2-adapters/Morph
 import {RebalanceScUsdcV2} from "../../script/v2/keeper-actions/RebalanceScUsdcV2.s.sol";
 import {MainnetAddresses} from "../../script/base/MainnetAddresses.sol";
 import {Constants} from "../../src/lib/Constants.sol";
-import {IScUSDCPriceConverter} from "../../src/steth/priceConverter/IPriceConverter.sol";
 
 contract RebalanceScUsdcV2Test is Test {
     using FixedPointMathLib for uint256;

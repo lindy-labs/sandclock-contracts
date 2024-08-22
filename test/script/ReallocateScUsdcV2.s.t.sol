@@ -5,6 +5,8 @@ import "forge-std/console2.sol";
 import "forge-std/Test.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 
+import {Constants as C} from "../../src/lib/Constants.sol";
+import {AggregatorV3Interface} from "../../src/interfaces/chainlink/AggregatorV3Interface.sol";
 import {scUSDCv2} from "../../src/steth/scUSDCv2.sol";
 import {PriceConverter} from "../../src/steth/PriceConverter.sol";
 import {IAdapter} from "../../src/steth/IAdapter.sol";
@@ -13,7 +15,7 @@ import {AaveV3ScUsdcAdapter} from "../../src/steth/scUsdcV2-adapters/AaveV3ScUsd
 import {MorphoAaveV3ScUsdcAdapter} from "../../src/steth/scUsdcV2-adapters/MorphoAaveV3ScUsdcAdapter.sol";
 import {ReallocateScUsdcV2} from "../../script/v2/keeper-actions/ReallocateScUsdcV2.s.sol";
 import {MainnetAddresses} from "../../script/base/MainnetAddresses.sol";
-import {IScUSDCPriceConverter} from "../../src/steth/priceConverter/IPriceConverter.sol";
+import {ISinglePairPriceConverter} from "../../src/steth/priceConverter/IPriceConverter.sol";
 
 contract ReallocateScUsdcV2Test is Test {
     using FixedPointMathLib for uint256;
@@ -24,7 +26,7 @@ contract ReallocateScUsdcV2Test is Test {
     AaveV3ScUsdcAdapter aaveV3;
     AaveV2ScUsdcAdapter aaveV2;
     MorphoAaveV3ScUsdcAdapter morpho;
-    IScUSDCPriceConverter priceConverter;
+    ISinglePairPriceConverter priceConverter;
     ReallocateScUsdcV2TestHarness script;
 
     function setUp() public {
@@ -35,7 +37,7 @@ contract ReallocateScUsdcV2Test is Test {
         script = new ReallocateScUsdcV2TestHarness();
 
         vault = scUSDCv2(MainnetAddresses.SCUSDCV2);
-        priceConverter = IScUSDCPriceConverter(address(vault.priceConverter()));
+        priceConverter = ISinglePairPriceConverter(address(vault.priceConverter()));
         morpho = script.morphoAdapter();
         aaveV2 = script.aaveV2Adapter();
         aaveV3 = script.aaveV3Adapter();
@@ -84,12 +86,8 @@ contract ReallocateScUsdcV2Test is Test {
             0.0001e18,
             "aave v2 collateral"
         );
-        assertApproxEqRel(
-            vault.getDebt(morpho.id()), morphoInitialDebt - expectedMorphoRepayAmount, 0.0001e18, "morpho debt"
-        );
-        assertApproxEqRel(
-            vault.getDebt(aaveV2.id()), aaveV2InitialDebt + expectedMorphoRepayAmount, 0.0001e18, "aave v2 debt"
-        );
+        assertApproxEqAbs(vault.getDebt(morpho.id()), morphoInitialDebt - expectedMorphoRepayAmount, 1, "morpho debt");
+        assertApproxEqAbs(vault.getDebt(aaveV2.id()), aaveV2InitialDebt + expectedMorphoRepayAmount, 1, "aave v2 debt");
         assertApproxEqRel(
             _getAllocationPercent(morpho), morphoAllocationPercent, 0.0001e18, "morpho allocation percent"
         );
@@ -201,14 +199,10 @@ contract ReallocateScUsdcV2Test is Test {
             "aave v3 collateral"
         );
 
-        assertApproxEqRel(
-            vault.getDebt(morpho.id()), morphoInitialDebt - expectedMorphoRepayAmount, 0.0001e18, "morpho debt"
-        );
-        assertApproxEqRel(
-            vault.getDebt(aaveV2.id()), aaveV2InitialDebt - expectedAaveV2RepayAmount, 0.0001e18, "aave v2 debt"
-        );
-        assertApproxEqRel(
-            vault.getDebt(aaveV3.id()), expectedAaveV2RepayAmount + expectedMorphoRepayAmount, 0.0001e18, "aave v3 debt"
+        assertApproxEqAbs(vault.getDebt(morpho.id()), morphoInitialDebt - expectedMorphoRepayAmount, 1, "morpho debt");
+        assertApproxEqAbs(vault.getDebt(aaveV2.id()), aaveV2InitialDebt - expectedAaveV2RepayAmount, 1, "aave v2 debt");
+        assertApproxEqAbs(
+            vault.getDebt(aaveV3.id()), expectedAaveV2RepayAmount + expectedMorphoRepayAmount, 1, "aave v3 debt"
         );
 
         assertApproxEqRel(
@@ -243,7 +237,7 @@ contract ReallocateScUsdcV2Test is Test {
         require(vault.totalCollateral() == 0, "vault has collateral");
 
         uint256 investableAmount = vault.totalAssets().mulWadDown(vault.floatPercentage());
-        uint256 borrowAmount = priceConverter.usdcToEth(investableAmount.mulWadDown(0.7e18)); // 0.7 target ltv
+        uint256 borrowAmount = _usdcToEth(investableAmount.mulWadDown(0.7e18)); // 0.7 target ltv
 
         bytes[] memory callData = new bytes[](4);
         callData[0] = abi.encodeWithSelector(vault.supply.selector, morpho.id(), investableAmount / 2);
@@ -272,6 +266,12 @@ contract ReallocateScUsdcV2Test is Test {
             assertTrue(vault.isSupported(aaveV3.id()), "aave v3 not supported");
             script.setUseAaveV3(true);
         }
+    }
+
+    function _usdcToEth(uint256 _usdcAmount) internal view returns (uint256) {
+        (, int256 usdcPriceInEth,,,) = AggregatorV3Interface(C.CHAINLINK_USDC_ETH_PRICE_FEED).latestRoundData();
+
+        return _usdcAmount.mulWadDown(uint256(usdcPriceInEth));
     }
 }
 

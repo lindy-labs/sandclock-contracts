@@ -9,13 +9,13 @@ import {ZeroAddress, CallerNotAdmin} from "../errors/scErrors.sol";
 import {Constants as C} from "../lib/Constants.sol";
 import {AggregatorV3Interface} from "../interfaces/chainlink/AggregatorV3Interface.sol";
 import {IwstETH} from "../interfaces/lido/IwstETH.sol";
-import {IScETHPriceConverter, IScUSDCPriceConverter} from "./priceConverter/IPriceConverter.sol";
+import {IScETHPriceConverter} from "./priceConverter/IPriceConverter.sol";
 
 /**
  * @title Price Converter
  * @notice Contract for price conversion between assets used by staking vaults.
  */
-contract PriceConverter is IScETHPriceConverter, IScUSDCPriceConverter, AccessControl {
+contract PriceConverter is IScETHPriceConverter, AccessControl {
     using FixedPointMathLib for uint256;
 
     IwstETH constant wstETH = IwstETH(C.WSTETH);
