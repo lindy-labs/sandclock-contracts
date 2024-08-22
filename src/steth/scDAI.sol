@@ -44,6 +44,7 @@ contract scDAI is ERC4626 {
     }
 
     function withdraw(uint256 assets, address receiver, address owner) public override returns (uint256 shares) {
+        // NOTE: copied and modified from ERC4626.sol
         shares = previewWithdraw(assets); // No need to check for rounding error, previewWithdraw rounds up.
 
         if (msg.sender != owner) {
@@ -52,8 +53,11 @@ contract scDAI is ERC4626 {
             if (allowed != type(uint256).max) allowance[owner][msg.sender] = allowed - shares;
         }
 
+        // removed beforeWithdraw(assets, shares); as it is not needed
+
         _burn(owner, shares);
 
+        // removed asset.safeTransfer(receiver, assets); and replaced with _withdrawDaiFromScSDai
         assets = _withdrawDaiFromScSDai(assets, shares, receiver);
 
         emit Withdraw(msg.sender, receiver, owner, assets, shares);
@@ -76,14 +80,12 @@ contract scDAI is ERC4626 {
         emit Withdraw(msg.sender, receiver, owner, assets, shares);
     }
 
-    function _withdrawDaiFromScSDai(uint256 assets, uint256, address receiver) internal returns (uint256) {
-        // assets is in DAI, we need it in SDAI
-        uint256 assetsInSdai = sDai.convertToShares(assets);
+    function _withdrawDaiFromScSDai(uint256 daiAmount, uint256, address receiver) internal returns (uint256) {
+        uint256 sDaiAmount = sDai.convertToShares(daiAmount);
 
-        // withdraw required sDAI from scSDAI vault
-        scsDai.withdraw(assetsInSdai, address(this), address(this));
+        scsDai.withdraw(sDaiAmount, address(this), address(this));
 
-        // swap sDAI to DAI
-        return sDai.redeem(assetsInSdai, receiver, address(this));
+        // redeem sDAI for DAI
+        return sDai.redeem(sDaiAmount, receiver, address(this));
     }
 }

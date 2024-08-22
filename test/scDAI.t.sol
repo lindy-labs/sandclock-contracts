@@ -46,6 +46,7 @@ contract scDAITest is Test {
 
     address constant keeper = address(0x05);
     address constant alice = address(0x06);
+    address constant bob = address(0x07);
 
     WETH weth;
     ERC4626 sDai;
@@ -74,13 +75,15 @@ contract scDAITest is Test {
         vault = new scDAI(scsDAI);
     }
 
-    function testConstructor() public {
+    function test_constructor() public {
+        vault = new scDAI(scsDAI);
+
         assertEq(address(vault.scsDai()), address(scsDAI), "scsDAI not updated");
         assertEq(dai.allowance(address(vault), C.SDAI), type(uint256).max, "dai allowance error");
         assertEq(sDai.allowance(address(vault), address(scsDAI)), type(uint256).max, "sDai allowance error");
     }
 
-    function testDeposit(uint256 amount) public {
+    function test_deposit(uint256 amount) public {
         amount = bound(amount, 1e15, 100000000e18);
         deal(address(dai), address(this), amount);
 
@@ -95,7 +98,7 @@ contract scDAITest is Test {
         assertApproxEqRel(vault.totalAssets(), amount, 1e10, "totalAssets");
     }
 
-    function testWithdraw_Redeem(uint256 amount) public {
+    function test_withdraw_redeem(uint256 amount) public {
         amount = bound(amount, 1e10, 100000000e18);
         deal(address(dai), address(this), amount);
 
@@ -116,6 +119,55 @@ contract scDAITest is Test {
         assertApproxEqRel(vault.totalAssets(), 1, 1e10, "totalAssets after redeem");
     }
 
+    function test_withdraw_failsIfCallerIsNotOwner() public {
+        uint256 amount = 1000e18;
+        _deposit(amount, alice);
+
+        vm.expectRevert();
+
+        vm.prank(bob);
+        vault.withdraw(amount / 2, address(this), alice);
+    }
+
+    function test_wihdraw_failsIfWithdrawingMoreThanBalance() public {
+        uint256 amount = 1000e18;
+        _deposit(amount, alice);
+
+        vm.expectRevert();
+        vm.prank(alice);
+        vault.withdraw(amount + 1, alice, alice);
+    }
+
+    function test_withdraw_failsIfCallerIsNotApproved() public {
+        uint256 amount = 1000e18;
+        _deposit(amount, alice);
+
+        assertEq(vault.allowance(alice, bob), 0, "allowance not zero");
+
+        uint256 withdrawAmount = amount / 2;
+
+        vm.expectRevert();
+        vm.prank(bob);
+        vault.withdraw(withdrawAmount, bob, alice);
+    }
+
+    function test_withdraw_worksIfCallerIsApproved() public {
+        uint256 amount = 1000e18;
+        uint256 shares = _deposit(amount, alice);
+
+        vm.prank(alice);
+        vault.approve(bob, shares / 2);
+
+        assertEq(vault.allowance(alice, bob), shares / 2, "allowance not set");
+
+        uint256 withdrawAmount = vault.convertToAssets(shares / 2);
+
+        vm.prank(bob);
+        vault.withdraw(withdrawAmount, bob, alice);
+
+        assertEq(vault.allowance(alice, bob), 0, "allowance not reduced to 0");
+    }
+
     function _deployAndSetUpScsDai() internal {
         priceConverter = new scSDAIPriceConverter();
         swapper = new Swapper();
@@ -130,5 +182,16 @@ contract scDAITest is Test {
         scsDAI.setFloatPercentage(0);
         // assign keeper role to deployer
         scsDAI.grantRole(scsDAI.KEEPER_ROLE(), address(this));
+    }
+
+    function _deposit(uint256 amount, address owner) internal returns (uint256 shares) {
+        deal(address(dai), owner, amount);
+
+        vm.startPrank(owner);
+        dai.approve(address(vault), amount);
+
+        shares = vault.deposit(amount, owner);
+
+        vm.stopPrank();
     }
 }
