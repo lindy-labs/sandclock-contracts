@@ -208,12 +208,7 @@ contract scSDAITest is Test {
 
     function test_withdrawFunds() public {
         uint256 initialBalance = 1_000_000e18;
-        deal(address(sDai), alice, initialBalance);
-
-        vm.startPrank(alice);
-        sDai.approve(address(vault), initialBalance);
-        vault.deposit(initialBalance, alice);
-        vm.stopPrank();
+        _deposit(alice, initialBalance);
 
         bytes[] memory callData = new bytes[](2);
         callData[0] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, spark.id(), initialBalance);
@@ -232,13 +227,7 @@ contract scSDAITest is Test {
         _amount = 36072990718134180857610733478 * 1e12;
         _withdrawAmount = 0;
         _amount = bound(_amount, 1e18, 10_000_000e18); // upper limit constrained by weth available on aave v3
-        deal(address(sDai), alice, _amount);
-        // console2.log("amount", _amount);
-
-        vm.startPrank(alice);
-        sDai.approve(address(vault), type(uint256).max);
-        vault.deposit(_amount, alice);
-        vm.stopPrank();
+        _deposit(alice, _amount);
 
         uint256 borrowAmount = priceConverter.baseAssetToToken(_amount.mulWadDown(0.7e18));
 
@@ -445,6 +434,15 @@ contract scSDAITest is Test {
 
         assertApproxEqAbs(collateral, _expectedCollateral, 1, string(abi.encodePacked("collateral on ", protocolName)));
         assertApproxEqAbs(debt, _expectedDebt, 1, string(abi.encodePacked("debt on ", protocolName)));
+    }
+
+    function _deposit(address _user, uint256 _amount) public returns (uint256 shares) {
+        deal(address(sDai), _user, _amount);
+
+        vm.startPrank(_user);
+        sDai.approve(address(vault), _amount);
+        shares = vault.deposit(_amount, _user);
+        vm.stopPrank();
     }
 
     function _protocolIdToString(uint256 _protocolId) public view returns (string memory) {

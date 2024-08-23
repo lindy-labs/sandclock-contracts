@@ -414,12 +414,14 @@ abstract contract scCrossAssetYieldVault is BaseV2Vault {
         uint256 invested = targetTokenInvestedAmount();
         uint256 total = _calculateTotalAssets(initialBalance, collateral, invested, debt);
         uint256 profit = _calculateProfitInTargetToken(invested, debt);
+
         uint256 floatRequired = total > _assets ? (total - _assets).mulWadUp(floatPercentage) : 0;
         uint256 assetNeeded = _assets + floatRequired - initialBalance;
 
         // first try to sell profits to cover withdrawal amount
         if (profit != 0) {
             uint256 withdrawn = _disinvest(profit);
+
             uint256 assetAmountOutMin = converter().tokenToBaseAsset(withdrawn).mulWadDown(slippageTolerance);
             uint256 assetReceived = _swapTargetTokenForAsset(withdrawn, assetAmountOutMin);
 
