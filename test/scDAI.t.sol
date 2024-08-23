@@ -168,6 +168,55 @@ contract scDAITest is Test {
         assertEq(vault.allowance(alice, bob), 0, "allowance not reduced to 0");
     }
 
+    function test_redeem_failsIfCallerIsNotOwner() public {
+        uint256 amount = 1000e18;
+        uint256 shares = _deposit(amount, alice);
+
+        vm.expectRevert();
+
+        vm.prank(bob);
+        vault.redeem(shares, address(this), alice);
+    }
+
+    function test_redeem_failsIfWithdrawingMoreThanBalance() public {
+        uint256 amount = 1000e18;
+        uint256 shares = _deposit(amount, alice);
+
+        vm.expectRevert();
+        vm.prank(alice);
+        vault.redeem(shares + 1, alice, alice);
+    }
+
+    function test_redeem_failsIfCallerIsNotApproved() public {
+        uint256 amount = 1000e18;
+        uint256 shares = _deposit(amount, alice);
+
+        assertEq(vault.allowance(alice, bob), 0, "allowance not zero");
+
+        uint256 withdrawAmount = shares / 2;
+
+        vm.expectRevert();
+        vm.prank(bob);
+        vault.redeem(withdrawAmount, bob, alice);
+    }
+
+    function test_redeem_worksIfCallerIsApproved() public {
+        uint256 amount = 1000e18;
+        uint256 shares = _deposit(amount, alice);
+
+        vm.prank(alice);
+        vault.approve(bob, shares / 2);
+
+        assertEq(vault.allowance(alice, bob), shares / 2, "allowance not set");
+
+        uint256 withdrawAmount = shares / 2;
+
+        vm.prank(bob);
+        vault.redeem(withdrawAmount, bob, alice);
+
+        assertEq(vault.allowance(alice, bob), 0, "allowance not reduced to 0");
+    }
+
     function _deployAndSetUpScsDai() internal {
         priceConverter = new scSDAIPriceConverter();
         swapper = new Swapper();
