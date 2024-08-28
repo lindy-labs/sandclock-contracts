@@ -7,7 +7,7 @@ import {ISinglePairPriceConverter} from "./IPriceConverter.sol";
 import {AggregatorV3Interface} from "../../interfaces/chainlink/AggregatorV3Interface.sol";
 import {Constants as C} from "../../lib/Constants.sol";
 
-contract scSDAIPriceConverter is ISinglePairPriceConverter {
+contract SDaiWethPriceConverter is ISinglePairPriceConverter {
     using FixedPointMathLib for uint256;
 
     IERC4626 public constant sDai = IERC4626(C.SDAI);

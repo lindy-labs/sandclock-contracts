@@ -14,7 +14,7 @@ import {scWETHv2} from "../../src/steth/scWETHv2.sol";
 import {scUSDCv2} from "../../src/steth/scUSDCv2.sol";
 import {Swapper} from "../../src/steth/Swapper.sol";
 import {PriceConverter} from "../../src/steth/PriceConverter.sol";
-import {scUSDCPriceConverter} from "../../src/steth/priceConverter/ScUSDCPriceConverter.sol";
+import {UsdcWethPriceConverter} from "../../src/steth/priceConverter/UsdcWethPriceConverter.sol";
 import {AaveV3ScWethAdapter} from "../../src/steth/scWethV2-adapters/AaveV3ScWethAdapter.sol";
 import {CompoundV3ScWethAdapter} from "../../src/steth/scWethV2-adapters/CompoundV3ScWethAdapter.sol";
 import {MorphoAaveV3ScWethAdapter} from "../../src/steth/scWethV2-adapters/MorphoAaveV3ScWethAdapter.sol";
@@ -22,17 +22,17 @@ import {AaveV3ScUsdcAdapter} from "../../src/steth/scUsdcV2-adapters/AaveV3ScUsd
 import {AaveV2ScUsdcAdapter} from "../../src/steth/scUsdcV2-adapters/AaveV2ScUsdcAdapter.sol";
 import {MorphoAaveV3ScUsdcAdapter} from "../../src/steth/scUsdcV2-adapters/MorphoAaveV3ScUsdcAdapter.sol";
 import {MainnetDeployBase} from "../base/MainnetDeployBase.sol";
-import {scUSDCSwapper} from "../../src/steth/swapper/scUSDCSwapper.sol";
+import {UsdcWethSwapper} from "../../src/steth/swapper/UsdcWethSwapper.sol";
 
 contract DeployScript is MainnetDeployBase {
     function run() external returns (scWETHv2 scWethV2, scUSDCv2 scUsdcV2) {
         vm.startBroadcast(deployerPrivateKey);
 
         Swapper swapper = new Swapper();
-        scUSDCSwapper scUsdcSwapper = new scUSDCSwapper();
+        UsdcWethSwapper scUsdcSwapper = new UsdcWethSwapper();
         console2.log("Swapper:", address(swapper));
         PriceConverter priceConverter = new PriceConverter(deployerAddress);
-        scUSDCPriceConverter usdcPriceConverter = new scUSDCPriceConverter();
+        UsdcWethPriceConverter usdcPriceConverter = new UsdcWethPriceConverter();
         console2.log("PriceConverter:", address(priceConverter));
 
         _transferAdminRoleToMultisig(priceConverter, deployerAddress);
@@ -68,7 +68,7 @@ contract DeployScript is MainnetDeployBase {
         console2.log("scWethV2 MorphoAdapter:", address(morphoAdapter));
     }
 
-    function _deployScUsdcV2(scWETHv2 _wethVault, scUSDCPriceConverter _priceConveter, scUSDCSwapper _swapper)
+    function _deployScUsdcV2(scWETHv2 _wethVault, UsdcWethPriceConverter _priceConveter, UsdcWethSwapper _swapper)
         internal
         returns (scUSDCv2 vault)
     {

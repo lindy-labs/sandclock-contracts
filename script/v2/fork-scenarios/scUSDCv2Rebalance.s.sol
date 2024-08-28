@@ -12,7 +12,7 @@ import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 import {Constants as C} from "../../../src/lib/Constants.sol";
 import {Swapper} from "../../../src/steth/Swapper.sol";
 import {PriceConverter} from "../../../src/steth/PriceConverter.sol";
-import {scUSDCPriceConverter} from "../../../src/steth/priceConverter/ScUSDCPriceConverter.sol";
+import {UsdcWethPriceConverter} from "../../../src/steth/priceConverter/UsdcWethPriceConverter.sol";
 import {scWETHv2} from "../../../src/steth/scWETHv2.sol";
 import {scUSDCv2} from "../../../src/steth/scUSDCv2.sol";
 import {AaveV2ScUsdcAdapter} from "../../../src/steth/scUsdcV2-adapters/AaveV2ScUsdcAdapter.sol";
@@ -20,7 +20,7 @@ import {AaveV3ScUsdcAdapter} from "../../../src/steth/scUsdcV2-adapters/AaveV3Sc
 import {MainnetDeployBase} from "../../base/MainnetDeployBase.sol";
 import {IAdapter} from "../../../src/steth/IAdapter.sol";
 import {scCrossAssetYieldVault} from "../../../src/steth/scCrossAssetYieldVault.sol";
-import {scUSDCSwapper} from "../../../src/steth/swapper/scUSDCSwapper.sol";
+import {UsdcWethSwapper} from "../../../src/steth/swapper/UsdcWethSwapper.sol";
 
 /**
  * A script exercising the rebalance functionality of scUSDCv2 in different situations on a forked mainnet.
@@ -111,9 +111,9 @@ contract scUSDCv2Rebalance is MainnetDeployBase, Test {
         vm.startBroadcast(deployerAddress);
 
         Swapper swapper = new Swapper();
-        scUSDCSwapper scUsdcSwapper = new scUSDCSwapper();
+        UsdcWethSwapper scUsdcSwapper = new UsdcWethSwapper();
         priceConverter = new PriceConverter(deployerAddress);
-        scUSDCPriceConverter usdcPriceConverter = new scUSDCPriceConverter();
+        UsdcWethPriceConverter usdcPriceConverter = new UsdcWethPriceConverter();
 
         scWethV2 = new scWETHv2(deployerAddress, keeper, weth, swapper, priceConverter);
         console2.log("scWethV2:", address(scWethV2));

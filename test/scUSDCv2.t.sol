@@ -26,7 +26,7 @@ import {scWETH} from "../src/steth/scWETH.sol";
 import {ISwapRouter} from "../src/interfaces/uniswap/ISwapRouter.sol";
 import {AggregatorV3Interface} from "../src/interfaces/chainlink/AggregatorV3Interface.sol";
 import {PriceConverter} from "../src/steth/PriceConverter.sol";
-import {scUSDCPriceConverter} from "../src/steth/priceConverter/ScUSDCPriceConverter.sol";
+import {UsdcWethPriceConverter} from "../src/steth/priceConverter/UsdcWethPriceConverter.sol";
 import {Swapper} from "../src/steth/Swapper.sol";
 import {IVault} from "../src/interfaces/balancer/IVault.sol";
 import {ICurvePool} from "../src/interfaces/curve/ICurvePool.sol";
@@ -36,8 +36,7 @@ import {IProtocolFeesCollector} from "../src/interfaces/balancer/IProtocolFeesCo
 import "../src/errors/scErrors.sol";
 import {FaultyAdapter} from "./mocks/adapters/FaultyAdapter.sol";
 import {scCrossAssetYieldVault} from "../src/steth/scCrossAssetYieldVault.sol";
-// TODO: fix
-import {scUSDCSwapper} from "../src/steth/swapper/scUSDCSwapper.sol";
+import {UsdcWethSwapper} from "../src/steth/swapper/UsdcWethSwapper.sol";
 
 contract scUSDCv2Test is Test {
     using FixedPointMathLib for uint256;
@@ -90,8 +89,8 @@ contract scUSDCv2Test is Test {
     AaveV2ScUsdcAdapter aaveV2;
     EulerScUsdcAdapter euler;
     MorphoAaveV3ScUsdcAdapter morpho;
-    scUSDCSwapper swapper;
-    scUSDCPriceConverter priceConverter;
+    UsdcWethSwapper swapper;
+    UsdcWethPriceConverter priceConverter;
 
     constructor() Test() {
         mainnetFork = vm.createSelectFork(vm.envString("RPC_URL_MAINNET"));
@@ -133,7 +132,7 @@ contract scUSDCv2Test is Test {
 
     function test_constructor_FailsIfPriceConverterIsZeroAddress() public {
         _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
-        priceConverter = scUSDCPriceConverter(address(0x0));
+        priceConverter = UsdcWethPriceConverter(address(0x0));
 
         vm.expectRevert(ZeroAddress.selector);
         new scUSDCv2(address(this), keeper, wethVault, priceConverter, swapper);
@@ -141,7 +140,7 @@ contract scUSDCv2Test is Test {
 
     function test_constructor_FailsIfSwapperIsZeroAddress() public {
         _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
-        swapper = scUSDCSwapper(address(0x0));
+        swapper = UsdcWethSwapper(address(0x0));
 
         vm.expectRevert(ZeroAddress.selector);
         new scUSDCv2(address(this), keeper, wethVault, priceConverter, swapper);
@@ -2204,8 +2203,8 @@ contract scUSDCv2Test is Test {
     }
 
     function _deployAndSetUpVault() internal {
-        priceConverter = new scUSDCPriceConverter();
-        swapper = new scUSDCSwapper();
+        priceConverter = new UsdcWethPriceConverter();
+        swapper = new UsdcWethSwapper();
 
         vault = new scUSDCv2(address(this), keeper, wethVault, priceConverter, swapper);
 

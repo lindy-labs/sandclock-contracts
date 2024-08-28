@@ -18,7 +18,7 @@ import {IProtocolDataProvider} from "../src/interfaces/aave-v2/IProtocolDataProv
 import {IAdapter} from "../src/steth/IAdapter.sol";
 import {SparkScSDaiAdapter} from "../src/steth/scSDai-adapters/SparkScSDaiAdapter.sol";
 import {scSDAI} from "../src/steth/scSDAI.sol";
-import {scSDAIPriceConverter} from "../src/steth/priceConverter/ScSDAIPriceConverter.sol";
+import {SDaiWethPriceConverter} from "../src/steth/priceConverter/SDaiWethPriceConverter.sol";
 import {scCrossAssetYieldVault} from "../src/steth/scCrossAssetYieldVault.sol";
 
 import {scWETH} from "../src/steth/scWETH.sol";
@@ -35,7 +35,7 @@ import {Address} from "openzeppelin-contracts/utils/Address.sol";
 import {MainnetAddresses as M} from "../script/base/MainnetAddresses.sol";
 import {ISinglePairPriceConverter} from "../src/steth/priceConverter/IPriceConverter.sol";
 import {ISinglePairSwapper} from "../src/steth/swapper/ISwapper.sol";
-import {scSDAISwapper} from "../src/steth/swapper/scSDAISwapper.sol";
+import {SDaiWethSwapper} from "../src/steth/swapper/SDaiWethSwapper.sol";
 
 contract scSDAITest is Test {
     using Address for address;
@@ -412,8 +412,8 @@ contract scSDAITest is Test {
     ///////////////////////////////// INTERNAL METHODS /////////////////////////////////
 
     function _deployAndSetUpVault() internal {
-        priceConverter = new scSDAIPriceConverter();
-        swapper = new scSDAISwapper();
+        priceConverter = new SDaiWethPriceConverter();
+        swapper = new SDaiWethSwapper();
 
         vault = new scSDAI(address(this), keeper, wethVault, priceConverter, swapper);
 

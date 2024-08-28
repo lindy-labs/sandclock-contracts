@@ -35,8 +35,8 @@ import "../src/errors/scErrors.sol";
 import {Address} from "openzeppelin-contracts/utils/Address.sol";
 import {MainnetAddresses as M} from "../script/base/MainnetAddresses.sol";
 import {ISinglePairPriceConverter} from "../src/steth/priceConverter/IPriceConverter.sol";
-import {scSDAIPriceConverter} from "../src/steth/priceConverter/ScSDAIPriceConverter.sol";
-import {scSDAISwapper} from "../src/steth/swapper/scSDAISwapper.sol";
+import {SDaiWethPriceConverter} from "../src/steth/priceConverter/SDaiWethPriceConverter.sol";
+import {SDaiWethSwapper} from "../src/steth/swapper/SDaiWethSwapper.sol";
 
 contract scDAITest is Test {
     using SafeTransferLib for ERC20;
@@ -58,7 +58,7 @@ contract scDAITest is Test {
     scDAI vault;
 
     SparkScSDaiAdapter spark;
-    scSDAISwapper swapper;
+    SDaiWethSwapper swapper;
     ISinglePairPriceConverter priceConverter;
 
     function setUp() public {
@@ -219,8 +219,8 @@ contract scDAITest is Test {
     }
 
     function _deployAndSetUpScsDai() internal {
-        priceConverter = new scSDAIPriceConverter();
-        swapper = new scSDAISwapper();
+        priceConverter = new SDaiWethPriceConverter();
+        swapper = new SDaiWethSwapper();
 
         scsDAI = new scSDAI(address(this), keeper, wethVault, priceConverter, swapper);
 

@@ -19,7 +19,7 @@ import {IProtocolDataProvider} from "../src/interfaces/aave-v2/IProtocolDataProv
 import {IAdapter} from "../src/steth/IAdapter.sol";
 import {scUSDT} from "../src/steth/scUSDT.sol";
 import {AaveV3ScUsdtAdapter} from "../src/steth/scUsdt-adapters/AaveV3ScUsdtAdapter.sol";
-import {scUSDTPriceConverter} from "../src/steth/priceConverter/ScUSDTPriceConverter.sol";
+import {UsdtWethPriceConverter} from "../src/steth/priceConverter/UsdtWethPriceConverter.sol";
 
 import {scWETH} from "../src/steth/scWETH.sol";
 import {scCrossAssetYieldVault} from "../src/steth/scCrossAssetYieldVault.sol";
@@ -27,6 +27,7 @@ import {ISwapRouter} from "../src/interfaces/uniswap/ISwapRouter.sol";
 import {AggregatorV3Interface} from "../src/interfaces/chainlink/AggregatorV3Interface.sol";
 import {PriceConverter} from "../src/steth/PriceConverter.sol";
 import {ISinglePairPriceConverter} from "../src/steth/priceConverter/IPriceConverter.sol";
+import {ISinglePairSwapper} from "../src/steth/swapper/ISwapper.sol";
 import {Swapper} from "../src/steth/Swapper.sol";
 import {IVault} from "../src/interfaces/balancer/IVault.sol";
 import {ICurvePool} from "../src/interfaces/curve/ICurvePool.sol";
@@ -35,7 +36,7 @@ import {IwstETH} from "../src/interfaces/lido/IwstETH.sol";
 import "../src/errors/scErrors.sol";
 import {Address} from "openzeppelin-contracts/utils/Address.sol";
 import {MainnetAddresses as M} from "../script/base/MainnetAddresses.sol";
-import {scUSDTSwapper} from "../src/steth/swapper/scUSDTSwapper.sol";
+import {UsdtWethSwapper} from "../src/steth/swapper/UsdtWethSwapper.sol";
 
 contract scUSDTTest is Test {
     using Address for address;
@@ -56,7 +57,7 @@ contract scUSDTTest is Test {
     scUSDT vault;
 
     AaveV3ScUsdtAdapter aaveV3Adapter;
-    scUSDTSwapper swapper;
+    ISinglePairSwapper swapper;
     ISinglePairPriceConverter priceConverter;
 
     uint256 pps;
@@ -332,8 +333,8 @@ contract scUSDTTest is Test {
     /////////////////////////////////// INTERNAL METHODS ////////////////////
 
     function _deployAndSetUpVault() internal {
-        priceConverter = new scUSDTPriceConverter();
-        swapper = new scUSDTSwapper();
+        priceConverter = new UsdtWethPriceConverter();
+        swapper = new UsdtWethSwapper();
 
         vault = new scUSDT(address(this), keeper, wethVault, priceConverter, swapper);
 

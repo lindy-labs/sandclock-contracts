@@ -6,7 +6,7 @@ import {ISinglePairPriceConverter} from "./IPriceConverter.sol";
 import {AggregatorV3Interface} from "../../interfaces/chainlink/AggregatorV3Interface.sol";
 import {Constants as C} from "../../lib/Constants.sol";
 
-contract scUSDCPriceConverter is ISinglePairPriceConverter {
+contract UsdcWethPriceConverter is ISinglePairPriceConverter {
     using FixedPointMathLib for uint256;
 
     AggregatorV3Interface public constant usdcToEthPriceFeed = AggregatorV3Interface(C.CHAINLINK_USDC_ETH_PRICE_FEED);

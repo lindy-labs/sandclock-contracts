@@ -8,7 +8,7 @@ import {Constants as C} from "../../lib/Constants.sol";
 import {ISwapRouter} from "../../interfaces/uniswap/ISwapRouter.sol";
 import {ISinglePairSwapper} from "./../swapper/ISwapper.sol";
 
-contract scUSDCSwapper is ISinglePairSwapper {
+contract UsdcWethSwapper is ISinglePairSwapper {
     using SafeTransferLib for ERC20;
 
     ISwapRouter public constant swapRouter = ISwapRouter(C.UNISWAP_V3_SWAP_ROUTER);

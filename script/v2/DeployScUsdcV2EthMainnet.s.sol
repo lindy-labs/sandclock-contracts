@@ -8,16 +8,16 @@ import {scWETHv2} from "../../src/steth/scWETHv2.sol";
 import {scUSDCv2} from "../../src/steth/scUSDCv2.sol";
 import {Swapper} from "../../src/steth/Swapper.sol";
 import {PriceConverter} from "../../src/steth/PriceConverter.sol";
-import {scUSDCPriceConverter} from "../../src/steth/priceConverter/ScUSDCPriceConverter.sol";
+import {UsdcWethPriceConverter} from "../../src/steth/priceConverter/UsdcWethPriceConverter.sol";
 import {AaveV3ScUsdcAdapter} from "../../src/steth/scUsdcV2-adapters/AaveV3ScUsdcAdapter.sol";
 import {MorphoAaveV3ScUsdcAdapter} from "../../src/steth/scUsdcV2-adapters/MorphoAaveV3ScUsdcAdapter.sol";
 import {AaveV2ScUsdcAdapter} from "../../src/steth/scUsdcV2-adapters/AaveV2ScUsdcAdapter.sol";
-import {scUSDCSwapper} from "../../src/steth/swapper/scUSDCSwapper.sol";
+import {UsdcWethSwapper} from "../../src/steth/swapper/UsdcWethSwapper.sol";
 
 contract DeployScript is MainnetDeployBase {
     scWETHv2 scWethV2 = scWETHv2(payable(MainnetAddresses.SCWETHV2));
-    scUSDCSwapper swapper = new scUSDCSwapper();
-    scUSDCPriceConverter priceConverter = new scUSDCPriceConverter();
+    UsdcWethSwapper swapper = new UsdcWethSwapper();
+    UsdcWethPriceConverter priceConverter = new UsdcWethPriceConverter();
 
     function run() external returns (scUSDCv2 scUsdcV2) {
         require(address(swapper) != address(0), "invalid address for Swapper contract");
