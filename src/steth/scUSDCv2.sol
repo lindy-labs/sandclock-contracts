@@ -3,12 +3,10 @@ pragma solidity ^0.8.19;
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {ERC4626} from "solmate/mixins/ERC4626.sol";
-import {WETH} from "solmate/tokens/WETH.sol";
-import {Address} from "openzeppelin-contracts/utils/Address.sol";
 
 import {Constants as C} from "../lib/Constants.sol";
-import {Swapper} from "./Swapper.sol";
-import {scUSDCPriceConverter} from "./priceConverter/ScUSDCPriceConverter.sol";
+import {ISinglePairSwapper} from "./swapper/ISwapper.sol";
+import {ISinglePairPriceConverter} from "./priceConverter/IPriceConverter.sol";
 import {scCrossAssetYieldVault} from "./scCrossAssetYieldVault.sol";
 
 /**
@@ -18,57 +16,23 @@ import {scCrossAssetYieldVault} from "./scCrossAssetYieldVault.sol";
  * @dev This vault uses Sandclock's leveraged WETH staking vault - scWETH.
  */
 contract scUSDCv2 is scCrossAssetYieldVault {
-    using Address for address;
-
+    // TODO: fix
     constructor(
         address _admin,
         address _keeper,
-        ERC4626 _scWETH,
-        scUSDCPriceConverter _priceConverter,
-        Swapper _swapper
+        ERC4626 _targetVault,
+        ISinglePairPriceConverter _priceConverter,
+        ISinglePairSwapper _swapper
     )
         scCrossAssetYieldVault(
             _admin,
             _keeper,
             ERC20(C.USDC),
-            _scWETH,
+            _targetVault,
             _priceConverter,
             _swapper,
             "Sandclock Yield USDC",
             "scUSDC"
         )
     {}
-
-    function _swapTargetTokenForAsset(uint256 _wethAmount, uint256 _usdcAmountOutMin)
-        internal
-        virtual
-        override
-        returns (uint256)
-    {
-        bytes memory result = address(swapper).functionDelegateCall(
-            abi.encodeWithSelector(
-                Swapper.uniswapSwapExactInput.selector,
-                targetToken,
-                asset,
-                _wethAmount,
-                _usdcAmountOutMin,
-                500 /* pool fee*/
-            )
-        );
-
-        return abi.decode(result, (uint256));
-    }
-
-    function _swapAssetForExactTargetToken(uint256 _wethAmountOut) internal virtual override {
-        address(swapper).functionDelegateCall(
-            abi.encodeWithSelector(
-                Swapper.uniswapSwapExactOutput.selector,
-                asset,
-                targetToken,
-                _wethAmountOut,
-                type(uint256).max, // ignore slippage
-                500 // pool fee
-            )
-        );
-    }
 }

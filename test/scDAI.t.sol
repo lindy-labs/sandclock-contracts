@@ -18,7 +18,7 @@ import {Constants as C} from "../src/lib/Constants.sol";
 import {ILendingPool} from "../src/interfaces/aave-v2/ILendingPool.sol";
 import {IProtocolDataProvider} from "../src/interfaces/aave-v2/IProtocolDataProvider.sol";
 import {IAdapter} from "../src/steth/IAdapter.sol";
-import {SparkScDaiAdapter} from "../src/steth/scSDai-adapters/SparkScDaiAdapter.sol";
+import {SparkScSDaiAdapter} from "../src/steth/scSDai-adapters/SparkScSDaiAdapter.sol";
 import {scSDAI} from "../src/steth/scSDAI.sol";
 import {scDAI} from "../src/steth/scDAI.sol";
 
@@ -36,6 +36,7 @@ import {Address} from "openzeppelin-contracts/utils/Address.sol";
 import {MainnetAddresses as M} from "../script/base/MainnetAddresses.sol";
 import {ISinglePairPriceConverter} from "../src/steth/priceConverter/IPriceConverter.sol";
 import {scSDAIPriceConverter} from "../src/steth/priceConverter/ScSDAIPriceConverter.sol";
+import {scSDAISwapper} from "../src/steth/swapper/scSDAISwapper.sol";
 
 contract scDAITest is Test {
     using SafeTransferLib for ERC20;
@@ -56,8 +57,8 @@ contract scDAITest is Test {
     scSDAI scsDAI;
     scDAI vault;
 
-    SparkScDaiAdapter spark;
-    Swapper swapper;
+    SparkScSDaiAdapter spark;
+    scSDAISwapper swapper;
     ISinglePairPriceConverter priceConverter;
 
     function setUp() public {
@@ -68,7 +69,7 @@ contract scDAITest is Test {
         sDai = ERC4626(C.SDAI);
         dai = ERC20(C.DAI);
         weth = WETH(payable(C.WETH));
-        spark = new SparkScDaiAdapter();
+        spark = new SparkScSDaiAdapter();
 
         _deployAndSetUpScsDai();
 
@@ -219,9 +220,9 @@ contract scDAITest is Test {
 
     function _deployAndSetUpScsDai() internal {
         priceConverter = new scSDAIPriceConverter();
-        swapper = new Swapper();
+        swapper = new scSDAISwapper();
 
-        scsDAI = new scSDAI(address(this), keeper, priceConverter, swapper);
+        scsDAI = new scSDAI(address(this), keeper, wethVault, priceConverter, swapper);
 
         scsDAI.addAdapter(spark);
 

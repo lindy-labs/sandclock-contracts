@@ -35,6 +35,7 @@ import {IwstETH} from "../src/interfaces/lido/IwstETH.sol";
 import "../src/errors/scErrors.sol";
 import {Address} from "openzeppelin-contracts/utils/Address.sol";
 import {MainnetAddresses as M} from "../script/base/MainnetAddresses.sol";
+import {scUSDTSwapper} from "../src/steth/swapper/scUSDTSwapper.sol";
 
 contract scUSDTTest is Test {
     using Address for address;
@@ -55,7 +56,7 @@ contract scUSDTTest is Test {
     scUSDT vault;
 
     AaveV3ScUsdtAdapter aaveV3Adapter;
-    Swapper swapper;
+    scUSDTSwapper swapper;
     ISinglePairPriceConverter priceConverter;
 
     uint256 pps;
@@ -332,9 +333,9 @@ contract scUSDTTest is Test {
 
     function _deployAndSetUpVault() internal {
         priceConverter = new scUSDTPriceConverter();
-        swapper = new Swapper();
+        swapper = new scUSDTSwapper();
 
-        vault = new scUSDT(address(this), keeper, priceConverter, swapper);
+        vault = new scUSDT(address(this), keeper, wethVault, priceConverter, swapper);
 
         vault.addAdapter(aaveV3Adapter);
 

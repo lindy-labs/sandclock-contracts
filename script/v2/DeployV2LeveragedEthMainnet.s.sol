@@ -22,12 +22,14 @@ import {AaveV3ScUsdcAdapter} from "../../src/steth/scUsdcV2-adapters/AaveV3ScUsd
 import {AaveV2ScUsdcAdapter} from "../../src/steth/scUsdcV2-adapters/AaveV2ScUsdcAdapter.sol";
 import {MorphoAaveV3ScUsdcAdapter} from "../../src/steth/scUsdcV2-adapters/MorphoAaveV3ScUsdcAdapter.sol";
 import {MainnetDeployBase} from "../base/MainnetDeployBase.sol";
+import {scUSDCSwapper} from "../../src/steth/swapper/scUSDCSwapper.sol";
 
 contract DeployScript is MainnetDeployBase {
     function run() external returns (scWETHv2 scWethV2, scUSDCv2 scUsdcV2) {
         vm.startBroadcast(deployerPrivateKey);
 
         Swapper swapper = new Swapper();
+        scUSDCSwapper scUsdcSwapper = new scUSDCSwapper();
         console2.log("Swapper:", address(swapper));
         PriceConverter priceConverter = new PriceConverter(deployerAddress);
         scUSDCPriceConverter usdcPriceConverter = new scUSDCPriceConverter();
@@ -37,7 +39,7 @@ contract DeployScript is MainnetDeployBase {
 
         scWethV2 = _deployScWethV2(priceConverter, swapper);
 
-        scUsdcV2 = _deployScUsdcV2(scWethV2, usdcPriceConverter, swapper);
+        scUsdcV2 = _deployScUsdcV2(scWethV2, usdcPriceConverter, scUsdcSwapper);
 
         vm.stopBroadcast();
     }
@@ -66,7 +68,7 @@ contract DeployScript is MainnetDeployBase {
         console2.log("scWethV2 MorphoAdapter:", address(morphoAdapter));
     }
 
-    function _deployScUsdcV2(scWETHv2 _wethVault, scUSDCPriceConverter _priceConveter, Swapper _swapper)
+    function _deployScUsdcV2(scWETHv2 _wethVault, scUSDCPriceConverter _priceConveter, scUSDCSwapper _swapper)
         internal
         returns (scUSDCv2 vault)
     {

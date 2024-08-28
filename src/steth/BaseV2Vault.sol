@@ -1,21 +1,21 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.19;
 
-import {TokenOutNotAllowed} from "../errors/scErrors.sol";
+import {TokenOutNotAllowed, AmountReceivedBelowMin} from "../errors/scErrors.sol";
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {Address} from "openzeppelin-contracts/utils/Address.sol";
 import {EnumerableMap} from "openzeppelin-contracts/utils/structs/EnumerableMap.sol";
+import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 
 import {ProtocolNotSupported, ProtocolInUse, ZeroAddress} from "../errors/scErrors.sol";
 import {Constants as C} from "../lib/Constants.sol";
 import {IVault} from "../interfaces/balancer/IVault.sol";
 import {IFlashLoanRecipient} from "../interfaces/balancer/IFlashLoanRecipient.sol";
 import {IAdapter} from "./IAdapter.sol";
-import {Swapper} from "./Swapper.sol";
 import {sc4626} from "../sc4626.sol";
-import {PriceConverter} from "./PriceConverter.sol";
 import {IPriceConverter} from "./priceConverter/IPriceConverter.sol";
+import {ISwapper} from "./swapper/ISwapper.sol";
 
 /**
  * @title BaseV2Vault
@@ -23,6 +23,7 @@ import {IPriceConverter} from "./priceConverter/IPriceConverter.sol";
  */
 abstract contract BaseV2Vault is sc4626, IFlashLoanRecipient {
     using Address for address;
+    using SafeTransferLib for ERC20;
     using EnumerableMap for EnumerableMap.UintToAddressMap;
 
     event SwapperUpdated(address indexed admin, address newSwapper);
@@ -40,7 +41,7 @@ abstract contract BaseV2Vault is sc4626, IFlashLoanRecipient {
     IPriceConverter public priceConverter;
 
     // swapper contract for facilitating token swaps
-    Swapper public swapper;
+    ISwapper public swapper;
 
     // mapping of IDs to lending protocol adapter contracts
     EnumerableMap.UintToAddressMap internal protocolAdapters;
@@ -53,7 +54,7 @@ abstract contract BaseV2Vault is sc4626, IFlashLoanRecipient {
         address _keeper,
         ERC20 _asset,
         IPriceConverter _priceConverter,
-        Swapper _swapper,
+        ISwapper _swapper,
         string memory _name,
         string memory _symbol
     ) sc4626(_admin, _keeper, _asset, _name, _symbol) {
@@ -85,8 +86,10 @@ abstract contract BaseV2Vault is sc4626, IFlashLoanRecipient {
      * @notice Set the swapper contract used for executing token swaps.
      * @param _newSwapper The new swapper contract.
      */
-    function setSwapper(Swapper _newSwapper) external {
+    function setSwapper(ISwapper _newSwapper) external {
         _onlyAdmin();
+
+        // TODO: make internal override function to check zero address
 
         if (address(_newSwapper) == address(0)) revert ZeroAddress();
 
@@ -184,31 +187,34 @@ abstract contract BaseV2Vault is sc4626, IFlashLoanRecipient {
     }
 
     /**
-     * @notice Sell any token for the "asset" token on 0x exchange.
+     * @notice Sell any token for any whitelisted token on 0x exchange.
      * @param _tokenIn The token to sell.
      * @param _tokenOut The token to buy.
      * @param _amount The amount of tokens to sell.
      * @param _swapData The swap data for 0xrouter.
-     * @param _assetAmountOutMin The minimum amount of "asset" token to receive for the swap.
+     * @param _amountOutMin The minimum output token amount to receive for the swap.
      */
     function zeroExSwap(
         ERC20 _tokenIn,
         ERC20 _tokenOut,
         uint256 _amount,
         bytes calldata _swapData,
-        uint256 _assetAmountOutMin
+        uint256 _amountOutMin
     ) external {
         _onlyKeeperOrFlashLoan();
 
         if (!zeroExSwapWhitelist[_tokenOut]) revert TokenOutNotAllowed(address(_tokenOut));
+        uint256 tokenOutInitialBalance = _tokenOut.balanceOf(address(this));
 
-        bytes memory result = address(swapper).functionDelegateCall(
-            abi.encodeWithSelector(
-                Swapper.zeroExSwap.selector, _tokenIn, _tokenOut, _amount, _assetAmountOutMin, _swapData
-            )
-        );
+        _tokenIn.safeApprove(C.ZERO_EX_ROUTER, _amount);
 
-        emit TokenSwapped(address(_tokenIn), _amount, abi.decode(result, (uint256)));
+        C.ZERO_EX_ROUTER.functionCall(_swapData);
+
+        uint256 amountReceived = _tokenOut.balanceOf(address(this)) - tokenOutInitialBalance;
+
+        if (amountReceived < _amountOutMin) revert AmountReceivedBelowMin();
+
+        emit TokenSwapped(address(_tokenIn), _amount, amountReceived);
     }
 
     function _multiCall(bytes[] memory _callData) internal {

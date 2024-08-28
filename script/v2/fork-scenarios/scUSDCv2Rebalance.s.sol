@@ -20,6 +20,7 @@ import {AaveV3ScUsdcAdapter} from "../../../src/steth/scUsdcV2-adapters/AaveV3Sc
 import {MainnetDeployBase} from "../../base/MainnetDeployBase.sol";
 import {IAdapter} from "../../../src/steth/IAdapter.sol";
 import {scCrossAssetYieldVault} from "../../../src/steth/scCrossAssetYieldVault.sol";
+import {scUSDCSwapper} from "../../../src/steth/swapper/scUSDCSwapper.sol";
 
 /**
  * A script exercising the rebalance functionality of scUSDCv2 in different situations on a forked mainnet.
@@ -110,12 +111,13 @@ contract scUSDCv2Rebalance is MainnetDeployBase, Test {
         vm.startBroadcast(deployerAddress);
 
         Swapper swapper = new Swapper();
+        scUSDCSwapper scUsdcSwapper = new scUSDCSwapper();
         priceConverter = new PriceConverter(deployerAddress);
         scUSDCPriceConverter usdcPriceConverter = new scUSDCPriceConverter();
 
         scWethV2 = new scWETHv2(deployerAddress, keeper, weth, swapper, priceConverter);
         console2.log("scWethV2:", address(scWethV2));
-        scUsdcV2 = new scUSDCv2(deployerAddress, keeper, scWethV2, usdcPriceConverter, swapper);
+        scUsdcV2 = new scUSDCv2(deployerAddress, keeper, scWethV2, usdcPriceConverter, scUsdcSwapper);
         console2.log("scUSDCV2:", address(scUsdcV2));
 
         aaveV2Adapter = new AaveV2ScUsdcAdapter();

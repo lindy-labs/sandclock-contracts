@@ -13,8 +13,8 @@ import {IAdapter} from "../IAdapter.sol";
  * @title Aave v3 Lending Protocol Adapter
  * @notice Facilitates lending and borrowing for the Aave v3 lending protocol
  */
-contract SparkScDaiAdapter is IAdapter {
-    ERC20 public constant dai = ERC20(C.SDAI);
+contract SparkScSDaiAdapter is IAdapter {
+    ERC20 public constant sDai = ERC20(C.SDAI);
     WETH public constant weth = WETH(payable(C.WETH));
 
     // Aave v3 pool contract
@@ -29,19 +29,19 @@ contract SparkScDaiAdapter is IAdapter {
 
     /// @inheritdoc IAdapter
     function setApprovals() external override {
-        dai.approve(address(pool), type(uint256).max + 0);
+        sDai.approve(address(pool), type(uint256).max);
         weth.approve(address(pool), type(uint256).max);
     }
 
     /// @inheritdoc IAdapter
     function revokeApprovals() external override {
-        dai.approve(address(pool), 0);
+        sDai.approve(address(pool), 0);
         weth.approve(address(pool), 0);
     }
 
     /// @inheritdoc IAdapter
     function supply(uint256 _amount) external override {
-        pool.supply(address(dai), _amount, address(this), 0);
+        pool.supply(address(sDai), _amount, address(this), 0);
     }
 
     /// @inheritdoc IAdapter
@@ -56,7 +56,7 @@ contract SparkScDaiAdapter is IAdapter {
 
     /// @inheritdoc IAdapter
     function withdraw(uint256 _amount) external override {
-        pool.withdraw(address(dai), _amount, address(this));
+        pool.withdraw(address(sDai), _amount, address(this));
     }
 
     /// @inheritdoc IAdapter
@@ -76,7 +76,7 @@ contract SparkScDaiAdapter is IAdapter {
 
     /// @inheritdoc IAdapter
     function getMaxLtv() external view override returns (uint256) {
-        (, uint256 ltv,,,,,,,,) = sparkPoolDataProvider.getReserveConfigurationData(address(dai));
+        (, uint256 ltv,,,,,,,,) = sparkPoolDataProvider.getReserveConfigurationData(address(sDai));
 
         // ltv is returned as a percentage with 2 decimals (e.g. 80% = 8000) so we need to multiply by 1e14
         return ltv * 1e14;

@@ -36,6 +36,8 @@ import {IProtocolFeesCollector} from "../src/interfaces/balancer/IProtocolFeesCo
 import "../src/errors/scErrors.sol";
 import {FaultyAdapter} from "./mocks/adapters/FaultyAdapter.sol";
 import {scCrossAssetYieldVault} from "../src/steth/scCrossAssetYieldVault.sol";
+// TODO: fix
+import {scUSDCSwapper} from "../src/steth/swapper/scUSDCSwapper.sol";
 
 contract scUSDCv2Test is Test {
     using FixedPointMathLib for uint256;
@@ -88,7 +90,7 @@ contract scUSDCv2Test is Test {
     AaveV2ScUsdcAdapter aaveV2;
     EulerScUsdcAdapter euler;
     MorphoAaveV3ScUsdcAdapter morpho;
-    Swapper swapper;
+    scUSDCSwapper swapper;
     scUSDCPriceConverter priceConverter;
 
     constructor() Test() {
@@ -139,7 +141,7 @@ contract scUSDCv2Test is Test {
 
     function test_constructor_FailsIfSwapperIsZeroAddress() public {
         _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
-        swapper = Swapper(address(0x0));
+        swapper = scUSDCSwapper(address(0x0));
 
         vm.expectRevert(ZeroAddress.selector);
         new scUSDCv2(address(this), keeper, wethVault, priceConverter, swapper);
@@ -2203,7 +2205,7 @@ contract scUSDCv2Test is Test {
 
     function _deployAndSetUpVault() internal {
         priceConverter = new scUSDCPriceConverter();
-        swapper = new Swapper();
+        swapper = new scUSDCSwapper();
 
         vault = new scUSDCv2(address(this), keeper, wethVault, priceConverter, swapper);
 

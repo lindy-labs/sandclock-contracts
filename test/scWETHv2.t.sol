@@ -1255,7 +1255,7 @@ contract scWETHv2Test is Test {
 
         // expect a call on curve pool to exchange weth for stETH
         vm.expectCall(
-            address(vault.swapper().curvePool()),
+            address(Swapper(address(vault.swapper())).curvePool()),
             abi.encodeCall(ICurvePool.exchange, (0, 1, totalWethAmount, totalWethAmount))
         );
 

@@ -12,6 +12,7 @@ import {Address} from "openzeppelin-contracts/utils/Address.sol";
 import {AmountReceivedBelowMin} from "../errors/scErrors.sol";
 import {ISwapRouter} from "../interfaces/uniswap/ISwapRouter.sol";
 import {Constants as C} from "../lib/Constants.sol";
+import {IScWETHSwapper} from "./swapper/ISwapper.sol";
 
 /**
  * @title Swapper
@@ -19,7 +20,7 @@ import {Constants as C} from "../lib/Constants.sol";
  * @dev This contract is only meant to be used via delegatecalls from another contract.
  * @dev Using this contract directly for swaps might result in reverts.
  */
-contract Swapper {
+contract Swapper is IScWETHSwapper {
     using SafeTransferLib for ERC20;
     using Address for address;
 
@@ -115,6 +116,7 @@ contract Swapper {
 
         return swapRouter.exactOutput(params);
     }
+
     /**
      * @notice Swap tokens on Uniswap V3 using exact output single function.
      * @param _tokenIn Address of the token to swap.
@@ -124,7 +126,6 @@ contract Swapper {
      * @param _poolFee Pool fee of the Uniswap V3 pool.
      * @return Amount of the token swapped.
      */
-
     function uniswapSwapExactOutput(
         ERC20 _tokenIn,
         ERC20 _tokenOut,

@@ -12,12 +12,13 @@ import {scUSDCPriceConverter} from "../../src/steth/priceConverter/ScUSDCPriceCo
 import {AaveV3ScUsdcAdapter} from "../../src/steth/scUsdcV2-adapters/AaveV3ScUsdcAdapter.sol";
 import {MorphoAaveV3ScUsdcAdapter} from "../../src/steth/scUsdcV2-adapters/MorphoAaveV3ScUsdcAdapter.sol";
 import {AaveV2ScUsdcAdapter} from "../../src/steth/scUsdcV2-adapters/AaveV2ScUsdcAdapter.sol";
+import {scUSDCSwapper} from "../../src/steth/swapper/scUSDCSwapper.sol";
 
 contract RedeployScript is MainnetDeployBase {
     // @note: change scWethV2 to the address of the deployed scWethV2 contract
     scWETHv2 scWethV2 = scWETHv2(payable(vm.envOr("SC_WETH_V2", address(0))));
 
-    Swapper swapper = Swapper(MainnetAddresses.SWAPPER);
+    scUSDCSwapper swapper = new scUSDCSwapper(); //TODO: scUSDCSwapper(MainnetAddresses.SCUSDC_SWAPPER);
     // TODO: add address of scUSDCPriceConverter and not create a new instance
     scUSDCPriceConverter priceConverter = new scUSDCPriceConverter();
     MorphoAaveV3ScUsdcAdapter morphoAdapter = MorphoAaveV3ScUsdcAdapter(MainnetAddresses.SCUSDCV2_MORPHO_ADAPTER);

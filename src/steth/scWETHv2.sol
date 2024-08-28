@@ -20,8 +20,8 @@ import {BaseV2Vault} from "./BaseV2Vault.sol";
 import {IAdapter} from "./IAdapter.sol";
 import {IwstETH} from "../interfaces/lido/IwstETH.sol";
 import {PriceConverter} from "./PriceConverter.sol";
-import {Swapper} from "./Swapper.sol";
 import {IScETHPriceConverter} from "./priceConverter/IPriceConverter.sol";
+import {IScWETHSwapper} from "./swapper/ISwapper.sol";
 
 /**
  * @title Sandclock WETH Vault version 2
@@ -59,9 +59,13 @@ contract scWETHv2 is BaseV2Vault {
 
     IwstETH constant wstETH = IwstETH(C.WSTETH);
 
-    constructor(address _admin, address _keeper, WETH _weth, Swapper _swapper, IScETHPriceConverter _priceConverter)
-        BaseV2Vault(_admin, _keeper, _weth, _priceConverter, _swapper, "Sandclock Yield ETH", "scETH")
-    {
+    constructor(
+        address _admin,
+        address _keeper,
+        WETH _weth,
+        IScWETHSwapper _swapper,
+        IScETHPriceConverter _priceConverter
+    ) BaseV2Vault(_admin, _keeper, _weth, _priceConverter, _swapper, "Sandclock Yield ETH", "scETH") {
         zeroExSwapWhitelist[ERC20(C.WSTETH)] = true;
     }
 
@@ -110,9 +114,7 @@ contract scWETHv2 is BaseV2Vault {
     function swapWethToWstEth(uint256 _wethAmount) external {
         _onlyKeeperOrFlashLoan();
 
-        address(swapper).functionDelegateCall(
-            abi.encodeWithSelector(Swapper.lidoSwapWethToWstEth.selector, _wethAmount)
-        );
+        address(swapper).functionDelegateCall(abi.encodeCall(IScWETHSwapper.lidoSwapWethToWstEth, _wethAmount));
     }
 
     /// @notice swap wstEth to weth on curve
@@ -135,7 +137,7 @@ contract scWETHv2 is BaseV2Vault {
         uint256 wethAmountOutMin = converter().stEthToEth(stEthAmount).mulWadDown(_slippageTolerance);
 
         address(swapper).functionDelegateCall(
-            abi.encodeWithSelector(Swapper.curveSwapStEthToWeth.selector, stEthAmount, wethAmountOutMin)
+            abi.encodeCall(IScWETHSwapper.curveSwapStEthToWeth, (stEthAmount, wethAmountOutMin))
         );
     }
 

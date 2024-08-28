@@ -16,7 +16,7 @@ import {Constants as C} from "../src/lib/Constants.sol";
 import {ILendingPool} from "../src/interfaces/aave-v2/ILendingPool.sol";
 import {IProtocolDataProvider} from "../src/interfaces/aave-v2/IProtocolDataProvider.sol";
 import {IAdapter} from "../src/steth/IAdapter.sol";
-import {SparkScDaiAdapter} from "../src/steth/scSDai-adapters/SparkScDaiAdapter.sol";
+import {SparkScSDaiAdapter} from "../src/steth/scSDai-adapters/SparkScSDaiAdapter.sol";
 import {scSDAI} from "../src/steth/scSDAI.sol";
 import {scSDAIPriceConverter} from "../src/steth/priceConverter/ScSDAIPriceConverter.sol";
 import {scCrossAssetYieldVault} from "../src/steth/scCrossAssetYieldVault.sol";
@@ -34,6 +34,8 @@ import "../src/errors/scErrors.sol";
 import {Address} from "openzeppelin-contracts/utils/Address.sol";
 import {MainnetAddresses as M} from "../script/base/MainnetAddresses.sol";
 import {ISinglePairPriceConverter} from "../src/steth/priceConverter/IPriceConverter.sol";
+import {ISinglePairSwapper} from "../src/steth/swapper/ISwapper.sol";
+import {scSDAISwapper} from "../src/steth/swapper/scSDAISwapper.sol";
 
 contract scSDAITest is Test {
     using Address for address;
@@ -54,8 +56,8 @@ contract scSDAITest is Test {
     scWETH wethVault = scWETH(payable(M.SCWETHV2));
     scSDAI vault;
 
-    SparkScDaiAdapter spark;
-    Swapper swapper;
+    SparkScSDaiAdapter spark;
+    ISinglePairSwapper swapper;
     ISinglePairPriceConverter priceConverter;
 
     uint256 pps;
@@ -69,7 +71,7 @@ contract scSDAITest is Test {
         sDai = ERC4626(C.SDAI);
         dai = ERC20(C.DAI);
         weth = WETH(payable(C.WETH));
-        spark = new SparkScDaiAdapter();
+        spark = new SparkScSDaiAdapter();
 
         pps = wethVault.totalAssets().divWadDown(wethVault.totalSupply());
 
@@ -411,9 +413,9 @@ contract scSDAITest is Test {
 
     function _deployAndSetUpVault() internal {
         priceConverter = new scSDAIPriceConverter();
-        swapper = new Swapper();
+        swapper = new scSDAISwapper();
 
-        vault = new scSDAI(address(this), keeper, priceConverter, swapper);
+        vault = new scSDAI(address(this), keeper, wethVault, priceConverter, swapper);
 
         vault.addAdapter(spark);
 

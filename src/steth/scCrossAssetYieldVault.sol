@@ -13,9 +13,8 @@ import {EnumerableMap} from "openzeppelin-contracts/utils/structs/EnumerableMap.
 import {Constants as C} from "../lib/Constants.sol";
 import {BaseV2Vault} from "./BaseV2Vault.sol";
 import {IAdapter} from "./IAdapter.sol";
-import {Swapper} from "./Swapper.sol";
-import {PriceConverter} from "./PriceConverter.sol";
 import {ISinglePairPriceConverter} from "./priceConverter/IPriceConverter.sol";
+import {ISinglePairSwapper} from "./swapper/ISwapper.sol";
 
 /**
  * @dev A separate swapper and priceConverter contract for each vault
@@ -56,7 +55,7 @@ abstract contract scCrossAssetYieldVault is BaseV2Vault {
         ERC20 _asset,
         ERC4626 _targetVault,
         ISinglePairPriceConverter _priceConverter,
-        Swapper _swapper,
+        ISinglePairSwapper _swapper,
         string memory _name,
         string memory _symbol
     ) BaseV2Vault(_admin, _keeper, _asset, _priceConverter, _swapper, _name, _symbol) {
@@ -510,7 +509,18 @@ abstract contract scCrossAssetYieldVault is BaseV2Vault {
     function _swapTargetTokenForAsset(uint256 _targetTokenAmount, uint256 _assetAmountOutMin)
         internal
         virtual
-        returns (uint256);
+        returns (uint256)
+    {
+        bytes memory result = address(swapper).functionDelegateCall(
+            abi.encodeCall(ISinglePairSwapper.swapTargetTokenForAsset, (_targetTokenAmount, _assetAmountOutMin))
+        );
 
-    function _swapAssetForExactTargetToken(uint256 _targetTokenAmountOut) internal virtual;
+        return abi.decode(result, (uint256));
+    }
+
+    function _swapAssetForExactTargetToken(uint256 _targetTokenAmountOut) internal virtual {
+        address(swapper).functionDelegateCall(
+            abi.encodeCall(ISinglePairSwapper.swapAssetForExactTargetToken, (_targetTokenAmountOut))
+        );
+    }
 }
