@@ -7,9 +7,9 @@ import {ERC4626} from "solmate/mixins/ERC4626.sol";
 import {Constants as C} from "../../lib/Constants.sol";
 import {ISinglePairSwapper} from "../swapper/ISwapper.sol";
 import {SwapperLib} from "./SwapperLib.sol";
-import {ZeroXSwapper} from "./ZeroXSwapper.sol";
+import {ZeroExSwapper} from "./ZeroExSwapper.sol";
 
-contract SDaiWethSwapper is ISinglePairSwapper, ZeroXSwapper {
+contract SDaiWethSwapper is ISinglePairSwapper, ZeroExSwapper {
     address public constant asset = address(C.SDAI);
     address public constant targetToken = address(C.WETH);
     // intermmediate token to swap to

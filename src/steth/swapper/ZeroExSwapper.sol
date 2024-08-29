@@ -13,7 +13,7 @@ import {SwapperLib} from "./SwapperLib.sol";
  * @dev This contract is only meant to be used via delegatecalls from another contract.
  * @dev Using this contract directly for swaps might result in reverts.
  */
-contract ZeroXSwapper is ISwapper {
+contract ZeroExSwapper is ISwapper {
     using SafeTransferLib for ERC20;
 
     /**
