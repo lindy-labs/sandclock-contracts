@@ -15,9 +15,9 @@
 	path = lib/aave-v3-core
 	url = https://github.com/aave/aave-v3-core
 	branch = v1.17.2
-[submodule "lib/euler-interfaces"] 
-	path = lib/euler-interfaces
-	url = https://github.com/euler-xyz/euler-interfaces
 [submodule "lib/surl"]
 	path = lib/surl
 	url = https://github.com/memester-xyz/surl
+[submodule "lib/euler-interfaces-legacy"]
+	path = lib/euler-interfaces-legacy
+	url = https://github.com/euler-xyz/euler-interfaces-legacy
