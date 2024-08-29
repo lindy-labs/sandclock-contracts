@@ -11,6 +11,7 @@ import {IAToken} from "aave-v3/interfaces/IAToken.sol";
 import {IVariableDebtToken} from "aave-v3/interfaces/IVariableDebtToken.sol";
 import {IPoolDataProvider} from "aave-v3/interfaces/IPoolDataProvider.sol";
 import {IEulerMarkets, IEulerEToken, IEulerDToken} from "lib/euler-interfaces/contracts/IEuler.sol";
+import {Errors} from "openzeppelin-contracts/utils/Errors.sol";
 
 import {Constants as C} from "../src/lib/Constants.sol";
 import {ILendingPool} from "../src/interfaces/aave-v2/ILendingPool.sol";
@@ -2076,57 +2077,55 @@ contract scUSDCv2Test is Test {
         vault.zeroExSwap(ERC20(C.EULER_REWARDS_TOKEN), ERC20(C.USDC), 0, bytes("0"), 0);
     }
 
-    // function test_zeroExSwap_SwapsEulerForUsdc() public {
-    //     _setUpForkAtBlock(EUL_SWAP_BLOCK);
+    function test_zeroExSwap_SwapsEulerForUsdc() public {
+        _setUpForkAtBlock(EUL_SWAP_BLOCK);
 
-    //     uint256 initialUsdcBalance = 2_000e6;
-    //     deal(address(usdc), address(vault), initialUsdcBalance);
-    //     deal(C.EULER_REWARDS_TOKEN, address(vault), EUL_AMOUNT * 2);
+        uint256 initialUsdcBalance = 2_000e6;
+        deal(address(usdc), address(vault), initialUsdcBalance);
+        deal(C.EULER_REWARDS_TOKEN, address(vault), EUL_AMOUNT * 2);
 
-    //     assertEq(ERC20(C.EULER_REWARDS_TOKEN).balanceOf(address(vault)), EUL_AMOUNT * 2, "euler initial balance");
-    //     assertEq(_usdcBalance(), initialUsdcBalance, "usdc balance");
-    //     assertEq(vault.totalAssets(), initialUsdcBalance, "total assets");
+        assertEq(ERC20(C.EULER_REWARDS_TOKEN).balanceOf(address(vault)), EUL_AMOUNT * 2, "euler initial balance");
+        assertEq(_usdcBalance(), initialUsdcBalance, "usdc balance");
+        assertEq(vault.totalAssets(), initialUsdcBalance, "total assets");
 
-    //     vault.zeroExSwap(ERC20(C.EULER_REWARDS_TOKEN), ERC20(C.USDC), EUL_AMOUNT, EUL_SWAP_DATA, EUL_SWAP_USDC_RECEIVED);
+        vault.zeroExSwap(ERC20(C.EULER_REWARDS_TOKEN), ERC20(C.USDC), EUL_AMOUNT, EUL_SWAP_DATA, EUL_SWAP_USDC_RECEIVED);
 
-    //     assertEq(ERC20(C.EULER_REWARDS_TOKEN).balanceOf(address(vault)), EUL_AMOUNT, "euler end balance");
-    //     assertEq(vault.totalAssets(), initialUsdcBalance + EUL_SWAP_USDC_RECEIVED, "vault total assets");
-    //     assertEq(_usdcBalance(), initialUsdcBalance + EUL_SWAP_USDC_RECEIVED, "vault usdc balance");
-    //     assertEq(ERC20(C.EULER_REWARDS_TOKEN).allowance(address(vault), C.ZERO_EX_ROUTER), 0, "0x token allowance");
-    // }
+        assertEq(ERC20(C.EULER_REWARDS_TOKEN).balanceOf(address(vault)), EUL_AMOUNT, "euler end balance");
+        assertEq(vault.totalAssets(), initialUsdcBalance + EUL_SWAP_USDC_RECEIVED, "vault total assets");
+        assertEq(_usdcBalance(), initialUsdcBalance + EUL_SWAP_USDC_RECEIVED, "vault usdc balance");
+        assertEq(ERC20(C.EULER_REWARDS_TOKEN).allowance(address(vault), C.ZERO_EX_ROUTER), 0, "0x token allowance");
+    }
 
-    // function test_zeroExSwap_EmitsEventOnSuccessfulSwap() public {
-    //     _setUpForkAtBlock(EUL_SWAP_BLOCK);
+    function test_zeroExSwap_EmitsEventOnSuccessfulSwap() public {
+        _setUpForkAtBlock(EUL_SWAP_BLOCK);
 
-    //     deal(C.EULER_REWARDS_TOKEN, address(vault), EUL_AMOUNT);
+        deal(C.EULER_REWARDS_TOKEN, address(vault), EUL_AMOUNT);
 
-    //     vm.expectEmit(true, true, true, true);
-    //     emit TokenSwapped(C.EULER_REWARDS_TOKEN, EUL_AMOUNT, EUL_SWAP_USDC_RECEIVED);
+        vm.expectEmit(true, true, true, true);
+        emit TokenSwapped(C.EULER_REWARDS_TOKEN, EUL_AMOUNT, EUL_SWAP_USDC_RECEIVED);
 
-    //     vault.zeroExSwap(ERC20(C.EULER_REWARDS_TOKEN), ERC20(C.USDC), EUL_AMOUNT, EUL_SWAP_DATA, 0);
-    // }
+        vault.zeroExSwap(ERC20(C.EULER_REWARDS_TOKEN), ERC20(C.USDC), EUL_AMOUNT, EUL_SWAP_DATA, 0);
+    }
 
-    // function test_zeroExSwap_FailsIfUsdcAmountReceivedIsLessThanMin() public {
-    //     _setUpForkAtBlock(EUL_SWAP_BLOCK);
+    function test_zeroExSwap_FailsIfUsdcAmountReceivedIsLessThanMin() public {
+        _setUpForkAtBlock(EUL_SWAP_BLOCK);
 
-    //     deal(C.EULER_REWARDS_TOKEN, address(vault), EUL_AMOUNT);
+        deal(C.EULER_REWARDS_TOKEN, address(vault), EUL_AMOUNT);
 
-    //     vm.expectRevert(AmountReceivedBelowMin.selector);
-    //     vault.zeroExSwap(
-    //         ERC20(C.EULER_REWARDS_TOKEN), ERC20(C.USDC), EUL_AMOUNT, EUL_SWAP_DATA, EUL_SWAP_USDC_RECEIVED + 1
-    //     );
-    // }
+        vm.expectRevert(AmountReceivedBelowMin.selector);
+        vault.zeroExSwap(ERC20(C.EULER_REWARDS_TOKEN), ERC20(C.USDC), EUL_AMOUNT, EUL_SWAP_DATA, EUL_SWAP_USDC_RECEIVED + 1);
+    }
 
-    // function test_zeroExSwap_FailsIfSwapIsNotSucessful() public {
-    //     _setUpForkAtBlock(EUL_SWAP_BLOCK);
+    function test_zeroExSwap_FailsIfSwapIsNotSucessful() public {
+        _setUpForkAtBlock(EUL_SWAP_BLOCK);
 
-    //     deal(C.EULER_REWARDS_TOKEN, address(vault), EUL_AMOUNT);
+        deal(C.EULER_REWARDS_TOKEN, address(vault), EUL_AMOUNT);
 
-    //     bytes memory invalidSwapData = hex"6af479b20000";
+        bytes memory invalidSwapData = hex"6af479b20000";
 
-    //     vm.expectRevert("Address: low-level call failed");
-    //     vault.zeroExSwap(ERC20(C.EULER_REWARDS_TOKEN), ERC20(C.USDC), EUL_AMOUNT, invalidSwapData, 0);
-    // }
+        vm.expectRevert(Errors.FailedCall.selector);
+        vault.zeroExSwap(ERC20(C.EULER_REWARDS_TOKEN), ERC20(C.USDC), EUL_AMOUNT, invalidSwapData, 0);
+    }
 
     /// #claimRewards ///
 

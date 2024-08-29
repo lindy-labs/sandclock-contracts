@@ -16,7 +16,6 @@ import {scCrossAssetYieldVault} from "./scCrossAssetYieldVault.sol";
  * @dev This vault uses Sandclock's leveraged WETH staking vault - scWETH.
  */
 contract scUSDCv2 is scCrossAssetYieldVault {
-    // TODO: fix
     constructor(
         address _admin,
         address _keeper,
