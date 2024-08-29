@@ -115,25 +115,13 @@ contract Swapper is IScWETHSwapper {
      * @return Amount of the token received.
      */
     function zeroExSwap(
-        ERC20 _tokenIn,
-        ERC20 _tokenOut,
+        address _tokenIn,
+        address _tokenOut,
         uint256 _amountIn,
         uint256 _amountOutMin,
         bytes calldata _swapData
     ) external returns (uint256) {
-        uint256 tokenOutInitialBalance = _tokenOut.balanceOf(address(this));
-
-        _tokenIn.safeApprove(C.ZERO_EX_ROUTER, _amountIn);
-
-        C.ZERO_EX_ROUTER.functionCall(_swapData);
-
-        uint256 amountReceived = _tokenOut.balanceOf(address(this)) - tokenOutInitialBalance;
-
-        if (amountReceived < _amountOutMin) revert AmountReceivedBelowMin();
-
-        _tokenIn.approve(C.ZERO_EX_ROUTER, 0);
-
-        return amountReceived;
+        return SwapperLib._zeroExSwap(_tokenIn, _tokenOut, _amountIn, _amountOutMin, _swapData);
     }
 
     /**

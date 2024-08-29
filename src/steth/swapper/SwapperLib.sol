@@ -4,6 +4,7 @@ pragma solidity ^0.8.19;
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {WETH} from "solmate/tokens/WETH.sol";
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
+import {Address} from "openzeppelin-contracts/utils/Address.sol";
 
 import {Constants as C} from "../../lib/Constants.sol";
 import {AmountReceivedBelowMin} from "../../errors/scErrors.sol";
@@ -15,6 +16,7 @@ import {IScWETHSwapper} from "./../swapper/ISwapper.sol";
 
 library SwapperLib {
     using SafeTransferLib for ERC20;
+    using Address for address;
 
     ISwapRouter public constant swapRouter = ISwapRouter(C.UNISWAP_V3_SWAP_ROUTER);
 
@@ -88,13 +90,14 @@ library SwapperLib {
      * @param _amountOut Amount of the token to receive
      * @param _amountInMaximum Maximum amount of the token to swap
      * @param _path abi.encodePacked(_tokenOut, fees, ...middleTokens, ...fees, _tokenIn)
+     * @return amountIn Amount of the input token used for the swap
      */
     function _uniswapSwapExactOutputMultihop(
         address _tokenIn,
         uint256 _amountOut,
         uint256 _amountInMaximum,
         bytes memory _path
-    ) internal returns (uint256) {
+    ) internal returns (uint256 amountIn) {
         ERC20(_tokenIn).safeApprove(address(swapRouter), _amountInMaximum);
 
         ISwapRouter.ExactOutputParams memory params = ISwapRouter.ExactOutputParams({
@@ -105,7 +108,9 @@ library SwapperLib {
             amountInMaximum: _amountInMaximum
         });
 
-        return swapRouter.exactOutput(params);
+        amountIn = swapRouter.exactOutput(params);
+
+        ERC20(_tokenIn).safeApprove(address(swapRouter), 0);
     }
 
     /**
@@ -115,7 +120,7 @@ library SwapperLib {
      * @param _amountOut Amount of the token to receive.
      * @param _amountInMaximum Maximum amount of the token to swap.
      * @param _poolFee Pool fee of the Uniswap V3 pool.
-     * @return Amount of the token swapped.
+     * @return amountIn Amount of the input token used for the swap
      */
     function _uniswapSwapExactOutput(
         address _tokenIn,
@@ -123,7 +128,7 @@ library SwapperLib {
         uint256 _amountOut,
         uint256 _amountInMaximum,
         uint24 _poolFee
-    ) internal returns (uint256) {
+    ) internal returns (uint256 amountIn) {
         ISwapRouter.ExactOutputSingleParams memory params = ISwapRouter.ExactOutputSingleParams({
             tokenIn: _tokenIn,
             tokenOut: _tokenOut,
@@ -137,10 +142,39 @@ library SwapperLib {
 
         ERC20(_tokenIn).safeApprove(address(swapRouter), _amountInMaximum);
 
-        uint256 amountIn = swapRouter.exactOutputSingle(params);
+        amountIn = swapRouter.exactOutputSingle(params);
 
         ERC20(_tokenIn).safeApprove(address(swapRouter), 0);
+    }
 
-        return amountIn;
+    /**
+     * @notice Swap tokens on 0xswap.
+     * @param _tokenIn Address of the token to swap.
+     * @param _tokenOut Address of the token to receive.
+     * @param _amountIn Amount of the token to swap.
+     * @param _amountOutMin Minimum amount of the token to receive.
+     * @param _swapData Encoded swap data obtained from 0x API.
+     * @return Amount of the token received.
+     */
+    function _zeroExSwap(
+        address _tokenIn,
+        address _tokenOut,
+        uint256 _amountIn,
+        uint256 _amountOutMin,
+        bytes calldata _swapData
+    ) internal returns (uint256) {
+        uint256 tokenOutInitialBalance = ERC20(_tokenOut).balanceOf(address(this));
+
+        ERC20(_tokenIn).safeApprove(C.ZERO_EX_ROUTER, _amountIn);
+
+        C.ZERO_EX_ROUTER.functionCall(_swapData);
+
+        uint256 amountReceived = ERC20(_tokenOut).balanceOf(address(this)) - tokenOutInitialBalance;
+
+        if (amountReceived < _amountOutMin) revert AmountReceivedBelowMin();
+
+        ERC20(_tokenIn).approve(C.ZERO_EX_ROUTER, 0);
+
+        return amountReceived;
     }
 }

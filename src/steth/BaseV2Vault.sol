@@ -204,15 +204,12 @@ abstract contract BaseV2Vault is sc4626, IFlashLoanRecipient {
         _onlyKeeperOrFlashLoan();
 
         if (!zeroExSwapWhitelist[_tokenOut]) revert TokenOutNotAllowed(address(_tokenOut));
-        uint256 tokenOutInitialBalance = _tokenOut.balanceOf(address(this));
 
-        _tokenIn.safeApprove(C.ZERO_EX_ROUTER, _amount);
+        bytes memory result = address(swapper).functionDelegateCall(
+            abi.encodeWithSelector(ISwapper.zeroExSwap.selector, _tokenIn, _tokenOut, _amount, _amountOutMin, _swapData)
+        );
 
-        C.ZERO_EX_ROUTER.functionCall(_swapData);
-
-        uint256 amountReceived = _tokenOut.balanceOf(address(this)) - tokenOutInitialBalance;
-
-        if (amountReceived < _amountOutMin) revert AmountReceivedBelowMin();
+        uint256 amountReceived = abi.decode(result, (uint256));
 
         emit TokenSwapped(address(_tokenIn), _amount, amountReceived);
     }

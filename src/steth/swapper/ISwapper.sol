@@ -1,7 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.19;
 
-interface ISwapper {}
+interface ISwapper {
+    function zeroExSwap(
+        address _tokenIn,
+        address _tokenOut,
+        uint256 _amountIn,
+        uint256 _amountOutMin,
+        bytes calldata _swapData
+    ) external returns (uint256);
+}
 
 interface IScWETHSwapper is ISwapper {
     function curveSwapStEthToWeth(uint256 _stEthAmount, uint256 _wethAmountOutMin)

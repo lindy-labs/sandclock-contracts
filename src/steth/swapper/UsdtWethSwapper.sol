@@ -2,18 +2,13 @@
 pragma solidity ^0.8.19;
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
-import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 
 import {Constants as C} from "../../lib/Constants.sol";
-import {ISwapRouter} from "../../interfaces/uniswap/ISwapRouter.sol";
 import {ISinglePairSwapper} from "./../swapper/ISwapper.sol";
 import {SwapperLib} from "./SwapperLib.sol";
+import {ZeroXSwapper} from "./ZeroXSwapper.sol";
 
-contract UsdtWethSwapper is ISinglePairSwapper {
-    using SafeTransferLib for ERC20;
-
-    ISwapRouter public constant swapRouter = ISwapRouter(C.UNISWAP_V3_SWAP_ROUTER);
-
+contract UsdtWethSwapper is ISinglePairSwapper, ZeroXSwapper {
     address public constant override asset = address(C.USDT);
     address public constant override targetToken = address(C.WETH);
     uint24 public constant POOL_FEE = 500;
