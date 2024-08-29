@@ -10,9 +10,9 @@ import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 import {Address} from "openzeppelin-contracts/utils/Address.sol";
 
 import {AmountReceivedBelowMin} from "../errors/scErrors.sol";
-import {ISwapRouter} from "../interfaces/uniswap/ISwapRouter.sol";
 import {Constants as C} from "../lib/Constants.sol";
 import {IScWETHSwapper} from "./swapper/ISwapper.sol";
+import {SwapperLib} from "./swapper/SwapperLib.sol";
 
 /**
  * @title Swapper
@@ -23,9 +23,6 @@ import {IScWETHSwapper} from "./swapper/ISwapper.sol";
 contract Swapper is IScWETHSwapper {
     using SafeTransferLib for ERC20;
     using Address for address;
-
-    // Uniswap V3 router
-    ISwapRouter public constant swapRouter = ISwapRouter(C.UNISWAP_V3_SWAP_ROUTER);
 
     ICurvePool public constant curvePool = ICurvePool(C.CURVE_ETH_STETH_POOL);
 
@@ -39,24 +36,15 @@ contract Swapper is IScWETHSwapper {
      * @param _amountIn Amount of the token to swap
      * @param _amountOutMin Minimum amount of the token to receive
      * @param _path abi.encodePacked(_tokenIn, fees, ...middleTokens, ...fees, _tokenOut)
+     * @return amountOut Amount of the output token received
      */
     function uniswapSwapExactInputMultihop(
         address _tokenIn,
         uint256 _amountIn,
         uint256 _amountOutMin,
         bytes memory _path
-    ) public returns (uint256) {
-        ERC20(_tokenIn).safeApprove(address(swapRouter), _amountIn);
-
-        ISwapRouter.ExactInputParams memory params = ISwapRouter.ExactInputParams({
-            path: _path,
-            recipient: address(this),
-            deadline: block.timestamp,
-            amountIn: _amountIn,
-            amountOutMinimum: _amountOutMin
-        });
-
-        return swapRouter.exactInput(params);
+    ) external returns (uint256 amountOut) {
+        amountOut = SwapperLib._uniswapSwapExactInputMultihop(_tokenIn, _amountIn, _amountOutMin, _path);
     }
 
     /**
@@ -66,7 +54,7 @@ contract Swapper is IScWETHSwapper {
      * @param _amountIn Amount of the token to swap.
      * @param _amountOutMin Minimum amount of the token to receive.
      * @param _poolFee Pool fee of the Uniswap V3 pool.
-     * @return Amount of the token received.
+     * @return amountOut Amount of the output token received.
      */
     function uniswapSwapExactInput(
         ERC20 _tokenIn,
@@ -74,21 +62,9 @@ contract Swapper is IScWETHSwapper {
         uint256 _amountIn,
         uint256 _amountOutMin,
         uint24 _poolFee
-    ) external returns (uint256) {
-        ERC20(_tokenIn).safeApprove(address(swapRouter), _amountIn);
-
-        ISwapRouter.ExactInputSingleParams memory params = ISwapRouter.ExactInputSingleParams({
-            tokenIn: address(_tokenIn),
-            tokenOut: address(_tokenOut),
-            fee: _poolFee,
-            recipient: address(this),
-            deadline: block.timestamp,
-            amountIn: _amountIn,
-            amountOutMinimum: _amountOutMin,
-            sqrtPriceLimitX96: 0
-        });
-
-        return swapRouter.exactInputSingle(params);
+    ) external returns (uint256 amountOut) {
+        amountOut =
+            SwapperLib._uniswapSwapExactInput(address(_tokenIn), address(_tokenOut), _amountIn, _amountOutMin, _poolFee);
     }
 
     /**
@@ -97,24 +73,15 @@ contract Swapper is IScWETHSwapper {
      * @param _amountOut Amount of the token to receive
      * @param _amountInMaximum Maximum amount of the token to swap
      * @param _path abi.encodePacked(_tokenOut, fees, ...middleTokens, ...fees, _tokenIn)
+     * @return amountIn Amount of the input token used for the swap
      */
     function uniswapSwapExactOutputMultihop(
         address _tokenIn,
         uint256 _amountOut,
         uint256 _amountInMaximum,
         bytes memory _path
-    ) public returns (uint256) {
-        ERC20(_tokenIn).safeApprove(address(swapRouter), _amountInMaximum);
-
-        ISwapRouter.ExactOutputParams memory params = ISwapRouter.ExactOutputParams({
-            path: _path,
-            recipient: address(this),
-            deadline: block.timestamp,
-            amountOut: _amountOut,
-            amountInMaximum: _amountInMaximum
-        });
-
-        return swapRouter.exactOutput(params);
+    ) public returns (uint256 amountIn) {
+        amountIn = SwapperLib._uniswapSwapExactOutputMultihop(_tokenIn, _amountOut, _amountInMaximum, _path);
     }
 
     /**
@@ -124,7 +91,7 @@ contract Swapper is IScWETHSwapper {
      * @param _amountOut Amount of the token to receive.
      * @param _amountInMaximum Maximum amount of the token to swap.
      * @param _poolFee Pool fee of the Uniswap V3 pool.
-     * @return Amount of the token swapped.
+     * @return amountIn Amount of the input token used for the swap
      */
     function uniswapSwapExactOutput(
         ERC20 _tokenIn,
@@ -132,25 +99,10 @@ contract Swapper is IScWETHSwapper {
         uint256 _amountOut,
         uint256 _amountInMaximum,
         uint24 _poolFee
-    ) public returns (uint256) {
-        ISwapRouter.ExactOutputSingleParams memory params = ISwapRouter.ExactOutputSingleParams({
-            tokenIn: address(_tokenIn),
-            tokenOut: address(_tokenOut),
-            fee: _poolFee,
-            recipient: address(this),
-            deadline: block.timestamp,
-            amountOut: _amountOut,
-            amountInMaximum: _amountInMaximum,
-            sqrtPriceLimitX96: 0
-        });
-
-        _tokenIn.safeApprove(address(swapRouter), _amountInMaximum);
-
-        uint256 amountIn = swapRouter.exactOutputSingle(params);
-
-        _tokenIn.safeApprove(address(swapRouter), 0);
-
-        return amountIn;
+    ) public returns (uint256 amountIn) {
+        amountIn = SwapperLib._uniswapSwapExactOutput(
+            address(_tokenIn), address(_tokenOut), _amountOut, _amountInMaximum, _poolFee
+        );
     }
 
     /**

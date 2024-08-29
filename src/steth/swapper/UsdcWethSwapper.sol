@@ -7,6 +7,7 @@ import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 import {Constants as C} from "../../lib/Constants.sol";
 import {ISwapRouter} from "../../interfaces/uniswap/ISwapRouter.sol";
 import {ISinglePairSwapper} from "./../swapper/ISwapper.sol";
+import {SwapperLib} from "./SwapperLib.sol";
 
 contract UsdcWethSwapper is ISinglePairSwapper {
     using SafeTransferLib for ERC20;
@@ -15,46 +16,19 @@ contract UsdcWethSwapper is ISinglePairSwapper {
 
     address public constant override asset = address(C.USDC);
     address public constant override targetToken = address(C.WETH);
+    uint24 public constant POOL_FEE = 500;
 
-    function swapTargetTokenForAsset(uint256 _targetAmount, uint256 _assetAmountOutMin)
+    function swapTargetTokenForAsset(uint256 _wethAmount, uint256 _usdcAmountOutMin)
         external
         override
-        returns (uint256)
+        returns (uint256 usdcReceived)
     {
-        ERC20(targetToken).safeApprove(address(swapRouter), _targetAmount);
-
-        ISwapRouter.ExactInputSingleParams memory params = ISwapRouter.ExactInputSingleParams({
-            tokenIn: targetToken,
-            tokenOut: asset,
-            fee: 500,
-            recipient: address(this),
-            deadline: block.timestamp,
-            amountIn: _targetAmount,
-            amountOutMinimum: _assetAmountOutMin,
-            sqrtPriceLimitX96: 0
-        });
-
-        return swapRouter.exactInputSingle(params);
+        usdcReceived = SwapperLib._uniswapSwapExactInput(targetToken, asset, _wethAmount, _usdcAmountOutMin, POOL_FEE);
     }
 
-    function swapAssetForExactTargetToken(uint256 _targetTokenAmountOut) external override returns (uint256) {
-        ISwapRouter.ExactOutputSingleParams memory params = ISwapRouter.ExactOutputSingleParams({
-            tokenIn: asset,
-            tokenOut: targetToken,
-            fee: 500,
-            recipient: address(this),
-            deadline: block.timestamp,
-            amountOut: _targetTokenAmountOut,
-            amountInMaximum: type(uint256).max,
-            sqrtPriceLimitX96: 0
-        });
+    function swapAssetForExactTargetToken(uint256 _wethAmountOut) external override returns (uint256 usdcSpent) {
+        uint256 usdcBalance = ERC20(asset).balanceOf(address(this));
 
-        ERC20(asset).safeApprove(address(swapRouter), type(uint256).max);
-
-        uint256 amountIn = swapRouter.exactOutputSingle(params);
-
-        ERC20(asset).safeApprove(address(swapRouter), 0);
-
-        return amountIn;
+        usdcSpent = SwapperLib._uniswapSwapExactOutput(asset, targetToken, _wethAmountOut, usdcBalance, POOL_FEE);
     }
 }

@@ -8,6 +8,7 @@ import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 import {Constants as C} from "../../lib/Constants.sol";
 import {ISinglePairSwapper} from "../swapper/ISwapper.sol";
 import {ISwapRouter} from "../../interfaces/uniswap/ISwapRouter.sol";
+import {SwapperLib} from "./SwapperLib.sol";
 
 contract SDaiWethSwapper is ISinglePairSwapper {
     using SafeTransferLib for ERC20;
@@ -21,49 +22,28 @@ contract SDaiWethSwapper is ISinglePairSwapper {
 
     bytes public constant swapPath = abi.encodePacked(targetToken, uint24(500), C.USDC, uint24(100), asset);
 
-    function swapTargetTokenForAsset(uint256 _targetAmount, uint256 _assetAmountOutMin)
+    function swapTargetTokenForAsset(uint256 _wethAmount, uint256 _sDaiAmountOutMin)
         external
         override
         returns (uint256 sDaiReceived)
     {
-        ERC20(targetToken).safeApprove(address(swapRouter), _targetAmount);
-
-        ISwapRouter.ExactInputParams memory params = ISwapRouter.ExactInputParams({
-            path: swapPath,
-            recipient: address(this),
-            deadline: block.timestamp,
-            amountIn: _targetAmount,
-            amountOutMinimum: _assetAmountOutMin
-        });
-
-        uint256 daiReceived = swapRouter.exactInput(params);
+        uint256 daiReceived =
+            SwapperLib._uniswapSwapExactInputMultihop(targetToken, _wethAmount, _sDaiAmountOutMin, swapPath);
 
         sDaiReceived = ERC4626(asset).deposit(daiReceived, address(this));
     }
 
-    function swapAssetForExactTargetToken(uint256 _targetTokenAmountOut)
-        external
-        override
-        returns (uint256 sDaiSpent)
-    {
+    function swapAssetForExactTargetToken(uint256 _wethAmountOut) external override returns (uint256 sDaiSpent) {
         // unwrap all sdai to dai
         uint256 sDaiBalance = ERC20(asset).balanceOf(address(this));
         uint256 daiBalance = ERC4626(asset).redeem(sDaiBalance, address(this), address(this));
 
-        ERC20(dai).safeApprove(address(swapRouter), daiBalance);
-
-        ISwapRouter.ExactOutputParams memory params = ISwapRouter.ExactOutputParams({
-            path: swapPath,
-            recipient: address(this),
-            deadline: block.timestamp,
-            amountOut: _targetTokenAmountOut,
-            amountInMaximum: daiBalance
-        });
-
-        uint256 daiSpent = swapRouter.exactOutput(params);
+        // swap dai for exact weth
+        uint256 daiSpent = SwapperLib._uniswapSwapExactOutputMultihop(asset, _wethAmountOut, daiBalance, swapPath);
 
         ERC20(dai).approve(address(swapRouter), 0);
 
+        // deposit remaining dai to sdai
         uint256 remainingSDai = ERC4626(asset).deposit(daiBalance - daiSpent, address(this));
 
         sDaiSpent = sDaiBalance - remainingSDai;
