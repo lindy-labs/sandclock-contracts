@@ -18,3 +18,6 @@
 [submodule "lib/surl"]
 	path = lib/surl
 	url = https://github.com/memester-xyz/surl
+[submodule "lib/euler-interfaces-legacy"]
+	path = lib/euler-interfaces-legacy
+	url = https://github.com/euler-xyz/euler-interfaces-legacy
