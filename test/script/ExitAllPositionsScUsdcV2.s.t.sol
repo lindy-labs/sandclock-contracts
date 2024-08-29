@@ -8,7 +8,7 @@ import {WETH} from "solmate/tokens/WETH.sol";
 
 import {scUSDCv2} from "../../src/steth/scUSDCv2.sol";
 import {scWETHv2} from "../../src/steth/scWETHv2.sol";
-import {PriceConverter} from "../../src/steth/PriceConverter.sol";
+import {PriceConverter} from "../../src/steth/priceConverter/PriceConverter.sol";
 import {AaveV2ScUsdcAdapter} from "../../src/steth/scUsdcV2-adapters/AaveV2ScUsdcAdapter.sol";
 import {AaveV3ScUsdcAdapter} from "../../src/steth/scUsdcV2-adapters/AaveV3ScUsdcAdapter.sol";
 import {MorphoAaveV3ScUsdcAdapter} from "../../src/steth/scUsdcV2-adapters/MorphoAaveV3ScUsdcAdapter.sol";

@@ -3,16 +3,16 @@ pragma solidity ^0.8.19;
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {WETH} from "solmate/tokens/WETH.sol";
-import {ILido} from "../interfaces/lido/ILido.sol";
-import {IwstETH} from "../interfaces/lido/IwstETH.sol";
-import {ICurvePool} from "../interfaces/curve/ICurvePool.sol";
+import {ILido} from "../../interfaces/lido/ILido.sol";
+import {IwstETH} from "../../interfaces/lido/IwstETH.sol";
+import {ICurvePool} from "../../interfaces/curve/ICurvePool.sol";
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 import {Address} from "openzeppelin-contracts/utils/Address.sol";
 
-import {AmountReceivedBelowMin} from "../errors/scErrors.sol";
-import {Constants as C} from "../lib/Constants.sol";
-import {IScWETHSwapper} from "./swapper/ISwapper.sol";
-import {SwapperLib} from "./swapper/SwapperLib.sol";
+import {AmountReceivedBelowMin} from "../../errors/scErrors.sol";
+import {Constants as C} from "../../lib/Constants.sol";
+import {IScWETHSwapper} from "./ISwapper.sol";
+import {SwapperLib} from "./SwapperLib.sol";
 
 /**
  * @title Swapper

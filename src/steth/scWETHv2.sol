@@ -19,7 +19,7 @@ import {Constants as C} from "../lib/Constants.sol";
 import {BaseV2Vault} from "./BaseV2Vault.sol";
 import {IAdapter} from "./IAdapter.sol";
 import {IwstETH} from "../interfaces/lido/IwstETH.sol";
-import {PriceConverter} from "./PriceConverter.sol";
+import {PriceConverter} from "./priceConverter/PriceConverter.sol";
 import {IScETHPriceConverter} from "./priceConverter/IPriceConverter.sol";
 import {IScWETHSwapper} from "./swapper/ISwapper.sol";
 

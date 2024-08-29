@@ -26,9 +26,8 @@ import {MorphoAaveV3ScUsdcAdapter} from "../src/steth/scUsdcV2-adapters/MorphoAa
 import {scWETH} from "../src/steth/scWETH.sol";
 import {ISwapRouter} from "../src/interfaces/uniswap/ISwapRouter.sol";
 import {AggregatorV3Interface} from "../src/interfaces/chainlink/AggregatorV3Interface.sol";
-import {PriceConverter} from "../src/steth/PriceConverter.sol";
+import {PriceConverter} from "../src/steth/priceConverter/PriceConverter.sol";
 import {UsdcWethPriceConverter} from "../src/steth/priceConverter/UsdcWethPriceConverter.sol";
-import {Swapper} from "../src/steth/Swapper.sol";
 import {IVault} from "../src/interfaces/balancer/IVault.sol";
 import {ICurvePool} from "../src/interfaces/curve/ICurvePool.sol";
 import {ILido} from "../src/interfaces/lido/ILido.sol";
@@ -38,6 +37,7 @@ import "../src/errors/scErrors.sol";
 import {FaultyAdapter} from "./mocks/adapters/FaultyAdapter.sol";
 import {scCrossAssetYieldVault} from "../src/steth/scCrossAssetYieldVault.sol";
 import {UsdcWethSwapper} from "../src/steth/swapper/UsdcWethSwapper.sol";
+import {ISwapper} from "../src/steth/swapper/ISwapper.sol";
 
 contract scUSDCv2Test is Test {
     using FixedPointMathLib for uint256;
@@ -60,7 +60,7 @@ contract scUSDCv2Test is Test {
     event Withdrawn(uint256 adapterId, uint256 amount);
     event Disinvested(uint256 wethAmount);
     event RewardsClaimed(uint256 adapterId);
-    event SwapperUpdated(address indexed admin, Swapper newSwapper);
+    event SwapperUpdated(address indexed admin, ISwapper newSwapper);
     event PriceConverterUpdated(address indexed admin, address newPriceConverter);
 
     // after the exploit, the euler protocol was disabled. At one point it should work again, so having the
@@ -190,19 +190,19 @@ contract scUSDCv2Test is Test {
 
         vm.prank(alice);
         vm.expectRevert(CallerNotAdmin.selector);
-        vault.setSwapper(Swapper(address(0x1)));
+        vault.setSwapper(ISwapper(address(0x1)));
     }
 
     function test_setSwapper_FailsIfAddressIs0() public {
         _setUpForkAtBlock(BLOCK_BEFORE_EULER_EXPLOIT);
 
         vm.expectRevert(ZeroAddress.selector);
-        vault.setSwapper(Swapper(address(0x0)));
+        vault.setSwapper(ISwapper(address(0x0)));
     }
 
     function test_setSwapper_UpdatesTheSwapperToNewAddress() public {
         _setUpForkAtBlock(BLOCK_BEFORE_EULER_EXPLOIT);
-        Swapper newSwapper = Swapper(address(0x09));
+        ISwapper newSwapper = ISwapper(address(0x09));
 
         vault.setSwapper(newSwapper);
 
@@ -211,7 +211,7 @@ contract scUSDCv2Test is Test {
 
     function test_setSwapper_EmitsEvent() public {
         _setUpForkAtBlock(BLOCK_BEFORE_EULER_EXPLOIT);
-        Swapper newSwapper = Swapper(address(0x09));
+        ISwapper newSwapper = ISwapper(address(0x09));
 
         vm.expectEmit(true, true, true, true);
         emit SwapperUpdated(address(this), newSwapper);

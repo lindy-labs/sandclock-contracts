@@ -31,8 +31,8 @@ import {IAdapter} from "../src/steth/IAdapter.sol";
 import {AaveV3ScWethAdapter} from "../src/steth/scWethV2-adapters/AaveV3ScWethAdapter.sol";
 import {CompoundV3ScWethAdapter} from "../src/steth/scWethV2-adapters/CompoundV3ScWethAdapter.sol";
 import {EulerScWethAdapter} from "../src/steth/scWethV2-adapters/EulerScWethAdapter.sol";
-import {Swapper} from "../src/steth/Swapper.sol";
-import {PriceConverter} from "../src/steth/PriceConverter.sol";
+import {Swapper} from "../src/steth/swapper/Swapper.sol";
+import {PriceConverter} from "../src/steth/priceConverter/PriceConverter.sol";
 import {MockAdapter} from "./mocks/adapters/MockAdapter.sol";
 
 contract scWETHv2Test is Test {

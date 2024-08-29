@@ -19,8 +19,8 @@ import {ISwapRouter} from "../../../src/interfaces/uniswap/ISwapRouter.sol";
 import {sc4626} from "../../../src/sc4626.sol";
 import {scWETHv2} from "../../../src/steth/scWETHv2.sol";
 import {scUSDCv2} from "../../../src/steth/scUSDCv2.sol";
-import {Swapper} from "../../../src/steth/Swapper.sol";
-import {PriceConverter} from "../../../src/steth/PriceConverter.sol";
+import {Swapper} from "../../../src/steth/swapper/Swapper.sol";
+import {PriceConverter} from "../../../src/steth/priceConverter/PriceConverter.sol";
 import {AaveV3ScWethAdapter as scWethAaveV3Adapter} from "../../../src/steth/scWethV2-adapters/AaveV3ScWethAdapter.sol";
 import {CompoundV3ScWethAdapter as scWethCompoundV3Adapter} from
     "../../../src/steth/scWethV2-adapters/CompoundV3ScWethAdapter.sol";

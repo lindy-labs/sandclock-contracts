@@ -11,7 +11,7 @@ import {IwstETH} from "../src/interfaces/lido/IwstETH.sol";
 import {ILido} from "../src/interfaces/lido/ILido.sol";
 import {Constants as C} from "../src/lib/Constants.sol";
 
-import {Swapper} from "../src/steth/Swapper.sol";
+import {Swapper} from "../src/steth/swapper/Swapper.sol";
 
 contract SwapperTest is Test {
     using Address for address;

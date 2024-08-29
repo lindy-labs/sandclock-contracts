@@ -22,8 +22,7 @@ import {SDaiWethPriceConverter} from "../src/steth/priceConverter/SDaiWethPriceC
 import {scCrossAssetYieldVault} from "../src/steth/scCrossAssetYieldVault.sol";
 
 import {scWETH} from "../src/steth/scWETH.sol";
-import {PriceConverter} from "../src/steth/PriceConverter.sol";
-import {Swapper} from "../src/steth/Swapper.sol";
+import {PriceConverter} from "../src/steth/priceConverter/PriceConverter.sol";
 import {ISwapRouter} from "../src/interfaces/uniswap/ISwapRouter.sol";
 import {AggregatorV3Interface} from "../src/interfaces/chainlink/AggregatorV3Interface.sol";
 import {IVault} from "../src/interfaces/balancer/IVault.sol";

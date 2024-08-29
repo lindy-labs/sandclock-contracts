@@ -7,7 +7,7 @@ import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 
 import {Constants as C} from "../src/lib/Constants.sol";
 import {AggregatorV3Interface} from "../src/interfaces/chainlink/AggregatorV3Interface.sol";
-import {PriceConverter} from "../src/steth/PriceConverter.sol";
+import {PriceConverter} from "../src/steth/priceConverter/PriceConverter.sol";
 import "../src/errors/scErrors.sol";
 import {FaultyAdapter} from "./mocks/adapters/FaultyAdapter.sol";
 

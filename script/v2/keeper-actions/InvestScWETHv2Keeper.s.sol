@@ -10,7 +10,7 @@ import {IERC20} from "openzeppelin-contracts/token/ERC20/IERC20.sol";
 import {MainnetAddresses} from "../../base/MainnetAddresses.sol";
 import {scWETHv2Keeper} from "src/steth/scWETHv2Keeper.sol";
 import {scWETHv2} from "src/steth/scWETHv2.sol";
-import {PriceConverter} from "src/steth/PriceConverter.sol";
+import {PriceConverter} from "src/steth/priceConverter/PriceConverter.sol";
 import {IScETHPriceConverter} from "src/steth/priceConverter/IPriceConverter.sol";
 import {Constants as C} from "src/lib/Constants.sol";
 

@@ -10,8 +10,8 @@ import {AccessControl} from "openzeppelin-contracts/access/AccessControl.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 
 import {Constants as C} from "../../../src/lib/Constants.sol";
-import {Swapper} from "../../../src/steth/Swapper.sol";
-import {PriceConverter} from "../../../src/steth/PriceConverter.sol";
+import {Swapper} from "../../../src/steth/swapper/Swapper.sol";
+import {PriceConverter} from "../../../src/steth/priceConverter/PriceConverter.sol";
 import {UsdcWethPriceConverter} from "../../../src/steth/priceConverter/UsdcWethPriceConverter.sol";
 import {scWETHv2} from "../../../src/steth/scWETHv2.sol";
 import {scUSDCv2} from "../../../src/steth/scUSDCv2.sol";
