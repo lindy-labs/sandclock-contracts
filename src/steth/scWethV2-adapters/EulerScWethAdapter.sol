@@ -5,7 +5,7 @@ import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {WETH} from "solmate/tokens/WETH.sol";
-import {IEulerDToken, IEulerEToken, IEulerMarkets} from "lib/euler-interfaces/contracts/IEuler.sol";
+import {IEulerDToken, IEulerEToken, IEulerMarkets} from "lib/euler-interfaces-legacy/contracts/IEuler.sol";
 
 import {Constants as C} from "../../lib/Constants.sol";
 import {IAdapter} from "../IAdapter.sol";
