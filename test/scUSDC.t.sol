@@ -61,9 +61,7 @@ contract scUSDCTest is Test {
 
     constructor() Test() {
         vm.createSelectFork(vm.envString("RPC_URL_MAINNET"));
-    }
 
-    function setUp() public {
         vm.rollFork(16643381);
 
         usdc = ERC20(C.USDC);

@@ -51,9 +51,6 @@ contract scWETHTest is Test {
 
     constructor() Test() {
         vm.createSelectFork(vm.envString("RPC_URL_MAINNET"));
-    }
-
-    function setUp() public {
         vm.rollFork(16784444);
 
         scWETH.ConstructorParams memory params = _createDefaultWethVaultConstructorParams();
