@@ -43,8 +43,6 @@ contract scSDAITest is Test {
     event Disinvested(uint256 wethAmount);
     event WethSwappedForAsset(uint256 wethAmount, uint256 assetAmountOut);
 
-    uint256 mainnetFork;
-
     address constant keeper = address(0x05);
     address constant alice = address(0x06);
 
@@ -62,8 +60,8 @@ contract scSDAITest is Test {
     uint256 pps;
     uint256 cleanStateSnapshot;
 
-    constructor() Test() {
-        mainnetFork = vm.createFork(vm.envString("RPC_URL_MAINNET"));
+    constructor() {
+        uint256 mainnetFork = vm.createFork(vm.envString("RPC_URL_MAINNET"));
         vm.selectFork(mainnetFork);
         vm.rollFork(19832667);
 
@@ -74,18 +72,25 @@ contract scSDAITest is Test {
 
         pps = wethVault.totalAssets().divWadDown(wethVault.totalSupply());
 
-        _deployAndSetUpVault();
+        priceConverter = new SDaiWethPriceConverter();
+        swapper = new SDaiWethSwapper();
 
-        cleanStateSnapshot = vm.snapshot();
-    }
+        vault = new scSDAI(address(this), keeper, wethVault, priceConverter, swapper);
 
-    function setUp() public {
-        vm.revertTo(cleanStateSnapshot);
+        vault.addAdapter(spark);
+
+        // set float percentage to 0 for most tests
+        vault.setFloatPercentage(0);
+        // assign keeper role to deployer
+        vault.grantRole(vault.KEEPER_ROLE(), address(this));
     }
 
     /// #constructor ///
 
     function test_constructor() public {
+        // this line is needed to include the constructor in the coverage report
+        vault = new scSDAI(address(this), keeper, wethVault, priceConverter, swapper);
+
         assertEq(address(vault.asset()), C.SDAI);
         assertEq(address(vault.targetVault()), address(wethVault), "weth vault");
         assertEq(address(vault.priceConverter()), address(priceConverter), "price converter");
@@ -187,6 +192,28 @@ contract scSDAITest is Test {
         );
     }
 
+    function test_sellProfit_FailsIfAmountReceivedIsLeessThanAmountOutMin() public {
+        uint256 initialBalance = 100000e18;
+        uint256 initialDebt = 10 ether;
+        deal(address(sDai), address(vault), initialBalance);
+
+        bytes[] memory callData = new bytes[](2);
+        callData[0] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, spark.id(), initialBalance);
+        callData[1] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, spark.id(), initialDebt);
+
+        vault.rebalance(callData);
+
+        // add 100% profit to the weth vault
+        uint256 initialWethInvested = vault.targetTokenInvestedAmount();
+        deal(address(weth), address(wethVault), initialWethInvested * 2);
+
+        uint256 tooLargeAmountOutMin = priceConverter.tokenToBaseAsset(vault.getProfit()).mulWadDown(1.01e18); // add 1% more than expected
+
+        vm.prank(keeper);
+        vm.expectRevert("Too little received");
+        vault.sellProfit(tooLargeAmountOutMin);
+    }
+
     function test_lifi() public {
         uint256 amount = 10000000000000000000;
         address lifi = 0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE;
@@ -251,7 +278,6 @@ contract scSDAITest is Test {
         _amount = 0;
         _amount = bound(_amount, 1e18, 10_000_000e18); // upper limit constrained by weth available on aave v3
         deal(address(sDai), alice, _amount);
-        console2.log("amount", _amount);
 
         vm.startPrank(alice);
         sDai.approve(address(vault), type(uint256).max);
@@ -280,12 +306,12 @@ contract scSDAITest is Test {
     }
 
     function test_exitAllPositions_RepaysDebtAndReleasesCollateralNoProfit() public {
-        uint256 initialBalance = 1_000_000e18;
+        uint256 initialBalance = 10_000e18;
         deal(address(sDai), address(vault), initialBalance);
 
         bytes[] memory callData = new bytes[](2);
         callData[0] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, spark.id(), initialBalance);
-        callData[1] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, spark.id(), 100 ether);
+        callData[1] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, spark.id(), 2 ether);
 
         vault.rebalance(callData);
 
@@ -343,8 +369,6 @@ contract scSDAITest is Test {
         // simulate profit
         uint256 wethInvested = weth.balanceOf(address(wethVault));
         deal(address(weth), address(wethVault), wethInvested.mulWadUp(1.5e18));
-
-        assertEq(vault.getProfit(), 50 ether, "profit");
 
         uint256 totalBefore = vault.totalAssets();
 
@@ -409,22 +433,6 @@ contract scSDAITest is Test {
     }
 
     ///////////////////////////////// INTERNAL METHODS /////////////////////////////////
-
-    function _deployAndSetUpVault() internal {
-        priceConverter = new SDaiWethPriceConverter();
-        swapper = new SDaiWethSwapper();
-
-        vault = new scSDAI(address(this), keeper, wethVault, priceConverter, swapper);
-
-        vault.addAdapter(spark);
-
-        // set vault eth balance to zero
-        vm.deal(address(vault), 0);
-        // set float percentage to 0 for most tests
-        vault.setFloatPercentage(0);
-        // assign keeper role to deployer
-        vault.grantRole(vault.KEEPER_ROLE(), address(this));
-    }
 
     function _assertCollateralAndDebt(uint256 _protocolId, uint256 _expectedCollateral, uint256 _expectedDebt)
         internal

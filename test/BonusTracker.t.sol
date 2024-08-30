@@ -194,19 +194,19 @@ contract BonusTrackerTest is DSTestPlus {
         );
     }
 
-    // function testCorrectness_bonus(uint256 timeLapsed) public {
-    //     timeLapsed = bound(timeLapsed, 1, 36500 days);
-    //     hevm.warp(timeLapsed);
-    //     stakingPool.boost();
-    //     timeLapsed = bound(timeLapsed, 1, 36500 days);
-    //     hevm.warp(timeLapsed * 2);
-    //     uint256 currentBonus = stakingPool.bonusOf(address(this));
-    //     uint256 accountBalance = stakingPool.balanceOf(address(this));
-    //     uint256 currentBonusPerToken = stakingPool.bonusPerToken();
-    //     uint256 userBonusPerTokenPaid = stakingPool.userBonusPerTokenPaid(address(this));
-    //     uint256 lastBonus = stakingPool.bonus(address(this));
-    //     assertEq(
-    //         currentBonus, accountBalance.mulDivDown(currentBonusPerToken - userBonusPerTokenPaid, PRECISION) + lastBonus
-    //     );
-    // }
+    function testCorrectness_bonus(uint256 timeLapsed) public {
+        timeLapsed = bound(timeLapsed, 1, 36500 days);
+        hevm.warp(timeLapsed);
+        stakingPool.boost();
+        timeLapsed = bound(timeLapsed, 1, 36500 days);
+        hevm.warp(timeLapsed * 2);
+        uint256 currentBonus = stakingPool.bonusOf(address(this));
+        uint256 accountBalance = stakingPool.balanceOf(address(this));
+        uint256 currentBonusPerToken = stakingPool.bonusPerToken();
+        uint256 userBonusPerTokenPaid = stakingPool.userBonusPerTokenPaid(address(this));
+        uint256 lastBonus = stakingPool.bonus(address(this));
+        assertEq(
+            currentBonus, accountBalance.mulDivDown(currentBonusPerToken - userBonusPerTokenPaid, PRECISION) + lastBonus
+        );
+    }
 }

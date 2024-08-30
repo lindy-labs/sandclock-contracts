@@ -166,6 +166,7 @@ contract scDAITest is Test {
         vault.withdraw(withdrawAmount, bob, alice);
 
         assertEq(vault.allowance(alice, bob), 0, "allowance not reduced to 0");
+        assertApproxEqAbs(dai.balanceOf(bob), withdrawAmount, 1, "withdrawn amount not transferred to bob");
     }
 
     function test_redeem_failsIfCallerIsNotOwner() public {
@@ -193,11 +194,11 @@ contract scDAITest is Test {
 
         assertEq(vault.allowance(alice, bob), 0, "allowance not zero");
 
-        uint256 withdrawAmount = shares / 2;
+        uint256 redeemAmount = shares / 2;
 
         vm.expectRevert();
         vm.prank(bob);
-        vault.redeem(withdrawAmount, bob, alice);
+        vault.redeem(redeemAmount, bob, alice);
     }
 
     function test_redeem_worksIfCallerIsApproved() public {
@@ -209,12 +210,25 @@ contract scDAITest is Test {
 
         assertEq(vault.allowance(alice, bob), shares / 2, "allowance not set");
 
-        uint256 withdrawAmount = shares / 2;
+        uint256 redeemAmount = shares / 2;
 
         vm.prank(bob);
-        vault.redeem(withdrawAmount, bob, alice);
+        vault.redeem(redeemAmount, bob, alice);
 
         assertEq(vault.allowance(alice, bob), 0, "allowance not reduced to 0");
+    }
+
+    function test_redeem_roundDown() public {
+        uint256 amount = 2;
+        uint256 shares = _deposit(amount, alice);
+
+        assertEq(shares, 2, "shares not 2");
+
+        uint256 redeemAmount = 1;
+
+        vm.prank(alice);
+        vm.expectRevert("ZERO_ASSETS");
+        vault.redeem(redeemAmount, bob, alice);
     }
 
     function _deployAndSetUpScsDai() internal {

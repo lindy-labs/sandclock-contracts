@@ -13,17 +13,19 @@ contract SDaiWethSwapper is ISinglePairSwapper, ZeroExSwapper {
     address public constant asset = address(C.SDAI);
     address public constant targetToken = address(C.WETH);
     // intermmediate token to swap to
-    ERC4626 public constant dai = ERC4626(C.DAI);
+    ERC20 public constant dai = ERC20(C.DAI);
 
-    bytes public constant swapPath = abi.encodePacked(targetToken, uint24(500), C.USDC, uint24(100), asset);
+    bytes public constant swapPath = abi.encodePacked(targetToken, uint24(500), C.USDC, uint24(100), dai);
 
     function swapTargetTokenForAsset(uint256 _wethAmount, uint256 _sDaiAmountOutMin)
         external
         override
         returns (uint256 sDaiReceived)
     {
+        uint256 daiAmountOutMin = ERC4626(asset).convertToAssets(_sDaiAmountOutMin);
+
         uint256 daiReceived =
-            SwapperLib._uniswapSwapExactInputMultihop(targetToken, _wethAmount, _sDaiAmountOutMin, swapPath);
+            SwapperLib._uniswapSwapExactInputMultihop(targetToken, _wethAmount, daiAmountOutMin, swapPath);
 
         sDaiReceived = ERC4626(asset).deposit(daiReceived, address(this));
     }
@@ -31,10 +33,12 @@ contract SDaiWethSwapper is ISinglePairSwapper, ZeroExSwapper {
     function swapAssetForExactTargetToken(uint256 _wethAmountOut) external override returns (uint256 sDaiSpent) {
         // unwrap all sdai to dai
         uint256 sDaiBalance = ERC20(asset).balanceOf(address(this));
+
         uint256 daiBalance = ERC4626(asset).redeem(sDaiBalance, address(this), address(this));
 
         // swap dai for exact weth
-        uint256 daiSpent = SwapperLib._uniswapSwapExactOutputMultihop(asset, _wethAmountOut, daiBalance, swapPath);
+        uint256 daiSpent =
+            SwapperLib._uniswapSwapExactOutputMultihop(address(dai), _wethAmountOut, daiBalance, swapPath);
 
         // deposit remaining dai to sdai
         uint256 remainingSDai = ERC4626(asset).deposit(daiBalance - daiSpent, address(this));

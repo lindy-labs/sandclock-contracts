@@ -2113,7 +2113,9 @@ contract scUSDCv2Test is Test {
         deal(C.EULER_REWARDS_TOKEN, address(vault), EUL_AMOUNT);
 
         vm.expectRevert(AmountReceivedBelowMin.selector);
-        vault.zeroExSwap(ERC20(C.EULER_REWARDS_TOKEN), ERC20(C.USDC), EUL_AMOUNT, EUL_SWAP_DATA, EUL_SWAP_USDC_RECEIVED + 1);
+        vault.zeroExSwap(
+            ERC20(C.EULER_REWARDS_TOKEN), ERC20(C.USDC), EUL_AMOUNT, EUL_SWAP_DATA, EUL_SWAP_USDC_RECEIVED + 1
+        );
     }
 
     function test_zeroExSwap_FailsIfSwapIsNotSucessful() public {
