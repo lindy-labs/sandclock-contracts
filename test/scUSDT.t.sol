@@ -113,7 +113,7 @@ contract scUSDTTest is Test {
         borrowOnAaveV3 = bound(
             borrowOnAaveV3,
             1e10,
-            priceConverter.baseAssetToToken(supplyOnAaveV3).mulWadDown(aaveV3Adapter.getMaxLtv() - 0.005e18) // -0.5% to avoid borrowing at max ltv
+            priceConverter.assetToTargetToken(supplyOnAaveV3).mulWadDown(aaveV3Adapter.getMaxLtv() - 0.005e18) // -0.5% to avoid borrowing at max ltv
         );
 
         uint256 initialBalance = supplyOnAaveV3.divWadDown(1e18 - floatPercentage);
@@ -172,7 +172,7 @@ contract scUSDTTest is Test {
         vm.prank(keeper);
         vault.sellProfit(0);
 
-        uint256 expectedDaiBalance = assetBalanceBefore + priceConverter.tokenToBaseAsset(profit);
+        uint256 expectedDaiBalance = assetBalanceBefore + priceConverter.targetTokenToAsset(profit);
         _assertCollateralAndDebt(aaveV3Adapter.id(), initialBalance, initialDebt);
         assertApproxEqRel(vault.assetBalance(), expectedDaiBalance, 0.01e18, "asset balance");
         assertApproxEqRel(
@@ -187,7 +187,7 @@ contract scUSDTTest is Test {
 
         assertEq(usdt.balanceOf(alice), 0, "alice deposit not transferred");
 
-        uint256 borrowAmount = priceConverter.baseAssetToToken(initialBalance.mulWadDown(0.6e18));
+        uint256 borrowAmount = priceConverter.assetToTargetToken(initialBalance.mulWadDown(0.6e18));
 
         bytes[] memory callData = new bytes[](2);
         callData[0] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, aaveV3Adapter.id(), initialBalance);
@@ -208,7 +208,7 @@ contract scUSDTTest is Test {
 
         _deposit(alice, initialBalance);
 
-        uint256 borrowAmount = priceConverter.baseAssetToToken(initialBalance.mulWadDown(0.6e18));
+        uint256 borrowAmount = priceConverter.assetToTargetToken(initialBalance.mulWadDown(0.6e18));
 
         bytes[] memory callData = new bytes[](2);
         callData[0] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, aaveV3Adapter.id(), initialBalance);
@@ -233,7 +233,7 @@ contract scUSDTTest is Test {
 
         _deposit(alice, _amount);
 
-        uint256 borrowAmount = priceConverter.baseAssetToToken(_amount.mulWadDown(0.6e18));
+        uint256 borrowAmount = priceConverter.assetToTargetToken(_amount.mulWadDown(0.6e18));
 
         bytes[] memory callData = new bytes[](2);
         callData[0] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, aaveV3Adapter.id(), _amount);

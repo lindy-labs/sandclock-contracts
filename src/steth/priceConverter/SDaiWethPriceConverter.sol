@@ -10,17 +10,18 @@ import {Constants as C} from "../../lib/Constants.sol";
 contract SDaiWethPriceConverter is ISinglePairPriceConverter {
     using FixedPointMathLib for uint256;
 
-    IERC4626 public constant sDai = IERC4626(C.SDAI);
+    address public constant asset = C.SDAI;
+    address public constant targetToken = C.WETH;
 
     // Chainlink price feed (DAI -> ETH)
     AggregatorV3Interface public constant DAI_ETH_PRICE_FEED = AggregatorV3Interface(C.CHAINLINK_DAI_ETH_PRICE_FEED);
 
-    function tokenToBaseAsset(uint256 _ethAmount) external view override returns (uint256) {
-        return sDai.convertToShares(_ethToDai(_ethAmount));
+    function targetTokenToAsset(uint256 _ethAmount) external view override returns (uint256) {
+        return IERC4626(asset).convertToShares(_ethToDai(_ethAmount));
     }
 
-    function baseAssetToToken(uint256 _sDaiAmount) external view override returns (uint256) {
-        return _daiToEth(sDai.convertToAssets(_sDaiAmount));
+    function assetToTargetToken(uint256 _sDaiAmount) external view override returns (uint256) {
+        return _daiToEth(IERC4626(asset).convertToAssets(_sDaiAmount));
     }
 
     function _ethToDai(uint256 _ethAmount) internal view returns (uint256) {

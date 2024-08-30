@@ -421,7 +421,7 @@ abstract contract scCrossAssetYieldVault is BaseV2Vault {
         if (profit != 0) {
             uint256 withdrawn = _disinvest(profit);
 
-            uint256 assetAmountOutMin = converter().tokenToBaseAsset(withdrawn).mulWadDown(slippageTolerance);
+            uint256 assetAmountOutMin = converter().targetTokenToAsset(withdrawn).mulWadDown(slippageTolerance);
             uint256 assetReceived = _swapTargetTokenForAsset(withdrawn, assetAmountOutMin);
 
             if (initialBalance + assetReceived >= _assets) return;
@@ -488,9 +488,9 @@ abstract contract scCrossAssetYieldVault is BaseV2Vault {
 
         if (profit != 0) {
             // account for slippage when selling targetToken profits
-            total += converter().tokenToBaseAsset(profit).mulWadDown(slippageTolerance);
+            total += converter().targetTokenToAsset(profit).mulWadDown(slippageTolerance);
         } else {
-            total -= converter().tokenToBaseAsset(_debt - _invested);
+            total -= converter().targetTokenToAsset(_debt - _invested);
         }
     }
 

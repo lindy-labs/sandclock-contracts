@@ -14,7 +14,10 @@ interface IScETHPriceConverter is IPriceConverter {
 }
 
 interface ISinglePairPriceConverter is IPriceConverter {
-    function tokenToBaseAsset(uint256 _tokenAmount) external view returns (uint256 assetAmount);
+    function asset() external view returns (address);
+    function targetToken() external view returns (address);
 
-    function baseAssetToToken(uint256 _assetAmount) external view returns (uint256 tokenAmount);
+    function targetTokenToAsset(uint256 _tokenAmount) external view returns (uint256 assetAmount);
+
+    function assetToTargetToken(uint256 _assetAmount) external view returns (uint256 tokenAmount);
 }

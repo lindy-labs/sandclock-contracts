@@ -9,13 +9,16 @@ import {Constants as C} from "../../lib/Constants.sol";
 contract UsdtWethPriceConverter is ISinglePairPriceConverter {
     using FixedPointMathLib for uint256;
 
+    address public constant asset = C.USDT;
+    address public constant targetToken = C.WETH;
+
     AggregatorV3Interface public constant USDT_ETH_PRICE_FEED = AggregatorV3Interface(C.CHAINLINK_USDT_ETH_PRICE_FEED);
 
-    function tokenToBaseAsset(uint256 _wethAmount) external view override returns (uint256 usdtAmount) {
+    function targetTokenToAsset(uint256 _wethAmount) external view override returns (uint256 usdtAmount) {
         usdtAmount = _wethAmount.divWadDown(_usdtPriceInEth() * C.WETH_USDT_DECIMALS_DIFF);
     }
 
-    function baseAssetToToken(uint256 _usdtAmount) external view override returns (uint256 wethAmount) {
+    function assetToTargetToken(uint256 _usdtAmount) external view override returns (uint256 wethAmount) {
         wethAmount = (_usdtAmount * C.WETH_USDT_DECIMALS_DIFF).mulWadDown(_usdtPriceInEth());
     }
 

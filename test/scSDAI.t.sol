@@ -128,7 +128,7 @@ contract scSDAITest is Test {
         borrowOnSpark = bound(
             borrowOnSpark,
             1e10,
-            priceConverter.baseAssetToToken(supplyOnSpark).mulWadDown(spark.getMaxLtv() - 0.005e18) // -0.5% to avoid borrowing at max ltv
+            priceConverter.assetToTargetToken(supplyOnSpark).mulWadDown(spark.getMaxLtv() - 0.005e18) // -0.5% to avoid borrowing at max ltv
         );
 
         uint256 initialBalance = supplyOnSpark.divWadDown(1e18 - floatPercentage);
@@ -184,7 +184,7 @@ contract scSDAITest is Test {
         vm.prank(keeper);
         vault.sellProfit(0);
 
-        uint256 expectedDaiBalance = sDaiBalanceBefore + priceConverter.tokenToBaseAsset(profit);
+        uint256 expectedDaiBalance = sDaiBalanceBefore + priceConverter.targetTokenToAsset(profit);
         _assertCollateralAndDebt(spark.id(), initialBalance, initialDebt);
         assertApproxEqRel(vault.assetBalance(), expectedDaiBalance, 0.01e18, "sDai balance");
         assertApproxEqRel(
@@ -207,7 +207,7 @@ contract scSDAITest is Test {
         uint256 initialWethInvested = vault.targetTokenInvestedAmount();
         deal(address(weth), address(wethVault), initialWethInvested * 2);
 
-        uint256 tooLargeAmountOutMin = priceConverter.tokenToBaseAsset(vault.getProfit()).mulWadDown(1.01e18); // add 1% more than expected
+        uint256 tooLargeAmountOutMin = priceConverter.targetTokenToAsset(vault.getProfit()).mulWadDown(1.01e18); // add 1% more than expected
 
         vm.prank(keeper);
         vm.expectRevert("Too little received");
@@ -257,7 +257,7 @@ contract scSDAITest is Test {
         _amount = bound(_amount, 1e18, 10_000_000e18); // upper limit constrained by weth available on aave v3
         _deposit(alice, _amount);
 
-        uint256 borrowAmount = priceConverter.baseAssetToToken(_amount.mulWadDown(0.7e18));
+        uint256 borrowAmount = priceConverter.assetToTargetToken(_amount.mulWadDown(0.7e18));
 
         bytes[] memory callData = new bytes[](2);
         callData[0] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, spark.id(), _amount);
@@ -284,7 +284,7 @@ contract scSDAITest is Test {
         vault.deposit(_amount, alice);
         vm.stopPrank();
 
-        uint256 borrowAmount = priceConverter.baseAssetToToken(_amount.mulWadDown(0.7e18));
+        uint256 borrowAmount = priceConverter.assetToTargetToken(_amount.mulWadDown(0.7e18));
 
         bytes[] memory callData = new bytes[](2);
         callData[0] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, spark.id(), _amount);
