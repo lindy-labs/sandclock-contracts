@@ -149,32 +149,32 @@ library SwapperLib {
 
     /**
      * @notice Swap tokens on 0xswap.
+     * @param _router Address of the 0x router.
      * @param _tokenIn Address of the token to swap.
      * @param _tokenOut Address of the token to receive.
      * @param _amountIn Amount of the token to swap.
      * @param _amountOutMin Minimum amount of the token to receive.
      * @param _swapData Encoded swap data obtained from 0x API.
-     * @return Amount of the token received.
+     * @return amountReceived Amount of the token received.
      */
     function _zeroExSwap(
+        address _router,
         address _tokenIn,
         address _tokenOut,
         uint256 _amountIn,
         uint256 _amountOutMin,
         bytes calldata _swapData
-    ) internal returns (uint256) {
+    ) internal returns (uint256 amountReceived) {
         uint256 tokenOutInitialBalance = ERC20(_tokenOut).balanceOf(address(this));
 
-        ERC20(_tokenIn).safeApprove(C.ZERO_EX_ROUTER, _amountIn);
+        ERC20(_tokenIn).safeApprove(_router, _amountIn);
 
-        C.ZERO_EX_ROUTER.functionCall(_swapData);
+        _router.functionCall(_swapData);
 
-        uint256 amountReceived = ERC20(_tokenOut).balanceOf(address(this)) - tokenOutInitialBalance;
+        amountReceived = ERC20(_tokenOut).balanceOf(address(this)) - tokenOutInitialBalance;
 
         if (amountReceived < _amountOutMin) revert AmountReceivedBelowMin();
 
-        ERC20(_tokenIn).approve(C.ZERO_EX_ROUTER, 0);
-
-        return amountReceived;
+        ERC20(_tokenIn).approve(_router, 0);
     }
 }

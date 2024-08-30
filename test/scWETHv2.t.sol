@@ -1962,7 +1962,7 @@ contract scWETHv2Test is Test {
     }
 
     function _deployVaultWithDefaultParams() internal returns (scWETHv2) {
-        return new scWETHv2(admin, keeper, WETH(payable(C.WETH)), new Swapper(), priceConverter);
+        return new scWETHv2(admin, keeper, WETH(payable(C.WETH)), new SwapperHarness(), priceConverter);
     }
 
     function _simulate_stEthStakingInterest(uint256 timePeriod, uint256 stEthStakingInterest) internal {
@@ -1981,4 +1981,10 @@ contract scWETHv2Test is Test {
     }
 
     receive() external payable {}
+}
+
+contract SwapperHarness is Swapper {
+    function zeroExRouter() public pure override returns (address) {
+        return C.ZERO_EX_ROUTER;
+    }
 }

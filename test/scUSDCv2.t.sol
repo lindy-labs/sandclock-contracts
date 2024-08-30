@@ -2205,7 +2205,7 @@ contract scUSDCv2Test is Test {
 
     function _deployAndSetUpVault() internal {
         priceConverter = new UsdcWethPriceConverter();
-        swapper = new UsdcWethSwapper();
+        swapper = new UsdcWethSwapperHarness();
 
         vault = new scUSDCv2(address(this), keeper, wethVault, priceConverter, swapper);
 
@@ -2247,5 +2247,11 @@ contract scUSDCv2Test is Test {
 
     function _usdcBalance() internal view returns (uint256) {
         return vault.asset().balanceOf(address(vault));
+    }
+}
+
+contract UsdcWethSwapperHarness is UsdcWethSwapper {
+    function zeroExRouter() public pure override returns (address) {
+        return C.ZERO_EX_ROUTER;
     }
 }

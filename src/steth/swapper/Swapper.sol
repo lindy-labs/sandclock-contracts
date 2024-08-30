@@ -13,6 +13,7 @@ import {AmountReceivedBelowMin} from "../../errors/scErrors.sol";
 import {Constants as C} from "../../lib/Constants.sol";
 import {IScWETHSwapper} from "./ISwapper.sol";
 import {SwapperLib} from "./SwapperLib.sol";
+import {ZeroExSwapper} from "./ZeroExSwapper.sol";
 
 /**
  * @title Swapper
@@ -20,7 +21,7 @@ import {SwapperLib} from "./SwapperLib.sol";
  * @dev This contract is only meant to be used via delegatecalls from another contract.
  * @dev Using this contract directly for swaps might result in reverts.
  */
-contract Swapper is IScWETHSwapper {
+contract Swapper is IScWETHSwapper, ZeroExSwapper {
     using SafeTransferLib for ERC20;
     using Address for address;
 
@@ -103,25 +104,6 @@ contract Swapper is IScWETHSwapper {
         amountIn = SwapperLib._uniswapSwapExactOutput(
             address(_tokenIn), address(_tokenOut), _amountOut, _amountInMaximum, _poolFee
         );
-    }
-
-    /**
-     * @notice Swap tokens on 0xswap.
-     * @param _tokenIn Address of the token to swap.
-     * @param _tokenOut Address of the token to receive.
-     * @param _amountIn Amount of the token to swap.
-     * @param _amountOutMin Minimum amount of the token to receive.
-     * @param _swapData Encoded swap data obtained from 0x API.
-     * @return Amount of the token received.
-     */
-    function zeroExSwap(
-        address _tokenIn,
-        address _tokenOut,
-        uint256 _amountIn,
-        uint256 _amountOutMin,
-        bytes calldata _swapData
-    ) external returns (uint256) {
-        return SwapperLib._zeroExSwap(_tokenIn, _tokenOut, _amountIn, _amountOutMin, _swapData);
     }
 
     /**

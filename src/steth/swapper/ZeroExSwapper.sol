@@ -4,6 +4,7 @@ pragma solidity ^0.8.19;
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 
+import {Constants as C} from "../../lib/Constants.sol";
 import {ISwapper} from "./ISwapper.sol";
 import {SwapperLib} from "./SwapperLib.sol";
 
@@ -14,7 +15,13 @@ import {SwapperLib} from "./SwapperLib.sol";
  * @dev Using this contract directly for swaps might result in reverts.
  */
 contract ZeroExSwapper is ISwapper {
-    using SafeTransferLib for ERC20;
+    /**
+     * @notice Address of the LIFI swap router, instead of the 0x swap router.
+     * @dev Address is set to the LIFI router by default since the 0x introduced a fee on swaps.
+     */
+    function zeroExRouter() public pure virtual returns (address) {
+        return C.LIFI;
+    }
 
     /**
      * @notice Swap tokens on 0xswap.
@@ -32,6 +39,6 @@ contract ZeroExSwapper is ISwapper {
         uint256 _amountOutMin,
         bytes calldata _swapData
     ) external returns (uint256) {
-        return SwapperLib._zeroExSwap(_tokenIn, _tokenOut, _amountIn, _amountOutMin, _swapData);
+        return SwapperLib._zeroExSwap(zeroExRouter(), _tokenIn, _tokenOut, _amountIn, _amountOutMin, _swapData);
     }
 }
