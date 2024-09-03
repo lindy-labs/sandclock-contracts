@@ -2,7 +2,9 @@
 pragma solidity ^0.8.19;
 
 interface ISwapper {
-    function zeroExSwap(
+    function swapRouter() external view returns (address);
+
+    function swapTokens(
         address _tokenIn,
         address _tokenOut,
         uint256 _amountIn,

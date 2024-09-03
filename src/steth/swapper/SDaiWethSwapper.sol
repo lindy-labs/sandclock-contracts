@@ -7,12 +7,12 @@ import {ERC4626} from "solmate/mixins/ERC4626.sol";
 import {Constants as C} from "../../lib/Constants.sol";
 import {ISinglePairSwapper} from "../swapper/ISwapper.sol";
 import {SwapperLib} from "./SwapperLib.sol";
-import {ZeroExSwapper} from "./ZeroExSwapper.sol";
+import {UniversalSwapper} from "./UniversalSwapper.sol";
 
-contract SDaiWethSwapper is ISinglePairSwapper, ZeroExSwapper {
+contract SDaiWethSwapper is ISinglePairSwapper, UniversalSwapper {
     address public constant asset = address(C.SDAI);
     address public constant targetToken = address(C.WETH);
-    // intermmediate token to swap to
+    // intermmediate token for swap
     ERC20 public constant dai = ERC20(C.DAI);
 
     bytes public constant swapPath = abi.encodePacked(targetToken, uint24(500), C.USDC, uint24(100), dai);

@@ -38,6 +38,7 @@ import {FaultyAdapter} from "./mocks/adapters/FaultyAdapter.sol";
 import {scCrossAssetYieldVault} from "../src/steth/scCrossAssetYieldVault.sol";
 import {UsdcWethSwapper} from "../src/steth/swapper/UsdcWethSwapper.sol";
 import {ISwapper} from "../src/steth/swapper/ISwapper.sol";
+import {UniversalSwapper} from "../src/steth/swapper/UniversalSwapper.sol";
 
 contract scUSDCv2Test is Test {
     using FixedPointMathLib for uint256;
@@ -1154,7 +1155,9 @@ contract scUSDCv2Test is Test {
             priceConverter.assetToTargetToken(supplyOnAaveV3).mulWadDown(aaveV3.getMaxLtv() - 0.005e18) // -0.5% to avoid borrowing at max ltv
         );
         borrowOnAaveV2 = bound(
-            borrowOnAaveV2, 1, priceConverter.assetToTargetToken(supplyOnAaveV2).mulWadDown(aaveV2.getMaxLtv() - 0.005e18)
+            borrowOnAaveV2,
+            1,
+            priceConverter.assetToTargetToken(supplyOnAaveV2).mulWadDown(aaveV2.getMaxLtv() - 0.005e18)
         );
 
         deal(address(usdc), address(vault), initialBalance);
@@ -2068,16 +2071,16 @@ contract scUSDCv2Test is Test {
         vault.exitAllPositions(invalidEndUsdcBalanceMin);
     }
 
-    /// #zeroExSwap ///
+    /// #swapTokens ///
 
-    function test_zeroExSwap_FailsIfCallerIsNotKeeper() public {
+    function test_swapTokens_FailsIfCallerIsNotKeeper() public {
         _setUpForkAtBlock(EUL_SWAP_BLOCK);
         vm.startPrank(alice);
         vm.expectRevert(CallerNotKeeper.selector);
-        vault.zeroExSwap(ERC20(C.EULER_REWARDS_TOKEN), ERC20(C.USDC), 0, bytes("0"), 0);
+        vault.swapTokens(ERC20(C.EULER_REWARDS_TOKEN), ERC20(C.USDC), 1, 0, bytes("0"));
     }
 
-    function test_zeroExSwap_SwapsEulerForUsdc() public {
+    function test_swapTokens_SwapsEulerForUsdc() public {
         _setUpForkAtBlock(EUL_SWAP_BLOCK);
 
         uint256 initialUsdcBalance = 2_000e6;
@@ -2088,7 +2091,7 @@ contract scUSDCv2Test is Test {
         assertEq(_usdcBalance(), initialUsdcBalance, "usdc balance");
         assertEq(vault.totalAssets(), initialUsdcBalance, "total assets");
 
-        vault.zeroExSwap(ERC20(C.EULER_REWARDS_TOKEN), ERC20(C.USDC), EUL_AMOUNT, EUL_SWAP_DATA, EUL_SWAP_USDC_RECEIVED);
+        vault.swapTokens(ERC20(C.EULER_REWARDS_TOKEN), ERC20(C.USDC), EUL_AMOUNT, EUL_SWAP_USDC_RECEIVED, EUL_SWAP_DATA);
 
         assertEq(ERC20(C.EULER_REWARDS_TOKEN).balanceOf(address(vault)), EUL_AMOUNT, "euler end balance");
         assertEq(vault.totalAssets(), initialUsdcBalance + EUL_SWAP_USDC_RECEIVED, "vault total assets");
@@ -2096,7 +2099,7 @@ contract scUSDCv2Test is Test {
         assertEq(ERC20(C.EULER_REWARDS_TOKEN).allowance(address(vault), C.ZERO_EX_ROUTER), 0, "0x token allowance");
     }
 
-    function test_zeroExSwap_EmitsEventOnSuccessfulSwap() public {
+    function test_swapTokens_EmitsEventOnSuccessfulSwap() public {
         _setUpForkAtBlock(EUL_SWAP_BLOCK);
 
         deal(C.EULER_REWARDS_TOKEN, address(vault), EUL_AMOUNT);
@@ -2104,21 +2107,21 @@ contract scUSDCv2Test is Test {
         vm.expectEmit(true, true, true, true);
         emit TokenSwapped(C.EULER_REWARDS_TOKEN, EUL_AMOUNT, EUL_SWAP_USDC_RECEIVED);
 
-        vault.zeroExSwap(ERC20(C.EULER_REWARDS_TOKEN), ERC20(C.USDC), EUL_AMOUNT, EUL_SWAP_DATA, 0);
+        vault.swapTokens(ERC20(C.EULER_REWARDS_TOKEN), ERC20(C.USDC), EUL_AMOUNT, 0, EUL_SWAP_DATA);
     }
 
-    function test_zeroExSwap_FailsIfUsdcAmountReceivedIsLessThanMin() public {
+    function test_swapTokens_FailsIfUsdcAmountReceivedIsLessThanMin() public {
         _setUpForkAtBlock(EUL_SWAP_BLOCK);
 
         deal(C.EULER_REWARDS_TOKEN, address(vault), EUL_AMOUNT);
 
         vm.expectRevert(AmountReceivedBelowMin.selector);
-        vault.zeroExSwap(
-            ERC20(C.EULER_REWARDS_TOKEN), ERC20(C.USDC), EUL_AMOUNT, EUL_SWAP_DATA, EUL_SWAP_USDC_RECEIVED + 1
+        vault.swapTokens(
+            ERC20(C.EULER_REWARDS_TOKEN), ERC20(C.USDC), EUL_AMOUNT, EUL_SWAP_USDC_RECEIVED + 1, EUL_SWAP_DATA
         );
     }
 
-    function test_zeroExSwap_FailsIfSwapIsNotSucessful() public {
+    function test_swapTokens_FailsIfSwapIsNotSucessful() public {
         _setUpForkAtBlock(EUL_SWAP_BLOCK);
 
         deal(C.EULER_REWARDS_TOKEN, address(vault), EUL_AMOUNT);
@@ -2126,7 +2129,7 @@ contract scUSDCv2Test is Test {
         bytes memory invalidSwapData = hex"6af479b20000";
 
         vm.expectRevert(Errors.FailedCall.selector);
-        vault.zeroExSwap(ERC20(C.EULER_REWARDS_TOKEN), ERC20(C.USDC), EUL_AMOUNT, invalidSwapData, 0);
+        vault.swapTokens(ERC20(C.EULER_REWARDS_TOKEN), ERC20(C.USDC), EUL_AMOUNT, 0, invalidSwapData);
     }
 
     /// #claimRewards ///
@@ -2251,7 +2254,7 @@ contract scUSDCv2Test is Test {
 }
 
 contract UsdcWethSwapperHarness is UsdcWethSwapper {
-    function zeroExRouter() public pure override returns (address) {
+    function swapRouter() public pure override(ISwapper, UniversalSwapper) returns (address) {
         return C.ZERO_EX_ROUTER;
     }
 }

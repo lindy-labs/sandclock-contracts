@@ -195,11 +195,7 @@ contract RebalanceScWethV2 is Script, scWETHv2Helper {
             bytes memory swapData = getSwapData(wethSwapAmount, C.WETH, C.WSTETH);
 
             if ((swapData.length > 0) && useZeroEx) {
-                multicallData.push(
-                    abi.encodeWithSelector(
-                        BaseV2Vault.zeroExSwap.selector, C.WETH, C.WSTETH, wethSwapAmount, swapData, 0
-                    )
-                );
+                multicallData.push(_getSwapCallData(C.WETH, C.WSTETH, wethSwapAmount, 0, swapData));
             } else {
                 multicallData.push(abi.encodeWithSelector(scWETHv2.swapWethToWstEth.selector, wethSwapAmount));
             }
@@ -246,16 +242,7 @@ contract RebalanceScWethV2 is Script, scWETHv2Helper {
             bytes memory swapData = getSwapData(swapAmount, C.WSTETH, C.WETH);
 
             if ((swapData.length > 0) && useZeroEx) {
-                multicallData.push(
-                    abi.encodeWithSelector(
-                        BaseV2Vault.zeroExSwap.selector,
-                        C.WSTETH,
-                        C.WETH,
-                        swapAmount,
-                        swapData,
-                        C.ONE - wstEthToWethSlippageTolerance
-                    )
-                );
+                multicallData.push(_getSwapCallData(C.WSTETH, C.WETH, swapAmount, 0, swapData));
             } else {
                 multicallData.push(
                     abi.encodeWithSelector(
@@ -365,5 +352,19 @@ contract RebalanceScWethV2 is Script, scWETHv2Helper {
 
         if (collateralInWeth != 0) console2.log("net LTV\t\t\t", debt.divWadUp(collateralInWeth));
         console2.log("wstEth balance\t\t", ERC20(C.WSTETH).balanceOf(address(vault)));
+    }
+
+    function _getSwapCallData(
+        address _tokenIn,
+        address _tokenOut,
+        uint256 _amountIn,
+        uint256 _amountOutMin,
+        bytes memory _swapData
+    ) internal pure returns (bytes memory callData) {
+        // function zeroExSwap(ERC20 _tokenIn, ERC20 _tokenOut, uint256 _amount, bytes calldata _swapData, uint256 _amountOutMin)
+        bytes4 zeroExSelector = bytes4(keccak256("zeroExSwap(address,address,uint256,bytes,uint256)"));
+
+        // NOTE: if the target contract changes from the current MA.SCWETHV2 to a recent one, change the below line to abi.encodeCall(BaseV2Vault.swapTokens.selector, _tokenIn, _tokenOut, _amountIn, _tokenIn, _tokenOut, _amountIn, _swapData, _amountOutMin, _swapData)
+        callData = abi.encodeWithSelector(zeroExSelector, _tokenIn, _tokenOut, _amountIn, _swapData, _amountOutMin);
     }
 }

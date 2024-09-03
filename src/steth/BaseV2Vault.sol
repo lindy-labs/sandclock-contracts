@@ -186,32 +186,36 @@ abstract contract BaseV2Vault is sc4626, IFlashLoanRecipient {
         emit RewardsClaimed(_adapterId);
     }
 
+    // TODO: ERC20 -> address
     /**
-     * @notice Sell any token for any whitelisted token on 0x exchange.
-     * @param _tokenIn The token to sell.
-     * @param _tokenOut The token to buy.
-     * @param _amount The amount of tokens to sell.
-     * @param _swapData The swap data for 0xrouter.
-     * @param _amountOutMin The minimum output token amount to receive for the swap.
+     * @notice Sell any token for any whitelisted token on preconfigured exchange in the swapper contract.
+     * @param _tokenIn Address of the token to swap.
+     * @param _tokenOut Address of the token to receive.
+     * @param _amountIn Amount of the token to swap.
+     * @param _amountOutMin Minimum amount of the token to receive.
+     * @param _swapData Arbitrary data to pass to the swap router.
      */
-    function zeroExSwap(
+    function swapTokens(
         ERC20 _tokenIn,
         ERC20 _tokenOut,
-        uint256 _amount,
-        bytes calldata _swapData,
-        uint256 _amountOutMin
+        uint256 _amountIn,
+        uint256 _amountOutMin,
+        bytes calldata _swapData
     ) external {
         _onlyKeeperOrFlashLoan();
 
         if (!zeroExSwapWhitelist[_tokenOut]) revert TokenOutNotAllowed(address(_tokenOut));
 
         bytes memory result = address(swapper).functionDelegateCall(
-            abi.encodeWithSelector(ISwapper.zeroExSwap.selector, _tokenIn, _tokenOut, _amount, _amountOutMin, _swapData)
+            abi.encodeWithSelector(
+                ISwapper.swapTokens.selector, _tokenIn, _tokenOut, _amountIn, _amountOutMin, _swapData
+            )
         );
 
         uint256 amountReceived = abi.decode(result, (uint256));
 
-        emit TokenSwapped(address(_tokenIn), _amount, amountReceived);
+        // TODO: update event data
+        emit TokenSwapped(address(_tokenIn), _amountIn, amountReceived);
     }
 
     function _multiCall(bytes[] memory _callData) internal {

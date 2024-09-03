@@ -24,6 +24,7 @@ import {IProtocolFeesCollector} from "../src/interfaces/balancer/IProtocolFeesCo
 import {AggregatorV3Interface} from "../src/interfaces/chainlink/AggregatorV3Interface.sol";
 import {sc4626} from "../src/sc4626.sol";
 import {BaseV2Vault} from "../src/steth/BaseV2Vault.sol";
+import {UniversalSwapper} from "../src/steth/swapper/UniversalSwapper.sol";
 import {scWETHv2Helper} from "./helpers/scWETHv2Helper.sol";
 import "../src/errors/scErrors.sol";
 
@@ -32,6 +33,7 @@ import {AaveV3ScWethAdapter} from "../src/steth/scWethV2-adapters/AaveV3ScWethAd
 import {CompoundV3ScWethAdapter} from "../src/steth/scWethV2-adapters/CompoundV3ScWethAdapter.sol";
 import {EulerScWethAdapter} from "../src/steth/scWethV2-adapters/EulerScWethAdapter.sol";
 import {Swapper} from "../src/steth/swapper/Swapper.sol";
+import {ISwapper} from "../src/steth/swapper/ISwapper.sol";
 import {PriceConverter} from "../src/steth/priceConverter/PriceConverter.sol";
 import {MockAdapter} from "./mocks/adapters/MockAdapter.sol";
 
@@ -160,14 +162,14 @@ contract scWETHv2Test is Test {
         assertEq(vault.isTokenWhitelisted(ERC20(C.USDC)), false);
     }
 
-    function test_zeroExSwap_TokenOutNotAllowed() public {
+    function test_swapTokens_TokenOutNotAllowed() public {
         _setUp(BLOCK_AFTER_EULER_EXPLOIT);
         uint256 amount = 10 ether;
         _depositToVault(address(this), amount);
 
         vm.expectRevert(abi.encodeWithSelector(TokenOutNotAllowed.selector, C.USDC));
         hoax(keeper);
-        vault.zeroExSwap(weth, ERC20(C.USDC), amount, "", 0);
+        vault.swapTokens(weth, ERC20(C.USDC), amount, 0, "");
     }
 
     function test_addAdapter() public {
@@ -322,7 +324,7 @@ contract scWETHv2Test is Test {
         balancer.flashLoan(address(vault), tokens, amounts, abi.encode(0, 0));
     }
 
-    function test_zeroExSwap_EulerToWeth() public {
+    function test_swapTokens_EulerToWeth() public {
         _setUp(17322802);
 
         uint256 expectedWethAmount = 988320853404199400;
@@ -334,16 +336,16 @@ contract scWETHv2Test is Test {
         deal(C.EULER_REWARDS_TOKEN, address(vault), eulerAmount);
 
         vm.expectRevert(CallerNotKeeper.selector);
-        vault.zeroExSwap(ERC20(C.EULER_REWARDS_TOKEN), ERC20(C.WETH), eulerAmount, swapData, 0);
+        vault.swapTokens(ERC20(C.EULER_REWARDS_TOKEN), ERC20(C.WETH), eulerAmount, 0, swapData);
 
         hoax(keeper);
-        vault.zeroExSwap(ERC20(C.EULER_REWARDS_TOKEN), ERC20(C.WETH), eulerAmount, swapData, 0);
+        vault.swapTokens(ERC20(C.EULER_REWARDS_TOKEN), ERC20(C.WETH), eulerAmount, 0, swapData);
 
         assertGe(weth.balanceOf(address(vault)), expectedWethAmount, "weth not received");
         assertEq(ERC20(C.EULER_REWARDS_TOKEN).balanceOf(address(vault)), 0, "euler token not transferred out");
     }
 
-    function test_zeroExSwap_WstEthToWeth() public {
+    function test_swapTokens_WstEthToWeth() public {
         _setUp(17323024);
 
         uint256 wstEthAmount = 10 ether;
@@ -353,7 +355,7 @@ contract scWETHv2Test is Test {
 
         deal(address(wstEth), address(vault), wstEthAmount);
         vm.prank(keeper);
-        vault.zeroExSwap(ERC20(address(wstEth)), ERC20(C.WETH), wstEthAmount, swapData, 0);
+        vault.swapTokens(ERC20(address(wstEth)), ERC20(C.WETH), wstEthAmount, 0, swapData);
 
         assertGe(weth.balanceOf(address(vault)), expectedWethAmount, "weth not received");
         assertEq(wstEth.balanceOf(address(vault)), 0, "wstEth not transferred out");
@@ -698,7 +700,7 @@ contract scWETHv2Test is Test {
 
         // swap wstEth to weth using zeroEx swap
         callData[1] = abi.encodeWithSelector(
-            BaseV2Vault.zeroExSwap.selector, wstEth, ERC20(C.WETH), wstEthAmountToWithdraw, swapData, 0
+            BaseV2Vault.swapTokens.selector, wstEth, ERC20(C.WETH), wstEthAmountToWithdraw, 0, swapData
         );
 
         hoax(keeper);
@@ -1161,9 +1163,6 @@ contract scWETHv2Test is Test {
     function test_invest_withZeroExWethToWstEthSwap() public {
         _setUp(17934941);
 
-        bytes memory swapData =
-            hex"6af479b20000000000000000000000000000000000000000000000000000000000000080000000000000000000000000000000000000000000000011e3ab8395c6e8000000000000000000000000000000000000000000000000000f97a7ede4f09e7a5b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002bc02aaa39b223fe8d0a0e5c4f27ead9083c756cc20000647f39c581f595b53c5cb19bd0b3f8da6c935e2ca0000000000000000000000000000000000000000000869584cd000000000000000000000000588ebf90cce940403c2d3650519313ed5c414cc200000000000000000000000000000000095789faafab13e98e0d8e807cdbbddf";
-
         vault.setTreasury(treasury);
         uint256 amount = 100 ether;
         _depositToVault(address(this), amount);
@@ -1188,7 +1187,12 @@ contract scWETHv2Test is Test {
         bytes[] memory callData = new bytes[](3);
 
         callData[0] = abi.encodeWithSelector(
-            BaseV2Vault.zeroExSwap.selector, weth, wstEth, investAmount + totalFlashLoanAmount, swapData, 1
+            BaseV2Vault.swapTokens.selector,
+            weth,
+            wstEth,
+            investAmount + totalFlashLoanAmount,
+            1,
+            hex"6af479b20000000000000000000000000000000000000000000000000000000000000080000000000000000000000000000000000000000000000011e3ab8395c6e8000000000000000000000000000000000000000000000000000f97a7ede4f09e7a5b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002bc02aaa39b223fe8d0a0e5c4f27ead9083c756cc20000647f39c581f595b53c5cb19bd0b3f8da6c935e2ca0000000000000000000000000000000000000000000869584cd000000000000000000000000588ebf90cce940403c2d3650519313ed5c414cc200000000000000000000000000000000095789faafab13e98e0d8e807cdbbddf"
         );
 
         callData[1] = abi.encodeWithSelector(
@@ -1984,7 +1988,7 @@ contract scWETHv2Test is Test {
 }
 
 contract SwapperHarness is Swapper {
-    function zeroExRouter() public pure override returns (address) {
+    function swapRouter() public pure override(ISwapper, UniversalSwapper) returns (address) {
         return C.ZERO_EX_ROUTER;
     }
 }

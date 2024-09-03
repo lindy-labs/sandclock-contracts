@@ -13,7 +13,7 @@ import {AmountReceivedBelowMin} from "../../errors/scErrors.sol";
 import {Constants as C} from "../../lib/Constants.sol";
 import {IScWETHSwapper} from "./ISwapper.sol";
 import {SwapperLib} from "./SwapperLib.sol";
-import {ZeroExSwapper} from "./ZeroExSwapper.sol";
+import {UniversalSwapper} from "./UniversalSwapper.sol";
 
 /**
  * @title Swapper
@@ -21,7 +21,7 @@ import {ZeroExSwapper} from "./ZeroExSwapper.sol";
  * @dev This contract is only meant to be used via delegatecalls from another contract.
  * @dev Using this contract directly for swaps might result in reverts.
  */
-contract Swapper is IScWETHSwapper, ZeroExSwapper {
+contract Swapper is IScWETHSwapper, UniversalSwapper {
     using SafeTransferLib for ERC20;
     using Address for address;
 

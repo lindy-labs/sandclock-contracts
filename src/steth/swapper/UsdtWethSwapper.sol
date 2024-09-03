@@ -6,9 +6,9 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 import {Constants as C} from "../../lib/Constants.sol";
 import {ISinglePairSwapper} from "./../swapper/ISwapper.sol";
 import {SwapperLib} from "./SwapperLib.sol";
-import {ZeroExSwapper} from "./ZeroExSwapper.sol";
+import {UniversalSwapper} from "./UniversalSwapper.sol";
 
-contract UsdtWethSwapper is ISinglePairSwapper, ZeroExSwapper {
+contract UsdtWethSwapper is ISinglePairSwapper, UniversalSwapper {
     address public constant override asset = address(C.USDT);
     address public constant override targetToken = address(C.WETH);
     uint24 public constant POOL_FEE = 500;
