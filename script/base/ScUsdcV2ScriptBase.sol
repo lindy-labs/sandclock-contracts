@@ -36,4 +36,13 @@ abstract contract ScUsdcV2ScriptBase is Script {
         console2.log("keeper\t\t", address(keeper));
         console2.log("scUsdcV2\t\t", address(scUsdcV2));
     }
+
+    function setKeeperPrivateKey(uint256 _privateKey) public {
+        keeperPrivateKey = _privateKey;
+        keeper = vm.addr(keeperPrivateKey);
+    }
+
+    function setVault(scUSDCv2 _scUsdcV2) public {
+        scUsdcV2 = _scUsdcV2;
+    }
 }

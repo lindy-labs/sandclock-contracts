@@ -110,6 +110,7 @@ contract RebalanceScWethV2 is Script, scWETHv2Helper {
     constructor() scWETHv2Helper(scWETHv2(payable(MA.SCWETHV2)), PriceConverter(MA.PRICE_CONVERTER)) {}
 
     function run() external {
+        console2.log("--RebalanceScWethV2 script running--");
         _logs("-------------------BEFORE REBALANCE-------------------");
 
         _initializeAdapterSettings();
@@ -130,6 +131,7 @@ contract RebalanceScWethV2 is Script, scWETHv2Helper {
         }
 
         _logs("-------------------AFTER REBALANCE-------------------");
+        console2.log("--RebalanceScWethV2 script done--");
     }
 
     function _executeRebalance(uint256 _investAmount, uint256 _totalFlashLoanAmount, bytes[] memory _multicallData)
@@ -340,7 +342,14 @@ contract RebalanceScWethV2 is Script, scWETHv2Helper {
         );
 
         string[] memory headers = new string[](1);
-        headers[0] = string(abi.encodePacked("0x-api-key: ", vm.envString("ZEROX_API_KEY")));
+        string memory zeroXApiKey = vm.envOr("ZEROX_API_KEY", string(""));
+
+        if (bytes(zeroXApiKey).length == 0) {
+            console2.log("----- ZEROX_API_KEY not found ---- Using backup swappers -------");
+            return "";
+        }
+
+        headers[0] = string(abi.encodePacked("0x-api-key: ", zeroXApiKey));
         (uint256 status, bytes memory data) = url.get(headers);
 
         if (status != 200) {
@@ -365,5 +374,14 @@ contract RebalanceScWethV2 is Script, scWETHv2Helper {
 
         if (collateralInWeth != 0) console2.log("net LTV\t\t\t", debt.divWadUp(collateralInWeth));
         console2.log("wstEth balance\t\t", ERC20(C.WSTETH).balanceOf(address(vault)));
+    }
+
+    function setKeeperPrivateKey(uint256 _keeperPrivateKey) public {
+        keeperPrivateKey = _keeperPrivateKey;
+        keeper = vm.addr(_keeperPrivateKey);
+    }
+
+    function setVault(scWETHv2 _scWethV2) public {
+        vault = _scWethV2;
     }
 }
