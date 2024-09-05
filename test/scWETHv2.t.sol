@@ -137,6 +137,10 @@ contract scWETHv2Test is Test {
 
     function test_constructor() public {
         _setUp(BLOCK_AFTER_EULER_EXPLOIT);
+
+        // line added to include constructor in coverage
+        vault = new scWETHv2(admin, keeper, WETH(payable(C.WETH)), new SwapperHarness(), priceConverter);
+
         assertEq(vault.hasRole(vault.DEFAULT_ADMIN_ROLE(), admin), true, "admin role not set");
         assertEq(vault.hasRole(vault.KEEPER_ROLE(), keeper), true, "keeper role not set");
         assertEq(address(vault.asset()), C.WETH);
@@ -169,7 +173,7 @@ contract scWETHv2Test is Test {
 
         vm.expectRevert(abi.encodeWithSelector(TokenOutNotAllowed.selector, C.USDC));
         hoax(keeper);
-        vault.swapTokens(weth, ERC20(C.USDC), amount, 0, "");
+        vault.swapTokens(address(weth), C.USDC, amount, 0, "");
     }
 
     function test_addAdapter() public {
@@ -336,10 +340,10 @@ contract scWETHv2Test is Test {
         deal(C.EULER_REWARDS_TOKEN, address(vault), eulerAmount);
 
         vm.expectRevert(CallerNotKeeper.selector);
-        vault.swapTokens(ERC20(C.EULER_REWARDS_TOKEN), ERC20(C.WETH), eulerAmount, 0, swapData);
+        vault.swapTokens(C.EULER_REWARDS_TOKEN, C.WETH, eulerAmount, 0, swapData);
 
         hoax(keeper);
-        vault.swapTokens(ERC20(C.EULER_REWARDS_TOKEN), ERC20(C.WETH), eulerAmount, 0, swapData);
+        vault.swapTokens(C.EULER_REWARDS_TOKEN, C.WETH, eulerAmount, 0, swapData);
 
         assertGe(weth.balanceOf(address(vault)), expectedWethAmount, "weth not received");
         assertEq(ERC20(C.EULER_REWARDS_TOKEN).balanceOf(address(vault)), 0, "euler token not transferred out");
@@ -355,7 +359,7 @@ contract scWETHv2Test is Test {
 
         deal(address(wstEth), address(vault), wstEthAmount);
         vm.prank(keeper);
-        vault.swapTokens(ERC20(address(wstEth)), ERC20(C.WETH), wstEthAmount, 0, swapData);
+        vault.swapTokens(address(wstEth), C.WETH, wstEthAmount, 0, swapData);
 
         assertGe(weth.balanceOf(address(vault)), expectedWethAmount, "weth not received");
         assertEq(wstEth.balanceOf(address(vault)), 0, "wstEth not transferred out");

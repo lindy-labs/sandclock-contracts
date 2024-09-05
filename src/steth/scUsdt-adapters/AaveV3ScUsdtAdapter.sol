@@ -26,8 +26,7 @@ contract AaveV3ScUsdtAdapter is IAdapter {
     // Aave v3 pool data provider contract
     IPoolDataProvider public constant aaveV3PoolDataProvider = IPoolDataProvider(C.AAVE_V3_POOL_DATA_PROVIDER);
     // Aave v3 "aEthUSDT" token (supply token)
-    // TODO: move to constants.sol
-    ERC20 public constant aUsdt = ERC20(0x23878914EFE38d27C4D67Ab83ed1b93A74D4086a);
+    ERC20 public constant aUsdt = ERC20(C.AAVE_V3_AUSDT_TOKEN);
     // Aave v3 "variableDebtEthWETH" token (variable debt token)
     ERC20 public constant dWeth = ERC20(C.AAVE_V3_VAR_DEBT_WETH_TOKEN);
 

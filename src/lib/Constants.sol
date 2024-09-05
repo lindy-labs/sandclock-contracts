@@ -47,6 +47,8 @@ library Constants {
 
     // address of the Aave v3 "aEthUSDC" token (supply token)
     address public constant AAVE_V3_AUSDC_TOKEN = 0x98C23E9d8f34FEFb1B7BD6a91B7FF122F4e16F5c;
+    // address of the Aave v3 "aEthUSDT" token (supply token)
+    address public constant AAVE_V3_AUSDT_TOKEN = 0x23878914EFE38d27C4D67Ab83ed1b93A74D4086a;
     // address of the Aave v3 "aEthwstETH" token (supply token)
     address public constant AAVE_V3_AWSTETH_TOKEN = 0x0B925eD163218f6662a35e0f0371Ac234f9E9371;
     // address of the Aave v3 "variableDebtEthWETH" token (variable debt token)

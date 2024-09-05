@@ -148,16 +148,16 @@ library SwapperLib {
     }
 
     /**
-     * @notice Swap tokens on 0xswap.
-     * @param _router Address of the 0x router.
-     * @param _tokenIn Address of the token to swap.
-     * @param _tokenOut Address of the token to receive.
-     * @param _amountIn Amount of the token to swap.
-     * @param _amountOutMin Minimum amount of the token to receive.
-     * @param _swapData Encoded swap data obtained from 0x API.
-     * @return amountReceived Amount of the token received.
+     * @notice Swap tokens using a preset swap router.
+     *
+     * @param _router Address of the swap router.
+     * @param _tokenIn Address of the token to swap
+     * @param _tokenOut Address of the token to receive
+     * @param _amountIn Amount of the token to swap
+     * @param _amountOutMin Minimum amount of the token to receive
+     * @param _swapData Arbitrary data to pass to the swap router
      */
-    function _zeroExSwap(
+    function _swapTokens(
         address _router,
         address _tokenIn,
         address _tokenOut,

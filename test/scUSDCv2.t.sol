@@ -54,7 +54,7 @@ contract scUSDCv2Test is Test {
     event Reallocated();
     event Rebalanced(uint256 totalCollateral, uint256 totalDebt, uint256 floatBalance);
     event ProfitSold(uint256 wethSold, uint256 usdcReceived);
-    event TokenSwapped(address token, uint256 amountSold, uint256 usdcReceived);
+    event TokenSwapped(address tokenIn, address tokenOut, uint256 amountSold, uint256 usdcReceived);
     event Supplied(uint256 adapterId, uint256 amount);
     event Borrowed(uint256 adapterId, uint256 amount);
     event Repaid(uint256 adapterId, uint256 amount);
@@ -2077,7 +2077,7 @@ contract scUSDCv2Test is Test {
         _setUpForkAtBlock(EUL_SWAP_BLOCK);
         vm.startPrank(alice);
         vm.expectRevert(CallerNotKeeper.selector);
-        vault.swapTokens(ERC20(C.EULER_REWARDS_TOKEN), ERC20(C.USDC), 1, 0, bytes("0"));
+        vault.swapTokens(C.EULER_REWARDS_TOKEN, C.USDC, 1, 0, bytes("0"));
     }
 
     function test_swapTokens_SwapsEulerForUsdc() public {
@@ -2091,7 +2091,7 @@ contract scUSDCv2Test is Test {
         assertEq(_usdcBalance(), initialUsdcBalance, "usdc balance");
         assertEq(vault.totalAssets(), initialUsdcBalance, "total assets");
 
-        vault.swapTokens(ERC20(C.EULER_REWARDS_TOKEN), ERC20(C.USDC), EUL_AMOUNT, EUL_SWAP_USDC_RECEIVED, EUL_SWAP_DATA);
+        vault.swapTokens(C.EULER_REWARDS_TOKEN, C.USDC, EUL_AMOUNT, EUL_SWAP_USDC_RECEIVED, EUL_SWAP_DATA);
 
         assertEq(ERC20(C.EULER_REWARDS_TOKEN).balanceOf(address(vault)), EUL_AMOUNT, "euler end balance");
         assertEq(vault.totalAssets(), initialUsdcBalance + EUL_SWAP_USDC_RECEIVED, "vault total assets");
@@ -2105,9 +2105,9 @@ contract scUSDCv2Test is Test {
         deal(C.EULER_REWARDS_TOKEN, address(vault), EUL_AMOUNT);
 
         vm.expectEmit(true, true, true, true);
-        emit TokenSwapped(C.EULER_REWARDS_TOKEN, EUL_AMOUNT, EUL_SWAP_USDC_RECEIVED);
+        emit TokenSwapped(C.EULER_REWARDS_TOKEN, C.USDC, EUL_AMOUNT, EUL_SWAP_USDC_RECEIVED);
 
-        vault.swapTokens(ERC20(C.EULER_REWARDS_TOKEN), ERC20(C.USDC), EUL_AMOUNT, 0, EUL_SWAP_DATA);
+        vault.swapTokens(C.EULER_REWARDS_TOKEN, C.USDC, EUL_AMOUNT, 0, EUL_SWAP_DATA);
     }
 
     function test_swapTokens_FailsIfUsdcAmountReceivedIsLessThanMin() public {
@@ -2116,9 +2116,7 @@ contract scUSDCv2Test is Test {
         deal(C.EULER_REWARDS_TOKEN, address(vault), EUL_AMOUNT);
 
         vm.expectRevert(AmountReceivedBelowMin.selector);
-        vault.swapTokens(
-            ERC20(C.EULER_REWARDS_TOKEN), ERC20(C.USDC), EUL_AMOUNT, EUL_SWAP_USDC_RECEIVED + 1, EUL_SWAP_DATA
-        );
+        vault.swapTokens(C.EULER_REWARDS_TOKEN, C.USDC, EUL_AMOUNT, EUL_SWAP_USDC_RECEIVED + 1, EUL_SWAP_DATA);
     }
 
     function test_swapTokens_FailsIfSwapIsNotSucessful() public {
@@ -2129,7 +2127,7 @@ contract scUSDCv2Test is Test {
         bytes memory invalidSwapData = hex"6af479b20000";
 
         vm.expectRevert(Errors.FailedCall.selector);
-        vault.swapTokens(ERC20(C.EULER_REWARDS_TOKEN), ERC20(C.USDC), EUL_AMOUNT, 0, invalidSwapData);
+        vault.swapTokens(C.EULER_REWARDS_TOKEN, C.USDC, EUL_AMOUNT, 0, invalidSwapData);
     }
 
     /// #claimRewards ///

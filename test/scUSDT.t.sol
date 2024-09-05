@@ -83,6 +83,17 @@ contract scUSDTTest is Test {
         assertEq(address(vault.swapper()), address(swapper), "swapper");
 
         assertEq(weth.allowance(address(vault), address(vault.targetVault())), type(uint256).max, "scWETH allowance");
+        assertEq(usdt.allowance(address(vault), address(aaveV3Adapter.pool())), type(uint256).max, "usdt allowance");
+        assertEq(weth.allowance(address(vault), address(aaveV3Adapter.pool())), type(uint256).max, "weth allowance");
+    }
+
+    function test_removeAdapter() public {
+        assertTrue(vault.hasRole(vault.KEEPER_ROLE(), address(this)), "admin role not set");
+
+        vault.removeAdapter(aaveV3Adapter.id(), false);
+
+        assertEq(usdt.allowance(address(vault), address(aaveV3Adapter.pool())), 0, "usdt allowance");
+        assertEq(weth.allowance(address(vault), address(aaveV3Adapter.pool())), 0, "weth allowance");
     }
 
     function test_rebalance() public {

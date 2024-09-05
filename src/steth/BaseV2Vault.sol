@@ -31,7 +31,7 @@ abstract contract BaseV2Vault is sc4626, IFlashLoanRecipient {
     event ProtocolAdapterAdded(address indexed admin, uint256 adapterId, address adapter);
     event ProtocolAdapterRemoved(address indexed admin, uint256 adapterId);
     event RewardsClaimed(uint256 adapterId);
-    event TokenSwapped(address token, uint256 amount, uint256 amountReceived);
+    event TokenSwapped(address tokenIn, address tokenOut, uint256 amountIn, uint256 amountOutReceived);
     event TokenWhitelisted(address token, bool value);
 
     // Balancer vault for flashloans
@@ -58,11 +58,8 @@ abstract contract BaseV2Vault is sc4626, IFlashLoanRecipient {
         string memory _name,
         string memory _symbol
     ) sc4626(_admin, _keeper, _asset, _name, _symbol) {
-        _zeroAddressCheck(address(_priceConverter));
-        _zeroAddressCheck(address(_swapper));
-
-        priceConverter = _priceConverter;
-        swapper = _swapper;
+        _setPriceConverter(_priceConverter);
+        _setSwapper(_swapper);
 
         zeroExSwapWhitelist[_asset] = true;
     }
@@ -89,11 +86,7 @@ abstract contract BaseV2Vault is sc4626, IFlashLoanRecipient {
     function setSwapper(ISwapper _newSwapper) external {
         _onlyAdmin();
 
-        // TODO: make internal override function to check zero address
-
-        if (address(_newSwapper) == address(0)) revert ZeroAddress();
-
-        swapper = _newSwapper;
+        _setSwapper(_newSwapper);
 
         emit SwapperUpdated(msg.sender, address(_newSwapper));
     }
@@ -105,9 +98,7 @@ abstract contract BaseV2Vault is sc4626, IFlashLoanRecipient {
     function setPriceConverter(IPriceConverter _newPriceConverter) external {
         _onlyAdmin();
 
-        if (address(_newPriceConverter) == address(0)) revert ZeroAddress();
-
-        priceConverter = _newPriceConverter;
+        _setPriceConverter(_newPriceConverter);
 
         emit PriceConverterUpdated(msg.sender, address(_newPriceConverter));
     }
@@ -186,7 +177,6 @@ abstract contract BaseV2Vault is sc4626, IFlashLoanRecipient {
         emit RewardsClaimed(_adapterId);
     }
 
-    // TODO: ERC20 -> address
     /**
      * @notice Sell any token for any whitelisted token on preconfigured exchange in the swapper contract.
      * @param _tokenIn Address of the token to swap.
@@ -196,15 +186,15 @@ abstract contract BaseV2Vault is sc4626, IFlashLoanRecipient {
      * @param _swapData Arbitrary data to pass to the swap router.
      */
     function swapTokens(
-        ERC20 _tokenIn,
-        ERC20 _tokenOut,
+        address _tokenIn,
+        address _tokenOut,
         uint256 _amountIn,
         uint256 _amountOutMin,
         bytes calldata _swapData
     ) external {
         _onlyKeeperOrFlashLoan();
 
-        if (!zeroExSwapWhitelist[_tokenOut]) revert TokenOutNotAllowed(address(_tokenOut));
+        if (!zeroExSwapWhitelist[ERC20(_tokenOut)]) revert TokenOutNotAllowed(_tokenOut);
 
         bytes memory result = address(swapper).functionDelegateCall(
             abi.encodeWithSelector(
@@ -214,8 +204,7 @@ abstract contract BaseV2Vault is sc4626, IFlashLoanRecipient {
 
         uint256 amountReceived = abi.decode(result, (uint256));
 
-        // TODO: update event data
-        emit TokenSwapped(address(_tokenIn), _amountIn, amountReceived);
+        emit TokenSwapped(_tokenIn, _tokenOut, _amountIn, amountReceived);
     }
 
     function _multiCall(bytes[] memory _callData) internal {
@@ -232,6 +221,18 @@ abstract contract BaseV2Vault is sc4626, IFlashLoanRecipient {
 
     function _adapterDelegateCall(address _adapter, bytes memory _data) internal {
         _adapter.functionDelegateCall(_data);
+    }
+
+    function _setSwapper(ISwapper _newSwapper) internal {
+        _zeroAddressCheck(address(_newSwapper));
+
+        swapper = _newSwapper;
+    }
+
+    function _setPriceConverter(IPriceConverter _newPriceConverter) internal {
+        _zeroAddressCheck(address(_newPriceConverter));
+
+        priceConverter = _newPriceConverter;
     }
 
     function _isSupportedCheck(uint256 _adapterId) internal view {

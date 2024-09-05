@@ -38,6 +38,6 @@ contract UniversalSwapper is ISwapper {
         uint256 _amountOutMin,
         bytes calldata _swapData
     ) external virtual returns (uint256) {
-        return SwapperLib._zeroExSwap(swapRouter(), _tokenIn, _tokenOut, _amountIn, _amountOutMin, _swapData);
+        return SwapperLib._swapTokens(swapRouter(), _tokenIn, _tokenOut, _amountIn, _amountOutMin, _swapData);
     }
 }
