@@ -33,6 +33,8 @@ library Constants {
     address public constant SDAI = 0x83F20F44975D03b1b09e64809B757c47f942BEeA;
     // address of the USDT token contract
     address public constant USDT = 0xdAC17F958D2ee523a2206206994597C13D831ec7;
+    // address of the WBTC token contract
+    address public constant WBTC = 0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599;
 
     // address of the Curve pool for ETH-stETH
     address public constant CURVE_ETH_STETH_POOL = 0xDC24316b9AE028F1497c275EB9192a3Ea0f67022;
@@ -45,6 +47,8 @@ library Constants {
     // address of the Aave pool data provider contract
     address public constant AAVE_V3_POOL_DATA_PROVIDER = 0x7B4EB56E7CD4b454BA8ff71E4518426369a138a3;
 
+    // address of the Aave v3 "aEthWBTC" token (supply token)
+    address public constant AAVE_V3_AWBTC_TOKEN = 0x5Ee5bf7ae06D1Be5997A1A72006FE6C607eC6DE8;
     // address of the Aave v3 "aEthUSDC" token (supply token)
     address public constant AAVE_V3_AUSDC_TOKEN = 0x98C23E9d8f34FEFb1B7BD6a91B7FF122F4e16F5c;
     // address of the Aave v3 "aEthUSDT" token (supply token)
@@ -82,6 +86,8 @@ library Constants {
     address public constant CHAINLINK_STETH_ETH_PRICE_FEED = 0x86392dC19c0b719886221c78AB11eb8Cf5c52812;
     // Chainlink pricefeed (USDT -> ETH)
     address public constant CHAINLINK_USDT_ETH_PRICE_FEED = 0xEe9F2375b4bdF6387aa8265dD4FB8F16512A1d46;
+    // Chainlink pricefeed (WBTC -> ETH)
+    address public constant CHAINLINK_WBTC_ETH_PRICE_FEED = 0xdeb288F737066589598e9214E782fa5A8eD689e8;
 
     // Liquity pricefeed (USD -> ETH) with Chainlink as primary and Tellor as backup.
     address public constant LIQUITY_USD_ETH_PRICE_FEED = 0x4c517D4e2C851CA76d7eC94B805269Df0f2201De;
