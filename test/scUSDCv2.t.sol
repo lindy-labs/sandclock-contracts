@@ -1761,7 +1761,6 @@ contract scUSDCv2Test is Test {
     function test_exitAllPositions_FailsIfEndBalanceIsLowerThanMinWhenInProfit() public {
         uint256 initialBalance = _setBalance(address(vault), 1_000_000e6);
 
-
         bytes[] memory callData;
         callData = _getSupplyAndBorrowCallData(callData, aaveV2.id(), initialBalance, 200 ether);
 
