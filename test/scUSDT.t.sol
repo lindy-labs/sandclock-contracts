@@ -26,7 +26,7 @@ import {scCrossAssetYieldVault} from "../src/steth/scCrossAssetYieldVault.sol";
 import {ISwapRouter} from "../src/interfaces/uniswap/ISwapRouter.sol";
 import {AggregatorV3Interface} from "../src/interfaces/chainlink/AggregatorV3Interface.sol";
 import {PriceConverter} from "../src/steth/priceConverter/PriceConverter.sol";
-import {ISinglePairPriceConverter} from "../src/steth/priceConverter/IPriceConverter.sol";
+import {ISinglePairPriceConverter} from "../src/steth/priceConverter/ISinglePairPriceConverter.sol";
 import {ISinglePairSwapper} from "../src/steth/swapper/ISinglePairSwapper.sol";
 import {IVault} from "../src/interfaces/balancer/IVault.sol";
 import {ICurvePool} from "../src/interfaces/curve/ICurvePool.sol";

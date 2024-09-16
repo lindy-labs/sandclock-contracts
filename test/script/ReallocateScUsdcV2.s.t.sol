@@ -15,7 +15,7 @@ import {AaveV3ScUsdcAdapter} from "../../src/steth/scUsdcV2-adapters/AaveV3ScUsd
 import {MorphoAaveV3ScUsdcAdapter} from "../../src/steth/scUsdcV2-adapters/MorphoAaveV3ScUsdcAdapter.sol";
 import {ReallocateScUsdcV2} from "../../script/v2/keeper-actions/ReallocateScUsdcV2.s.sol";
 import {MainnetAddresses} from "../../script/base/MainnetAddresses.sol";
-import {ISinglePairPriceConverter} from "../../src/steth/priceConverter/IPriceConverter.sol";
+import {ISinglePairPriceConverter} from "../../src/steth/priceConverter/ISinglePairPriceConverter.sol";
 
 contract ReallocateScUsdcV2Test is Test {
     using FixedPointMathLib for uint256;

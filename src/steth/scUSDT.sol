@@ -6,7 +6,7 @@ import {ERC4626} from "solmate/mixins/ERC4626.sol";
 
 import {scCrossAssetYieldVault} from "./scCrossAssetYieldVault.sol";
 import {Constants as C} from "../lib/Constants.sol";
-import {ISinglePairPriceConverter} from "./priceConverter/IPriceConverter.sol";
+import {ISinglePairPriceConverter} from "./priceConverter/ISinglePairPriceConverter.sol";
 import {ISinglePairSwapper} from "./swapper/ISinglePairSwapper.sol";
 
 contract scUSDT is scCrossAssetYieldVault {

@@ -20,7 +20,7 @@ import {BaseV2Vault} from "./BaseV2Vault.sol";
 import {IAdapter} from "./IAdapter.sol";
 import {IwstETH} from "../interfaces/lido/IwstETH.sol";
 import {PriceConverter} from "./priceConverter/PriceConverter.sol";
-import {IScETHPriceConverter} from "./priceConverter/IPriceConverter.sol";
+import {IScETHPriceConverter} from "./priceConverter/IScETHPriceConverter.sol";
 import {IScWETHSwapper} from "./swapper/IScWETHSwapper.sol";
 
 /**
