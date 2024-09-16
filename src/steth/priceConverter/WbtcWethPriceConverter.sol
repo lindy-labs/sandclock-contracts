@@ -15,11 +15,11 @@ contract WbtcWethPriceConverter is ISinglePairPriceConverter {
     AggregatorV3Interface public constant WBTC_ETH_PRICE_FEED = AggregatorV3Interface(C.CHAINLINK_WBTC_ETH_PRICE_FEED);
 
     function targetTokenToAsset(uint256 _wethAmount) external view override returns (uint256) {
-        return _wethAmount.divWadDown(_wbtcPriceInEth());
+        return _wethAmount.divWadDown(_wbtcPriceInEth() * C.WETH_WBTC_DECIMALS_DIFF);
     }
 
     function assetToTargetToken(uint256 _wbtcAmount) external view override returns (uint256) {
-        return _wbtcAmount.mulWadDown(_wbtcPriceInEth());
+        return (_wbtcAmount * C.WETH_WBTC_DECIMALS_DIFF).mulWadDown(_wbtcPriceInEth());
     }
 
     function _wbtcPriceInEth() internal view returns (uint256) {

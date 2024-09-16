@@ -3,9 +3,10 @@ pragma solidity ^0.8.13;
 
 library Constants {
     uint256 public constant ONE = 1e18;
-    // decimals difference between WETH and USDC (18 - 6)
+    // decimals difference between WETH and other tokens
     uint256 public constant WETH_USDC_DECIMALS_DIFF = 1e12;
     uint256 public constant WETH_USDT_DECIMALS_DIFF = 1e12;
+    uint256 public constant WETH_WBTC_DECIMALS_DIFF = 1e10;
     // value for the variable interest rate mode on Aave
     uint256 public constant AAVE_VAR_INTEREST_RATE_MODE = 2;
     // enable efficeincy mode on Aave (used to allow greater LTV when asset and debt tokens are correlated in price)
