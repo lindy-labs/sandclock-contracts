@@ -19,7 +19,7 @@ contract SwapperTest is Test {
     Swapper swapper;
     IwstETH wstEth;
 
-    function setUp() public {
+    constructor() {
         uint256 mainnetFork = vm.createFork(vm.envString("RPC_URL_MAINNET"));
         vm.selectFork(mainnetFork);
         vm.rollFork(19880300);

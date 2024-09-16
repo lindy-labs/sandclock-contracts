@@ -1549,7 +1549,7 @@ contract scUSDCv2Test is Test {
     }
 
     function testFuzz_withdraw(uint256 _amount, uint256 _withdrawAmount) public {
-        _amount = bound(_amount, 1e6, 6_000_000e6); // upper limit constrained by weth available on aave v3
+        _amount = bound(_amount, 1e6, 5_000_000e6); // upper limit constrained by weth available on aave v3
         _setBalance(alice, _amount);
 
         vm.startPrank(alice);

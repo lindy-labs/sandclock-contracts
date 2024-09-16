@@ -36,7 +36,7 @@ contract RebalanceScWethV2Test is Test {
     IAdapter compoundV3Adapter;
     IAdapter aaveV3Adapter;
 
-    function setUp() public {
+    constructor() {
         vm.createFork(vm.envString("RPC_URL_MAINNET"));
         vm.selectFork(mainnetFork);
         vm.rollFork(18018649);

@@ -33,7 +33,7 @@ contract scWETHv2KeeperTest is Test {
     IERC20 weth = IERC20(C.WETH);
     IERC20 wstEth = IERC20(C.WSTETH);
 
-    function setUp() public {
+    constructor() {
         uint256 mainnetFork = vm.createFork(vm.envString("RPC_URL_MAINNET"));
         vm.selectFork(mainnetFork);
         vm.rollFork(20068274);

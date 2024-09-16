@@ -60,7 +60,7 @@ contract scDAITest is Test {
     SDaiWethSwapper swapper;
     ISinglePairPriceConverter priceConverter;
 
-    function setUp() public {
+    constructor() {
         mainnetFork = vm.createFork(vm.envString("RPC_URL_MAINNET"));
         vm.selectFork(mainnetFork);
         vm.rollFork(19832667);

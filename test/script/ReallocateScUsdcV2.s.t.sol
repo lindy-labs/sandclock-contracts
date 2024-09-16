@@ -29,7 +29,7 @@ contract ReallocateScUsdcV2Test is Test {
     ISinglePairPriceConverter priceConverter;
     ReallocateScUsdcV2TestHarness script;
 
-    function setUp() public {
+    constructor() {
         mainnetFork = vm.createFork(vm.envString("RPC_URL_MAINNET"));
         vm.selectFork(mainnetFork);
         vm.rollFork(18488739);
