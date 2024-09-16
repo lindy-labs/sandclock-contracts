@@ -11,33 +11,39 @@ import {Address} from "openzeppelin-contracts/utils/Address.sol";
 
 import {AmountReceivedBelowMin} from "../../errors/scErrors.sol";
 import {Constants as C} from "../../lib/Constants.sol";
-import {IScWETHSwapper} from "./ISwapper.sol";
+import {IScWETHSwapper} from "./IScWETHSwapper.sol";
 import {SwapperLib} from "./SwapperLib.sol";
 import {UniversalSwapper} from "./UniversalSwapper.sol";
 
 /**
  * @title Swapper
- * @notice Contract facilitating token swaps on Uniswap V3 and 0x.
- * @dev This contract is only meant to be used via delegatecalls from another contract.
+ * @notice Contract providing swapping functionalities involving WETH, stETH, and wstETH using Lido and Curve protocols.
+ * @dev This contract is intended to be used only via delegate calls.
  * @dev Using this contract directly for swaps might result in reverts.
  */
 contract Swapper is IScWETHSwapper, UniversalSwapper {
     using SafeTransferLib for ERC20;
     using Address for address;
 
+    /// @notice Curve ETH/stETH Pool
     ICurvePool public constant curvePool = ICurvePool(C.CURVE_ETH_STETH_POOL);
 
+    /// @notice Wrapped Ether (WETH) Token
     WETH public constant weth = WETH(payable(C.WETH));
+
+    /// @notice Lido stETH Token
     ILido public constant stEth = ILido(C.STETH);
+
+    /// @notice Wrapped stETH Token
     IwstETH public constant wstEth = IwstETH(C.WSTETH);
 
     /**
-     * @notice Swap tokens on Uniswap V3 using exact input multi route
-     * @param _tokenIn Address of the token to swap
-     * @param _amountIn Amount of the token to swap
-     * @param _amountOutMin Minimum amount of the token to receive
-     * @param _path abi.encodePacked(_tokenIn, fees, ...middleTokens, ...fees, _tokenOut)
-     * @return amountOut Amount of the output token received
+     * @notice Swap tokens on Uniswap V3 using exact input multi-hop.
+     * @param _tokenIn The address of the token to swap from.
+     * @param _amountIn The amount of `_tokenIn` to swap.
+     * @param _amountOutMin The minimum amount of output tokens to receive.
+     * @param _path The encoded path for the swap.
+     * @return amountOut The amount of output tokens received from the swap.
      */
     function uniswapSwapExactInputMultihop(
         address _tokenIn,
@@ -50,12 +56,12 @@ contract Swapper is IScWETHSwapper, UniversalSwapper {
 
     /**
      * @notice Swap tokens on Uniswap V3 using exact input single function.
-     * @param _tokenIn Address of the token to swap.
-     * @param _tokenOut Address of the token to receive.
-     * @param _amountIn Amount of the token to swap.
-     * @param _amountOutMin Minimum amount of the token to receive.
-     * @param _poolFee Pool fee of the Uniswap V3 pool.
-     * @return amountOut Amount of the output token received.
+     * @param _tokenIn The ERC20 token to swap from.
+     * @param _tokenOut The ERC20 token to swap to.
+     * @param _amountIn The amount of `_tokenIn` to swap.
+     * @param _amountOutMin The minimum amount of `_tokenOut` to receive.
+     * @param _poolFee The fee tier of the Uniswap V3 pool.
+     * @return amountOut The amount of `_tokenOut` received from the swap.
      */
     function uniswapSwapExactInput(
         ERC20 _tokenIn,
@@ -69,12 +75,12 @@ contract Swapper is IScWETHSwapper, UniversalSwapper {
     }
 
     /**
-     * @notice Swap tokens on Uniswap V3 using exact output multi route
-     * @param _tokenIn Address of the token to swap
-     * @param _amountOut Amount of the token to receive
-     * @param _amountInMaximum Maximum amount of the token to swap
-     * @param _path abi.encodePacked(_tokenOut, fees, ...middleTokens, ...fees, _tokenIn)
-     * @return amountIn Amount of the input token used for the swap
+     * @notice Swap tokens on Uniswap V3 using exact output multi-hop.
+     * @param _tokenIn The address of the token to swap from.
+     * @param _amountOut The exact amount of output tokens desired.
+     * @param _amountInMaximum The maximum amount of `_tokenIn` willing to spend.
+     * @param _path The encoded path for the swap, reversed.
+     * @return amountIn The amount of `_tokenIn` spent to receive `_amountOut` of the output token.
      */
     function uniswapSwapExactOutputMultihop(
         address _tokenIn,
@@ -87,12 +93,12 @@ contract Swapper is IScWETHSwapper, UniversalSwapper {
 
     /**
      * @notice Swap tokens on Uniswap V3 using exact output single function.
-     * @param _tokenIn Address of the token to swap.
-     * @param _tokenOut Address of the token to receive.
-     * @param _amountOut Amount of the token to receive.
-     * @param _amountInMaximum Maximum amount of the token to swap.
-     * @param _poolFee Pool fee of the Uniswap V3 pool.
-     * @return amountIn Amount of the input token used for the swap
+     * @param _tokenIn The ERC20 token to swap from.
+     * @param _tokenOut The ERC20 token to receive.
+     * @param _amountOut The exact amount of `_tokenOut` desired.
+     * @param _amountInMaximum The maximum amount of `_tokenIn` willing to spend.
+     * @param _poolFee The fee tier of the Uniswap V3 pool.
+     * @return amountIn The amount of `_tokenIn` spent to receive `_amountOut` of `_tokenOut`.
      */
     function uniswapSwapExactOutput(
         ERC20 _tokenIn,
@@ -107,45 +113,48 @@ contract Swapper is IScWETHSwapper, UniversalSwapper {
     }
 
     /**
-     * Swap WETH to wstETH using Lido or Curve for ETH to stETH conversion, whichever is cheaper.
-     * @param _wethAmount Amount of WETH to swap.
-     * @return Amount of wstETH received.
+     * @notice Swap WETH to wstETH using Lido or Curve for ETH to stETH conversion, whichever offers a better rate.
+     * @param _wethAmount The amount of WETH to swap.
+     * @return wstEthReceived The amount of wstETH received from the swap.
      */
-    function lidoSwapWethToWstEth(uint256 _wethAmount) external returns (uint256) {
-        // weth to eth
+    function lidoSwapWethToWstEth(uint256 _wethAmount) external override returns (uint256 wstEthReceived) {
+        // Unwrap WETH to ETH
         weth.withdraw(_wethAmount);
 
-        // eth to stEth
-        // if curve exchange rate is better than lido's 1:1, use curve
+        // Check if Curve offers a better rate than Lido
         if (curvePool.get_dy(0, 1, _wethAmount) > _wethAmount) {
+            // Swap ETH to stETH via Curve
             curvePool.exchange{value: _wethAmount}(0, 1, _wethAmount, _wethAmount);
         } else {
+            // Swap ETH to stETH via Lido
             stEth.submit{value: _wethAmount}(address(0x00));
         }
 
-        // stEth to wstEth
+        // Wrap stETH to wstETH
         uint256 stEthBalance = stEth.balanceOf(address(this));
         ERC20(address(stEth)).safeApprove(address(wstEth), stEthBalance);
 
-        return wstEth.wrap(stEthBalance);
+        wstEthReceived = wstEth.wrap(stEthBalance);
     }
 
     /**
-     * Swap stETH to WETH on Curve.
-     * @param _stEthAmount Amount of stETH to swap.
-     * @param _wethAmountOutMin Minimum amount of WETH to receive.
-     * @return wethReceived Amount of WETH received.
+     * @notice Swap stETH to WETH on Curve.
+     * @param _stEthAmount The amount of stETH to swap.
+     * @param _wethAmountOutMin The minimum amount of WETH to receive.
+     * @return wethReceived The amount of WETH received from the swap.
      */
     function curveSwapStEthToWeth(uint256 _stEthAmount, uint256 _wethAmountOutMin)
         external
+        override
         returns (uint256 wethReceived)
     {
-        // stEth to eth
+        // Approve stETH to Curve Pool
         ERC20(address(stEth)).safeApprove(address(curvePool), _stEthAmount);
 
+        // Swap stETH to ETH via Curve
         wethReceived = curvePool.exchange(1, 0, _stEthAmount, _wethAmountOutMin);
 
-        // eth to weth
+        // Wrap ETH to WETH
         weth.deposit{value: address(this).balance}();
     }
 }

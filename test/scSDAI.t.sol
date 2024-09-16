@@ -33,7 +33,7 @@ import "../src/errors/scErrors.sol";
 import {Address} from "openzeppelin-contracts/utils/Address.sol";
 import {MainnetAddresses as M} from "../script/base/MainnetAddresses.sol";
 import {ISinglePairPriceConverter} from "../src/steth/priceConverter/IPriceConverter.sol";
-import {ISinglePairSwapper} from "../src/steth/swapper/ISwapper.sol";
+import {ISinglePairSwapper} from "../src/steth/swapper/ISinglePairSwapper.sol";
 import {SDaiWethSwapper} from "../src/steth/swapper/SDaiWethSwapper.sol";
 
 contract scSDAITest is Test {

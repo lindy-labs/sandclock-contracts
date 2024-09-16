@@ -21,7 +21,7 @@ import {IAdapter} from "./IAdapter.sol";
 import {IwstETH} from "../interfaces/lido/IwstETH.sol";
 import {PriceConverter} from "./priceConverter/PriceConverter.sol";
 import {IScETHPriceConverter} from "./priceConverter/IPriceConverter.sol";
-import {IScWETHSwapper} from "./swapper/ISwapper.sol";
+import {IScWETHSwapper} from "./swapper/IScWETHSwapper.sol";
 
 /**
  * @title Sandclock WETH Vault version 2

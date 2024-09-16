@@ -14,7 +14,7 @@ import {Constants as C} from "../lib/Constants.sol";
 import {BaseV2Vault} from "./BaseV2Vault.sol";
 import {IAdapter} from "./IAdapter.sol";
 import {ISinglePairPriceConverter} from "./priceConverter/IPriceConverter.sol";
-import {ISinglePairSwapper} from "./swapper/ISwapper.sol";
+import {ISinglePairSwapper} from "./swapper/ISinglePairSwapper.sol";
 
 /**
  * @dev A separate swapper and priceConverter contract for each vault

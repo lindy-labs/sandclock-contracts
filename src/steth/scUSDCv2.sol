@@ -5,7 +5,7 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 import {ERC4626} from "solmate/mixins/ERC4626.sol";
 
 import {Constants as C} from "../lib/Constants.sol";
-import {ISinglePairSwapper} from "./swapper/ISwapper.sol";
+import {ISinglePairSwapper} from "./swapper/ISinglePairSwapper.sol";
 import {ISinglePairPriceConverter} from "./priceConverter/IPriceConverter.sol";
 import {scCrossAssetYieldVault} from "./scCrossAssetYieldVault.sol";
 
