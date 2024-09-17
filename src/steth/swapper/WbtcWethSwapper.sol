@@ -4,7 +4,7 @@ pragma solidity ^0.8.19;
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
 import {Constants as C} from "../../lib/Constants.sol";
-import {ISinglePairSwapper} from "./../swapper/ISwapper.sol";
+import {ISinglePairSwapper} from "./../swapper/ISinglePairSwapper.sol";
 import {SwapperLib} from "./SwapperLib.sol";
 import {UniversalSwapper} from "./UniversalSwapper.sol";
 

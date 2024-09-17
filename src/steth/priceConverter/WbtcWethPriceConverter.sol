@@ -2,7 +2,7 @@
 pragma solidity ^0.8.19;
 
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
-import {ISinglePairPriceConverter} from "./IPriceConverter.sol";
+import {ISinglePairPriceConverter} from "./ISinglePairPriceConverter.sol";
 import {AggregatorV3Interface} from "../../interfaces/chainlink/AggregatorV3Interface.sol";
 import {Constants as C} from "../../lib/Constants.sol";
 
