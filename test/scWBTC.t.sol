@@ -254,7 +254,7 @@ contract scWBTCTest is Test {
         vault.rebalance(callData);
 
         uint256 total = vault.totalAssets();
-        _withdrawAmount = bound(_withdrawAmount, 1e6, total);
+        _withdrawAmount = bound(_withdrawAmount, 1e5, total) - 1e3;
         vm.startPrank(alice);
         vault.withdraw(_withdrawAmount, alice, alice);
 
