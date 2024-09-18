@@ -11,6 +11,11 @@ import {ISinglePairPriceConverter} from "./priceConverter/ISinglePairPriceConver
 import {ISinglePairSwapper} from "./swapper/ISinglePairSwapper.sol";
 import {MainnetAddresses as MA} from "../../script/base/MainnetAddresses.sol";
 
+/**
+ * @title scSDAI
+ * @notice Sandclock USDT Vault implementation.
+ * @dev Inherits from scCrossAssetYieldVault to manage and generate sDAI yield.
+ */
 contract scSDAI is scCrossAssetYieldVault {
     using SafeTransferLib for ERC20;
 

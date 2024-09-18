@@ -17,7 +17,10 @@ import {ISinglePairPriceConverter} from "./priceConverter/ISinglePairPriceConver
 import {ISinglePairSwapper} from "./swapper/ISinglePairSwapper.sol";
 
 /**
- * @dev A separate swapper and priceConverter contract for each vault
+ * @title scCrossAssetYieldVault
+ * @notice An abstract vault contract implementing cross-asset yield strategies.
+ * @dev Cross-asset means that the yield generated in the target vault (target tokens) is converted to the underlying asset token of the vault.
+ * @dev Inherits from BaseV2Vault and provides functionalities to interact with multiple lending markets.
  */
 abstract contract scCrossAssetYieldVault is BaseV2Vault {
     using SafeTransferLib for ERC20;
@@ -25,9 +28,6 @@ abstract contract scCrossAssetYieldVault is BaseV2Vault {
     using Address for address;
     using EnumerableMap for EnumerableMap.UintToAddressMap;
 
-    /**
-     * @notice Enum indicating the purpose of a flashloan.
-     */
     enum FlashLoanType {
         Reallocate,
         ExitAllPositions
@@ -46,7 +46,10 @@ abstract contract scCrossAssetYieldVault is BaseV2Vault {
     event Invested(uint256 targetTokenAmount);
     event Disinvested(uint256 targetTokenAmount);
 
+    /// @notice The target vault (staking vault) where target tokens are invested.
     ERC4626 public immutable targetVault;
+
+    /// @notice The target token used as underlying in the target vault.
     ERC20 public immutable targetToken;
 
     constructor(
@@ -72,19 +75,19 @@ abstract contract scCrossAssetYieldVault is BaseV2Vault {
     //////////////////////////////////////////////////////////////*/
 
     /**
-     * @notice Rebalance the vault's positions/loans in multiple lending markets.
-     * @dev Called to increase or decrease the WETH debt to maintain the LTV (loan to value) and avoid liquidation.
-     * @param _callData The encoded data for the calls to be made to the lending markets.
+     * @notice Rebalance the vault's positions and loans across multiple lending markets.
+     * @dev Called to adjust the target token debt, maintain the desired LTV and avoid liquidation.
+     * @param _callData An array of encoded function calls to be executed.
      */
     function rebalance(bytes[] calldata _callData) external {
         _onlyKeeper();
 
         _multiCall(_callData);
 
-        // invest any targetToken remaining after rebalancing
+        // Invest any remaining target token amount after rebalancing
         _invest();
 
-        // enforce float to be above the minimum required
+        // Enforce float to be above the minimum required
         uint256 float = assetBalance();
         uint256 floatRequired = totalAssets().mulWadDown(floatPercentage);
 
@@ -96,10 +99,10 @@ abstract contract scCrossAssetYieldVault is BaseV2Vault {
     }
 
     /**
-     * @notice Reallocate collateral & debt between lending markets, ie move debt and collateral positions from one lending market to another.
-     * @dev To move the funds between lending markets, the vault uses flashloans to repay debt and release collateral in one lending market enabling it to be moved to anoter mm.
-     * @param _flashLoanAmount The amount of WETH to flashloan from Balancer. Has to be at least equal to amount of WETH debt moved between lending markets.
-     * @param _callData The encoded data for the calls to be made to the lending markets.
+     * @notice Reallocate collateral and debt between lending markets.
+     * @dev Uses flash loans to repay debt and release collateral in one market to move to another.
+     * @param _flashLoanAmount The amount of target tokens to flash loan.
+     * @param _callData An array of encoded function calls to be executed.
      */
     function reallocate(uint256 _flashLoanAmount, bytes[] calldata _callData) external {
         _onlyKeeper();
@@ -120,9 +123,9 @@ abstract contract scCrossAssetYieldVault is BaseV2Vault {
     }
 
     /**
-     * @notice Sells WETH profits (swaps to asset).
-     * @dev As the vault generates yield by staking WETH, the profits are in WETH.
-     * @param _assetAmountOutMin The minimum amount of asset to receive.
+     * @notice Sells profits (in taget tokens) by swapping to the asset token.
+     * @dev The vault generates yield in target tokens; profits are sold to asse tokenst.
+     * @param _assetAmountOutMin The minimum amount of asset tokens to receive.
      */
     function sellProfit(uint256 _assetAmountOutMin) external {
         _onlyKeeper();
@@ -138,10 +141,9 @@ abstract contract scCrossAssetYieldVault is BaseV2Vault {
     }
 
     /**
-     * @notice Emergency exit to disinvest everything, repay all debt and withdraw all collateral to the vault.
-     * @dev In unlikely situation that the vault makes a loss on ETH staked, the total debt would be higher than ETH available to "unstake",
-     *  which can lead to withdrawals being blocked. To handle this situation, the vault can close all positions in all lending markets and release all of the assets (realize all losses).
-     * @param _endAssetBalanceMin The minimum asset balance of the vault at the end of execution (after all positions are closed).
+     * @notice Emergency exit to disinvest everything, repay all debt, and withdraw all collateral.
+     * @dev Closes all positions to release assets and realize any losses.
+     * @param _endAssetBalanceMin The minimum asset balance expected after execution.
      */
     function exitAllPositions(uint256 _endAssetBalanceMin) external {
         _onlyKeeper();
@@ -152,7 +154,7 @@ abstract contract scCrossAssetYieldVault is BaseV2Vault {
             targetVault.redeem(targetVault.balanceOf(address(this)), address(this), address(this));
 
         if (debt > targetTokenBalance) {
-            // not enough WETH to repay all debt, flashloan the difference
+            // not enough target tokens to repay all debt, flashloan the difference
             address[] memory tokens = new address[](1);
             tokens[0] = address(targetToken);
 
@@ -165,7 +167,7 @@ abstract contract scCrossAssetYieldVault is BaseV2Vault {
         } else {
             _repayAllDebtAndWithdrawCollateral();
 
-            // if some WETH remains after repaying all debt, swap it to asset
+            // Swap remaining target tokens to asset if any
             uint256 targetTokenLeft = _targetTokenBalance();
 
             if (targetTokenLeft != 0) _swapTargetTokenForAsset(targetTokenLeft, 0);
@@ -181,7 +183,7 @@ abstract contract scCrossAssetYieldVault is BaseV2Vault {
      * @dev Called by Balancer's vault in 2 situations:
      * 1. When the vault is underwater and the vault needs to exit all positions.
      * 2. When the vault needs to reallocate capital between lending markets.
-     * @param _amounts single elment array containing the amount of WETH being flashloaned.
+     * @param _amounts single elment array containing the amount of target tokens being flashloaned.
      * @param _data The encoded data that was passed to the flashloan.
      */
     function receiveFlashLoan(
@@ -207,9 +209,9 @@ abstract contract scCrossAssetYieldVault is BaseV2Vault {
     }
 
     /**
-     * @notice Supply asset assets to a lending market.
+     * @notice Supply asset tokens to a lending market.
      * @param _adapterId The ID of the lending market adapter.
-     * @param _amount The amount of asset to supply.
+     * @param _amount The amount of asset tokens to supply.
      */
     function supply(uint256 _adapterId, uint256 _amount) external {
         _onlyKeeperOrFlashLoan();
@@ -219,9 +221,9 @@ abstract contract scCrossAssetYieldVault is BaseV2Vault {
     }
 
     /**
-     * @notice Borrow WETH from a lending market.
+     * @notice Borrow an amount of target tokens from a lending market.
      * @param _adapterId The ID of the lending market adapter.
-     * @param _amount The amount of WETH to borrow.
+     * @param _amount The amount of target tokens to borrow.
      */
     function borrow(uint256 _adapterId, uint256 _amount) external {
         _onlyKeeperOrFlashLoan();
@@ -231,9 +233,9 @@ abstract contract scCrossAssetYieldVault is BaseV2Vault {
     }
 
     /**
-     * @notice Repay WETH to a lending market.
+     * @notice Repay an amount of debt to a lending market.
      * @param _adapterId The ID of the lending market adapter.
-     * @param _amount The amount of WETH to repay.
+     * @param _amount The amount of target tokens to repay.
      */
     function repay(uint256 _adapterId, uint256 _amount) external {
         _onlyKeeperOrFlashLoan();
@@ -243,9 +245,9 @@ abstract contract scCrossAssetYieldVault is BaseV2Vault {
     }
 
     /**
-     * @notice Withdraw asset assets from a lending market.
+     * @notice Withdraw asset tokens from a lending market.
      * @param _adapterId The ID of the lending market adapter.
-     * @param _amount The amount of asset to withdraw.
+     * @param _amount The amount of asset tokens to withdraw.
      */
     function withdraw(uint256 _adapterId, uint256 _amount) external {
         _onlyKeeperOrFlashLoan();
@@ -255,8 +257,8 @@ abstract contract scCrossAssetYieldVault is BaseV2Vault {
     }
 
     /**
-     * @notice Withdraw WETH from the staking vault (targetVault).
-     * @param _amount The amount of WETH to withdraw.
+     * @notice Withdraw target tokens from the target vault.
+     * @param _amount The amount of target tokens to withdraw.
      */
     function disinvest(uint256 _amount) external {
         _onlyKeeper();
@@ -265,7 +267,8 @@ abstract contract scCrossAssetYieldVault is BaseV2Vault {
     }
 
     /**
-     * @notice total claimable assets of the vault in asset.
+     * @notice Returns the total claimable assets of the vault in asset tokens.
+     * @return The total assets managed by the vault.
      */
     function totalAssets() public view override returns (uint256) {
         return _calculateTotalAssets(assetBalance(), totalCollateral(), targetTokenInvestedAmount(), totalDebt());
@@ -273,14 +276,16 @@ abstract contract scCrossAssetYieldVault is BaseV2Vault {
 
     /**
      * @notice Returns the asset balance of the vault.
+     * @return The balance of asset tokens held by the vault.
      */
     function assetBalance() public view returns (uint256) {
         return asset.balanceOf(address(this));
     }
 
     /**
-     * @notice Returns the asset supplied as collateral in a lending market.
+     * @notice Returns the amount of asset tokens supplied as collateral in a lending market.
      * @param _adapterId The ID of the lending market adapter.
+     * @return The amount of collateral supplied in the specified lending market.
      */
     function getCollateral(uint256 _adapterId) external view returns (uint256) {
         if (!isSupported(_adapterId)) return 0;
@@ -289,7 +294,8 @@ abstract contract scCrossAssetYieldVault is BaseV2Vault {
     }
 
     /**
-     * @notice Returns the total asset supplied as collateral in all lending markets.
+     * @notice Returns the total amount of asset tokens supplied as collateral in all lending markets.
+     * @return total The total collateral across all lending markets.
      */
     function totalCollateral() public view returns (uint256 total) {
         uint256 length = protocolAdapters.length();
@@ -301,8 +307,9 @@ abstract contract scCrossAssetYieldVault is BaseV2Vault {
     }
 
     /**
-     * @notice Returns the WETH borrowed from a lending market.
+     * @notice Returns the amount of target tokens borrowed from a lending market.
      * @param _adapterId The ID of the lending market adapter.
+     * @return The amount of debt in target tokens for the specified lending market.
      */
     function getDebt(uint256 _adapterId) external view returns (uint256) {
         if (!isSupported(_adapterId)) return 0;
@@ -311,7 +318,8 @@ abstract contract scCrossAssetYieldVault is BaseV2Vault {
     }
 
     /**
-     * @notice Returns the total WETH borrowed in all lending markets.
+     * @notice Returns the total amount of target tokens borrowed across all lending markets.
+     * @return total The total debt in target tokens across all lending markets.
      */
     function totalDebt() public view returns (uint256 total) {
         uint256 length = protocolAdapters.length();
@@ -323,36 +331,53 @@ abstract contract scCrossAssetYieldVault is BaseV2Vault {
     }
 
     /**
-     * @notice Returns the amount of WETH invested (staked) in the leveraged WETH vault.
+     * @notice Returns the amount of target tokens invested (staked) in the target vault.
+     * @return The amount of target tokens invested in the target vault.
      */
     function targetTokenInvestedAmount() public view returns (uint256) {
         return targetVault.convertToAssets(targetVault.balanceOf(address(this)));
     }
 
     /**
-     * @notice Returns the amount of profit (in WETH) made by the vault.
-     * @dev The profit is calculated as the difference between the current WETH staked and the WETH owed.
+     * @notice Returns the amount of profit (in target tokens) made by the vault.
+     * @dev Profit is calculated as the difference between invested and owed target token amounts.
+     * @return The amount of profit in target tokens.
      */
     function getProfit() public view returns (uint256) {
         return _calculateProfitInTargetToken(targetTokenInvestedAmount(), totalDebt());
     }
 
     /*//////////////////////////////////////////////////////////////
-                            INTERNAL API
+                            INTERNAL FUNCTIONS
     //////////////////////////////////////////////////////////////*/
 
+    /**
+     * @notice Supplies asset tokens to a lending market adapter.
+     * @param _adapterId The ID of the adapter.
+     * @param _amount The amount of asset tokens to supply.
+     */
     function _supply(uint256 _adapterId, uint256 _amount) internal {
         _adapterDelegateCall(_adapterId, abi.encodeWithSelector(IAdapter.supply.selector, _amount));
 
         emit Supplied(_adapterId, _amount);
     }
 
+    /**
+     * @notice Borrows target tokens from a lending market adapter.
+     * @param _adapterId The ID of the adapter.
+     * @param _amount The amount of target tokens to borrow.
+     */
     function _borrow(uint256 _adapterId, uint256 _amount) internal {
         _adapterDelegateCall(_adapterId, abi.encodeWithSelector(IAdapter.borrow.selector, _amount));
 
         emit Borrowed(_adapterId, _amount);
     }
 
+    /**
+     * @notice Repays debt in target tokens to a lending market adapter.
+     * @param _adapterId The ID of the adapter.
+     * @param _amount The amount of debt to repay.
+     */
     function _repay(uint256 _adapterId, uint256 _amount) internal {
         uint256 targetTokenBalance = _targetTokenBalance();
 
@@ -363,12 +388,20 @@ abstract contract scCrossAssetYieldVault is BaseV2Vault {
         emit Repaid(_adapterId, _amount);
     }
 
+    /**
+     * @notice Withdraws asset tokens from a lending market adapter.
+     * @param _adapterId The ID of the adapter.
+     * @param _amount The amount of asset tokens to withdraw.
+     */
     function _withdraw(uint256 _adapterId, uint256 _amount) internal {
         _adapterDelegateCall(_adapterId, abi.encodeWithSelector(IAdapter.withdraw.selector, _amount));
 
         emit Withdrawn(_adapterId, _amount);
     }
 
+    /**
+     * @notice Invests any available target tokens into the target vault.
+     */
     function _invest() internal {
         uint256 targetTokenBalance = _targetTokenBalance();
 
@@ -379,6 +412,11 @@ abstract contract scCrossAssetYieldVault is BaseV2Vault {
         }
     }
 
+    /**
+     * @notice Disinvests (withdraws) target tokens from the target vault.
+     * @param _targetTokenAmount The amount of target tokens to disinvest.
+     * @return The amount of target tokens withdrawn.
+     */
     function _disinvest(uint256 _targetTokenAmount) internal returns (uint256) {
         uint256 shares = targetVault.convertToShares(_targetTokenAmount);
 
@@ -389,6 +427,9 @@ abstract contract scCrossAssetYieldVault is BaseV2Vault {
         return amount;
     }
 
+    /**
+     * @notice Repays all debt and withdraws all collateral from all lending markets.
+     */
     function _repayAllDebtAndWithdrawCollateral() internal {
         uint256 length = protocolAdapters.length();
 
@@ -402,9 +443,11 @@ abstract contract scCrossAssetYieldVault is BaseV2Vault {
         }
     }
 
+    /**
+     * @notice Hook called before withdrawing assets.
+     * @param _assets The amount of assets to withdraw.
+     */
     function beforeWithdraw(uint256 _assets, uint256) internal override {
-        // here we need to make sure that the vault has enough assets to cover the withdrawal
-        // the idea is to keep the same ltv after the withdrawal as before on every protocol
         uint256 initialBalance = assetBalance();
         if (initialBalance >= _assets) return;
 
@@ -433,6 +476,13 @@ abstract contract scCrossAssetYieldVault is BaseV2Vault {
         _repayDebtAndReleaseCollateral(debt, collateral, invested, assetNeeded);
     }
 
+    /**
+     * @notice Repays debt and releases collateral to meet asset needs.
+     * @param _totalDebt The total debt owed.
+     * @param _totalCollateral The total collateral supplied.
+     * @param _invested The total invested in the target vault.
+     * @param _assetNeeded The amount of asset tokens needed.
+     */
     function _repayDebtAndReleaseCollateral(
         uint256 _totalDebt,
         uint256 _totalCollateral,
@@ -448,7 +498,7 @@ abstract contract scCrossAssetYieldVault is BaseV2Vault {
         uint256 targetTokenDisinvested = 0;
         if (targetTokenNeeded != 0) targetTokenDisinvested = _disinvest(targetTokenNeeded);
 
-        // repay debt and withdraw collateral from each protocol in proportion to asset supplied
+        // Repay debt and withdraw collateral proportionally from each protocol
         uint256 length = protocolAdapters.length();
 
         for (uint256 i = 0; i < length; i++) {
@@ -461,7 +511,7 @@ abstract contract scCrossAssetYieldVault is BaseV2Vault {
             uint256 toWithdraw = _assetNeeded.mulDivUp(collateral, _totalCollateral);
 
             if (targetTokenDisinvested != 0 && debt != 0) {
-                // keep the same ltv when withdrawing asset supplied from each protocol
+                // Keep the same LTV when withdrawing collateral
                 uint256 toRepay = toWithdraw.mulDivUp(debt, collateral);
 
                 if (toRepay > targetTokenDisinvested) {
@@ -477,6 +527,14 @@ abstract contract scCrossAssetYieldVault is BaseV2Vault {
         }
     }
 
+    /**
+     * @notice Calculates the total assets of the vault.
+     * @param _float The current float balance.
+     * @param _collateral The total collateral supplied.
+     * @param _invested The total invested in the target vault.
+     * @param _debt The total debt owed.
+     * @return total The total assets of the vault.
+     */
     function _calculateTotalAssets(uint256 _float, uint256 _collateral, uint256 _invested, uint256 _debt)
         internal
         view
@@ -494,18 +552,38 @@ abstract contract scCrossAssetYieldVault is BaseV2Vault {
         }
     }
 
+    /**
+     * @notice Calculates the profit in target tokens.
+     * @param _invested The amount invested in the target vault.
+     * @param _debt The total debt owed.
+     * @return The profit in target tokens.
+     */
     function _calculateProfitInTargetToken(uint256 _invested, uint256 _debt) internal pure returns (uint256) {
         return _invested > _debt ? _invested - _debt : 0;
     }
 
+    /**
+     * @notice Returns the target token balance of the vault.
+     * @return The balance of target tokens held by the vault.
+     */
     function _targetTokenBalance() internal view returns (uint256) {
         return targetToken.balanceOf(address(this));
     }
 
+    /**
+     * @notice Returns the price converter contract casted to ISinglePairPriceConverter.
+     * @return The price converter contract.
+     */
     function converter() public view returns (ISinglePairPriceConverter) {
         return ISinglePairPriceConverter(address(priceConverter));
     }
 
+    /**
+     * @notice Swaps target tokens for asset tokens using the swapper contract.
+     * @param _targetTokenAmount The amount of target tokens to swap.
+     * @param _assetAmountOutMin The minimum amount of asset tokens to receive.
+     * @return The amount of asset tokens received.
+     */
     function _swapTargetTokenForAsset(uint256 _targetTokenAmount, uint256 _assetAmountOutMin)
         internal
         virtual
@@ -518,6 +596,10 @@ abstract contract scCrossAssetYieldVault is BaseV2Vault {
         return abi.decode(result, (uint256));
     }
 
+    /**
+     * @notice Swaps asset tokens for an exact amount of target tokens using the swapper contract.
+     * @param _targetTokenAmountOut The exact amount of target tokens desired.
+     */
     function _swapAssetForExactTargetToken(uint256 _targetTokenAmountOut) internal virtual {
         address(swapper).functionDelegateCall(
             abi.encodeCall(ISinglePairSwapper.swapAssetForExactTargetToken, (_targetTokenAmountOut))

@@ -9,6 +9,11 @@ import {Constants as C} from "../lib/Constants.sol";
 import {ISinglePairPriceConverter} from "./priceConverter/ISinglePairPriceConverter.sol";
 import {ISinglePairSwapper} from "./swapper/ISinglePairSwapper.sol";
 
+/**
+ * @title scUSDT
+ * @notice Sandclock USDT Vault implementation.
+ * @dev Inherits from scCrossAssetYieldVault to manage and generate USDT yield.
+ */
 contract scUSDT is scCrossAssetYieldVault {
     constructor(
         address _admin,
