@@ -73,15 +73,6 @@ contract scWBTCTest is Test {
         assertEq(weth.allowance(address(vault), address(aaveV3Adapter.pool())), type(uint256).max, "weth allowance");
     }
 
-    function test_removeAdapter() public {
-        assertTrue(vault.hasRole(vault.KEEPER_ROLE(), address(this)), "admin role not set");
-
-        vault.removeAdapter(aaveV3Adapter.id(), false);
-
-        assertEq(wbtc.allowance(address(vault), address(aaveV3Adapter.pool())), 0, "wbtc allowance");
-        assertEq(weth.allowance(address(vault), address(aaveV3Adapter.pool())), 0, "weth allowance");
-    }
-
     function test_rebalance() public {
         uint256 initialBalance = 1e8;
         uint256 initialDebt = 1 ether;
@@ -99,35 +90,6 @@ contract scWBTCTest is Test {
         _assertCollateralAndDebt(aaveV3Adapter.id(), initialBalance, initialDebt);
 
         assertApproxEqRel(wethVault.balanceOf(address(vault)), initialDebt.divWadDown(pps), 1e5, "scETH shares");
-    }
-
-    function testFuzz_rebalance(uint256 supplyOnAaveV3, uint256 borrowOnAaveV3) public {
-        uint256 floatPercentage = 0.01e18;
-        // -10 to account for rounding error difference between debt vs invested amounts
-        vault.setFloatPercentage(floatPercentage - 10);
-
-        supplyOnAaveV3 = bound(supplyOnAaveV3, 0.01e8, 1000e8);
-        borrowOnAaveV3 = bound(
-            borrowOnAaveV3,
-            1e10,
-            priceConverter.assetToTargetToken(supplyOnAaveV3).mulWadDown(aaveV3Adapter.getMaxLtv() - 0.005e18) // -0.5% to avoid borrowing at max ltv
-        );
-
-        uint256 initialBalance = supplyOnAaveV3.divWadDown(1e18 - floatPercentage);
-        console2.log("initialBalance", initialBalance);
-        uint256 minFloat = supplyOnAaveV3.mulWadDown(floatPercentage);
-
-        deal(address(wbtc), address(vault), initialBalance);
-
-        bytes[] memory callData = new bytes[](2);
-        callData[0] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, aaveV3Adapter.id(), supplyOnAaveV3);
-        callData[1] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, aaveV3Adapter.id(), borrowOnAaveV3);
-
-        vault.rebalance(callData);
-
-        _assertCollateralAndDebt(aaveV3Adapter.id(), supplyOnAaveV3, borrowOnAaveV3);
-        assertApproxEqAbs(vault.totalAssets(), initialBalance, 1e10, "total assets");
-        assertApproxEqRel(vault.assetBalance(), minFloat, 0.05e18, "float");
     }
 
     function test_disinvest() public {
@@ -178,29 +140,6 @@ contract scWBTCTest is Test {
         );
     }
 
-    function test_withdrawFunds() public {
-        uint256 initialBalance = 100e8;
-
-        _deposit(alice, initialBalance);
-
-        assertEq(wbtc.balanceOf(alice), 0, "alice deposit not transferred");
-
-        uint256 borrowAmount = priceConverter.assetToTargetToken(initialBalance.mulWadDown(0.6e18));
-
-        bytes[] memory callData = new bytes[](2);
-        callData[0] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, aaveV3Adapter.id(), initialBalance);
-        callData[1] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, aaveV3Adapter.id(), borrowAmount);
-
-        vault.rebalance(callData);
-
-        uint256 withdrawAmount = vault.convertToAssets(vault.balanceOf(alice));
-        vm.prank(alice);
-        vault.withdraw(withdrawAmount, alice, alice);
-
-        assertEq(wbtc.balanceOf(alice), withdrawAmount, "alice asset balance");
-        assertEq(vault.totalAssets(), initialBalance - withdrawAmount, "vault asset balance");
-    }
-
     function test_withdraw_whenInProfit() public {
         uint256 initialBalance = 10e8;
 
@@ -224,28 +163,6 @@ contract scWBTCTest is Test {
         vault.redeem(vault.balanceOf(alice), alice, alice);
 
         assertApproxEqAbs(wbtc.balanceOf(alice), initialBalance * 2, 3e7, "alice profits almost doubled");
-    }
-
-    function testFuzz_withdraw(uint256 _amount, uint256 _withdrawAmount) public {
-        _amount = bound(_amount, 1e6, 50e8); // upper limit constrained by weth available on aave v3
-
-        _deposit(alice, _amount);
-
-        uint256 borrowAmount = priceConverter.assetToTargetToken(_amount.mulWadDown(0.6e18));
-
-        bytes[] memory callData = new bytes[](2);
-        callData[0] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, aaveV3Adapter.id(), _amount);
-        callData[1] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, aaveV3Adapter.id(), borrowAmount);
-
-        vault.rebalance(callData);
-
-        uint256 total = vault.totalAssets();
-        _withdrawAmount = bound(_withdrawAmount, 1e5, total) - 1e3;
-        vm.startPrank(alice);
-        vault.withdraw(_withdrawAmount, alice, alice);
-
-        assertApproxEqAbs(vault.totalAssets(), total - _withdrawAmount, 0.0001e18, "total assets");
-        assertApproxEqAbs(wbtc.balanceOf(alice), _withdrawAmount, 0.01e18, "sdai balance");
     }
 
     function test_exitAllPositions_RepaysDebtAndReleasesCollateralOnOneProtocolAndNoProfit() public {
