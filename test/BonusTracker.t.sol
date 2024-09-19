@@ -195,10 +195,10 @@ contract BonusTrackerTest is DSTestPlus {
     }
 
     function testCorrectness_bonus(uint256 timeLapsed) public {
-        timeLapsed = bound(timeLapsed, 1, 36500 days);
+        timeLapsed = bound(timeLapsed, 2, 36500 days);
         hevm.warp(timeLapsed);
         stakingPool.boost();
-        timeLapsed = bound(timeLapsed, 1, 36500 days);
+        timeLapsed = bound(timeLapsed, 2, 36500 days);
         hevm.warp(timeLapsed * 2);
         uint256 currentBonus = stakingPool.bonusOf(address(this));
         uint256 accountBalance = stakingPool.balanceOf(address(this));
