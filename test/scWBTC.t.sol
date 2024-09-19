@@ -7,31 +7,17 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 import {WETH} from "solmate/tokens/WETH.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
-import {IPool} from "aave-v3/interfaces/IPool.sol";
-import {IAToken} from "aave-v3/interfaces/IAToken.sol";
-import {IVariableDebtToken} from "aave-v3/interfaces/IVariableDebtToken.sol";
-import {IPoolDataProvider} from "aave-v3/interfaces/IPoolDataProvider.sol";
-import {ERC4626} from "solmate/mixins/ERC4626.sol";
 
 import {Constants as C} from "../src/lib/Constants.sol";
-import {ILendingPool} from "../src/interfaces/aave-v2/ILendingPool.sol";
-import {IProtocolDataProvider} from "../src/interfaces/aave-v2/IProtocolDataProvider.sol";
-import {IAdapter} from "../src/steth/IAdapter.sol";
 import {scWBTC} from "../src/steth/scWBTC.sol";
 import {AaveV3ScWbtcAdapter} from "../src/steth/scWbtc-adapters/AaveV3ScWbtcAdapter.sol";
 import {WbtcWethPriceConverter} from "../src/steth/priceConverter/WbtcWethPriceConverter.sol";
 
 import {scWETH} from "../src/steth/scWETH.sol";
 import {scCrossAssetYieldVault} from "../src/steth/scCrossAssetYieldVault.sol";
-import {ISwapRouter} from "../src/interfaces/uniswap/ISwapRouter.sol";
-import {AggregatorV3Interface} from "../src/interfaces/chainlink/AggregatorV3Interface.sol";
 import {PriceConverter} from "../src/steth/priceConverter/PriceConverter.sol";
 import {ISinglePairPriceConverter} from "../src/steth/priceConverter/ISinglePairPriceConverter.sol";
 import {ISinglePairSwapper} from "../src/steth/swapper/ISinglePairSwapper.sol";
-import {IVault} from "../src/interfaces/balancer/IVault.sol";
-import {ICurvePool} from "../src/interfaces/curve/ICurvePool.sol";
-import {ILido} from "../src/interfaces/lido/ILido.sol";
-import {IwstETH} from "../src/interfaces/lido/IwstETH.sol";
 import "../src/errors/scErrors.sol";
 import {Address} from "openzeppelin-contracts/utils/Address.sol";
 import {MainnetAddresses as M} from "../script/base/MainnetAddresses.sol";
@@ -61,7 +47,7 @@ contract scWBTCTest is Test {
 
     uint256 pps;
 
-    function setUp() public {
+    constructor() {
         mainnetFork = vm.createFork(vm.envString("RPC_URL_MAINNET"));
         vm.selectFork(mainnetFork);
         vm.rollFork(20733282);
