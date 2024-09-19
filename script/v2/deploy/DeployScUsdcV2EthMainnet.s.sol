@@ -2,19 +2,18 @@
 pragma solidity ^0.8.13;
 
 import "forge-std/console2.sol";
-import {MainnetAddresses} from "../base/MainnetAddresses.sol";
-import {MainnetDeployBase} from "../base/MainnetDeployBase.sol";
-import {scWETHv2} from "../../src/steth/scWETHv2.sol";
-import {scUSDCv2} from "../../src/steth/scUSDCv2.sol";
-import {Swapper} from "../../src/steth/swapper/Swapper.sol";
-import {PriceConverter} from "../../src/steth/priceConverter/PriceConverter.sol";
-import {UsdcWethPriceConverter} from "../../src/steth/priceConverter/UsdcWethPriceConverter.sol";
-import {AaveV3ScUsdcAdapter} from "../../src/steth/scUsdcV2-adapters/AaveV3ScUsdcAdapter.sol";
-import {MorphoAaveV3ScUsdcAdapter} from "../../src/steth/scUsdcV2-adapters/MorphoAaveV3ScUsdcAdapter.sol";
-import {AaveV2ScUsdcAdapter} from "../../src/steth/scUsdcV2-adapters/AaveV2ScUsdcAdapter.sol";
-import {UsdcWethSwapper} from "../../src/steth/swapper/UsdcWethSwapper.sol";
+import {MainnetAddresses} from "script/base/MainnetAddresses.sol";
+import {MainnetDeployBase} from "script/base/MainnetDeployBase.sol";
+import {scWETHv2} from "src/steth/scWETHv2.sol";
+import {scUSDCv2} from "src/steth/scUSDCv2.sol";
+import {Swapper} from "src/steth/swapper/Swapper.sol";
+import {UsdcWethPriceConverter} from "src/steth/priceConverter/UsdcWethPriceConverter.sol";
+import {AaveV3ScUsdcAdapter} from "src/steth/scUsdcV2-adapters/AaveV3ScUsdcAdapter.sol";
+import {MorphoAaveV3ScUsdcAdapter} from "src/steth/scUsdcV2-adapters/MorphoAaveV3ScUsdcAdapter.sol";
+import {AaveV2ScUsdcAdapter} from "src/steth/scUsdcV2-adapters/AaveV2ScUsdcAdapter.sol";
+import {UsdcWethSwapper} from "src/steth/swapper/UsdcWethSwapper.sol";
 
-contract DeployScript is MainnetDeployBase {
+contract DeployScUsdcV2EthMainnet is MainnetDeployBase {
     scWETHv2 scWethV2 = scWETHv2(payable(MainnetAddresses.SCWETHV2));
     UsdcWethSwapper swapper = new UsdcWethSwapper();
     UsdcWethPriceConverter priceConverter = new UsdcWethPriceConverter();

@@ -2,29 +2,28 @@
 pragma solidity ^0.8.13;
 
 import "forge-std/console2.sol";
-import {CREATE3Script} from "../base/CREATE3Script.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {WETH} from "solmate/tokens/WETH.sol";
 import {AccessControl} from "openzeppelin-contracts/access/AccessControl.sol";
 
-import {Constants as C} from "../../src/lib/Constants.sol";
-import {ISwapRouter} from "../../src/interfaces/uniswap/ISwapRouter.sol";
-import {sc4626} from "../../src/sc4626.sol";
-import {scWETHv2} from "../../src/steth/scWETHv2.sol";
-import {scUSDCv2} from "../../src/steth/scUSDCv2.sol";
-import {Swapper} from "../../src/steth/swapper/Swapper.sol";
-import {PriceConverter} from "../../src/steth/priceConverter/PriceConverter.sol";
-import {UsdcWethPriceConverter} from "../../src/steth/priceConverter/UsdcWethPriceConverter.sol";
-import {AaveV3ScWethAdapter} from "../../src/steth/scWethV2-adapters/AaveV3ScWethAdapter.sol";
-import {CompoundV3ScWethAdapter} from "../../src/steth/scWethV2-adapters/CompoundV3ScWethAdapter.sol";
-import {MorphoAaveV3ScWethAdapter} from "../../src/steth/scWethV2-adapters/MorphoAaveV3ScWethAdapter.sol";
-import {AaveV3ScUsdcAdapter} from "../../src/steth/scUsdcV2-adapters/AaveV3ScUsdcAdapter.sol";
-import {AaveV2ScUsdcAdapter} from "../../src/steth/scUsdcV2-adapters/AaveV2ScUsdcAdapter.sol";
-import {MorphoAaveV3ScUsdcAdapter} from "../../src/steth/scUsdcV2-adapters/MorphoAaveV3ScUsdcAdapter.sol";
-import {MainnetDeployBase} from "../base/MainnetDeployBase.sol";
-import {UsdcWethSwapper} from "../../src/steth/swapper/UsdcWethSwapper.sol";
+import {MainnetDeployBase} from "script/base/MainnetDeployBase.sol";
+import {Constants as C} from "src/lib/Constants.sol";
+import {ISwapRouter} from "src/interfaces/uniswap/ISwapRouter.sol";
+import {sc4626} from "src/sc4626.sol";
+import {scWETHv2} from "src/steth/scWETHv2.sol";
+import {scUSDCv2} from "src/steth/scUSDCv2.sol";
+import {Swapper} from "src/steth/swapper/Swapper.sol";
+import {PriceConverter} from "src/steth/priceConverter/PriceConverter.sol";
+import {UsdcWethPriceConverter} from "src/steth/priceConverter/UsdcWethPriceConverter.sol";
+import {AaveV3ScWethAdapter} from "src/steth/scWethV2-adapters/AaveV3ScWethAdapter.sol";
+import {CompoundV3ScWethAdapter} from "src/steth/scWethV2-adapters/CompoundV3ScWethAdapter.sol";
+import {MorphoAaveV3ScWethAdapter} from "src/steth/scWethV2-adapters/MorphoAaveV3ScWethAdapter.sol";
+import {AaveV3ScUsdcAdapter} from "src/steth/scUsdcV2-adapters/AaveV3ScUsdcAdapter.sol";
+import {AaveV2ScUsdcAdapter} from "src/steth/scUsdcV2-adapters/AaveV2ScUsdcAdapter.sol";
+import {MorphoAaveV3ScUsdcAdapter} from "src/steth/scUsdcV2-adapters/MorphoAaveV3ScUsdcAdapter.sol";
+import {UsdcWethSwapper} from "src/steth/swapper/UsdcWethSwapper.sol";
 
-contract DeployScript is MainnetDeployBase {
+contract DeployV2LeveragedEthMainnet is MainnetDeployBase {
     function run() external returns (scWETHv2 scWethV2, scUSDCv2 scUsdcV2) {
         vm.startBroadcast(deployerPrivateKey);
 

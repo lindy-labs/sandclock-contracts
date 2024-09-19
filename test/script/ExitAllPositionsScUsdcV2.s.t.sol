@@ -7,7 +7,6 @@ import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 import {WETH} from "solmate/tokens/WETH.sol";
 
 import {scUSDCv2} from "../../src/steth/scUSDCv2.sol";
-import {scWETHv2} from "../../src/steth/scWETHv2.sol";
 import {PriceConverter} from "../../src/steth/priceConverter/PriceConverter.sol";
 import {AaveV2ScUsdcAdapter} from "../../src/steth/scUsdcV2-adapters/AaveV2ScUsdcAdapter.sol";
 import {AaveV3ScUsdcAdapter} from "../../src/steth/scUsdcV2-adapters/AaveV3ScUsdcAdapter.sol";
@@ -16,7 +15,6 @@ import {RebalanceScUsdcV2} from "../../script/v2/keeper-actions/RebalanceScUsdcV
 import {MainnetAddresses} from "../../script/base/MainnetAddresses.sol";
 import {Constants} from "../../src/lib/Constants.sol";
 
-import {RedeployScript} from "../../script/v2/RedeployScUsdcV2EthMainnet.s.sol";
 import {ExitAllPositionsScUsdcV2} from "../../script/v2/keeper-actions/ExitAllPositionsScUsdcV2.s.sol";
 import {scCrossAssetYieldVault} from "../../src/steth/scCrossAssetYieldVault.sol";
 

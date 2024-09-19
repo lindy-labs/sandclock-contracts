@@ -4,11 +4,11 @@ pragma solidity ^0.8.13;
 import "forge-std/console2.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
-import {MainnetAddresses} from "./base/MainnetAddresses.sol";
-import {MainnetDeployBase} from "./base/MainnetDeployBase.sol";
-import {ISwapRouter} from "../src/interfaces/uniswap/ISwapRouter.sol";
-import {Constants as C} from "../src/lib/Constants.sol";
-import {scLiquity} from "../src/liquity/scLiquity.sol";
+import {MainnetAddresses} from "script/base/MainnetAddresses.sol";
+import {MainnetDeployBase} from "script/base/MainnetDeployBase.sol";
+import {ISwapRouter} from "src/interfaces/uniswap/ISwapRouter.sol";
+import {Constants as C} from "src/lib/Constants.sol";
+import {scLiquity} from "src/liquity/scLiquity.sol";
 
 /**
  * Mainnet deployment script for scLiquity vault.

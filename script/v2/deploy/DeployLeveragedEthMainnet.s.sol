@@ -3,12 +3,9 @@ pragma solidity ^0.8.13;
 
 import "forge-std/console2.sol";
 
-import {DeployLeveragedEth} from "./base/DeployLeveragedEth.sol";
-import {scWETH} from "../src/steth/scWETH.sol";
-import {scUSDC} from "../src/steth/scUSDC.sol";
-import {sc4626} from "../src/sc4626.sol";
-import {Constants as C} from "../src/lib/Constants.sol";
-import {ISwapRouter} from "../src/interfaces/uniswap/ISwapRouter.sol";
+import {DeployLeveragedEth} from "script/base/DeployLeveragedEth.sol";
+import {scWETH} from "src/steth/scWETH.sol";
+import {scUSDC} from "src/steth/scUSDC.sol";
 
 contract DeployLeveragedEthMainnet is DeployLeveragedEth {
     function run() external {

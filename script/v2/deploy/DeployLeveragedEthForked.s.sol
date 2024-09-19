@@ -3,17 +3,12 @@ pragma solidity ^0.8.13;
 
 import "forge-std/console2.sol";
 import "forge-std/Test.sol";
-import "forge-std/StdStorage.sol";
 
-import {DeployLeveragedEth} from "./base/DeployLeveragedEth.sol";
-import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
-import {MockWETH} from "../test/mocks/MockWETH.sol";
-import {MockUSDC} from "../test/mocks/MockUSDC.sol";
-import {Constants as C} from "../src/lib/Constants.sol";
+import {DeployLeveragedEth} from "script/base/DeployLeveragedEth.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
-import {sc4626} from "../src/sc4626.sol";
-import {scWETH} from "../src/steth/scWETH.sol";
-import {scUSDC} from "../src/steth/scUSDC.sol";
+import {sc4626} from "src/sc4626.sol";
+import {scWETH} from "src/steth/scWETH.sol";
+import {scUSDC} from "src/steth/scUSDC.sol";
 
 /**
  * Deployment & Fixture exection script to be run against staging forked node.
@@ -21,8 +16,6 @@ import {scUSDC} from "../src/steth/scUSDC.sol";
  *          --rpc-url=http://forked-node`
  */
 contract DeployLeveragedEthForked is DeployLeveragedEth, Test {
-    using stdStorage for StdStorage;
-
     uint256 public constant INITIAL_WETH_DEPOSIT = 10e18;
     uint256 public constant INITIAL_WETH_WITHDRAW = 1e18;
     uint256 public constant INITIAL_USDC_DEPOSIT = 100e6;
