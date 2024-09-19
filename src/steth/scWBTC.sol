@@ -11,6 +11,11 @@ import {ISinglePairPriceConverter} from "./priceConverter/ISinglePairPriceConver
 import {ISinglePairSwapper} from "./swapper/ISinglePairSwapper.sol";
 import {MainnetAddresses as MA} from "../../script/base/MainnetAddresses.sol";
 
+/**
+ * @title Sandclock WBTC Vault
+ * @notice A vault that allows users to earn interest on their WBTC deposits from leveraged WETH staking.
+ * @dev This vault uses Sandclock's leveraged WETH staking vault - scWETH.
+ */
 contract scWBTC is scCrossAssetYieldVault {
     using SafeTransferLib for ERC20;
 
