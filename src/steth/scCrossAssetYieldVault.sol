@@ -1,7 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.19;
 
-import {NoProfitsToSell, FlashLoanAmountZero, EndAssetBalanceTooLow, FloatBalanceTooLow} from "../errors/scErrors.sol";
+import {
+    NoProfitsToSell,
+    FlashLoanAmountZero,
+    EndAssetBalanceTooLow,
+    FloatBalanceTooLow,
+    TargetTokenMustBeSame,
+    WithdrawInvestedAmountFirst
+} from "../errors/scErrors.sol";
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {ERC4626} from "solmate/mixins/ERC4626.sol";
@@ -45,12 +52,13 @@ abstract contract scCrossAssetYieldVault is BaseV2Vault {
     event Withdrawn(uint256 adapterId, uint256 amount);
     event Invested(uint256 targetTokenAmount);
     event Disinvested(uint256 targetTokenAmount);
-
-    /// @notice The target vault (staking vault) where target tokens are invested.
-    ERC4626 public immutable targetVault;
+    event TargetVaultUpdated(address targetVault);
 
     /// @notice The target token used as underlying in the target vault.
     ERC20 public immutable targetToken;
+
+    /// @notice The target vault (staking vault) where target tokens are invested.
+    ERC4626 public targetVault;
 
     constructor(
         address _admin,
@@ -73,6 +81,28 @@ abstract contract scCrossAssetYieldVault is BaseV2Vault {
     /*//////////////////////////////////////////////////////////////
                             PUBLIC API
     //////////////////////////////////////////////////////////////*/
+
+    /**
+     * @notice Updates the address of the target vault
+     * @dev Make sure to disinvest all invested amount from previous target vault
+     * @dev The new target vault must have the same target token as previous one.
+     * @param _newTargetVault address of the new target vault
+     */
+    function updateTargetVault(ERC4626 _newTargetVault) external {
+        _onlyAdmin();
+
+        if (_newTargetVault.asset() != targetToken) {
+            revert TargetTokenMustBeSame();
+        }
+
+        if (targetTokenInvestedAmount() != 0) {
+            revert WithdrawInvestedAmountFirst();
+        }
+
+        targetVault = _newTargetVault;
+
+        emit TargetVaultUpdated(address(_newTargetVault));
+    }
 
     /**
      * @notice Rebalance the vault's positions and loans across multiple lending markets.
