@@ -121,4 +121,7 @@ library Constants {
 
     // Morpho
     address public constant MORPHO = 0x33333aea097c193e66081E930c33020272b33333;
+
+    // Sky
+    address public constant DAI_USDS_CONVERTER = 0x3225737a9Bbb6473CB4a45b7244ACa2BeFdB276A;
 }
