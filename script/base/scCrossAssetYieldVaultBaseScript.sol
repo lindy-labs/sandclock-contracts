@@ -12,7 +12,7 @@ import {WETH} from "solmate/tokens/WETH.sol";
 import {MainnetAddresses} from "./MainnetAddresses.sol";
 import {PriceConverter} from "../../src/steth/priceConverter/PriceConverter.sol";
 import {scCrossAssetYieldVault} from "../../src/steth/scCrossAssetYieldVault.sol";
-import {ISinglePairPriceConverter} from "../../src/steth/priceConverter/IPriceConverter.sol";
+import {ISinglePairPriceConverter} from "../../src/steth/priceConverter/ISinglePairPriceConverter.sol";
 
 /**
  * A base script for executing keeper functions on `scCrossAssetYieldVault` contracts.
