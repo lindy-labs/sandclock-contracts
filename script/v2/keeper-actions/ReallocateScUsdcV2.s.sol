@@ -9,7 +9,7 @@ import {WETH} from "solmate/tokens/WETH.sol";
 import {AccessControl} from "openzeppelin-contracts/access/AccessControl.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 
-import {ScUsdcV2ScriptBase} from "../../base/ScUsdcV2ScriptBase.sol";
+import {scCrossAssetYieldVaultBaseScript} from "../../base/scCrossAssetYieldVaultBaseScript.sol";
 import {MainnetAddresses} from "../../base/MainnetAddresses.sol";
 import {PriceConverter} from "../../../src/steth/priceConverter/PriceConverter.sol";
 import {scUSDCv2} from "../../../src/steth/scUSDCv2.sol";
@@ -22,7 +22,7 @@ import {scCrossAssetYieldVault} from "../../../src/steth/scCrossAssetYieldVault.
 /**
  * A script for executing reallocate functionality for scUsdcV2 vaults.
  */
-contract ReallocateScUsdcV2 is ScUsdcV2ScriptBase {
+contract ReallocateScUsdcV2 is scCrossAssetYieldVaultBaseScript {
     using FixedPointMathLib for uint256;
 
     /*//////////////////////////////////////////////////////////////
@@ -61,9 +61,13 @@ contract ReallocateScUsdcV2 is ScUsdcV2ScriptBase {
     uint256 flashLoanAmount;
     uint256 totalAllocationPercent;
 
+    MorphoAaveV3ScUsdcAdapter public morphoAdapter = MorphoAaveV3ScUsdcAdapter(MainnetAddresses.SCUSDCV2_MORPHO_ADAPTER);
+    AaveV2ScUsdcAdapter public aaveV2Adapter = AaveV2ScUsdcAdapter(MainnetAddresses.SCUSDCV2_AAVEV2_ADAPTER);
+    AaveV3ScUsdcAdapter public aaveV3Adapter = AaveV3ScUsdcAdapter(MainnetAddresses.SCUSDCV2_AAVEV3_ADAPTER);
+
     function run() external {
         console2.log("--ReallocateScUsdcV2 script running--");
-        require(scUsdcV2.hasRole(scUsdcV2.KEEPER_ROLE(), address(keeper)), "invalid keeper");
+        require(vault.hasRole(vault.KEEPER_ROLE(), address(keeper)), "invalid keeper");
 
         _logScriptParams();
 
@@ -75,7 +79,7 @@ contract ReallocateScUsdcV2 is ScUsdcV2ScriptBase {
 
         console2.log("start execution");
 
-        scUsdcV2.reallocate(flashLoanAmount, multicallData);
+        vault.reallocate(flashLoanAmount, multicallData);
 
         vm.stopBroadcast();
 
@@ -83,22 +87,26 @@ contract ReallocateScUsdcV2 is ScUsdcV2ScriptBase {
         console2.log("--ReallocateScUsdcV2 script done--");
     }
 
+    function getVault() internal override returns (scCrossAssetYieldVault) {
+        return scCrossAssetYieldVault(vm.envOr("SC_USDC_V2", MainnetAddresses.SCUSDCV2));
+    }
+
     function _logPositions(string memory message) internal view {
         console2.log(message);
 
-        console2.log("moprhoCollateral\t", morphoAdapter.getCollateral(address(scUsdcV2)));
-        console2.log("moprhoDebt\t\t", morphoAdapter.getDebt(address(scUsdcV2)));
+        console2.log("moprhoCollateral\t", morphoAdapter.getCollateral(address(vault)));
+        console2.log("moprhoDebt\t\t", morphoAdapter.getDebt(address(vault)));
 
-        console2.log("aaveV2Collateral\t", aaveV2Adapter.getCollateral(address(scUsdcV2)));
-        console2.log("aaveV2Debt\t\t", aaveV2Adapter.getDebt(address(scUsdcV2)));
+        console2.log("aaveV2Collateral\t", aaveV2Adapter.getCollateral(address(vault)));
+        console2.log("aaveV2Debt\t\t", aaveV2Adapter.getDebt(address(vault)));
 
-        console2.log("aaveV3Collateral\t", aaveV3Adapter.getCollateral(address(scUsdcV2)));
-        console2.log("aaveV3Debt\t\t", aaveV3Adapter.getDebt(address(scUsdcV2)));
+        console2.log("aaveV3Collateral\t", aaveV3Adapter.getCollateral(address(vault)));
+        console2.log("aaveV3Debt\t\t", aaveV3Adapter.getDebt(address(vault)));
     }
 
     function _initReallocateData() internal {
         if (useMorpho) {
-            if (!scUsdcV2.isSupported(morphoAdapter.id())) revert("morpho adapter not supported");
+            if (!vault.isSupported(morphoAdapter.id())) revert("morpho adapter not supported");
 
             _createData(morphoAdapter.id(), morphoAllocationPercent);
 
@@ -106,7 +114,7 @@ contract ReallocateScUsdcV2 is ScUsdcV2ScriptBase {
         }
 
         if (useAaveV2) {
-            if (!scUsdcV2.isSupported(aaveV2Adapter.id())) revert("aave v2 adapter not supported");
+            if (!vault.isSupported(aaveV2Adapter.id())) revert("aave v2 adapter not supported");
 
             _createData(aaveV2Adapter.id(), aaveV2AllocationPercent);
 
@@ -114,7 +122,7 @@ contract ReallocateScUsdcV2 is ScUsdcV2ScriptBase {
         }
 
         if (useAaveV3) {
-            if (!scUsdcV2.isSupported(aaveV3Adapter.id())) revert("aave v3 adapter not supported");
+            if (!vault.isSupported(aaveV3Adapter.id())) revert("aave v3 adapter not supported");
 
             _createData(aaveV3Adapter.id(), aaveV3AllocationPercent);
 
@@ -131,10 +139,10 @@ contract ReallocateScUsdcV2 is ScUsdcV2ScriptBase {
 
         data.adapterId = _adapterId;
 
-        uint256 currentAllocation = scUsdcV2.getCollateral(_adapterId);
-        uint256 expectedAllocation = scUsdcV2.totalCollateral().mulWadUp(_allocationPercent);
-        uint256 currentDebt = scUsdcV2.getDebt(_adapterId);
-        uint256 expectedDebt = scUsdcV2.totalDebt().mulWadUp(_allocationPercent);
+        uint256 currentAllocation = vault.getCollateral(_adapterId);
+        uint256 expectedAllocation = vault.totalCollateral().mulWadUp(_allocationPercent);
+        uint256 currentDebt = vault.getDebt(_adapterId);
+        uint256 expectedDebt = vault.totalDebt().mulWadUp(_allocationPercent);
 
         if (currentAllocation > expectedAllocation) {
             // we need to withdraw some collateral

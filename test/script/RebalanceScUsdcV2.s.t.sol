@@ -44,21 +44,21 @@ contract RebalanceScUsdcV2Test is Test {
     }
 
     function test_run_initialRebalance() public {
-        assertEq(script.wethInvested(), 0, "weth invested");
+        assertEq(script.targetTokensInvested(), 0, "weth invested");
         assertEq(vault.totalDebt(), 0, "total debt");
         assertEq(vault.totalCollateral(), 0, "total collateral");
-        assertTrue(script.usdcBalance() > 0, "usdc balance");
+        assertTrue(script.assetBalance() > 0, "usdc balance");
 
         uint256 expectedFloat = vault.totalAssets().mulWadDown(vault.floatPercentage());
-        uint256 expectedCollateral = script.usdcBalance() - expectedFloat;
+        uint256 expectedCollateral = script.assetBalance() - expectedFloat;
         uint256 expectedDebt = priceConverter.usdcToEth(expectedCollateral).mulWadDown(script.morphoTargetLtv());
 
         script.run();
 
-        assertApproxEqRel(script.wethInvested(), expectedDebt, 0.001e18, "weth invested");
+        assertApproxEqRel(script.targetTokensInvested(), expectedDebt, 0.001e18, "weth invested");
         assertApproxEqRel(vault.totalDebt(), expectedDebt, 0.001e18, "total debt");
         assertApproxEqRel(vault.totalCollateral(), expectedCollateral, 0.001e18, "total collateral");
-        assertApproxEqRel(script.usdcBalance(), expectedFloat, 0.001e18, "usdc balance");
+        assertApproxEqRel(script.assetBalance(), expectedFloat, 0.001e18, "usdc balance");
     }
 
     function test_run_failsIfTotalInvestableAmountPercentNot100() public {
@@ -77,15 +77,15 @@ contract RebalanceScUsdcV2Test is Test {
         script.setAaveV2InvestableAmountPercent(aaveV2InvestableAmountPercent);
 
         uint256 expectedFloat = vault.totalAssets().mulWadDown(vault.floatPercentage());
-        uint256 expectedCollateral = script.usdcBalance() - expectedFloat;
+        uint256 expectedCollateral = script.assetBalance() - expectedFloat;
         uint256 expectedDebt = priceConverter.usdcToEth(expectedCollateral).mulWadDown(script.morphoTargetLtv());
 
         script.run();
 
-        assertApproxEqRel(script.wethInvested(), expectedDebt, 0.001e18, "weth invested");
+        assertApproxEqRel(script.targetTokensInvested(), expectedDebt, 0.001e18, "weth invested");
         assertApproxEqRel(vault.totalDebt(), expectedDebt, 0.001e18, "total debt");
         assertApproxEqRel(vault.totalCollateral(), expectedCollateral, 0.001e18, "total collateral");
-        assertApproxEqRel(script.usdcBalance(), expectedFloat, 0.001e18, "usdc balance");
+        assertApproxEqRel(script.assetBalance(), expectedFloat, 0.001e18, "usdc balance");
 
         uint256 morphoExpectedCollateral = expectedCollateral.mulWadDown(morphoInvestableAmountPercent);
         uint256 aaveV2ExpectedCollateral = expectedCollateral.mulWadDown(aaveV2InvestableAmountPercent);
@@ -115,10 +115,10 @@ contract RebalanceScUsdcV2Test is Test {
 
         script.run();
 
-        assertApproxEqRel(script.wethInvested(), expectedDebt, 0.001e18, "weth invested");
+        assertApproxEqRel(script.targetTokensInvested(), expectedDebt, 0.001e18, "weth invested");
         assertApproxEqRel(vault.totalDebt(), expectedDebt, 0.001e18, "total debt");
         assertApproxEqRel(vault.totalCollateral(), expectedCollateral, 0.001e18, "total collateral");
-        assertApproxEqRel(script.usdcBalance(), expectedFloat, 0.001e18, "usdc balance");
+        assertApproxEqRel(script.assetBalance(), expectedFloat, 0.001e18, "usdc balance");
     }
 
     function test_run_twoAdaptersLeverageDown() public {
@@ -199,8 +199,8 @@ contract RebalanceScUsdcV2Test is Test {
 
         script.run();
 
-        assertApproxEqRel(script.usdcBalance(), expectedFloat, 0.001e18, "usdc balance");
-        assertApproxEqRel(script.wethInvested(), expectedDebt, 0.001e18, "weth invested");
+        assertApproxEqRel(script.assetBalance(), expectedFloat, 0.001e18, "usdc balance");
+        assertApproxEqRel(script.targetTokensInvested(), expectedDebt, 0.001e18, "weth invested");
         assertApproxEqRel(vault.totalDebt(), expectedDebt, 0.001e18, "total debt");
         assertApproxEqRel(vault.totalCollateral(), expectedCollateral, 0.001e18, "total collateral");
         assertTrue(vault.totalDebt() >= debtBefore, "total debt decreased");
@@ -227,8 +227,8 @@ contract RebalanceScUsdcV2Test is Test {
 
         script.run();
 
-        assertApproxEqRel(script.usdcBalance(), expectedFloat, 0.001e18, "usdc balance");
-        assertApproxEqRel(script.wethInvested(), expectedDebt, 0.001e18, "weth invested");
+        assertApproxEqRel(script.assetBalance(), expectedFloat, 0.001e18, "usdc balance");
+        assertApproxEqRel(script.targetTokensInvested(), expectedDebt, 0.001e18, "weth invested");
         assertApproxEqRel(vault.totalDebt(), expectedDebt, 0.001e18, "total debt");
         assertApproxEqRel(vault.totalCollateral(), expectedCollateral, 0.001e18, "total collateral");
         assertTrue(vault.totalDebt() <= debtBefore, "total debt increased");
@@ -250,8 +250,8 @@ contract RebalanceScUsdcV2Test is Test {
 
         script.run();
 
-        assertApproxEqRel(script.usdcBalance(), expectedFloat, 0.001e18, "usdc balance");
-        assertApproxEqRel(script.wethInvested(), expectedDebt, 0.001e18, "weth invested");
+        assertApproxEqRel(script.assetBalance(), expectedFloat, 0.001e18, "usdc balance");
+        assertApproxEqRel(script.targetTokensInvested(), expectedDebt, 0.001e18, "weth invested");
         assertApproxEqRel(vault.totalDebt(), expectedDebt, 0.001e18, "total debt");
         assertApproxEqRel(vault.totalCollateral(), expectedCollateral, 0.001e18, "total collateral");
     }
@@ -266,17 +266,17 @@ contract RebalanceScUsdcV2Test is Test {
 
         _assertInitialState();
 
-        vault.withdraw(script.usdcBalance(), address(this), address(this));
-        assertEq(script.usdcBalance(), 0, "usdc balance");
+        vault.withdraw(script.assetBalance(), address(this), address(this));
+        assertEq(script.assetBalance(), 0, "usdc balance");
 
         uint256 expectedFloat = vault.totalAssets().mulWadDown(vault.floatPercentage());
         uint256 expectedCollateral = vault.totalAssets() - expectedFloat;
         uint256 expectedDebt = vault.totalDebt();
-        uint256 wethInvested = script.wethInvested();
+        uint256 wethInvested = script.targetTokensInvested();
 
         script.run();
 
-        assertApproxEqRel(script.wethInvested(), wethInvested, 0.001e18, "weth invested");
+        assertApproxEqRel(script.targetTokensInvested(), wethInvested, 0.001e18, "weth invested");
         assertApproxEqRel(vault.totalDebt(), expectedDebt, 0.001e18, "total debt");
         assertApproxEqRel(vault.totalCollateral(), expectedCollateral, 0.001e18, "total collateral");
     }
@@ -291,8 +291,8 @@ contract RebalanceScUsdcV2Test is Test {
 
         _assertInitialState();
 
-        vault.withdraw(script.usdcBalance(), address(this), address(this));
-        assertEq(script.usdcBalance(), 0, "usdc balance");
+        vault.withdraw(script.assetBalance(), address(this), address(this));
+        assertEq(script.assetBalance(), 0, "usdc balance");
 
         uint256 newMorphoTargetLtv = script.morphoTargetLtv() + 0.05e18;
         script.setMorphoTargetLtv(newMorphoTargetLtv);
@@ -303,7 +303,7 @@ contract RebalanceScUsdcV2Test is Test {
 
         script.run();
 
-        assertApproxEqRel(script.wethInvested(), expectedDebt, 0.001e18, "weth invested");
+        assertApproxEqRel(script.targetTokensInvested(), expectedDebt, 0.001e18, "weth invested");
         assertApproxEqRel(vault.totalDebt(), expectedDebt, 0.001e18, "total debt");
         assertApproxEqRel(vault.totalCollateral(), expectedCollateral, 0.001e18, "total collateral");
     }
@@ -318,8 +318,8 @@ contract RebalanceScUsdcV2Test is Test {
 
         _assertInitialState();
 
-        vault.withdraw(script.usdcBalance(), address(this), address(this));
-        assertEq(script.usdcBalance(), 0, "usdc balance");
+        vault.withdraw(script.assetBalance(), address(this), address(this));
+        assertEq(script.assetBalance(), 0, "usdc balance");
 
         uint256 newMorphoTargetLtv = script.morphoTargetLtv() - 0.05e18;
         script.setMorphoTargetLtv(newMorphoTargetLtv);
@@ -330,7 +330,7 @@ contract RebalanceScUsdcV2Test is Test {
 
         script.run();
 
-        assertApproxEqRel(script.wethInvested(), expectedDebt, 0.001e18, "weth invested");
+        assertApproxEqRel(script.targetTokensInvested(), expectedDebt, 0.001e18, "weth invested");
         assertApproxEqRel(vault.totalDebt(), expectedDebt, 0.001e18, "total debt");
         assertApproxEqRel(vault.totalCollateral(), expectedCollateral, 0.001e18, "total collateral");
     }
@@ -347,7 +347,7 @@ contract RebalanceScUsdcV2Test is Test {
         script.setAaveV3TargetLtv(newAaveV3TargetLtv); // 50%
 
         uint256 expectedFloat = vault.totalAssets().mulWadDown(vault.floatPercentage());
-        uint256 investableAmount = script.usdcBalance() - expectedFloat;
+        uint256 investableAmount = script.assetBalance() - expectedFloat;
         uint256 expectedAaveV3Debt = priceConverter.usdcToEth(investableAmount).mulWadDown(newAaveV3TargetLtv);
 
         script.run();
@@ -429,7 +429,7 @@ contract RebalanceScUsdcV2Test is Test {
 
         assertTrue(vault.getProfit() == 0, "profit != 0");
 
-        uint256 wethInvested = script.wethInvested();
+        uint256 wethInvested = script.targetTokensInvested();
 
         _simulate100PctProfit();
 
@@ -448,12 +448,12 @@ contract RebalanceScUsdcV2Test is Test {
         script.run();
 
         assertApproxEqAbs(vault.getProfit(), 0, 2, "profit not sold entirely");
-        assertTrue(script.usdcBalance() >= expectedFloat, "float balance");
+        assertTrue(script.assetBalance() >= expectedFloat, "float balance");
         assertApproxEqRel(
             vault.totalCollateral(), initialCollateral + approxUsdcReinvested, 0.01e18, "total collateral"
         );
         assertApproxEqRel(vault.totalDebt(), initialDebt + approxAdditionalDebt, 0.01e18, "total debt");
-        assertApproxEqRel(script.wethInvested(), wethInvested + approxAdditionalDebt, 0.01e18, "weth invested");
+        assertApproxEqRel(script.targetTokensInvested(), wethInvested + approxAdditionalDebt, 0.01e18, "weth invested");
     }
 
     function test_run_doesntSellProfitIfBelowDefinedMin() public {
@@ -469,21 +469,21 @@ contract RebalanceScUsdcV2Test is Test {
         // set min profit to reinvest to 2x the actual profit
         script.setMinUsdcProfitToReinvest(priceConverter.ethToUsdc(wethProfit * 2));
 
-        uint256 wethInvested = script.wethInvested();
+        uint256 wethInvested = script.targetTokensInvested();
         uint256 expectedFloat = vault.totalAssets().mulWadDown(vault.floatPercentage());
         uint256 initialCollateral = vault.totalCollateral();
         uint256 initialDebt = vault.totalDebt();
 
-        uint256 missingFloat = expectedFloat - script.usdcBalance();
+        uint256 missingFloat = expectedFloat - script.assetBalance();
         uint256 wethDisinvested = priceConverter.usdcToEth(missingFloat);
 
         script.run();
 
         assertEq(vault.getProfit(), wethProfit, "profit");
-        assertTrue(script.usdcBalance() >= expectedFloat, "float balance");
+        assertTrue(script.assetBalance() >= expectedFloat, "float balance");
         assertApproxEqRel(vault.totalCollateral(), initialCollateral - missingFloat, 0.005e18, "total collateral");
         assertApproxEqRel(vault.totalDebt(), initialDebt, 0.005e18, "total debt");
-        assertApproxEqRel(script.wethInvested(), wethInvested - wethDisinvested, 0.005e18, "weth invested");
+        assertApproxEqRel(script.targetTokensInvested(), wethInvested - wethDisinvested, 0.005e18, "weth invested");
     }
 
     function test_run_failsIfRealizedSlippageOnSellingProfitsIsTooHigh() public {
@@ -512,7 +512,7 @@ contract RebalanceScUsdcV2Test is Test {
 
         _assertInitialState();
 
-        uint256 wethInvested = script.wethInvested();
+        uint256 wethInvested = script.targetTokensInvested();
         _simulate100PctProfit();
         assertApproxEqAbs(vault.getProfit(), wethInvested, 1, "profit != wethInvested");
 
@@ -530,7 +530,7 @@ contract RebalanceScUsdcV2Test is Test {
         script.run();
 
         assertApproxEqAbs(vault.getProfit(), 0, 2, "profit not sold entirely");
-        assertApproxEqRel(script.wethInvested(), expectedDebt, 0.01e18, "weth invested");
+        assertApproxEqRel(script.targetTokensInvested(), expectedDebt, 0.01e18, "weth invested");
         assertApproxEqRel(vault.totalDebt(), expectedDebt, 0.01e18, "total debt");
         assertApproxEqRel(vault.totalCollateral(), expectedCollateral, 0.001e18, "total collateral");
         assertTrue(vault.totalCollateral() > initialCollateral, "total collateral not increased");
@@ -541,10 +541,10 @@ contract RebalanceScUsdcV2Test is Test {
     }
 
     function _assertInitialState() internal {
-        assertTrue(script.wethInvested() > 0, "weth invested");
+        assertTrue(script.targetTokensInvested() > 0, "weth invested");
         assertTrue(vault.totalDebt() > 0, "total debt");
         assertTrue(vault.totalCollateral() > 0, "total collateral");
-        assertTrue(script.usdcBalance() > 0, "usdc balance");
+        assertTrue(script.assetBalance() > 0, "usdc balance");
     }
 
     function _simulate100PctProfit() internal {
@@ -553,8 +553,8 @@ contract RebalanceScUsdcV2Test is Test {
         // simulate 100% profit by dealing more WETH to scWETH vault
         deal(
             address(weth),
-            address(script.scWETH()),
-            script.scWETH().totalAssets() + weth.balanceOf(address(script.scWETH()))
+            address(script.targetVault()),
+            script.targetVault().totalAssets() + weth.balanceOf(address(script.targetVault()))
         );
     }
 }

@@ -42,7 +42,7 @@ contract ExitAllPositionsScUsdcV2Test is Test {
     }
 
     function test_run_exitsAllPositions() public {
-        assertEq(script.wethInvested(), 0, "weth invested");
+        assertEq(script.targetTokensInvested(), 0, "weth invested");
         assertEq(vault.totalDebt(), 0, "total debt");
         assertEq(vault.totalCollateral(), 0, "total collateral");
         assertTrue(vault.asset().balanceOf(address(vault)) > 0, "usdc balance");
@@ -61,14 +61,14 @@ contract ExitAllPositionsScUsdcV2Test is Test {
         uint256 totalAssetsBefore = vault.totalAssets();
         uint256 maxLossPercent = script.maxAceeptableLossPercent();
 
-        assertApproxEqAbs(script.wethInvested(), debtAmount, 1, "weth invested");
+        assertApproxEqAbs(script.targetTokensInvested(), debtAmount, 1, "weth invested");
         assertApproxEqAbs(vault.totalDebt(), debtAmount, 1, "total debt");
         assertApproxEqAbs(vault.totalCollateral(), investAmount, 1, "total collateral");
 
         // exit
         script.run();
 
-        assertEq(script.wethInvested(), 0, "weth invested");
+        assertEq(script.targetTokensInvested(), 0, "weth invested");
         assertEq(vault.totalDebt(), 0, "total debt");
         assertEq(vault.totalCollateral(), 0, "total collateral");
         assertApproxEqRel(vault.totalAssets(), totalAssetsBefore, maxLossPercent, "total assets");

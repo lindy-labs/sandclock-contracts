@@ -10,7 +10,7 @@ import {WETH} from "solmate/tokens/WETH.sol";
 import {AccessControl} from "openzeppelin-contracts/access/AccessControl.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 
-import {ScUsdcV2ScriptBase} from "../../base/ScUsdcV2ScriptBase.sol";
+import {scCrossAssetYieldVaultBaseScript} from "../../base/scCrossAssetYieldVaultBaseScript.sol";
 import {MainnetAddresses} from "../../base/MainnetAddresses.sol";
 import {PriceConverter} from "../../../src/steth/priceConverter/PriceConverter.sol";
 import {scUSDCv2} from "../../../src/steth/scUSDCv2.sol";
@@ -23,7 +23,7 @@ import {scCrossAssetYieldVault} from "../../../src/steth/scCrossAssetYieldVault.
 /**
  * A script for executing rebalance functionality for scUsdcV2 vaults.
  */
-contract RebalanceScUsdcV2 is ScUsdcV2ScriptBase {
+contract RebalanceScUsdcV2 is scCrossAssetYieldVaultBaseScript {
     using FixedPointMathLib for uint256;
 
     /*//////////////////////////////////////////////////////////////
@@ -74,18 +74,27 @@ contract RebalanceScUsdcV2 is ScUsdcV2ScriptBase {
     uint256 disinvestAmount = 0;
     bytes[] multicallData;
 
+    MorphoAaveV3ScUsdcAdapter public morphoAdapter = MorphoAaveV3ScUsdcAdapter(MainnetAddresses.SCUSDCV2_MORPHO_ADAPTER);
+    AaveV2ScUsdcAdapter public aaveV2Adapter = AaveV2ScUsdcAdapter(MainnetAddresses.SCUSDCV2_AAVEV2_ADAPTER);
+    AaveV3ScUsdcAdapter public aaveV3Adapter = AaveV3ScUsdcAdapter(MainnetAddresses.SCUSDCV2_AAVEV3_ADAPTER);
+
     function run() external {
         console2.log("--RebalanceScUsdcV2 script running--");
 
-        require(scUsdcV2.hasRole(scUsdcV2.KEEPER_ROLE(), address(keeper)), "invalid keeper");
+        require(vault.hasRole(vault.KEEPER_ROLE(), address(keeper)), "invalid keeper");
 
         _logScriptParams();
 
         _initializeAdapterSettings();
 
+        require(
+            morphoInvestableAmountPercent + aaveV2InvestableAmountPercent + aaveV3InvestableAmountPercent == 1e18,
+            "investable amount percent not 100%"
+        );
+
         uint256 minUsdcFromProfitSelling = _sellWethProfitIfAboveDefinedMin();
-        uint256 minUsdcBalance = minUsdcFromProfitSelling + usdcBalance();
-        uint256 minFloatRequired = scUsdcV2.totalAssets().mulWadUp(scUsdcV2.floatPercentage());
+        uint256 minUsdcBalance = minUsdcFromProfitSelling + assetBalance();
+        uint256 minFloatRequired = vault.totalAssets().mulWadUp(vault.floatPercentage());
         uint256 missingFloat = minFloatRequired > minUsdcBalance ? minFloatRequired - minUsdcBalance : 0;
         uint256 investableAmount = minFloatRequired < minUsdcBalance ? minUsdcBalance - minFloatRequired : 0;
 
@@ -94,11 +103,15 @@ contract RebalanceScUsdcV2 is ScUsdcV2ScriptBase {
         _logVaultInfo("state before rebalance");
 
         vm.startBroadcast(keeper);
-        scUsdcV2.rebalance(multicallData);
+        vault.rebalance(multicallData);
         vm.stopBroadcast();
 
         _logVaultInfo("state after rebalance");
         console2.log("--RebalanceScUsdcV2 script done--");
+    }
+
+    function getVault() internal override returns (scCrossAssetYieldVault) {
+        return scCrossAssetYieldVault(vm.envOr("SC_USDC_V2", MainnetAddresses.SCUSDCV2));
     }
 
     function _initializeAdapterSettings() internal {
@@ -125,17 +138,12 @@ contract RebalanceScUsdcV2 is ScUsdcV2ScriptBase {
                 targetLtv: aaveV3TargetLtv
             })
         );
-
-        require(
-            morphoInvestableAmountPercent + aaveV2InvestableAmountPercent + aaveV3InvestableAmountPercent == 1e18,
-            "investable amount percent not 100%"
-        );
     }
 
     function _sellWethProfitIfAboveDefinedMin() internal returns (uint256) {
-        uint256 wethProfit = scUsdcV2.getProfit();
+        uint256 wethProfit = vault.getProfit();
         // account for slippage when selling weth profit for usdc
-        uint256 minExpectedUsdcProfit = priceConverter.ethToUsdc(wethProfit).mulWadDown(1e18 - maxProfitSellSlippage);
+        uint256 minExpectedUsdcProfit = targetTokensPriceInAssets(wethProfit).mulWadDown(1e18 - maxProfitSellSlippage);
 
         // if profit is too small, don't sell & reinvest
         if (minExpectedUsdcProfit < minUsdcProfitToReinvest) return 0;
@@ -150,7 +158,7 @@ contract RebalanceScUsdcV2 is ScUsdcV2ScriptBase {
             AdapterSettings memory settings = adapterSettings[i];
 
             if (
-                !scUsdcV2.isSupported(settings.adapterId)
+                !vault.isSupported(settings.adapterId)
                     && (settings.targetLtv > 0 || settings.investableAmountPercent > 0)
             ) {
                 revert ScriptCannotUseUnsupportedAdapter(settings.adapterId);
@@ -173,11 +181,11 @@ contract RebalanceScUsdcV2 is ScUsdcV2ScriptBase {
         uint256 _investableAmount,
         uint256 _missingFloat
     ) internal {
-        uint256 collateral = scUsdcV2.getCollateral(_adapterId);
-        uint256 debt = scUsdcV2.getDebt(_adapterId);
+        uint256 collateral = vault.getCollateral(_adapterId);
+        uint256 debt = vault.getDebt(_adapterId);
 
         uint256 targetCollateral = collateral + _investableAmount - _missingFloat;
-        uint256 targetDebt = priceConverter.usdcToEth(targetCollateral).mulWadDown(_targetLtv);
+        uint256 targetDebt = assetPriceInTargetTokens(targetCollateral).mulWadDown(_targetLtv);
 
         RebalanceData memory rebalanceData;
         rebalanceData.adapterId = _adapterId;
@@ -255,11 +263,11 @@ contract RebalanceScUsdcV2 is ScUsdcV2ScriptBase {
 
     function _logVaultInfo(string memory message) internal view {
         console2.log("\t", message);
-        console2.log("total assets\t\t", scUsdcV2.totalAssets());
-        console2.log("weth profit\t\t", scUsdcV2.getProfit());
-        console2.log("float\t\t\t", usdcBalance());
-        console2.log("total collateral\t", scUsdcV2.totalCollateral());
-        console2.log("total debt\t\t", scUsdcV2.totalDebt());
-        console2.log("weth invested\t\t", wethInvested());
+        console2.log("total assets\t\t", vault.totalAssets());
+        console2.log("weth profit\t\t", vault.getProfit());
+        console2.log("float\t\t\t", assetBalance());
+        console2.log("total collateral\t", vault.totalCollateral());
+        console2.log("total debt\t\t", vault.totalDebt());
+        console2.log("weth invested\t\t", targetTokensInvested());
     }
 }
