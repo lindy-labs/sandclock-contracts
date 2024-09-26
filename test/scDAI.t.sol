@@ -33,7 +33,7 @@ import {IwstETH} from "../src/interfaces/lido/IwstETH.sol";
 import "../src/errors/scErrors.sol";
 import {Address} from "openzeppelin-contracts/utils/Address.sol";
 import {MainnetAddresses as M} from "../script/base/MainnetAddresses.sol";
-import {ISinglePairPriceConverter} from "../src/steth/priceConverter/IPriceConverter.sol";
+import {ISinglePairPriceConverter} from "../src/steth/priceConverter/ISinglePairPriceConverter.sol";
 import {SDaiWethPriceConverter} from "../src/steth/priceConverter/SDaiWethPriceConverter.sol";
 import {SDaiWethSwapper} from "../src/steth/swapper/SDaiWethSwapper.sol";
 

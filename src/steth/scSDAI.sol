@@ -7,10 +7,15 @@ import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 
 import {Constants as C} from "../lib/Constants.sol";
 import {scCrossAssetYieldVault} from "./scCrossAssetYieldVault.sol";
-import {ISinglePairPriceConverter} from "./priceConverter/IPriceConverter.sol";
-import {ISinglePairSwapper} from "./swapper/ISwapper.sol";
+import {ISinglePairPriceConverter} from "./priceConverter/ISinglePairPriceConverter.sol";
+import {ISinglePairSwapper} from "./swapper/ISinglePairSwapper.sol";
 import {MainnetAddresses as MA} from "../../script/base/MainnetAddresses.sol";
 
+/**
+ * @title scSDAI
+ * @notice Sandclock USDT Vault implementation.
+ * @dev Inherits from scCrossAssetYieldVault to manage and generate sDAI yield.
+ */
 contract scSDAI is scCrossAssetYieldVault {
     using SafeTransferLib for ERC20;
 

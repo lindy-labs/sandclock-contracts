@@ -12,28 +12,39 @@ import {ISwapRouter} from "../../interfaces/uniswap/ISwapRouter.sol";
 import {ILido} from "../../interfaces/lido/ILido.sol";
 import {IwstETH} from "../../interfaces/lido/IwstETH.sol";
 import {ICurvePool} from "../../interfaces/curve/ICurvePool.sol";
-import {IScWETHSwapper} from "./../swapper/ISwapper.sol";
 
+/**
+ * @title SwapperLib
+ * @notice Library providing utility functions for token swaps using Uniswap V3 and arbitrary routers.
+ * @dev This library is intended to be used by contracts facilitating token swaps.
+ */
 library SwapperLib {
     using SafeTransferLib for ERC20;
     using Address for address;
 
+    /// @notice Uniswap V3 Swap Router
     ISwapRouter public constant swapRouter = ISwapRouter(C.UNISWAP_V3_SWAP_ROUTER);
 
+    /// @notice Curve ETH/stETH Pool
     ICurvePool public constant curvePool = ICurvePool(C.CURVE_ETH_STETH_POOL);
 
+    /// @notice Wrapped Ether (WETH) Token
     WETH public constant weth = WETH(payable(C.WETH));
+
+    /// @notice Lido stETH Token
     ILido public constant stEth = ILido(C.STETH);
+
+    /// @notice Wrapped stETH Token
     IwstETH public constant wstEth = IwstETH(C.WSTETH);
 
     /**
-     * @notice Swap tokens on Uniswap V3 using exact input single function.
-     * @param _tokenIn Address of the token to swap.
-     * @param _tokenOut Address of the token to receive.
-     * @param _amountIn Amount of the token to swap.
-     * @param _amountOutMin Minimum amount of the token to receive.
-     * @param _poolFee Pool fee of the Uniswap V3 pool.
-     * @return Amount of the token received.
+     * @notice Swap tokens on Uniswap V3 using the exact input single function.
+     * @param _tokenIn The address of the token to swap from.
+     * @param _tokenOut The address of the token to swap to.
+     * @param _amountIn The amount of `_tokenIn` to swap.
+     * @param _amountOutMin The minimum amount of `_tokenOut` to receive.
+     * @param _poolFee The fee tier of the Uniswap V3 pool.
+     * @return amountOut The amount of `_tokenOut` received from the swap.
      */
     function _uniswapSwapExactInput(
         address _tokenIn,
@@ -41,7 +52,7 @@ library SwapperLib {
         uint256 _amountIn,
         uint256 _amountOutMin,
         uint24 _poolFee
-    ) internal returns (uint256) {
+    ) internal returns (uint256 amountOut) {
         ERC20(_tokenIn).safeApprove(address(swapRouter), _amountIn);
 
         ISwapRouter.ExactInputSingleParams memory params = ISwapRouter.ExactInputSingleParams({
@@ -55,22 +66,23 @@ library SwapperLib {
             sqrtPriceLimitX96: 0
         });
 
-        return swapRouter.exactInputSingle(params);
+        amountOut = swapRouter.exactInputSingle(params);
     }
 
     /**
-     * @notice Swap tokens on Uniswap V3 using exact input multi route
-     * @param _tokenIn Address of the token to swap
-     * @param _amountIn Amount of the token to swap
-     * @param _amountOutMin Minimum amount of the token to receive
-     * @param _path abi.encodePacked(_tokenIn, fees, ...middleTokens, ...fees, _tokenOut)
+     * @notice Swap tokens on Uniswap V3 using exact input multi-hop.
+     * @param _tokenIn The address of the token to swap from.
+     * @param _amountIn The amount of `_tokenIn` to swap.
+     * @param _amountOutMin The minimum amount of the output token to receive.
+     * @param _path The encoded path for the swap, including tokens and fees.
+     * @return amountOut The amount of output tokens received from the swap.
      */
     function _uniswapSwapExactInputMultihop(
         address _tokenIn,
         uint256 _amountIn,
         uint256 _amountOutMin,
         bytes memory _path
-    ) internal returns (uint256) {
+    ) internal returns (uint256 amountOut) {
         ERC20(_tokenIn).safeApprove(address(swapRouter), _amountIn);
 
         ISwapRouter.ExactInputParams memory params = ISwapRouter.ExactInputParams({
@@ -81,16 +93,16 @@ library SwapperLib {
             amountOutMinimum: _amountOutMin
         });
 
-        return swapRouter.exactInput(params);
+        amountOut = swapRouter.exactInput(params);
     }
 
     /**
-     * @notice Swap tokens on Uniswap V3 using exact output multi route
-     * @param _tokenIn Address of the token to swap
-     * @param _amountOut Amount of the token to receive
-     * @param _amountInMaximum Maximum amount of the token to swap
-     * @param _path abi.encodePacked(_tokenOut, fees, ...middleTokens, ...fees, _tokenIn)
-     * @return amountIn Amount of the input token used for the swap
+     * @notice Swap tokens on Uniswap V3 using exact output multi-hop.
+     * @param _tokenIn The address of the token to swap from.
+     * @param _amountOut The exact amount of the output token desired.
+     * @param _amountInMaximum The maximum amount of `_tokenIn` willing to spend.
+     * @param _path The encoded path for the swap, reversed (output token to input token).
+     * @return amountIn The amount of `_tokenIn` spent to receive `_amountOut` of the output token.
      */
     function _uniswapSwapExactOutputMultihop(
         address _tokenIn,
@@ -110,17 +122,18 @@ library SwapperLib {
 
         amountIn = swapRouter.exactOutput(params);
 
+        // Reset approval to zero
         ERC20(_tokenIn).safeApprove(address(swapRouter), 0);
     }
 
     /**
-     * @notice Swap tokens on Uniswap V3 using exact output single function.
-     * @param _tokenIn Address of the token to swap.
-     * @param _tokenOut Address of the token to receive.
-     * @param _amountOut Amount of the token to receive.
-     * @param _amountInMaximum Maximum amount of the token to swap.
-     * @param _poolFee Pool fee of the Uniswap V3 pool.
-     * @return amountIn Amount of the input token used for the swap
+     * @notice Swap tokens on Uniswap V3 using the exact output single function.
+     * @param _tokenIn The address of the token to swap from.
+     * @param _tokenOut The address of the token to receive.
+     * @param _amountOut The exact amount of `_tokenOut` desired.
+     * @param _amountInMaximum The maximum amount of `_tokenIn` willing to spend.
+     * @param _poolFee The fee tier of the Uniswap V3 pool.
+     * @return amountIn The amount of `_tokenIn` spent to receive `_amountOut` of `_tokenOut`.
      */
     function _uniswapSwapExactOutput(
         address _tokenIn,
@@ -144,18 +157,19 @@ library SwapperLib {
 
         amountIn = swapRouter.exactOutputSingle(params);
 
+        // Reset approval to zero
         ERC20(_tokenIn).safeApprove(address(swapRouter), 0);
     }
 
     /**
-     * @notice Swap tokens using a preset swap router.
-     *
-     * @param _router Address of the swap router.
-     * @param _tokenIn Address of the token to swap
-     * @param _tokenOut Address of the token to receive
-     * @param _amountIn Amount of the token to swap
-     * @param _amountOutMin Minimum amount of the token to receive
-     * @param _swapData Arbitrary data to pass to the swap router
+     * @notice Swap tokens using an arbitrary swap router.
+     * @param _router The address of the swap router contract.
+     * @param _tokenIn The address of the token to swap from.
+     * @param _tokenOut The address of the token to receive.
+     * @param _amountIn The amount of `_tokenIn` to swap.
+     * @param _amountOutMin The minimum amount of `_tokenOut` to receive.
+     * @param _swapData Arbitrary data to pass to the swap router.
+     * @return amountReceived The amount of `_tokenOut` received from the swap.
      */
     function _swapTokens(
         address _router,
@@ -173,8 +187,10 @@ library SwapperLib {
 
         amountReceived = ERC20(_tokenOut).balanceOf(address(this)) - tokenOutInitialBalance;
 
+        // Check if the received amount is at least the minimum required
         if (amountReceived < _amountOutMin) revert AmountReceivedBelowMin();
 
+        // Reset approval to zero
         ERC20(_tokenIn).approve(_router, 0);
     }
 }
