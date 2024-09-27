@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.19;
 
+import "forge-std/console2.sol";
+
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {ERC4626} from "solmate/mixins/ERC4626.sol";
@@ -10,7 +12,8 @@ import {IDaiUsds} from "../interfaces/sky/IDaiUsds.sol";
 
 /**
  * @title scUSDS
- * @notice Sandclock USDS Vault implementation.
+ * @notice Sandclock USDS Vault
+ * @dev A wrapper ERC4626 Vault that swaps the usds to dai and deposits dai to scDAI Vault.
  */
 contract scUSDS is ERC4626 {
     using SafeTransferLib for ERC20;
@@ -81,7 +84,7 @@ contract scUSDS is ERC4626 {
         _burn(owner, shares);
 
         // change2: removed "asset.safeTransfer(receiver, assets);" and replaced with "_withdrawUsdsFromScDai(...)" call
-        assets = _withdrawUsdsFromScDai(assets, shares, receiver);
+        _withdrawUsdsFromScDai(assets, shares, receiver);
 
         emit Withdraw(msg.sender, receiver, owner, assets, shares);
     }
@@ -105,7 +108,7 @@ contract scUSDS is ERC4626 {
 
         _burn(owner, shares);
 
-        assets = _withdrawUsdsFromScDai(assets, shares, receiver);
+        _withdrawUsdsFromScDai(assets, shares, receiver);
 
         emit Withdraw(msg.sender, receiver, owner, assets, shares);
     }
@@ -116,15 +119,10 @@ contract scUSDS is ERC4626 {
      * @notice withdraws the required dai amount from scDAI and converts it to usds
      * @param usdsAmount Amount of usds to withdraw
      * @param receiver The address to receive the withdrawn USDS
-     * @return withdrawAmount The amount of usds finally withdrawn
-     *
      */
-    function _withdrawUsdsFromScDai(uint256 usdsAmount, uint256, address receiver)
-        internal
-        returns (uint256 withdrawAmount)
-    {
-        withdrawAmount = scDai.withdraw(usdsAmount, address(this), address(this));
+    function _withdrawUsdsFromScDai(uint256 usdsAmount, uint256, address receiver) internal {
+        scDai.withdraw(usdsAmount, address(this), address(this));
 
-        converter.daiToUsds(receiver, withdrawAmount);
+        converter.daiToUsds(receiver, dai.balanceOf(address(this)));
     }
 }

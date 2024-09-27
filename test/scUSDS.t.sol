@@ -35,6 +35,13 @@ import "../src/errors/scErrors.sol";
 import {Address} from "openzeppelin-contracts/utils/Address.sol";
 import {MainnetAddresses as M} from "../script/base/MainnetAddresses.sol";
 import {UsdtWethSwapper} from "../src/steth/swapper/UsdtWethSwapper.sol";
+import {scUSDS} from "../src/steth/scUSDS.sol";
+import {IDaiUsds} from "../src/interfaces/sky/IDaiUsds.sol";
+import {scSDAI} from "../src/steth/scSDAI.sol";
+import {scDAI} from "../src/steth/scDAI.sol";
+import {SDaiWethSwapper} from "../src/steth/swapper/SDaiWethSwapper.sol";
+import {SDaiWethPriceConverter} from "../src/steth/priceConverter/SDaiWethPriceConverter.sol";
+import {SparkScSDaiAdapter} from "../src/steth/scSDai-adapters/SparkScSDaiAdapter.sol";
 
 contract scUSDSTest is Test {
     using Address for address;
@@ -51,15 +58,14 @@ contract scUSDSTest is Test {
     ERC20 dai = ERC20(C.DAI);
 
     scWETH wethVault = scWETH(payable(M.SCWETHV2));
-    // scUSDS vault;
+    scDAI scDai;
+    scUSDS vault;
 
     AaveV3ScUsdtAdapter aaveV3Adapter;
     ISinglePairSwapper swapper;
     ISinglePairPriceConverter priceConverter;
 
     uint256 pps;
-
-    DaiUsds daiUsdsConverter;
 
     constructor() {
         mainnetFork = vm.createFork(vm.envString("RPC_URL_MAINNET"));
@@ -68,14 +74,17 @@ contract scUSDSTest is Test {
 
         usds = ERC20(C.USDS);
         weth = WETH(payable(C.WETH));
-        // aaveV3Adapter = new AaveV3ScUsdtAdapter();
 
         pps = wethVault.totalAssets().divWadDown(wethVault.totalSupply());
 
-        daiUsdsConverter = DaiUsds(0x3225737a9Bbb6473CB4a45b7244ACa2BeFdB276A);
+        _deployAndSetUpScDai();
+
+        vault = new scUSDS(ERC4626(address(scDai)));
     }
 
     function test_DaiUsdsConverter() public {
+        IDaiUsds daiUsdsConverter = IDaiUsds(C.DAI_USDS_CONVERTER);
+
         uint256 daiAmount = 100e18;
         deal(address(dai), address(this), daiAmount);
 
@@ -96,10 +105,58 @@ contract scUSDSTest is Test {
         assertEq(usds.balanceOf(address(this)), 0, "usds transfer error 2");
         assertEq(dai.balanceOf(address(this)), daiAmount, "dai transfer error 2");
     }
-}
 
-interface DaiUsds {
-    function daiToUsds(address usr, uint256 wad) external;
+    function test_deposit(uint256 amount) public {
+        amount = bound(amount, 1e10, 100000000e18);
+        deal(address(usds), address(this), amount);
 
-    function usdsToDai(address usr, uint256 wad) external;
+        usds.approve(address(vault), amount);
+
+        vault.deposit(amount, address(this));
+
+        assertEq(vault.balanceOf(address(this)), amount, "scUSDS shares");
+        assertEq(scDai.balanceOf(address(this)), 0, "scDAI shares to user");
+        assertEq(scDai.balanceOf(address(vault)), amount, "amount deposited in scDAI");
+
+        assertApproxEqRel(vault.totalAssets(), amount, 1e10, "totalAssets");
+    }
+
+    function test_withdraw_redeem() public {
+        uint256 amount = 10_000e18;
+        deal(address(usds), address(this), amount);
+
+        usds.approve(address(vault), amount);
+        vault.deposit(amount, address(this));
+
+        uint256 withdrawAmount = amount / 2;
+
+        vault.withdraw(withdrawAmount, address(this), address(this));
+
+        assertApproxEqRel(usds.balanceOf(address(this)), withdrawAmount, 1e10, "usds after withdraw");
+        assertApproxEqRel(vault.totalAssets(), amount - withdrawAmount, 1e10, "totalAssets");
+
+        vault.redeem(vault.balanceOf(address(this)), address(this), address(this));
+
+        assertApproxEqRel(usds.balanceOf(address(this)), amount, 1e10, "usds after full redeem");
+        assertEq(vault.balanceOf(address(this)), 0, "scUSDS shares not zero");
+    }
+    /////////////////////////////// INTERNAL METHODS /////////////////////////////////////////////////
+
+    function _deployAndSetUpScDai() internal {
+        priceConverter = new SDaiWethPriceConverter();
+        swapper = new SDaiWethSwapper();
+
+        scSDAI scsDAI = new scSDAI(address(this), keeper, wethVault, priceConverter, swapper);
+
+        scsDAI.addAdapter(new SparkScSDaiAdapter());
+
+        // set vault eth balance to zero
+        vm.deal(address(scsDAI), 0);
+        // set float percentage to 0 for most tests
+        scsDAI.setFloatPercentage(0);
+        // assign keeper role to deployer
+        scsDAI.grantRole(scsDAI.KEEPER_ROLE(), address(this));
+
+        scDai = new scDAI(scsDAI);
+    }
 }
