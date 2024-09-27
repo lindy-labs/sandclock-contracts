@@ -14,7 +14,9 @@ verbosity = 4
 [rpc_endpoints]
 goerli = "${RPC_URL_GOERLI}"
 mainnet = "${RPC_URL_MAINNET}"
+staging = "${RPC_URL_STAGING}"
 
 [etherscan]
 goerli = {key = "${ETHERSCAN_KEY}", url = "https://api-goerli.etherscan.io/api"}
 mainnet = {key = "${ETHERSCAN_KEY}"}
+staging = { key = "verifyContract", url= "${VERIFICATION_URL_STAGING}" }
