@@ -22,14 +22,15 @@ abstract contract scCrossAssetYieldVaultBaseScript is Script {
     // if keeper private key is not provided, use the default keeper address for running the script tests
     address keeper = keeperPrivateKey != 0 ? vm.addr(keeperPrivateKey) : MainnetAddresses.KEEPER;
 
-    scCrossAssetYieldVault vault = getVault();
+    scCrossAssetYieldVault vault = _getVaultAddress();
 
-    function getVault() internal virtual returns (scCrossAssetYieldVault);
+    function _getVaultAddress() internal virtual returns (scCrossAssetYieldVault);
 
     function _logScriptParams() internal view virtual {
-        console2.log("\t script params");
-        console2.log("keeper\t\t", address(keeper));
-        console2.log("vault\t\t", address(vault));
+        console2.log("\t -script params-");
+        console2.log("vault\t\t\t", string.concat(vault.name(), " - ", vault.symbol()));
+        console2.log("vault address\t\t", address(vault));
+        console2.log("caller\t\t", address(keeper));
     }
 
     function targetTokensInvested() public view returns (uint256) {

@@ -60,7 +60,7 @@ contract ExitAllPositionsScUsdcV2 is scCrossAssetYieldVaultBaseScript {
         console2.log("--Exit all positions ScUsdcV2 script done--");
     }
 
-    function getVault() internal override returns (scCrossAssetYieldVault) {
+    function _getVaultAddress() internal override returns (scCrossAssetYieldVault) {
         return scCrossAssetYieldVault(vm.envOr("SC_USDC_V2", MainnetAddresses.SCUSDCV2));
     }
 

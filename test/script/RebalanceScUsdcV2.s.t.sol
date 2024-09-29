@@ -14,6 +14,7 @@ import {AaveV2ScUsdcAdapter} from "../../src/steth/scUsdcV2-adapters/AaveV2ScUsd
 import {AaveV3ScUsdcAdapter} from "../../src/steth/scUsdcV2-adapters/AaveV3ScUsdcAdapter.sol";
 import {MorphoAaveV3ScUsdcAdapter} from "../../src/steth/scUsdcV2-adapters/MorphoAaveV3ScUsdcAdapter.sol";
 import {RebalanceScUsdcV2} from "../../script/v2/keeper-actions/RebalanceScUsdcV2.s.sol";
+import {scCrossAssetYieldVaultRebalanceScript} from "../../script/base/scCrossAssetYieldVaultRebalanceScript.s.sol";
 import {MainnetAddresses} from "../../script/base/MainnetAddresses.sol";
 import {Constants} from "../../src/lib/Constants.sol";
 
@@ -371,7 +372,11 @@ contract RebalanceScUsdcV2Test is Test {
         script.setAaveV3InvestableAmountPercent(0.2e18); // 100%
         script.setAaveV3TargetLtv(0);
 
-        vm.expectRevert(abi.encodePacked(RebalanceScUsdcV2.ScriptCannotUseUnsupportedAdapter.selector, aaveV3.id()));
+        vm.expectRevert(
+            abi.encodePacked(
+                scCrossAssetYieldVaultRebalanceScript.ScriptCannotUseUnsupportedAdapter.selector, aaveV3.id()
+            )
+        );
         script.run();
     }
 
@@ -390,7 +395,11 @@ contract RebalanceScUsdcV2Test is Test {
         script.setAaveV3InvestableAmountPercent(0);
         script.setAaveV3TargetLtv(0.5e18); // 50%
 
-        vm.expectRevert(abi.encodePacked(RebalanceScUsdcV2.ScriptCannotUseUnsupportedAdapter.selector, aaveV3.id()));
+        vm.expectRevert(
+            abi.encodePacked(
+                scCrossAssetYieldVaultRebalanceScript.ScriptCannotUseUnsupportedAdapter.selector, aaveV3.id()
+            )
+        );
         script.run();
     }
 
@@ -561,7 +570,7 @@ contract RebalanceScUsdcV2Test is Test {
 
 contract RebalanceScUsdcV2TestHarness is RebalanceScUsdcV2 {
     function setMinUsdcProfitToReinvest(uint256 _minUsdcProfitToReinvest) public {
-        minUsdcProfitToReinvest = _minUsdcProfitToReinvest;
+        minProfitToReinvest = _minUsdcProfitToReinvest;
     }
 
     function setMaxProfitSellSlippage(uint256 _maxProfitSellSlippage) public {
