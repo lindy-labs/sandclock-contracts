@@ -4,37 +4,30 @@ pragma solidity ^0.8.13;
 import "forge-std/console2.sol";
 import "forge-std/Test.sol";
 
-import {ERC20} from "solmate/tokens/ERC20.sol";
-import {WETH} from "solmate/tokens/WETH.sol";
-import {AccessControl} from "openzeppelin-contracts/access/AccessControl.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 
-import {scCrossAssetYieldVaultBaseScript} from "../../base/scCrossAssetYieldVaultBaseScript.sol";
 import {MainnetAddresses} from "../../base/MainnetAddresses.sol";
-import {PriceConverter} from "../../../src/steth/priceConverter/PriceConverter.sol";
 import {scUSDCv2} from "../../../src/steth/scUSDCv2.sol";
 import {MorphoAaveV3ScUsdcAdapter} from "../../../src/steth/scUsdcV2-adapters/MorphoAaveV3ScUsdcAdapter.sol";
 import {AaveV2ScUsdcAdapter} from "../../../src/steth/scUsdcV2-adapters/AaveV2ScUsdcAdapter.sol";
 import {AaveV3ScUsdcAdapter} from "../../../src/steth/scUsdcV2-adapters/AaveV3ScUsdcAdapter.sol";
-import {IAdapter} from "../../../src/steth/IAdapter.sol";
 import {scCrossAssetYieldVault} from "../../../src/steth/scCrossAssetYieldVault.sol";
+import {scCrossAssetYieldVaultReallocateScript} from "../../base/scCrossAssetYieldVaultReallocateScript.sol";
 
 /**
  * A script for executing reallocate functionality for scUsdcV2 vaults.
  */
-contract ReallocateScUsdcV2 is scCrossAssetYieldVaultBaseScript {
+contract ReallocateScUsdcV2 is scCrossAssetYieldVaultReallocateScript {
     using FixedPointMathLib for uint256;
 
     /*//////////////////////////////////////////////////////////////
                           SCRIPT PARAMETERS
     //////////////////////////////////////////////////////////////*/
 
-    // @dev The following parameters are used to configure the reallocate script. The goal is to move funds from one lending protocol to another without touching the invested WETH.
-    // @note: supply and withdraw amounts have to sum up to 0, same for borrow and repay amounts or else the script will revert
+    /// @dev The following parameters are used to configure the reallocate script. The goal is to move funds from one lending protocol to another without touching the invested WETH.
+    // NOTE: supply and withdraw amounts have to sum up to 0, same for borrow and repay amounts or else the script will revert
     // use adapter - whether or not to use a specific adapter
     // allocationPercent - the percentage of the total assets used as collateral to be allocated to the protocol adapter
-
-    uint256 flashloanFeePercent = 0e18; // currently 0% on balancer
 
     bool public useMorpho = true;
     uint256 public morphoAllocationPercent = 0;
@@ -47,158 +40,58 @@ contract ReallocateScUsdcV2 is scCrossAssetYieldVaultBaseScript {
 
     /*//////////////////////////////////////////////////////////////*/
 
-    struct ReallocateData {
-        uint256 adapterId;
-        uint256 supplyAmount;
-        uint256 borrowAmount;
-        uint256 withdrawAmount;
-        uint256 repayAmount;
-    }
-
-    // script state
-    ReallocateData[] public reallocateData;
-    bytes[] multicallData;
-    uint256 flashLoanAmount;
-    uint256 totalAllocationPercent;
-
     MorphoAaveV3ScUsdcAdapter public morphoAdapter = MorphoAaveV3ScUsdcAdapter(MainnetAddresses.SCUSDCV2_MORPHO_ADAPTER);
     AaveV2ScUsdcAdapter public aaveV2Adapter = AaveV2ScUsdcAdapter(MainnetAddresses.SCUSDCV2_AAVEV2_ADAPTER);
     AaveV3ScUsdcAdapter public aaveV3Adapter = AaveV3ScUsdcAdapter(MainnetAddresses.SCUSDCV2_AAVEV3_ADAPTER);
-
-    function run() external {
-        console2.log("--ReallocateScUsdcV2 script running--");
-        require(vault.hasRole(vault.KEEPER_ROLE(), address(keeper)), "invalid keeper");
-
-        _logScriptParams();
-
-        _logPositions("\tbefore reallocate");
-        _initReallocateData();
-        _createMulticallData();
-
-        vm.startBroadcast(keeper);
-
-        console2.log("start execution");
-
-        vault.reallocate(flashLoanAmount, multicallData);
-
-        vm.stopBroadcast();
-
-        _logPositions("\tafter reallocate");
-        console2.log("--ReallocateScUsdcV2 script done--");
-    }
 
     function _getVaultAddress() internal override returns (scCrossAssetYieldVault) {
         return scCrossAssetYieldVault(vm.envOr("SC_USDC_V2", MainnetAddresses.SCUSDCV2));
     }
 
-    function _logPositions(string memory message) internal view {
-        console2.log(message);
-
-        console2.log("moprhoCollateral\t", morphoAdapter.getCollateral(address(vault)));
-        console2.log("moprhoDebt\t\t", morphoAdapter.getDebt(address(vault)));
-
-        console2.log("aaveV2Collateral\t", aaveV2Adapter.getCollateral(address(vault)));
-        console2.log("aaveV2Debt\t\t", aaveV2Adapter.getDebt(address(vault)));
-
-        console2.log("aaveV3Collateral\t", aaveV3Adapter.getCollateral(address(vault)));
-        console2.log("aaveV3Debt\t\t", aaveV3Adapter.getDebt(address(vault)));
-    }
-
-    function _initReallocateData() internal {
+    function _initReallocateData() internal override {
         if (useMorpho) {
             if (!vault.isSupported(morphoAdapter.id())) revert("morpho adapter not supported");
 
             _createData(morphoAdapter.id(), morphoAllocationPercent);
-
-            totalAllocationPercent += morphoAllocationPercent;
         }
 
         if (useAaveV2) {
             if (!vault.isSupported(aaveV2Adapter.id())) revert("aave v2 adapter not supported");
 
             _createData(aaveV2Adapter.id(), aaveV2AllocationPercent);
-
-            totalAllocationPercent += aaveV2AllocationPercent;
         }
 
         if (useAaveV3) {
             if (!vault.isSupported(aaveV3Adapter.id())) revert("aave v3 adapter not supported");
 
             _createData(aaveV3Adapter.id(), aaveV3AllocationPercent);
-
-            totalAllocationPercent += aaveV3AllocationPercent;
-        }
-
-        if (totalAllocationPercent != 1e18) {
-            revert("total allocation percent not 100%");
         }
     }
 
-    function _createData(uint256 _adapterId, uint256 _allocationPercent) internal {
-        ReallocateData memory data;
+    function _logPositions(string memory message) internal view override {
+        console2.log("\n\t----------------------------");
+        console2.log(string.concat("\t\t", message));
+        console2.log("\t----------------------------");
 
-        data.adapterId = _adapterId;
+        console2.log("moprho collateral\t", morphoAdapter.getCollateral(address(vault)));
+        console2.log("moprho debt\t\t", morphoAdapter.getDebt(address(vault)));
 
-        uint256 currentAllocation = vault.getCollateral(_adapterId);
-        uint256 expectedAllocation = vault.totalCollateral().mulWadUp(_allocationPercent);
-        uint256 currentDebt = vault.getDebt(_adapterId);
-        uint256 expectedDebt = vault.totalDebt().mulWadUp(_allocationPercent);
+        console2.log("aave v2 collateral\t", aaveV2Adapter.getCollateral(address(vault)));
+        console2.log("aave v2 debt\t\t", aaveV2Adapter.getDebt(address(vault)));
 
-        if (currentAllocation > expectedAllocation) {
-            // we need to withdraw some collateral
-            data.withdrawAmount = currentAllocation - expectedAllocation;
-            data.repayAmount = currentDebt - expectedDebt;
-        } else if (currentAllocation < expectedAllocation) {
-            // we need to supply some collateral
-            data.supplyAmount = expectedAllocation - currentAllocation;
-            data.borrowAmount = expectedDebt - currentDebt;
-        }
-
-        reallocateData.push(data);
-    }
-
-    function _createMulticallData() internal {
-        for (uint256 i = 0; i < reallocateData.length; i++) {
-            ReallocateData memory data = reallocateData[i];
-
-            if (data.withdrawAmount > 0) {
-                flashLoanAmount += data.repayAmount;
-
-                multicallData.push(
-                    abi.encodeWithSelector(scCrossAssetYieldVault.repay.selector, data.adapterId, data.repayAmount)
-                );
-                multicallData.push(
-                    abi.encodeWithSelector(
-                        scCrossAssetYieldVault.withdraw.selector, data.adapterId, data.withdrawAmount
-                    )
-                );
-            }
-        }
-
-        for (uint256 i = 0; i < reallocateData.length; i++) {
-            ReallocateData memory data = reallocateData[i];
-
-            if (data.supplyAmount > 0) {
-                uint256 borrowAmount = data.borrowAmount.mulWadDown(1e18 - flashloanFeePercent);
-
-                multicallData.push(
-                    abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, data.adapterId, data.supplyAmount)
-                );
-                multicallData.push(
-                    abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, data.adapterId, borrowAmount)
-                );
-            }
-        }
+        console2.log("aave v3 collateral\t", aaveV3Adapter.getCollateral(address(vault)));
+        console2.log("aave v3 debt\t\t", aaveV3Adapter.getDebt(address(vault)));
+        console2.log("\t----------------------------");
     }
 
     function _logScriptParams() internal view override {
         super._logScriptParams();
-        console2.log("flashloanFeePercent\t", flashloanFeePercent);
-        console2.log("useMorpho\t\t", useMorpho);
-        console2.log("morphoAllocationPercent\t", morphoAllocationPercent);
-        console2.log("useAaveV2\t\t", useAaveV2);
-        console2.log("aaveV2AllocationPercent\t", aaveV2AllocationPercent);
-        console2.log("useAaveV3\t\t", useAaveV3);
-        console2.log("aaveV3AllocationPercent\t", aaveV3AllocationPercent);
+        console2.log("flash loan fee pct\t", flashloanFeePercent);
+        console2.log("use morpho\t\t", useMorpho);
+        console2.log("morpho allocation pct\t", morphoAllocationPercent);
+        console2.log("use aave v2\t\t", useAaveV2);
+        console2.log("aave v2 allocation pct", aaveV2AllocationPercent);
+        console2.log("use aave v3\t\t", useAaveV3);
+        console2.log("aave v3 allocation pct", aaveV3AllocationPercent);
     }
 }

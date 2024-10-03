@@ -16,7 +16,7 @@ import {MorphoAaveV3ScUsdcAdapter} from "../../../src/steth/scUsdcV2-adapters/Mo
 import {AaveV2ScUsdcAdapter} from "../../../src/steth/scUsdcV2-adapters/AaveV2ScUsdcAdapter.sol";
 import {AaveV3ScUsdcAdapter} from "../../../src/steth/scUsdcV2-adapters/AaveV3ScUsdcAdapter.sol";
 import {scCrossAssetYieldVault} from "../../../src/steth/scCrossAssetYieldVault.sol";
-import {scCrossAssetYieldVaultRebalanceScript} from "../../base/scCrossAssetYieldVaultRebalanceScript.s.sol";
+import {scCrossAssetYieldVaultRebalanceScript} from "../../base/scCrossAssetYieldVaultRebalanceScript.sol";
 
 /**
  * A script for executing rebalance functionality for...

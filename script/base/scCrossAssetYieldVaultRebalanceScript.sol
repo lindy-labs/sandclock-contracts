@@ -2,22 +2,11 @@
 pragma solidity ^0.8.13;
 
 import "forge-std/console2.sol";
-import "forge-std/Test.sol";
 import "forge-std/Script.sol";
 
-import {ERC20} from "solmate/tokens/ERC20.sol";
-import {WETH} from "solmate/tokens/WETH.sol";
-import {AccessControl} from "openzeppelin-contracts/access/AccessControl.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 
 import {scCrossAssetYieldVaultBaseScript} from "./scCrossAssetYieldVaultBaseScript.sol";
-import {MainnetAddresses} from "./MainnetAddresses.sol";
-import {PriceConverter} from "src/steth/priceConverter/PriceConverter.sol";
-import {scUSDCv2} from "src/steth/scUSDCv2.sol";
-import {MorphoAaveV3ScUsdcAdapter} from "src/steth/scUsdcV2-adapters/MorphoAaveV3ScUsdcAdapter.sol";
-import {AaveV2ScUsdcAdapter} from "src/steth/scUsdcV2-adapters/AaveV2ScUsdcAdapter.sol";
-import {AaveV3ScUsdcAdapter} from "src/steth/scUsdcV2-adapters/AaveV3ScUsdcAdapter.sol";
-import {IAdapter} from "src/steth/IAdapter.sol";
 import {scCrossAssetYieldVault} from "src/steth/scCrossAssetYieldVault.sol";
 
 abstract contract scCrossAssetYieldVaultRebalanceScript is scCrossAssetYieldVaultBaseScript {
@@ -50,7 +39,13 @@ abstract contract scCrossAssetYieldVaultRebalanceScript is scCrossAssetYieldVaul
 
     uint256 minProfitToReinvest = _getMinProfitToReinvest();
 
+    // configuration functions
+
     function _getMinProfitToReinvest() internal view virtual returns (uint256);
+
+    function _initializeAdapterSettings() internal virtual;
+
+    // script functions
 
     function run() external virtual {
         console2.log("--Rebalance script running--");
@@ -79,8 +74,6 @@ abstract contract scCrossAssetYieldVaultRebalanceScript is scCrossAssetYieldVaul
         console2.log("--Rebalance script done--");
     }
 
-    function _initializeAdapterSettings() internal virtual;
-
     function _checkAllocationPercentages() internal view {
         uint256 totalAllocationPercent = 0;
         for (uint256 i = 0; i < adapterSettings.length; i++) {
@@ -92,9 +85,9 @@ abstract contract scCrossAssetYieldVaultRebalanceScript is scCrossAssetYieldVaul
     }
 
     function _sellProfitIfAboveDefinedMin() internal returns (uint256) {
-        uint256 wethProfit = vault.getProfit();
-        // account for slippage when selling weth profit for usdc
-        uint256 minExpectedProfit = targetTokensPriceInAssets(wethProfit).mulWadDown(1e18 - maxProfitSellSlippage);
+        uint256 profit = vault.getProfit();
+        // account for slippage when swapping target token profits to underlying assets
+        uint256 minExpectedProfit = targetTokensPriceInAssets(profit).mulWadDown(1e18 - maxProfitSellSlippage);
 
         // if profit is too small, don't sell & reinvest
         if (minExpectedProfit < minProfitToReinvest) return 0;
