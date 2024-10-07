@@ -2320,4 +2320,5 @@ contract FakeTargetVault is ERC4626 {
     function totalAssets() public pure override returns (uint256) {
         return 1e18;
     }
+
 }
