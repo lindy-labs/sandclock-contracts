@@ -54,9 +54,6 @@ abstract contract scCrossAssetYieldVault is BaseV2Vault {
     event Disinvested(uint256 targetTokenAmount);
     event TargetVaultUpdated(address targetVault);
 
-    /// @notice The target vault (staking vault) where target tokens are invested.
-    ERC4626 public immutable targetVault;
-
     /// @notice The target token used as underlying in the target vault.
     ERC20 public immutable targetToken;
 
