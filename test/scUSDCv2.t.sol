@@ -5,6 +5,7 @@ import "forge-std/console2.sol";
 import "forge-std/Test.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {WETH} from "solmate/tokens/WETH.sol";
+import {ERC4626} from "solmate/mixins/ERC4626.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 import {IPool} from "aave-v3/interfaces/IPool.sol";
 import {IAToken} from "aave-v3/interfaces/IAToken.sol";
@@ -63,6 +64,7 @@ contract scUSDCv2Test is Test {
     event RewardsClaimed(uint256 adapterId);
     event SwapperUpdated(address indexed admin, ISwapper newSwapper);
     event PriceConverterUpdated(address indexed admin, address newPriceConverter);
+    event TargetVaultUpdated(address newTargetVault);
 
     // after the exploit, the euler protocol was disabled. At one point it should work again, so having the
     // tests run in both cases (when protocol is working and not) requires two blocks to fork from
@@ -146,6 +148,62 @@ contract scUSDCv2Test is Test {
 
         vm.expectRevert(ZeroAddress.selector);
         new scUSDCv2(address(this), keeper, wethVault, priceConverter, swapper);
+    }
+
+    /// #updateTargetVault ///
+
+    function test_updateTargetVault_FailsIfCallerNotAdmin() public {
+        _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
+
+        vm.prank(alice);
+        vm.expectRevert(CallerNotAdmin.selector);
+        vault.updateTargetVault(wethVault);
+    }
+
+    function test_updateTargetVault_FailsifTargetTokenIsDifferentThanPreviousOne() public {
+        _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
+
+        ERC4626 fakeVault = new FakeTargetVault(ERC20(C.USDT));
+
+        vm.expectRevert(TargetTokenMismatch.selector);
+        vault.updateTargetVault(fakeVault);
+    }
+
+    function test_updateTargetVault_FailsIfInvestedAmountNotZero() public {
+        _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
+
+        uint256 initialBalance = 1_000_000e6;
+        uint256 initialDebt = 100 ether;
+        deal(address(usdc), address(vault), initialBalance);
+        bytes[] memory callData = new bytes[](2);
+        callData[0] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, aaveV3.id(), initialBalance);
+        callData[1] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, aaveV3.id(), initialDebt);
+        vault.rebalance(callData);
+
+        vm.expectRevert(InvestedAmountNotWithdrawn.selector);
+        vault.updateTargetVault(wethVault);
+    }
+
+    function test_updateTargetVault_EmitsEvent() public {
+        _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
+
+        uint256 initialBalance = 1_000_000e6;
+        uint256 initialDebt = 100 ether;
+        deal(address(usdc), address(vault), initialBalance);
+        bytes[] memory callData = new bytes[](2);
+        callData[0] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, aaveV3.id(), initialBalance);
+        callData[1] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, aaveV3.id(), initialDebt);
+        vault.rebalance(callData);
+
+        vault.disinvest(vault.targetTokenInvestedAmount());
+
+        ERC4626 newTargetVault = new FakeTargetVault(weth);
+
+        vm.expectEmit(true, true, true, true);
+        emit TargetVaultUpdated(address(newTargetVault));
+
+        vault.updateTargetVault(newTargetVault);
+        assertEq(address(vault.targetVault()), address(newTargetVault), "target vault not updated");
     }
 
     /// #setPriceConverter ///
@@ -2254,5 +2312,13 @@ contract scUSDCv2Test is Test {
 contract UsdcWethSwapperHarness is UsdcWethSwapper {
     function swapRouter() public pure override(ISwapper, UniversalSwapper) returns (address) {
         return C.ZERO_EX_ROUTER;
+    }
+}
+
+contract FakeTargetVault is ERC4626 {
+    constructor(ERC20 _asset) ERC4626(_asset, "Fake TARGET VAULT", "scFake") {}
+
+    function totalAssets() public pure override returns (uint256) {
+        return 1e18;
     }
 }

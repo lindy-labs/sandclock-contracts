@@ -24,6 +24,8 @@ error ProtocolNotSupported(uint256 adapterId);
 error ProtocolInUse(uint256 adapterId);
 error FloatBalanceTooLow(uint256 actual, uint256 required);
 error TokenOutNotAllowed(address token);
+error TargetTokenMismatch();
+error InvestedAmountNotWithdrawn();
 
 library Check {
     function isZeroAddress(address _address) internal pure {

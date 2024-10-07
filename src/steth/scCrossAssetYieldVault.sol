@@ -1,7 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.19;
 
-import {NoProfitsToSell, FlashLoanAmountZero, EndAssetBalanceTooLow, FloatBalanceTooLow} from "../errors/scErrors.sol";
+import {
+    NoProfitsToSell,
+    FlashLoanAmountZero,
+    EndAssetBalanceTooLow,
+    FloatBalanceTooLow,
+    TargetTokenMismatch,
+    InvestedAmountNotWithdrawn
+} from "../errors/scErrors.sol";
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {ERC4626} from "solmate/mixins/ERC4626.sol";
@@ -45,12 +52,13 @@ abstract contract scCrossAssetYieldVault is BaseV2Vault {
     event Withdrawn(uint256 adapterId, uint256 amount);
     event Invested(uint256 targetTokenAmount);
     event Disinvested(uint256 targetTokenAmount);
-
-    /// @notice The target vault (staking vault) where target tokens are invested.
-    ERC4626 public immutable targetVault;
+    event TargetVaultUpdated(address targetVault);
 
     /// @notice The target token used as underlying in the target vault.
     ERC20 public immutable targetToken;
+
+    /// @notice The target vault (staking vault) where target tokens are invested.
+    ERC4626 public targetVault;
 
     constructor(
         address _admin,
@@ -73,6 +81,23 @@ abstract contract scCrossAssetYieldVault is BaseV2Vault {
     /*//////////////////////////////////////////////////////////////
                             PUBLIC API
     //////////////////////////////////////////////////////////////*/
+
+    /**
+     * @notice Updates the address of the target vault.
+     * @dev Reverts if invested amount is not zero or if the target token (underlying asset) is different.
+     * @param _newTargetVault address of the new target vault.
+     */
+    function updateTargetVault(ERC4626 _newTargetVault) external {
+        _onlyAdmin();
+
+        if (_newTargetVault.asset() != targetToken) revert TargetTokenMismatch();
+
+        if (targetTokenInvestedAmount() != 0) revert InvestedAmountNotWithdrawn();
+
+        targetVault = _newTargetVault;
+
+        emit TargetVaultUpdated(address(_newTargetVault));
+    }
 
     /**
      * @notice Rebalance the vault's positions and loans across multiple lending markets.
