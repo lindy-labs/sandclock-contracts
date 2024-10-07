@@ -12,12 +12,13 @@ import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 
 import {ScUsdcV2ScriptBase} from "../../base/ScUsdcV2ScriptBase.sol";
 import {MainnetAddresses} from "../../base/MainnetAddresses.sol";
-import {PriceConverter} from "../../../src/steth/PriceConverter.sol";
+import {PriceConverter} from "../../../src/steth/priceConverter/PriceConverter.sol";
 import {scUSDCv2} from "../../../src/steth/scUSDCv2.sol";
 import {MorphoAaveV3ScUsdcAdapter} from "../../../src/steth/scUsdcV2-adapters/MorphoAaveV3ScUsdcAdapter.sol";
 import {AaveV2ScUsdcAdapter} from "../../../src/steth/scUsdcV2-adapters/AaveV2ScUsdcAdapter.sol";
 import {AaveV3ScUsdcAdapter} from "../../../src/steth/scUsdcV2-adapters/AaveV3ScUsdcAdapter.sol";
 import {IAdapter} from "../../../src/steth/IAdapter.sol";
+import {scCrossAssetYieldVault} from "../../../src/steth/scCrossAssetYieldVault.sol";
 
 /**
  * A script for executing rebalance functionality for scUsdcV2 vaults.
@@ -83,7 +84,7 @@ contract RebalanceScUsdcV2 is ScUsdcV2ScriptBase {
         _initializeAdapterSettings();
 
         uint256 minUsdcFromProfitSelling = _sellWethProfitIfAboveDefinedMin();
-        uint256 minUsdcBalance = minUsdcFromProfitSelling + scUsdcV2.usdcBalance();
+        uint256 minUsdcBalance = minUsdcFromProfitSelling + usdcBalance();
         uint256 minFloatRequired = scUsdcV2.totalAssets().mulWadUp(scUsdcV2.floatPercentage());
         uint256 missingFloat = minFloatRequired > minUsdcBalance ? minFloatRequired - minUsdcBalance : 0;
         uint256 investableAmount = minFloatRequired < minUsdcBalance ? minUsdcBalance - minFloatRequired : 0;
@@ -134,13 +135,12 @@ contract RebalanceScUsdcV2 is ScUsdcV2ScriptBase {
     function _sellWethProfitIfAboveDefinedMin() internal returns (uint256) {
         uint256 wethProfit = scUsdcV2.getProfit();
         // account for slippage when selling weth profit for usdc
-        uint256 minExpectedUsdcProfit =
-            scUsdcV2.priceConverter().ethToUsdc(wethProfit).mulWadDown(1e18 - maxProfitSellSlippage);
+        uint256 minExpectedUsdcProfit = priceConverter.ethToUsdc(wethProfit).mulWadDown(1e18 - maxProfitSellSlippage);
 
         // if profit is too small, don't sell & reinvest
         if (minExpectedUsdcProfit < minUsdcProfitToReinvest) return 0;
 
-        multicallData.push(abi.encodeWithSelector(scUSDCv2.sellProfit.selector, minExpectedUsdcProfit));
+        multicallData.push(abi.encodeWithSelector(scCrossAssetYieldVault.sellProfit.selector, minExpectedUsdcProfit));
 
         return minExpectedUsdcProfit;
     }
@@ -177,7 +177,7 @@ contract RebalanceScUsdcV2 is ScUsdcV2ScriptBase {
         uint256 debt = scUsdcV2.getDebt(_adapterId);
 
         uint256 targetCollateral = collateral + _investableAmount - _missingFloat;
-        uint256 targetDebt = scUsdcV2.priceConverter().usdcToEth(targetCollateral).mulWadDown(_targetLtv);
+        uint256 targetDebt = priceConverter.usdcToEth(targetCollateral).mulWadDown(_targetLtv);
 
         RebalanceData memory rebalanceData;
         rebalanceData.adapterId = _adapterId;
@@ -204,7 +204,7 @@ contract RebalanceScUsdcV2 is ScUsdcV2ScriptBase {
 
     function _createRebalanceMulticallData() internal {
         if (disinvestAmount > 0) {
-            multicallData.push(abi.encodeWithSelector(scUsdcV2.disinvest.selector, disinvestAmount));
+            multicallData.push(abi.encodeWithSelector(scCrossAssetYieldVault.disinvest.selector, disinvestAmount));
         }
 
         for (uint256 i = 0; i < rebalanceDatas.length; i++) {
@@ -212,26 +212,28 @@ contract RebalanceScUsdcV2 is ScUsdcV2ScriptBase {
             if (rebalanceData.supplyAmount > 0) {
                 multicallData.push(
                     abi.encodeWithSelector(
-                        scUsdcV2.supply.selector, rebalanceData.adapterId, rebalanceData.supplyAmount
+                        scCrossAssetYieldVault.supply.selector, rebalanceData.adapterId, rebalanceData.supplyAmount
                     )
                 );
             }
             if (rebalanceData.borrowAmount > 0) {
                 multicallData.push(
                     abi.encodeWithSelector(
-                        scUsdcV2.borrow.selector, rebalanceData.adapterId, rebalanceData.borrowAmount
+                        scCrossAssetYieldVault.borrow.selector, rebalanceData.adapterId, rebalanceData.borrowAmount
                     )
                 );
             }
             if (rebalanceData.repayAmount > 0) {
                 multicallData.push(
-                    abi.encodeWithSelector(scUsdcV2.repay.selector, rebalanceData.adapterId, rebalanceData.repayAmount)
+                    abi.encodeWithSelector(
+                        scCrossAssetYieldVault.repay.selector, rebalanceData.adapterId, rebalanceData.repayAmount
+                    )
                 );
             }
             if (rebalanceData.withdrawAmount > 0) {
                 multicallData.push(
                     abi.encodeWithSelector(
-                        scUSDCv2.withdraw.selector, rebalanceData.adapterId, rebalanceData.withdrawAmount
+                        scCrossAssetYieldVault.withdraw.selector, rebalanceData.adapterId, rebalanceData.withdrawAmount
                     )
                 );
             }
@@ -255,9 +257,9 @@ contract RebalanceScUsdcV2 is ScUsdcV2ScriptBase {
         console2.log("\t", message);
         console2.log("total assets\t\t", scUsdcV2.totalAssets());
         console2.log("weth profit\t\t", scUsdcV2.getProfit());
-        console2.log("float\t\t\t", scUsdcV2.usdcBalance());
+        console2.log("float\t\t\t", usdcBalance());
         console2.log("total collateral\t", scUsdcV2.totalCollateral());
         console2.log("total debt\t\t", scUsdcV2.totalDebt());
-        console2.log("weth invested\t\t", scUsdcV2.wethInvested());
+        console2.log("weth invested\t\t", wethInvested());
     }
 }

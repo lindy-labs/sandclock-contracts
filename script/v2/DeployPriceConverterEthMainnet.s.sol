@@ -3,7 +3,7 @@ pragma solidity ^0.8.13;
 
 import {MainnetDeployBase} from "../base/MainnetDeployBase.sol";
 import {MainnetAddresses} from "../base/MainnetAddresses.sol";
-import {PriceConverter} from "../../src/steth/PriceConverter.sol";
+import {PriceConverter} from "../../src/steth/priceConverter/PriceConverter.sol";
 
 contract DeployScript is MainnetDeployBase {
     function run() external returns (PriceConverter priceConverter) {

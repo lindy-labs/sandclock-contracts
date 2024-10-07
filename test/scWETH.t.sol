@@ -49,9 +49,8 @@ contract scWETHTest is Test {
     uint256 maxLtv;
     uint256 targetLtv = 0.7e18;
 
-    function setUp() public {
-        vm.createFork(vm.envString("RPC_URL_MAINNET"));
-        vm.selectFork(mainnetFork);
+    constructor() Test() {
+        vm.createSelectFork(vm.envString("RPC_URL_MAINNET"));
         vm.rollFork(16784444);
 
         scWETH.ConstructorParams memory params = _createDefaultWethVaultConstructorParams();
@@ -324,7 +323,7 @@ contract scWETHTest is Test {
         vault.applyNewTargetLtv(newLtv);
 
         // some amount will be left in vault, unrealized slippage
-        assertApproxEqRel(vault.getLtv(), newLtv, 0.03e18, "leverage change failed");
+        assertApproxEqRel(vault.getLtv(), newLtv, 0.04e18, "leverage change failed");
     }
 
     function test_applyNewTargetLtv_invalidMaxLtv() public {

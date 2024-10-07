@@ -10,14 +10,17 @@ import {AccessControl} from "openzeppelin-contracts/access/AccessControl.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 
 import {Constants as C} from "../../../src/lib/Constants.sol";
-import {Swapper} from "../../../src/steth/Swapper.sol";
-import {PriceConverter} from "../../../src/steth/PriceConverter.sol";
+import {Swapper} from "../../../src/steth/swapper/Swapper.sol";
+import {PriceConverter} from "../../../src/steth/priceConverter/PriceConverter.sol";
+import {UsdcWethPriceConverter} from "../../../src/steth/priceConverter/UsdcWethPriceConverter.sol";
 import {scWETHv2} from "../../../src/steth/scWETHv2.sol";
 import {scUSDCv2} from "../../../src/steth/scUSDCv2.sol";
 import {AaveV2ScUsdcAdapter} from "../../../src/steth/scUsdcV2-adapters/AaveV2ScUsdcAdapter.sol";
 import {AaveV3ScUsdcAdapter} from "../../../src/steth/scUsdcV2-adapters/AaveV3ScUsdcAdapter.sol";
 import {MainnetDeployBase} from "../../base/MainnetDeployBase.sol";
 import {IAdapter} from "../../../src/steth/IAdapter.sol";
+import {scCrossAssetYieldVault} from "../../../src/steth/scCrossAssetYieldVault.sol";
+import {UsdcWethSwapper} from "../../../src/steth/swapper/UsdcWethSwapper.sol";
 
 /**
  * A script exercising the rebalance functionality of scUSDCv2 in different situations on a forked mainnet.
@@ -108,11 +111,13 @@ contract scUSDCv2Rebalance is MainnetDeployBase, Test {
         vm.startBroadcast(deployerAddress);
 
         Swapper swapper = new Swapper();
+        UsdcWethSwapper scUsdcSwapper = new UsdcWethSwapper();
         priceConverter = new PriceConverter(deployerAddress);
+        UsdcWethPriceConverter usdcPriceConverter = new UsdcWethPriceConverter();
 
         scWethV2 = new scWETHv2(deployerAddress, keeper, weth, swapper, priceConverter);
         console2.log("scWethV2:", address(scWethV2));
-        scUsdcV2 = new scUSDCv2(deployerAddress, keeper, scWethV2, priceConverter, swapper);
+        scUsdcV2 = new scUSDCv2(deployerAddress, keeper, scWethV2, usdcPriceConverter, scUsdcSwapper);
         console2.log("scUSDCV2:", address(scUsdcV2));
 
         aaveV2Adapter = new AaveV2ScUsdcAdapter();
@@ -137,7 +142,7 @@ contract scUSDCv2Rebalance is MainnetDeployBase, Test {
 
     function _invest() internal {
         uint256 minFloatRequired = scUsdcV2.totalAssets().mulWadUp(scUsdcV2.floatPercentage());
-        uint256 investableAmount = scUsdcV2.usdcBalance() - minFloatRequired;
+        uint256 investableAmount = _usdcBalance() - minFloatRequired;
 
         uint256 aaveV3Collaateral = investableAmount.mulWadDown(aaveV3AllocationPercent);
         uint256 aaveV3TargetDebt = priceConverter.usdcToEth(aaveV3Collaateral.mulWadDown(aaveV3TargetLtv));
@@ -146,10 +151,14 @@ contract scUSDCv2Rebalance is MainnetDeployBase, Test {
         uint256 aaveV2TargetDebt = priceConverter.usdcToEth(aaveV2Collaateral.mulWadDown(aaveV2TargetLtv));
 
         bytes[] memory callData = new bytes[](4);
-        callData[0] = abi.encodeWithSelector(scUsdcV2.supply.selector, aaveV3Adapter.id(), aaveV3Collaateral);
-        callData[1] = abi.encodeWithSelector(scUsdcV2.borrow.selector, aaveV3Adapter.id(), aaveV3TargetDebt);
-        callData[2] = abi.encodeWithSelector(scUsdcV2.supply.selector, aaveV2Adapter.id(), aaveV2Collaateral);
-        callData[3] = abi.encodeWithSelector(scUsdcV2.borrow.selector, aaveV2Adapter.id(), aaveV2TargetDebt);
+        callData[0] =
+            abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, aaveV3Adapter.id(), aaveV3Collaateral);
+        callData[1] =
+            abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, aaveV3Adapter.id(), aaveV3TargetDebt);
+        callData[2] =
+            abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, aaveV2Adapter.id(), aaveV2Collaateral);
+        callData[3] =
+            abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, aaveV2Adapter.id(), aaveV2TargetDebt);
 
         scUsdcV2.rebalance(callData);
     }
@@ -167,18 +176,22 @@ contract scUSDCv2Rebalance is MainnetDeployBase, Test {
 
         // make sure the mimimum float is maintained after the rebalance otherwise rebalance will revert
         uint256 minFloatRequired = scUsdcV2.totalAssets().mulWadUp(scUsdcV2.floatPercentage());
-        uint256 floatDelta = minFloatRequired - scUsdcV2.usdcBalance();
+        uint256 floatDelta = minFloatRequired - _usdcBalance();
 
         // include the float delta in the repay amount
         uint256 repayAmount = aaveV3repayAmount + aaveV2repayAmount + floatDelta;
 
         // create the multicall data for the rebalance, i.e. disinvest from scWETH, repay debt, and withdraw collateral maintain min float
         bytes[] memory callData = new bytes[](5);
-        callData[0] = abi.encodeWithSelector(scUSDCv2.disinvest.selector, repayAmount);
-        callData[1] = abi.encodeWithSelector(scUSDCv2.repay.selector, aaveV3Adapter.id(), aaveV3repayAmount);
-        callData[2] = abi.encodeWithSelector(scUSDCv2.withdraw.selector, aaveV3Adapter.id(), floatDelta / 2);
-        callData[3] = abi.encodeWithSelector(scUSDCv2.repay.selector, aaveV2Adapter.id(), aaveV2repayAmount);
-        callData[4] = abi.encodeWithSelector(scUSDCv2.withdraw.selector, aaveV2Adapter.id(), floatDelta / 2);
+        callData[0] = abi.encodeWithSelector(scCrossAssetYieldVault.disinvest.selector, repayAmount);
+        callData[1] =
+            abi.encodeWithSelector(scCrossAssetYieldVault.repay.selector, aaveV3Adapter.id(), aaveV3repayAmount);
+        callData[2] =
+            abi.encodeWithSelector(scCrossAssetYieldVault.withdraw.selector, aaveV3Adapter.id(), floatDelta / 2);
+        callData[3] =
+            abi.encodeWithSelector(scCrossAssetYieldVault.repay.selector, aaveV2Adapter.id(), aaveV2repayAmount);
+        callData[4] =
+            abi.encodeWithSelector(scCrossAssetYieldVault.withdraw.selector, aaveV2Adapter.id(), floatDelta / 2);
 
         scUsdcV2.rebalance(callData);
     }
@@ -213,6 +226,10 @@ contract scUSDCv2Rebalance is MainnetDeployBase, Test {
         console2.log("total assets\t\t", scUsdcV2.totalAssets());
         console2.log("total collateral\t", scUsdcV2.totalCollateral());
         console2.log("total debt\t\t", scUsdcV2.totalDebt());
-        console2.log("weth invested\t\t", scUsdcV2.wethInvested());
+        console2.log("weth invested\t\t", scUsdcV2.targetTokenInvestedAmount());
+    }
+
+    function _usdcBalance() internal view returns (uint256) {
+        return usdc.balanceOf(address(scUsdcV2));
     }
 }

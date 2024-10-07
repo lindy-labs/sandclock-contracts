@@ -11,12 +11,13 @@ import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 
 import {ScUsdcV2ScriptBase} from "../../base/ScUsdcV2ScriptBase.sol";
 import {MainnetAddresses} from "../../base/MainnetAddresses.sol";
-import {PriceConverter} from "../../../src/steth/PriceConverter.sol";
+import {PriceConverter} from "../../../src/steth/priceConverter/PriceConverter.sol";
 import {scUSDCv2} from "../../../src/steth/scUSDCv2.sol";
 import {MorphoAaveV3ScUsdcAdapter} from "../../../src/steth/scUsdcV2-adapters/MorphoAaveV3ScUsdcAdapter.sol";
 import {AaveV2ScUsdcAdapter} from "../../../src/steth/scUsdcV2-adapters/AaveV2ScUsdcAdapter.sol";
 import {AaveV3ScUsdcAdapter} from "../../../src/steth/scUsdcV2-adapters/AaveV3ScUsdcAdapter.sol";
 import {IAdapter} from "../../../src/steth/IAdapter.sol";
+import {scCrossAssetYieldVault} from "../../../src/steth/scCrossAssetYieldVault.sol";
 
 /**
  * A script for executing reallocate functionality for scUsdcV2 vaults.
@@ -155,9 +156,13 @@ contract ReallocateScUsdcV2 is ScUsdcV2ScriptBase {
             if (data.withdrawAmount > 0) {
                 flashLoanAmount += data.repayAmount;
 
-                multicallData.push(abi.encodeWithSelector(scUsdcV2.repay.selector, data.adapterId, data.repayAmount));
                 multicallData.push(
-                    abi.encodeWithSelector(scUSDCv2.withdraw.selector, data.adapterId, data.withdrawAmount)
+                    abi.encodeWithSelector(scCrossAssetYieldVault.repay.selector, data.adapterId, data.repayAmount)
+                );
+                multicallData.push(
+                    abi.encodeWithSelector(
+                        scCrossAssetYieldVault.withdraw.selector, data.adapterId, data.withdrawAmount
+                    )
                 );
             }
         }
@@ -168,8 +173,12 @@ contract ReallocateScUsdcV2 is ScUsdcV2ScriptBase {
             if (data.supplyAmount > 0) {
                 uint256 borrowAmount = data.borrowAmount.mulWadDown(1e18 - flashloanFeePercent);
 
-                multicallData.push(abi.encodeWithSelector(scUsdcV2.supply.selector, data.adapterId, data.supplyAmount));
-                multicallData.push(abi.encodeWithSelector(scUsdcV2.borrow.selector, data.adapterId, borrowAmount));
+                multicallData.push(
+                    abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, data.adapterId, data.supplyAmount)
+                );
+                multicallData.push(
+                    abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, data.adapterId, borrowAmount)
+                );
             }
         }
     }

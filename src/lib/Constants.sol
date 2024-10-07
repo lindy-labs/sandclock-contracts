@@ -5,6 +5,7 @@ library Constants {
     uint256 public constant ONE = 1e18;
     // decimals difference between WETH and USDC (18 - 6)
     uint256 public constant WETH_USDC_DECIMALS_DIFF = 1e12;
+    uint256 public constant WETH_USDT_DECIMALS_DIFF = 1e12;
     // value for the variable interest rate mode on Aave
     uint256 public constant AAVE_VAR_INTEREST_RATE_MODE = 2;
     // enable efficeincy mode on Aave (used to allow greater LTV when asset and debt tokens are correlated in price)
@@ -30,6 +31,8 @@ library Constants {
     address public constant DAI = 0x6B175474E89094C44Da98b954EedeAC495271d0F;
     // address of the sDAI token contract
     address public constant SDAI = 0x83F20F44975D03b1b09e64809B757c47f942BEeA;
+    // address of the USDT token contract
+    address public constant USDT = 0xdAC17F958D2ee523a2206206994597C13D831ec7;
 
     // address of the Curve pool for ETH-stETH
     address public constant CURVE_ETH_STETH_POOL = 0xDC24316b9AE028F1497c275EB9192a3Ea0f67022;
@@ -44,6 +47,8 @@ library Constants {
 
     // address of the Aave v3 "aEthUSDC" token (supply token)
     address public constant AAVE_V3_AUSDC_TOKEN = 0x98C23E9d8f34FEFb1B7BD6a91B7FF122F4e16F5c;
+    // address of the Aave v3 "aEthUSDT" token (supply token)
+    address public constant AAVE_V3_AUSDT_TOKEN = 0x23878914EFE38d27C4D67Ab83ed1b93A74D4086a;
     // address of the Aave v3 "aEthwstETH" token (supply token)
     address public constant AAVE_V3_AWSTETH_TOKEN = 0x0B925eD163218f6662a35e0f0371Ac234f9E9371;
     // address of the Aave v3 "variableDebtEthWETH" token (variable debt token)
@@ -71,9 +76,13 @@ library Constants {
 
     // adress of the Chainlink aggregator for the USDC/eth price feed
     address public constant CHAINLINK_USDC_ETH_PRICE_FEED = 0x986b5E1e1755e3C2440e960477f25201B0a8bbD4;
+    // Chainlink pricefeed (DAI -> ETH)
     address public constant CHAINLINK_DAI_ETH_PRICE_FEED = 0x773616E4d11A78F511299002da57A0a94577F1f4;
     // Chainlink pricefeed (stETH -> ETH)
     address public constant CHAINLINK_STETH_ETH_PRICE_FEED = 0x86392dC19c0b719886221c78AB11eb8Cf5c52812;
+    // Chainlink pricefeed (USDT -> ETH)
+    address public constant CHAINLINK_USDT_ETH_PRICE_FEED = 0xEe9F2375b4bdF6387aa8265dD4FB8F16512A1d46;
+
     // Liquity pricefeed (USD -> ETH) with Chainlink as primary and Tellor as backup.
     address public constant LIQUITY_USD_ETH_PRICE_FEED = 0x4c517D4e2C851CA76d7eC94B805269Df0f2201De;
 

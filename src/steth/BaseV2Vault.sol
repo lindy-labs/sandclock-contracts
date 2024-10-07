@@ -1,20 +1,19 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.19;
 
-import {TokenOutNotAllowed} from "../errors/scErrors.sol";
-
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {Address} from "openzeppelin-contracts/utils/Address.sol";
 import {EnumerableMap} from "openzeppelin-contracts/utils/structs/EnumerableMap.sol";
+import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 
-import {ProtocolNotSupported, ProtocolInUse, ZeroAddress} from "../errors/scErrors.sol";
+import {ProtocolNotSupported, ProtocolInUse, ZeroAddress, TokenOutNotAllowed} from "../errors/scErrors.sol";
 import {Constants as C} from "../lib/Constants.sol";
 import {IVault} from "../interfaces/balancer/IVault.sol";
 import {IFlashLoanRecipient} from "../interfaces/balancer/IFlashLoanRecipient.sol";
 import {IAdapter} from "./IAdapter.sol";
-import {PriceConverter} from "./PriceConverter.sol";
-import {Swapper} from "./Swapper.sol";
 import {sc4626} from "../sc4626.sol";
+import {IPriceConverter} from "./priceConverter/IPriceConverter.sol";
+import {ISwapper} from "./swapper/ISwapper.sol";
 
 /**
  * @title BaseV2Vault
@@ -22,59 +21,58 @@ import {sc4626} from "../sc4626.sol";
  */
 abstract contract BaseV2Vault is sc4626, IFlashLoanRecipient {
     using Address for address;
+    using SafeTransferLib for ERC20;
     using EnumerableMap for EnumerableMap.UintToAddressMap;
 
     event SwapperUpdated(address indexed admin, address newSwapper);
+    event PriceConverterUpdated(address indexed admin, address newPriceConverter);
     event ProtocolAdapterAdded(address indexed admin, uint256 adapterId, address adapter);
     event ProtocolAdapterRemoved(address indexed admin, uint256 adapterId);
     event RewardsClaimed(uint256 adapterId);
-    event TokenSwapped(address token, uint256 amount, uint256 amountReceived);
+    event TokenSwapped(address tokenIn, address tokenOut, uint256 amountIn, uint256 amountOutReceived);
     event TokenWhitelisted(address token, bool value);
 
     // Balancer vault for flashloans
     IVault public constant balancerVault = IVault(C.BALANCER_VAULT);
 
     // price converter contract
-    PriceConverter public immutable priceConverter;
+    IPriceConverter public priceConverter;
 
     // swapper contract for facilitating token swaps
-    Swapper public swapper;
+    ISwapper public swapper;
 
     // mapping of IDs to lending protocol adapter contracts
     EnumerableMap.UintToAddressMap internal protocolAdapters;
 
-    // mapping for the tokenOuts allowed during zeroExSwap
-    mapping(ERC20 => bool) internal zeroExSwapWhitelist;
+    // mapping for the tokens allowed for swapping
+    mapping(ERC20 => bool) internal swapWhitelist;
 
     constructor(
         address _admin,
         address _keeper,
         ERC20 _asset,
-        PriceConverter _priceConverter,
-        Swapper _swapper,
+        IPriceConverter _priceConverter,
+        ISwapper _swapper,
         string memory _name,
         string memory _symbol
     ) sc4626(_admin, _keeper, _asset, _name, _symbol) {
-        _zeroAddressCheck(address(_priceConverter));
-        _zeroAddressCheck(address(_swapper));
+        _setPriceConverter(_priceConverter);
+        _setSwapper(_swapper);
 
-        priceConverter = _priceConverter;
-        swapper = _swapper;
-
-        zeroExSwapWhitelist[_asset] = true;
+        swapWhitelist[_asset] = true;
     }
 
     /**
-     * @notice whitelist (or cancel whitelist) a token to be swapped out using zeroExSwap
+     * @notice whitelist (or cancel whitelist) a token to be swapped out
      * @param _token The token to whitelist
      * @param _value whether to whitelist or cancel whitelist
      */
-    function whiteListOutToken(ERC20 _token, bool _value) external {
+    function whiteListToken(ERC20 _token, bool _value) external {
         _onlyAdmin();
 
         if (address(_token) == address(0)) revert ZeroAddress();
 
-        zeroExSwapWhitelist[_token] = _value;
+        swapWhitelist[_token] = _value;
 
         emit TokenWhitelisted(address(_token), _value);
     }
@@ -83,14 +81,24 @@ abstract contract BaseV2Vault is sc4626, IFlashLoanRecipient {
      * @notice Set the swapper contract used for executing token swaps.
      * @param _newSwapper The new swapper contract.
      */
-    function setSwapper(Swapper _newSwapper) external {
+    function setSwapper(ISwapper _newSwapper) external {
         _onlyAdmin();
 
-        if (address(_newSwapper) == address(0)) revert ZeroAddress();
-
-        swapper = _newSwapper;
+        _setSwapper(_newSwapper);
 
         emit SwapperUpdated(msg.sender, address(_newSwapper));
+    }
+
+    /**
+     * @notice Set the price converter contract used for executing token swaps.
+     * @param _newPriceConverter The new price converter contract.
+     */
+    function setPriceConverter(IPriceConverter _newPriceConverter) external {
+        _onlyAdmin();
+
+        _setPriceConverter(_newPriceConverter);
+
+        emit PriceConverterUpdated(msg.sender, address(_newPriceConverter));
     }
 
     /**
@@ -147,10 +155,10 @@ abstract contract BaseV2Vault is sc4626, IFlashLoanRecipient {
     }
 
     /**
-     * @notice returns whether a token is whitelisted to be swapped out using zeroExSwap or not
+     * @notice returns whether a token is whitelisted to be swapped out or not
      */
     function isTokenWhitelisted(ERC20 _token) external view returns (bool) {
-        return zeroExSwapWhitelist[_token];
+        return swapWhitelist[_token];
     }
 
     /**
@@ -168,31 +176,33 @@ abstract contract BaseV2Vault is sc4626, IFlashLoanRecipient {
     }
 
     /**
-     * @notice Sell any token for the "asset" token on 0x exchange.
-     * @param _tokenIn The token to sell.
-     * @param _tokenOut The token to buy.
-     * @param _amount The amount of tokens to sell.
-     * @param _swapData The swap data for 0xrouter.
-     * @param _assetAmountOutMin The minimum amount of "asset" token to receive for the swap.
+     * @notice Sell any token for any whitelisted token on preconfigured exchange in the swapper contract.
+     * @param _tokenIn Address of the token to swap.
+     * @param _tokenOut Address of the token to receive.
+     * @param _amountIn Amount of the token to swap.
+     * @param _amountOutMin Minimum amount of the token to receive.
+     * @param _swapData Arbitrary data to pass to the swap router.
      */
-    function zeroExSwap(
-        ERC20 _tokenIn,
-        ERC20 _tokenOut,
-        uint256 _amount,
-        bytes calldata _swapData,
-        uint256 _assetAmountOutMin
+    function swapTokens(
+        address _tokenIn,
+        address _tokenOut,
+        uint256 _amountIn,
+        uint256 _amountOutMin,
+        bytes calldata _swapData
     ) external {
         _onlyKeeperOrFlashLoan();
 
-        if (!zeroExSwapWhitelist[_tokenOut]) revert TokenOutNotAllowed(address(_tokenOut));
+        if (!swapWhitelist[ERC20(_tokenOut)]) revert TokenOutNotAllowed(_tokenOut);
 
         bytes memory result = address(swapper).functionDelegateCall(
             abi.encodeWithSelector(
-                Swapper.zeroExSwap.selector, _tokenIn, _tokenOut, _amount, _assetAmountOutMin, _swapData
+                ISwapper.swapTokens.selector, _tokenIn, _tokenOut, _amountIn, _amountOutMin, _swapData
             )
         );
 
-        emit TokenSwapped(address(_tokenIn), _amount, abi.decode(result, (uint256)));
+        uint256 amountReceived = abi.decode(result, (uint256));
+
+        emit TokenSwapped(_tokenIn, _tokenOut, _amountIn, amountReceived);
     }
 
     function _multiCall(bytes[] memory _callData) internal {
@@ -209,6 +219,18 @@ abstract contract BaseV2Vault is sc4626, IFlashLoanRecipient {
 
     function _adapterDelegateCall(address _adapter, bytes memory _data) internal {
         _adapter.functionDelegateCall(_data);
+    }
+
+    function _setSwapper(ISwapper _newSwapper) internal {
+        _zeroAddressCheck(address(_newSwapper));
+
+        swapper = _newSwapper;
+    }
+
+    function _setPriceConverter(IPriceConverter _newPriceConverter) internal {
+        _zeroAddressCheck(address(_newPriceConverter));
+
+        priceConverter = _newPriceConverter;
     }
 
     function _isSupportedCheck(uint256 _adapterId) internal view {

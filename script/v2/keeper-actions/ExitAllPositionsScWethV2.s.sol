@@ -11,7 +11,7 @@ import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 import {Constants as C} from "../../../src/lib/Constants.sol";
 import {MainnetAddresses as MA} from "../../base/MainnetAddresses.sol";
 import {scWETHv2} from "../../../src/steth/scWETHv2.sol";
-import {PriceConverter} from "../../../src/steth/PriceConverter.sol";
+import {PriceConverter} from "../../../src/steth/priceConverter/PriceConverter.sol";
 import {scWETHv2Helper} from "../../../test/helpers/scWETHv2Helper.sol";
 
 /**

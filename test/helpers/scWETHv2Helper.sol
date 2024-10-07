@@ -4,7 +4,7 @@ pragma solidity ^0.8.13;
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 
 import {scWETHv2} from "../../src/steth/scWETHv2.sol";
-import {PriceConverter} from "../../src/steth/PriceConverter.sol";
+import {PriceConverter} from "../../src/steth/priceConverter/PriceConverter.sol";
 import {IAdapter} from "../../src/steth/IAdapter.sol";
 
 /// @title helper contract for just the external view methods to be used by the backend

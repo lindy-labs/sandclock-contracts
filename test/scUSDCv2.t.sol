@@ -11,6 +11,7 @@ import {IAToken} from "aave-v3/interfaces/IAToken.sol";
 import {IVariableDebtToken} from "aave-v3/interfaces/IVariableDebtToken.sol";
 import {IPoolDataProvider} from "aave-v3/interfaces/IPoolDataProvider.sol";
 import {IEulerMarkets, IEulerEToken, IEulerDToken} from "lib/euler-interfaces-legacy/contracts/IEuler.sol";
+import {Errors} from "openzeppelin-contracts/utils/Errors.sol";
 
 import {Constants as C} from "../src/lib/Constants.sol";
 import {ILendingPool} from "../src/interfaces/aave-v2/ILendingPool.sol";
@@ -25,8 +26,8 @@ import {MorphoAaveV3ScUsdcAdapter} from "../src/steth/scUsdcV2-adapters/MorphoAa
 import {scWETH} from "../src/steth/scWETH.sol";
 import {ISwapRouter} from "../src/interfaces/uniswap/ISwapRouter.sol";
 import {AggregatorV3Interface} from "../src/interfaces/chainlink/AggregatorV3Interface.sol";
-import {PriceConverter} from "../src/steth/PriceConverter.sol";
-import {Swapper} from "../src/steth/Swapper.sol";
+import {PriceConverter} from "../src/steth/priceConverter/PriceConverter.sol";
+import {UsdcWethPriceConverter} from "../src/steth/priceConverter/UsdcWethPriceConverter.sol";
 import {IVault} from "../src/interfaces/balancer/IVault.sol";
 import {ICurvePool} from "../src/interfaces/curve/ICurvePool.sol";
 import {ILido} from "../src/interfaces/lido/ILido.sol";
@@ -34,6 +35,10 @@ import {IwstETH} from "../src/interfaces/lido/IwstETH.sol";
 import {IProtocolFeesCollector} from "../src/interfaces/balancer/IProtocolFeesCollector.sol";
 import "../src/errors/scErrors.sol";
 import {FaultyAdapter} from "./mocks/adapters/FaultyAdapter.sol";
+import {scCrossAssetYieldVault} from "../src/steth/scCrossAssetYieldVault.sol";
+import {UsdcWethSwapper} from "../src/steth/swapper/UsdcWethSwapper.sol";
+import {ISwapper} from "../src/steth/swapper/ISwapper.sol";
+import {UniversalSwapper} from "../src/steth/swapper/UniversalSwapper.sol";
 
 contract scUSDCv2Test is Test {
     using FixedPointMathLib for uint256;
@@ -49,14 +54,15 @@ contract scUSDCv2Test is Test {
     event Reallocated();
     event Rebalanced(uint256 totalCollateral, uint256 totalDebt, uint256 floatBalance);
     event ProfitSold(uint256 wethSold, uint256 usdcReceived);
-    event TokenSwapped(address token, uint256 amountSold, uint256 usdcReceived);
+    event TokenSwapped(address tokenIn, address tokenOut, uint256 amountSold, uint256 usdcReceived);
     event Supplied(uint256 adapterId, uint256 amount);
     event Borrowed(uint256 adapterId, uint256 amount);
     event Repaid(uint256 adapterId, uint256 amount);
     event Withdrawn(uint256 adapterId, uint256 amount);
     event Disinvested(uint256 wethAmount);
     event RewardsClaimed(uint256 adapterId);
-    event SwapperUpdated(address indexed admin, Swapper newSwapper);
+    event SwapperUpdated(address indexed admin, ISwapper newSwapper);
+    event PriceConverterUpdated(address indexed admin, address newPriceConverter);
 
     // after the exploit, the euler protocol was disabled. At one point it should work again, so having the
     // tests run in both cases (when protocol is working and not) requires two blocks to fork from
@@ -85,12 +91,14 @@ contract scUSDCv2Test is Test {
     AaveV2ScUsdcAdapter aaveV2;
     EulerScUsdcAdapter euler;
     MorphoAaveV3ScUsdcAdapter morpho;
-    Swapper swapper;
-    PriceConverter priceConverter;
+    UsdcWethSwapper swapper;
+    UsdcWethPriceConverter priceConverter;
+
+    constructor() Test() {
+        mainnetFork = vm.createSelectFork(vm.envString("RPC_URL_MAINNET"));
+    }
 
     function _setUpForkAtBlock(uint256 _forkAtBlock) internal {
-        mainnetFork = vm.createFork(vm.envString("RPC_URL_MAINNET"));
-        vm.selectFork(mainnetFork);
         vm.rollFork(_forkAtBlock);
 
         usdc = ERC20(C.USDC);
@@ -109,11 +117,11 @@ contract scUSDCv2Test is Test {
     function test_constructor() public {
         _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
         assertEq(address(vault.asset()), C.USDC);
-        assertEq(address(vault.scWETH()), address(wethVault), "weth vault");
+        assertEq(address(vault.targetVault()), address(wethVault), "weth vault");
         assertEq(address(vault.priceConverter()), address(priceConverter), "price converter");
         assertEq(address(vault.swapper()), address(swapper), "swapper");
 
-        assertEq(weth.allowance(address(vault), address(vault.scWETH())), type(uint256).max, "scWETH allowance");
+        assertEq(weth.allowance(address(vault), address(vault.targetVault())), type(uint256).max, "scWETH allowance");
     }
 
     function test_constructor_FailsIfScWethIsZeroAddress() public {
@@ -126,7 +134,7 @@ contract scUSDCv2Test is Test {
 
     function test_constructor_FailsIfPriceConverterIsZeroAddress() public {
         _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
-        priceConverter = PriceConverter(address(0x0));
+        priceConverter = UsdcWethPriceConverter(address(0x0));
 
         vm.expectRevert(ZeroAddress.selector);
         new scUSDCv2(address(this), keeper, wethVault, priceConverter, swapper);
@@ -134,10 +142,46 @@ contract scUSDCv2Test is Test {
 
     function test_constructor_FailsIfSwapperIsZeroAddress() public {
         _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
-        swapper = Swapper(address(0x0));
+        swapper = UsdcWethSwapper(address(0x0));
 
         vm.expectRevert(ZeroAddress.selector);
         new scUSDCv2(address(this), keeper, wethVault, priceConverter, swapper);
+    }
+
+    /// #setPriceConverter ///
+
+    function test_setPriceConverter_FailsIfCallerIsNotAdmin() public {
+        _setUpForkAtBlock(BLOCK_BEFORE_EULER_EXPLOIT);
+
+        vm.prank(alice);
+        vm.expectRevert(CallerNotAdmin.selector);
+        vault.setPriceConverter(PriceConverter(address(0x1)));
+    }
+
+    function test_setPriceConverter_FailsIfAddressIs0() public {
+        _setUpForkAtBlock(BLOCK_BEFORE_EULER_EXPLOIT);
+
+        vm.expectRevert(ZeroAddress.selector);
+        vault.setPriceConverter(PriceConverter(address(0x0)));
+    }
+
+    function test_setPriceConverter_UpdatesThePriceConverterToNewAddress() public {
+        _setUpForkAtBlock(BLOCK_BEFORE_EULER_EXPLOIT);
+        PriceConverter newPriceConverter = PriceConverter(address(0x09));
+
+        vault.setPriceConverter(newPriceConverter);
+
+        assertEq(address(vault.priceConverter()), address(newPriceConverter), "price converter not updated");
+    }
+
+    function test_setPriceConverter_EmitsEvent() public {
+        _setUpForkAtBlock(BLOCK_BEFORE_EULER_EXPLOIT);
+        PriceConverter newPriceConverter = PriceConverter(address(0x09));
+
+        vm.expectEmit(true, true, true, true);
+        emit PriceConverterUpdated(address(this), address(newPriceConverter));
+
+        vault.setPriceConverter(newPriceConverter);
     }
 
     /// #setSwapper ///
@@ -147,19 +191,19 @@ contract scUSDCv2Test is Test {
 
         vm.prank(alice);
         vm.expectRevert(CallerNotAdmin.selector);
-        vault.setSwapper(Swapper(address(0x1)));
+        vault.setSwapper(ISwapper(address(0x1)));
     }
 
     function test_setSwapper_FailsIfAddressIs0() public {
         _setUpForkAtBlock(BLOCK_BEFORE_EULER_EXPLOIT);
 
         vm.expectRevert(ZeroAddress.selector);
-        vault.setSwapper(Swapper(address(0x0)));
+        vault.setSwapper(ISwapper(address(0x0)));
     }
 
     function test_setSwapper_UpdatesTheSwapperToNewAddress() public {
         _setUpForkAtBlock(BLOCK_BEFORE_EULER_EXPLOIT);
-        Swapper newSwapper = Swapper(address(0x09));
+        ISwapper newSwapper = ISwapper(address(0x09));
 
         vault.setSwapper(newSwapper);
 
@@ -168,7 +212,7 @@ contract scUSDCv2Test is Test {
 
     function test_setSwapper_EmitsEvent() public {
         _setUpForkAtBlock(BLOCK_BEFORE_EULER_EXPLOIT);
-        Swapper newSwapper = Swapper(address(0x09));
+        ISwapper newSwapper = ISwapper(address(0x09));
 
         vm.expectEmit(true, true, true, true);
         emit SwapperUpdated(address(this), newSwapper);
@@ -221,7 +265,7 @@ contract scUSDCv2Test is Test {
         assertEq(weth.allowance(address(vault), euler.protocol()), type(uint256).max, "weth allowance");
 
         vault.supply(euler.id(), initialBalance);
-        assertEq(vault.usdcBalance(), 0, "usdc balance");
+        assertEq(_usdcBalance(), 0, "usdc balance");
         assertApproxEqAbs(euler.getCollateral(address(vault)), initialBalance, 1, "collateral");
     }
 
@@ -261,7 +305,7 @@ contract scUSDCv2Test is Test {
 
         uint256 aaveV3Id = aaveV3.id();
 
-        vault.supply(aaveV3Id, vault.usdcBalance());
+        vault.supply(aaveV3Id, _usdcBalance());
 
         vm.expectRevert(abi.encodeWithSelector(ProtocolInUse.selector, aaveV3Id));
         vault.removeAdapter(aaveV3Id, false);
@@ -503,7 +547,7 @@ contract scUSDCv2Test is Test {
         uint256 withdrawAmount = 5_000e6;
         vault.withdraw(aaveV2.id(), withdrawAmount);
 
-        assertEq(vault.usdcBalance(), withdrawAmount, "usdc balance");
+        assertEq(_usdcBalance(), withdrawAmount, "usdc balance");
         assertApproxEqAbs(aaveV2.getCollateral(address(vault)), initialBalance - withdrawAmount, 1, "collateral");
     }
 
@@ -537,15 +581,15 @@ contract scUSDCv2Test is Test {
         uint256 initialDebt = 100 ether;
         deal(address(usdc), address(vault), initialBalance);
         bytes[] memory callData = new bytes[](2);
-        callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV3.id(), initialBalance);
-        callData[1] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV3.id(), initialDebt);
+        callData[0] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, aaveV3.id(), initialBalance);
+        callData[1] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, aaveV3.id(), initialDebt);
         vault.rebalance(callData);
 
-        uint256 disinvestAmount = vault.wethInvested() / 2;
+        uint256 disinvestAmount = vault.targetTokenInvestedAmount() / 2;
         vault.disinvest(disinvestAmount);
 
         assertEq(weth.balanceOf(address(vault)), disinvestAmount, "weth balance");
-        assertEq(vault.wethInvested(), initialDebt - disinvestAmount, "weth invested");
+        assertEq(vault.targetTokenInvestedAmount(), initialDebt - disinvestAmount, "weth invested");
     }
 
     function test_disinvest_EmitsEvent() public {
@@ -554,8 +598,8 @@ contract scUSDCv2Test is Test {
         uint256 initialDebt = 100 ether;
         deal(address(usdc), address(vault), initialBalance);
         bytes[] memory callData = new bytes[](2);
-        callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV3.id(), initialBalance);
-        callData[1] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV3.id(), initialDebt);
+        callData[0] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, aaveV3.id(), initialBalance);
+        callData[1] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, aaveV3.id(), initialDebt);
         vault.rebalance(callData);
 
         uint256 disinvestAmount = 1 ether;
@@ -586,8 +630,8 @@ contract scUSDCv2Test is Test {
         deal(address(usdc), address(vault), initialBalance);
 
         bytes[] memory callData = new bytes[](2);
-        callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV3.id(), initialBalance);
-        callData[1] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV3.id(), initialDebt);
+        callData[0] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, aaveV3.id(), initialBalance);
+        callData[1] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, aaveV3.id(), initialDebt);
 
         vault.rebalance(callData);
 
@@ -606,8 +650,8 @@ contract scUSDCv2Test is Test {
         deal(address(usdc), address(vault), initialBalance);
 
         bytes[] memory callData = new bytes[](3);
-        callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV3.id(), initialBalance);
-        callData[1] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV3.id(), initialDebt);
+        callData[0] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, aaveV3.id(), initialBalance);
+        callData[1] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, aaveV3.id(), initialDebt);
         callData[2] = ""; // empty bytes
 
         vault.rebalance(callData);
@@ -629,8 +673,8 @@ contract scUSDCv2Test is Test {
         deal(address(usdc), address(vault), initialBalance);
 
         bytes[] memory callData = new bytes[](2);
-        callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, euler.id(), initialBalance);
-        callData[1] = abi.encodeWithSelector(scUSDCv2.borrow.selector, euler.id(), initialDebt);
+        callData[0] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, euler.id(), initialBalance);
+        callData[1] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, euler.id(), initialDebt);
 
         vault.rebalance(callData);
 
@@ -655,8 +699,8 @@ contract scUSDCv2Test is Test {
         assertTrue(vault.isSupported(morpho.id()));
 
         bytes[] memory callData = new bytes[](2);
-        callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, morpho.id(), initialBalance);
-        callData[1] = abi.encodeWithSelector(scUSDCv2.borrow.selector, morpho.id(), initialDebt);
+        callData[0] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, morpho.id(), initialBalance);
+        callData[1] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, morpho.id(), initialDebt);
 
         vault.rebalance(callData);
 
@@ -674,8 +718,8 @@ contract scUSDCv2Test is Test {
         deal(address(usdc), address(vault), initialBalance);
 
         bytes[] memory callData = new bytes[](2);
-        callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV2.id(), initialBalance);
-        callData[1] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV2.id(), initialDebt);
+        callData[0] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, aaveV2.id(), initialBalance);
+        callData[1] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, aaveV2.id(), initialDebt);
 
         vault.rebalance(callData);
 
@@ -694,8 +738,8 @@ contract scUSDCv2Test is Test {
         deal(address(usdc), address(vault), initialBalance);
 
         bytes[] memory callData = new bytes[](2);
-        callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV2.id(), initialBalance);
-        callData[1] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV2.id(), initialDebt);
+        callData[0] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, aaveV2.id(), initialBalance);
+        callData[1] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, aaveV2.id(), initialDebt);
 
         vault.rebalance(callData);
 
@@ -704,8 +748,8 @@ contract scUSDCv2Test is Test {
 
         // leverage down
         callData = new bytes[](2);
-        callData[0] = abi.encodeWithSelector(scUSDCv2.disinvest.selector, initialDebt / 2);
-        callData[1] = abi.encodeWithSelector(scUSDCv2.repay.selector, aaveV2.id(), initialDebt / 2);
+        callData[0] = abi.encodeWithSelector(scCrossAssetYieldVault.disinvest.selector, initialDebt / 2);
+        callData[1] = abi.encodeWithSelector(scCrossAssetYieldVault.repay.selector, aaveV2.id(), initialDebt / 2);
 
         vault.rebalance(callData);
 
@@ -722,8 +766,8 @@ contract scUSDCv2Test is Test {
         deal(address(usdc), address(vault), initialBalance);
 
         bytes[] memory callData = new bytes[](2);
-        callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV2.id(), initialBalance);
-        callData[1] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV2.id(), initialDebt);
+        callData[0] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, aaveV2.id(), initialBalance);
+        callData[1] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, aaveV2.id(), initialDebt);
 
         vault.rebalance(callData);
 
@@ -732,7 +776,7 @@ contract scUSDCv2Test is Test {
 
         // leverage up
         callData = new bytes[](1);
-        callData[0] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV2.id(), initialDebt);
+        callData[0] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, aaveV2.id(), initialDebt);
 
         vault.rebalance(callData);
 
@@ -749,8 +793,8 @@ contract scUSDCv2Test is Test {
         deal(address(usdc), address(vault), initialBalance);
 
         bytes[] memory callData = new bytes[](2);
-        callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV3.id(), initialBalance);
-        callData[1] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV3.id(), initialDebt);
+        callData[0] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, aaveV3.id(), initialBalance);
+        callData[1] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, aaveV3.id(), initialDebt);
 
         vault.rebalance(callData);
 
@@ -761,8 +805,8 @@ contract scUSDCv2Test is Test {
         uint256 additionalDebt = 10 ether;
         deal(address(usdc), address(vault), additionalBalance);
         callData = new bytes[](2);
-        callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV3.id(), additionalBalance);
-        callData[1] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV3.id(), additionalDebt);
+        callData[0] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, aaveV3.id(), additionalBalance);
+        callData[1] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, aaveV3.id(), additionalDebt);
 
         vault.rebalance(callData);
 
@@ -778,10 +822,10 @@ contract scUSDCv2Test is Test {
         deal(address(usdc), address(vault), initialBalance);
 
         bytes[] memory callData = new bytes[](4);
-        callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV3.id(), initialBalance / 2);
-        callData[1] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV3.id(), debtOnAaveV3);
-        callData[2] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV2.id(), initialBalance / 2);
-        callData[3] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV2.id(), debtOnAaveV2);
+        callData[0] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, aaveV3.id(), initialBalance / 2);
+        callData[1] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, aaveV3.id(), debtOnAaveV3);
+        callData[2] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, aaveV2.id(), initialBalance / 2);
+        callData[3] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, aaveV2.id(), debtOnAaveV2);
 
         vault.rebalance(callData);
 
@@ -806,10 +850,10 @@ contract scUSDCv2Test is Test {
         assertTrue(vault.isSupported(morpho.id()));
 
         bytes[] memory callData = new bytes[](4);
-        callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV3.id(), initialBalance / 2);
-        callData[1] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV3.id(), debtOnAaveV3);
-        callData[2] = abi.encodeWithSelector(scUSDCv2.supply.selector, morpho.id(), initialBalance / 2);
-        callData[3] = abi.encodeWithSelector(scUSDCv2.borrow.selector, morpho.id(), debtOnMorpho);
+        callData[0] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, aaveV3.id(), initialBalance / 2);
+        callData[1] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, aaveV3.id(), debtOnAaveV3);
+        callData[2] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, morpho.id(), initialBalance / 2);
+        callData[3] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, morpho.id(), debtOnMorpho);
 
         vault.rebalance(callData);
 
@@ -830,10 +874,10 @@ contract scUSDCv2Test is Test {
         deal(address(usdc), address(vault), initialBalance);
 
         bytes[] memory callData = new bytes[](4);
-        callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV3.id(), initialBalance / 2);
-        callData[1] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV3.id(), debtOnAaveV3);
-        callData[2] = abi.encodeWithSelector(scUSDCv2.supply.selector, euler.id(), initialBalance / 2);
-        callData[3] = abi.encodeWithSelector(scUSDCv2.borrow.selector, euler.id(), debtOnEuler);
+        callData[0] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, aaveV3.id(), initialBalance / 2);
+        callData[1] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, aaveV3.id(), debtOnAaveV3);
+        callData[2] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, euler.id(), initialBalance / 2);
+        callData[3] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, euler.id(), debtOnEuler);
 
         vault.rebalance(callData);
 
@@ -847,10 +891,13 @@ contract scUSDCv2Test is Test {
         deal(address(usdc), address(vault), additionalCollateralOnAaveV3 + additionalCollateralOnEuler);
 
         callData = new bytes[](4);
-        callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV3.id(), additionalCollateralOnAaveV3);
-        callData[1] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV3.id(), additionalDebtOnAaveV3);
-        callData[2] = abi.encodeWithSelector(scUSDCv2.supply.selector, euler.id(), additionalCollateralOnEuler);
-        callData[3] = abi.encodeWithSelector(scUSDCv2.borrow.selector, euler.id(), additionalDebtOnEuler);
+        callData[0] =
+            abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, aaveV3.id(), additionalCollateralOnAaveV3);
+        callData[1] =
+            abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, aaveV3.id(), additionalDebtOnAaveV3);
+        callData[2] =
+            abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, euler.id(), additionalCollateralOnEuler);
+        callData[3] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, euler.id(), additionalDebtOnEuler);
 
         vault.rebalance(callData);
 
@@ -885,10 +932,10 @@ contract scUSDCv2Test is Test {
         deal(address(usdc), address(vault), initialBalance);
 
         bytes[] memory callData = new bytes[](4);
-        callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV3.id(), initialBalance / 2);
-        callData[1] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV3.id(), debtOnAaveV3);
-        callData[2] = abi.encodeWithSelector(scUSDCv2.supply.selector, euler.id(), initialBalance / 2);
-        callData[3] = abi.encodeWithSelector(scUSDCv2.borrow.selector, euler.id(), debtOnEuler);
+        callData[0] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, aaveV3.id(), initialBalance / 2);
+        callData[1] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, aaveV3.id(), debtOnAaveV3);
+        callData[2] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, euler.id(), initialBalance / 2);
+        callData[3] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, euler.id(), debtOnEuler);
 
         vault.rebalance(callData);
 
@@ -901,10 +948,14 @@ contract scUSDCv2Test is Test {
         deal(address(usdc), address(vault), additionalCollateralOnAaveV3);
 
         callData = new bytes[](4);
-        callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV3.id(), additionalCollateralOnAaveV3);
-        callData[1] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV3.id(), additionalDebtOnAaveV3);
-        callData[2] = abi.encodeWithSelector(scUSDCv2.disinvest.selector, debtReductionOnEuler - additionalDebtOnAaveV3);
-        callData[3] = abi.encodeWithSelector(scUSDCv2.repay.selector, euler.id(), debtReductionOnEuler);
+        callData[0] =
+            abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, aaveV3.id(), additionalCollateralOnAaveV3);
+        callData[1] =
+            abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, aaveV3.id(), additionalDebtOnAaveV3);
+        callData[2] = abi.encodeWithSelector(
+            scCrossAssetYieldVault.disinvest.selector, debtReductionOnEuler - additionalDebtOnAaveV3
+        );
+        callData[3] = abi.encodeWithSelector(scCrossAssetYieldVault.repay.selector, euler.id(), debtReductionOnEuler);
 
         vault.rebalance(callData);
 
@@ -935,12 +986,12 @@ contract scUSDCv2Test is Test {
         deal(address(usdc), address(vault), initialBalance);
 
         bytes[] memory callData = new bytes[](6);
-        callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV3.id(), initialBalance / 3);
-        callData[1] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV3.id(), debtOnAaveV3);
-        callData[2] = abi.encodeWithSelector(scUSDCv2.supply.selector, euler.id(), initialBalance / 3);
-        callData[3] = abi.encodeWithSelector(scUSDCv2.borrow.selector, euler.id(), debtOnEuler);
-        callData[4] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV2.id(), initialBalance / 3);
-        callData[5] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV2.id(), debtOnAaveV2);
+        callData[0] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, aaveV3.id(), initialBalance / 3);
+        callData[1] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, aaveV3.id(), debtOnAaveV3);
+        callData[2] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, euler.id(), initialBalance / 3);
+        callData[3] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, euler.id(), debtOnEuler);
+        callData[4] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, aaveV2.id(), initialBalance / 3);
+        callData[5] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, aaveV2.id(), debtOnAaveV2);
 
         vault.rebalance(callData);
 
@@ -964,12 +1015,12 @@ contract scUSDCv2Test is Test {
         deal(address(usdc), address(vault), initialBalance);
 
         bytes[] memory callData = new bytes[](6);
-        callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV3.id(), initialBalance / 3);
-        callData[1] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV3.id(), debtOnAaveV3);
-        callData[2] = abi.encodeWithSelector(scUSDCv2.supply.selector, euler.id(), initialBalance / 3);
-        callData[3] = abi.encodeWithSelector(scUSDCv2.borrow.selector, euler.id(), debtOnEuler);
-        callData[4] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV2.id(), initialBalance / 3);
-        callData[5] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV2.id(), debtOnAaveV2);
+        callData[0] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, aaveV3.id(), initialBalance / 3);
+        callData[1] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, aaveV3.id(), debtOnAaveV3);
+        callData[2] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, euler.id(), initialBalance / 3);
+        callData[3] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, euler.id(), debtOnEuler);
+        callData[4] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, aaveV2.id(), initialBalance / 3);
+        callData[5] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, aaveV2.id(), debtOnAaveV2);
 
         vault.rebalance(callData);
 
@@ -982,10 +1033,10 @@ contract scUSDCv2Test is Test {
         uint256 totalDebtReduction = debtReductionOnAaveV3 + debtReductionOnEuler + debtReductionOnAaveV2;
 
         callData = new bytes[](4);
-        callData[0] = abi.encodeWithSelector(scUSDCv2.disinvest.selector, totalDebtReduction);
-        callData[1] = abi.encodeWithSelector(scUSDCv2.repay.selector, aaveV3.id(), debtReductionOnAaveV3);
-        callData[2] = abi.encodeWithSelector(scUSDCv2.repay.selector, euler.id(), debtReductionOnEuler);
-        callData[3] = abi.encodeWithSelector(scUSDCv2.repay.selector, aaveV2.id(), debtReductionOnAaveV2);
+        callData[0] = abi.encodeWithSelector(scCrossAssetYieldVault.disinvest.selector, totalDebtReduction);
+        callData[1] = abi.encodeWithSelector(scCrossAssetYieldVault.repay.selector, aaveV3.id(), debtReductionOnAaveV3);
+        callData[2] = abi.encodeWithSelector(scCrossAssetYieldVault.repay.selector, euler.id(), debtReductionOnEuler);
+        callData[3] = abi.encodeWithSelector(scCrossAssetYieldVault.repay.selector, aaveV2.id(), debtReductionOnAaveV2);
 
         vault.rebalance(callData);
 
@@ -1011,10 +1062,10 @@ contract scUSDCv2Test is Test {
         deal(address(usdc), address(vault), initialBalance);
 
         bytes[] memory callData = new bytes[](4);
-        callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV3.id(), supplyOnAaveV3);
-        callData[1] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV3.id(), debtOnAaveV3);
-        callData[2] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV2.id(), supplyOnAaveV2);
-        callData[3] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV2.id(), debtOnAaveV2);
+        callData[0] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, aaveV3.id(), supplyOnAaveV3);
+        callData[1] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, aaveV3.id(), debtOnAaveV3);
+        callData[2] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, aaveV2.id(), supplyOnAaveV2);
+        callData[3] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, aaveV2.id(), debtOnAaveV2);
 
         vm.expectEmit(true, true, true, true);
         emit Rebalanced(supplyOnAaveV3 + supplyOnAaveV2, debtOnAaveV3 + debtOnAaveV2, float);
@@ -1034,8 +1085,9 @@ contract scUSDCv2Test is Test {
         uint256 actualFloat = 1_000e6; // this much is left in the vault
 
         bytes[] memory callData = new bytes[](2);
-        callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV3.id(), initialBalance - actualFloat);
-        callData[1] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV3.id(), 50 ether);
+        callData[0] =
+            abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, aaveV3.id(), initialBalance - actualFloat);
+        callData[1] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, aaveV3.id(), 50 ether);
 
         vm.expectRevert(abi.encodeWithSelector(FloatBalanceTooLow.selector, actualFloat, expectedFloat));
         vault.rebalance(callData);
@@ -1046,36 +1098,38 @@ contract scUSDCv2Test is Test {
 
         uint256 targetLtv = 0.7e18;
         uint256 initialBalance = 1_000_000e6;
-        uint256 initialDebt = priceConverter.usdcToEth(initialBalance.mulWadDown(targetLtv));
+        uint256 initialDebt = priceConverter.assetToTargetToken(initialBalance.mulWadDown(targetLtv));
         deal(address(usdc), address(vault), initialBalance);
 
         bytes[] memory callData = new bytes[](2);
-        callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV2.id(), initialBalance);
-        callData[1] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV2.id(), initialDebt);
+        callData[0] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, aaveV2.id(), initialBalance);
+        callData[1] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, aaveV2.id(), initialDebt);
 
         vault.rebalance(callData);
 
         // add 10% profit to the weth vault
         uint256 totalBefore = vault.totalAssets();
-        uint256 wethProfit = vault.wethInvested().mulWadUp(0.1e18);
-        uint256 usdcProfit = priceConverter.ethToUsdc(wethProfit);
-        deal(address(weth), address(wethVault), vault.wethInvested() + wethProfit);
+        uint256 wethProfit = vault.targetTokenInvestedAmount().mulWadUp(0.1e18);
+        uint256 usdcProfit = priceConverter.targetTokenToAsset(wethProfit);
+        deal(address(weth), address(wethVault), vault.targetTokenInvestedAmount() + wethProfit);
 
         assertApproxEqRel(vault.totalAssets(), totalBefore + usdcProfit, 0.01e18, "total assets before reinvest");
 
         uint256 minUsdcAmountOut = usdcProfit.mulWadDown(vault.slippageTolerance());
-        uint256 wethToReinvest = priceConverter.usdcToEth(minUsdcAmountOut);
+        uint256 wethToReinvest = priceConverter.assetToTargetToken(minUsdcAmountOut);
         callData = new bytes[](3);
-        callData[0] = abi.encodeWithSelector(scUSDCv2.sellProfit.selector, minUsdcAmountOut);
-        callData[1] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV2.id(), minUsdcAmountOut);
-        callData[2] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV2.id(), wethToReinvest);
+        callData[0] = abi.encodeWithSelector(scCrossAssetYieldVault.sellProfit.selector, minUsdcAmountOut);
+        callData[1] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, aaveV2.id(), minUsdcAmountOut);
+        callData[2] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, aaveV2.id(), wethToReinvest);
 
         vault.rebalance(callData);
 
         assertApproxEqRel(vault.totalAssets(), totalBefore + usdcProfit, 0.01e18, "total assets after reinvest");
         assertApproxEqAbs(vault.getCollateral(aaveV2.id()), initialBalance + minUsdcAmountOut, 1, "collateral");
         assertTrue(vault.getDebt(aaveV2.id()) > initialDebt + wethToReinvest, "debt");
-        assertApproxEqAbs(vault.getDebt(aaveV2.id()), vault.wethInvested(), 1, "debt and weth invested mismatch");
+        assertApproxEqAbs(
+            vault.getDebt(aaveV2.id()), vault.targetTokenInvestedAmount(), 1, "debt and weth invested mismatch"
+        );
     }
 
     function testFuzz_rebalance(
@@ -1098,25 +1152,28 @@ contract scUSDCv2Test is Test {
         borrowOnAaveV3 = bound(
             borrowOnAaveV3,
             1,
-            priceConverter.usdcToEth(supplyOnAaveV3).mulWadDown(aaveV3.getMaxLtv() - 0.005e18) // -0.5% to avoid borrowing at max ltv
+            priceConverter.assetToTargetToken(supplyOnAaveV3).mulWadDown(aaveV3.getMaxLtv() - 0.005e18) // -0.5% to avoid borrowing at max ltv
         );
-        borrowOnAaveV2 =
-            bound(borrowOnAaveV2, 1, priceConverter.usdcToEth(supplyOnAaveV2).mulWadDown(aaveV2.getMaxLtv() - 0.005e18));
+        borrowOnAaveV2 = bound(
+            borrowOnAaveV2,
+            1,
+            priceConverter.assetToTargetToken(supplyOnAaveV2).mulWadDown(aaveV2.getMaxLtv() - 0.005e18)
+        );
 
         deal(address(usdc), address(vault), initialBalance);
 
         bytes[] memory callData = new bytes[](4);
-        callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV3.id(), supplyOnAaveV3);
-        callData[1] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV3.id(), borrowOnAaveV3);
-        callData[2] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV2.id(), supplyOnAaveV2);
-        callData[3] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV2.id(), borrowOnAaveV2);
+        callData[0] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, aaveV3.id(), supplyOnAaveV3);
+        callData[1] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, aaveV3.id(), borrowOnAaveV3);
+        callData[2] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, aaveV2.id(), supplyOnAaveV2);
+        callData[3] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, aaveV2.id(), borrowOnAaveV2);
 
         vault.rebalance(callData);
 
         _assertCollateralAndDebt(aaveV3.id(), supplyOnAaveV3, borrowOnAaveV3);
         _assertCollateralAndDebt(aaveV2.id(), supplyOnAaveV2, borrowOnAaveV2);
         assertApproxEqAbs(vault.totalAssets(), initialBalance, 2, "total asets");
-        assertApproxEqAbs(vault.usdcBalance(), minFloat, vault.totalAssets().mulWadDown(floatPercentage), "float");
+        assertApproxEqAbs(_usdcBalance(), minFloat, vault.totalAssets().mulWadDown(floatPercentage), "float");
     }
 
     /// #reallocate ///
@@ -1145,8 +1202,8 @@ contract scUSDCv2Test is Test {
         deal(address(usdc), address(vault), totalCollateral);
 
         bytes[] memory callData = new bytes[](2);
-        callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV3.id(), totalCollateral);
-        callData[1] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV3.id(), totalDebt);
+        callData[0] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, aaveV3.id(), totalCollateral);
+        callData[1] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, aaveV3.id(), totalDebt);
 
         vault.rebalance(callData);
 
@@ -1160,10 +1217,10 @@ contract scUSDCv2Test is Test {
         uint256 flashLoanAmount = debtToMove;
 
         callData = new bytes[](4);
-        callData[0] = abi.encodeWithSelector(scUSDCv2.repay.selector, aaveV3.id(), debtToMove);
-        callData[1] = abi.encodeWithSelector(scUSDCv2.withdraw.selector, aaveV3.id(), collateralToMove);
-        callData[2] = abi.encodeWithSelector(scUSDCv2.supply.selector, euler.id(), collateralToMove);
-        callData[3] = abi.encodeWithSelector(scUSDCv2.borrow.selector, euler.id(), debtToMove);
+        callData[0] = abi.encodeWithSelector(scCrossAssetYieldVault.repay.selector, aaveV3.id(), debtToMove);
+        callData[1] = abi.encodeWithSelector(scCrossAssetYieldVault.withdraw.selector, aaveV3.id(), collateralToMove);
+        callData[2] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, euler.id(), collateralToMove);
+        callData[3] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, euler.id(), debtToMove);
 
         assertFalse(vault.flashLoanInitiated(), "flash loan initiated");
 
@@ -1188,8 +1245,8 @@ contract scUSDCv2Test is Test {
         deal(address(usdc), address(vault), totalCollateral);
 
         bytes[] memory callData = new bytes[](2);
-        callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV3.id(), totalCollateral);
-        callData[1] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV3.id(), totalDebt);
+        callData[0] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, aaveV3.id(), totalCollateral);
+        callData[1] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, aaveV3.id(), totalDebt);
 
         vault.rebalance(callData);
 
@@ -1203,8 +1260,8 @@ contract scUSDCv2Test is Test {
         uint256 flashLoanAmount = debtToMove;
 
         callData = new bytes[](2);
-        callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, euler.id(), collateralToMove);
-        callData[1] = abi.encodeWithSelector(scUSDCv2.borrow.selector, euler.id(), debtToMove);
+        callData[0] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, euler.id(), collateralToMove);
+        callData[1] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, euler.id(), debtToMove);
 
         vm.expectRevert();
         vault.reallocate(flashLoanAmount, callData);
@@ -1219,10 +1276,10 @@ contract scUSDCv2Test is Test {
         deal(address(usdc), address(vault), totalCollateral);
 
         bytes[] memory callData = new bytes[](4);
-        callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV3.id(), totalCollateral / 2);
-        callData[1] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV3.id(), totalDebt / 2);
-        callData[2] = abi.encodeWithSelector(scUSDCv2.supply.selector, euler.id(), totalCollateral / 2);
-        callData[3] = abi.encodeWithSelector(scUSDCv2.borrow.selector, euler.id(), totalDebt / 2);
+        callData[0] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, aaveV3.id(), totalCollateral / 2);
+        callData[1] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, aaveV3.id(), totalDebt / 2);
+        callData[2] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, euler.id(), totalCollateral / 2);
+        callData[3] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, euler.id(), totalDebt / 2);
 
         vault.rebalance(callData);
 
@@ -1236,10 +1293,10 @@ contract scUSDCv2Test is Test {
         uint256 flashLoanAmount = 100 ether;
 
         callData = new bytes[](4);
-        callData[0] = abi.encodeWithSelector(scUSDCv2.repay.selector, aaveV3.id(), debtToMove);
-        callData[1] = abi.encodeWithSelector(scUSDCv2.withdraw.selector, aaveV3.id(), collateralToMove);
-        callData[2] = abi.encodeWithSelector(scUSDCv2.supply.selector, euler.id(), collateralToMove);
-        callData[3] = abi.encodeWithSelector(scUSDCv2.borrow.selector, euler.id(), debtToMove);
+        callData[0] = abi.encodeWithSelector(scCrossAssetYieldVault.repay.selector, aaveV3.id(), debtToMove);
+        callData[1] = abi.encodeWithSelector(scCrossAssetYieldVault.withdraw.selector, aaveV3.id(), collateralToMove);
+        callData[2] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, euler.id(), collateralToMove);
+        callData[3] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, euler.id(), debtToMove);
 
         vault.reallocate(flashLoanAmount, callData);
 
@@ -1260,8 +1317,8 @@ contract scUSDCv2Test is Test {
         deal(address(usdc), address(vault), totalCollateral);
 
         bytes[] memory callData = new bytes[](2);
-        callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV3.id(), totalCollateral);
-        callData[1] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV3.id(), totalDebt);
+        callData[0] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, aaveV3.id(), totalCollateral);
+        callData[1] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, aaveV3.id(), totalDebt);
 
         vault.rebalance(callData);
 
@@ -1275,12 +1332,15 @@ contract scUSDCv2Test is Test {
         uint256 flashLoanAmount = debtToMoveFromAaveV3;
 
         callData = new bytes[](6);
-        callData[0] = abi.encodeWithSelector(scUSDCv2.repay.selector, aaveV3.id(), debtToMoveFromAaveV3);
-        callData[1] = abi.encodeWithSelector(scUSDCv2.withdraw.selector, aaveV3.id(), collateralToMoveFromAaveV3);
-        callData[2] = abi.encodeWithSelector(scUSDCv2.supply.selector, euler.id(), collateralToMoveToEuler);
-        callData[3] = abi.encodeWithSelector(scUSDCv2.borrow.selector, euler.id(), debtToMoveToEuler);
-        callData[4] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV2.id(), collateralToMoveToAaveV2);
-        callData[5] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV2.id(), debtToMoveToAaveV2);
+        callData[0] = abi.encodeWithSelector(scCrossAssetYieldVault.repay.selector, aaveV3.id(), debtToMoveFromAaveV3);
+        callData[1] =
+            abi.encodeWithSelector(scCrossAssetYieldVault.withdraw.selector, aaveV3.id(), collateralToMoveFromAaveV3);
+        callData[2] =
+            abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, euler.id(), collateralToMoveToEuler);
+        callData[3] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, euler.id(), debtToMoveToEuler);
+        callData[4] =
+            abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, aaveV2.id(), collateralToMoveToAaveV2);
+        callData[5] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, aaveV2.id(), debtToMoveToAaveV2);
 
         vault.reallocate(flashLoanAmount, callData);
 
@@ -1300,10 +1360,10 @@ contract scUSDCv2Test is Test {
         deal(address(usdc), address(vault), totalCollateral);
 
         bytes[] memory callData = new bytes[](4);
-        callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV3.id(), totalCollateral / 2);
-        callData[1] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV3.id(), totalDebt / 2);
-        callData[2] = abi.encodeWithSelector(scUSDCv2.supply.selector, euler.id(), totalCollateral / 2);
-        callData[3] = abi.encodeWithSelector(scUSDCv2.borrow.selector, euler.id(), totalDebt / 2);
+        callData[0] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, aaveV3.id(), totalCollateral / 2);
+        callData[1] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, aaveV3.id(), totalDebt / 2);
+        callData[2] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, euler.id(), totalCollateral / 2);
+        callData[3] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, euler.id(), totalDebt / 2);
 
         vault.rebalance(callData);
 
@@ -1313,10 +1373,10 @@ contract scUSDCv2Test is Test {
         uint256 flashLoanAmount = debtToMove;
 
         callData = new bytes[](4);
-        callData[0] = abi.encodeWithSelector(scUSDCv2.repay.selector, aaveV3.id(), debtToMove);
-        callData[1] = abi.encodeWithSelector(scUSDCv2.withdraw.selector, aaveV3.id(), collateralToMove);
-        callData[2] = abi.encodeWithSelector(scUSDCv2.supply.selector, euler.id(), collateralToMove);
-        callData[3] = abi.encodeWithSelector(scUSDCv2.borrow.selector, euler.id(), debtToMove);
+        callData[0] = abi.encodeWithSelector(scCrossAssetYieldVault.repay.selector, aaveV3.id(), debtToMove);
+        callData[1] = abi.encodeWithSelector(scCrossAssetYieldVault.withdraw.selector, aaveV3.id(), collateralToMove);
+        callData[2] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, euler.id(), collateralToMove);
+        callData[3] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, euler.id(), debtToMove);
 
         vault.reallocate(flashLoanAmount, callData);
 
@@ -1325,10 +1385,10 @@ contract scUSDCv2Test is Test {
         debtToMove = euler.getDebt(address(vault));
 
         callData = new bytes[](4);
-        callData[0] = abi.encodeWithSelector(scUSDCv2.repay.selector, euler.id(), debtToMove);
-        callData[1] = abi.encodeWithSelector(scUSDCv2.withdraw.selector, euler.id(), collateralToMove);
-        callData[2] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV3.id(), collateralToMove);
-        callData[3] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV3.id(), debtToMove);
+        callData[0] = abi.encodeWithSelector(scCrossAssetYieldVault.repay.selector, euler.id(), debtToMove);
+        callData[1] = abi.encodeWithSelector(scCrossAssetYieldVault.withdraw.selector, euler.id(), collateralToMove);
+        callData[2] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, aaveV3.id(), collateralToMove);
+        callData[3] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, aaveV3.id(), debtToMove);
 
         flashLoanAmount = debtToMove;
         vault.reallocate(flashLoanAmount, callData);
@@ -1348,8 +1408,8 @@ contract scUSDCv2Test is Test {
         deal(address(usdc), address(vault), totalCollateral);
 
         bytes[] memory callData = new bytes[](2);
-        callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV3.id(), totalCollateral / 2);
-        callData[1] = abi.encodeWithSelector(scUSDCv2.supply.selector, euler.id(), totalCollateral / 2);
+        callData[0] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, aaveV3.id(), totalCollateral / 2);
+        callData[1] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, euler.id(), totalCollateral / 2);
 
         vault.rebalance(callData);
 
@@ -1357,8 +1417,8 @@ contract scUSDCv2Test is Test {
         uint256 collateralToMove = totalCollateral / 4;
 
         callData = new bytes[](2);
-        callData[0] = abi.encodeWithSelector(scUSDCv2.withdraw.selector, aaveV3.id(), collateralToMove);
-        callData[1] = abi.encodeWithSelector(scUSDCv2.supply.selector, euler.id(), collateralToMove);
+        callData[0] = abi.encodeWithSelector(scCrossAssetYieldVault.withdraw.selector, aaveV3.id(), collateralToMove);
+        callData[1] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, euler.id(), collateralToMove);
 
         vm.expectEmit(true, true, true, true);
         emit Reallocated();
@@ -1382,8 +1442,8 @@ contract scUSDCv2Test is Test {
         assertEq(balancerFeeContract.getFlashLoanFeePercentage(), flashLoanFeePercent);
 
         bytes[] memory callData = new bytes[](2);
-        callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV3.id(), totalCollateral);
-        callData[1] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV3.id(), totalDebt);
+        callData[0] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, aaveV3.id(), totalCollateral);
+        callData[1] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, aaveV3.id(), totalDebt);
 
         vault.rebalance(callData);
 
@@ -1394,17 +1454,18 @@ contract scUSDCv2Test is Test {
         uint256 flashLoanAmount = debtToMove;
 
         callData = new bytes[](4);
-        callData[0] = abi.encodeWithSelector(scUSDCv2.repay.selector, aaveV3.id(), debtToMove);
-        callData[1] = abi.encodeWithSelector(scUSDCv2.withdraw.selector, aaveV3.id(), collateralToMove);
-        callData[2] = abi.encodeWithSelector(scUSDCv2.supply.selector, euler.id(), collateralToMove);
-        callData[3] = abi.encodeWithSelector(scUSDCv2.borrow.selector, euler.id(), debtToMove);
+        callData[0] = abi.encodeWithSelector(scCrossAssetYieldVault.repay.selector, aaveV3.id(), debtToMove);
+        callData[1] = abi.encodeWithSelector(scCrossAssetYieldVault.withdraw.selector, aaveV3.id(), collateralToMove);
+        callData[2] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, euler.id(), collateralToMove);
+        callData[3] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, euler.id(), debtToMove);
 
         // expect to fail since flash loan fees are not accounted for
         vm.expectRevert();
         vault.reallocate(flashLoanAmount, callData);
 
         // borrow more to cover the flash loan fees
-        callData[3] = abi.encodeWithSelector(scUSDCv2.borrow.selector, euler.id(), debtToMove + flashLoanFee);
+        callData[3] =
+            abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, euler.id(), debtToMove + flashLoanFee);
         vault.reallocate(flashLoanAmount, callData);
     }
 
@@ -1458,28 +1519,30 @@ contract scUSDCv2Test is Test {
         deal(address(usdc), address(vault), initialBalance);
 
         bytes[] memory callData = new bytes[](4);
-        callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV3.id(), initialBalance / 2);
-        callData[1] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV3.id(), 50 ether);
-        callData[2] = abi.encodeWithSelector(scUSDCv2.supply.selector, euler.id(), initialBalance / 2);
-        callData[3] = abi.encodeWithSelector(scUSDCv2.borrow.selector, euler.id(), 50 ether);
+        callData[0] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, aaveV3.id(), initialBalance / 2);
+        callData[1] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, aaveV3.id(), 50 ether);
+        callData[2] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, euler.id(), initialBalance / 2);
+        callData[3] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, euler.id(), 50 ether);
 
         vault.rebalance(callData);
 
         // add 100% profit to the weth vault
-        uint256 initialWethInvested = vault.wethInvested();
+        uint256 initialWethInvested = vault.targetTokenInvestedAmount();
         deal(address(weth), address(wethVault), initialWethInvested * 2);
 
-        uint256 usdcBalanceBefore = vault.usdcBalance();
+        uint256 usdcBalanceBefore = _usdcBalance();
         uint256 profit = vault.getProfit();
 
         vm.prank(keeper);
         vault.sellProfit(0);
 
-        uint256 expectedUsdcBalance = usdcBalanceBefore + priceConverter.ethToUsdc(profit);
+        uint256 expectedUsdcBalance = usdcBalanceBefore + priceConverter.targetTokenToAsset(profit);
         _assertCollateralAndDebt(aaveV3.id(), initialBalance / 2, 50 ether);
         _assertCollateralAndDebt(euler.id(), initialBalance / 2, 50 ether);
-        assertApproxEqRel(vault.usdcBalance(), expectedUsdcBalance, 0.01e18, "usdc balance");
-        assertApproxEqRel(vault.wethInvested(), initialWethInvested, 0.001e18, "sold more than actual profit");
+        assertApproxEqRel(_usdcBalance(), expectedUsdcBalance, 0.01e18, "usdc balance");
+        assertApproxEqRel(
+            vault.targetTokenInvestedAmount(), initialWethInvested, 0.001e18, "sold more than actual profit"
+        );
     }
 
     function test_sellProfit_EmitsEvent() public {
@@ -1491,17 +1554,17 @@ contract scUSDCv2Test is Test {
         deal(address(usdc), address(vault), initialBalance);
 
         bytes[] memory callData = new bytes[](4);
-        callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV3.id(), initialBalance / 2);
-        callData[1] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV3.id(), initialDebt / 2);
-        callData[2] = abi.encodeWithSelector(scUSDCv2.supply.selector, euler.id(), initialBalance / 2);
-        callData[3] = abi.encodeWithSelector(scUSDCv2.borrow.selector, euler.id(), initialDebt / 2);
+        callData[0] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, aaveV3.id(), initialBalance / 2);
+        callData[1] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, aaveV3.id(), initialDebt / 2);
+        callData[2] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, euler.id(), initialBalance / 2);
+        callData[3] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, euler.id(), initialDebt / 2);
 
         vault.rebalance(callData);
 
         // add 100% profit to the weth vault
         uint256 wethInvested = weth.balanceOf(address(wethVault));
         deal(address(weth), address(wethVault), wethInvested * 2);
-        uint256 profit = vault.wethInvested() - vault.totalDebt();
+        uint256 profit = vault.targetTokenInvestedAmount() - vault.totalDebt();
 
         vm.expectEmit(true, true, true, true);
         emit ProfitSold(profit, 161501_703508);
@@ -1518,10 +1581,10 @@ contract scUSDCv2Test is Test {
         deal(address(usdc), address(vault), initialBalance);
 
         bytes[] memory callData = new bytes[](4);
-        callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV3.id(), initialBalance / 2);
-        callData[1] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV3.id(), initialDebt / 2);
-        callData[2] = abi.encodeWithSelector(scUSDCv2.supply.selector, euler.id(), initialBalance / 2);
-        callData[3] = abi.encodeWithSelector(scUSDCv2.borrow.selector, euler.id(), initialDebt / 2);
+        callData[0] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, aaveV3.id(), initialBalance / 2);
+        callData[1] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, aaveV3.id(), initialDebt / 2);
+        callData[2] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, euler.id(), initialBalance / 2);
+        callData[3] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, euler.id(), initialDebt / 2);
 
         vault.rebalance(callData);
 
@@ -1529,7 +1592,7 @@ contract scUSDCv2Test is Test {
         uint256 wethInvested = weth.balanceOf(address(wethVault));
         deal(address(weth), address(wethVault), wethInvested * 2);
 
-        uint256 tooLargeUsdcAmountOutMin = priceConverter.ethToUsdc(vault.getProfit()).mulWadDown(1.05e18); // add 5% more than expected
+        uint256 tooLargeUsdcAmountOutMin = priceConverter.targetTokenToAsset(vault.getProfit()).mulWadDown(1.05e18); // add 5% more than expected
 
         vm.prank(keeper);
         vm.expectRevert("Too little received");
@@ -1549,8 +1612,8 @@ contract scUSDCv2Test is Test {
         vm.stopPrank();
 
         bytes[] memory callData = new bytes[](2);
-        callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV3.id(), initialBalance);
-        callData[1] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV3.id(), 200 ether);
+        callData[0] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, aaveV3.id(), initialBalance);
+        callData[1] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, aaveV3.id(), 200 ether);
 
         vault.rebalance(callData);
 
@@ -1575,9 +1638,9 @@ contract scUSDCv2Test is Test {
 
         bytes[] memory callData = new bytes[](2);
         callData[0] = abi.encodeWithSelector(
-            scUSDCv2.supply.selector, aaveV3.id(), initialBalance.mulWadDown(1e18 - floatPercentage)
+            scCrossAssetYieldVault.supply.selector, aaveV3.id(), initialBalance.mulWadDown(1e18 - floatPercentage)
         );
-        callData[1] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV3.id(), 200 ether);
+        callData[1] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, aaveV3.id(), 200 ether);
 
         vault.rebalance(callData);
 
@@ -1607,22 +1670,22 @@ contract scUSDCv2Test is Test {
 
         bytes[] memory callData = new bytes[](2);
         callData[0] = abi.encodeWithSelector(
-            scUSDCv2.supply.selector, aaveV3.id(), initialBalance.mulWadDown(1e18 - floatPercentage)
+            scCrossAssetYieldVault.supply.selector, aaveV3.id(), initialBalance.mulWadDown(1e18 - floatPercentage)
         );
-        callData[1] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV3.id(), 200 ether);
+        callData[1] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, aaveV3.id(), 200 ether);
 
         vault.rebalance(callData);
 
         // add 100% profit to the weth vault
-        uint256 initialWethInvested = vault.wethInvested();
+        uint256 initialWethInvested = vault.targetTokenInvestedAmount();
         deal(address(weth), address(wethVault), initialWethInvested * 2);
 
         uint256 collateralBefore = vault.totalCollateral();
         uint256 debtBefore = vault.totalDebt();
 
         uint256 profit = vault.getProfit();
-        uint256 expectedUsdcFromProfitSelling = priceConverter.ethToUsdc(profit);
-        uint256 initialFloat = vault.usdcBalance();
+        uint256 expectedUsdcFromProfitSelling = priceConverter.targetTokenToAsset(profit);
+        uint256 initialFloat = _usdcBalance();
         // withdraw double the float amount
         uint256 withdrawAmount = initialFloat * 2;
         vm.prank(alice);
@@ -1632,7 +1695,7 @@ contract scUSDCv2Test is Test {
         assertApproxEqAbs(vault.getProfit(), 0, 1, "profit not sold");
         assertApproxEqAbs(vault.totalCollateral(), collateralBefore, 1, "collateral not expected to change");
         assertApproxEqAbs(vault.totalDebt(), debtBefore, 1, "debt not expected to change");
-        assertApproxEqRel(vault.usdcBalance(), expectedUsdcFromProfitSelling - initialFloat, 0.01e18, "float remaining");
+        assertApproxEqRel(_usdcBalance(), expectedUsdcFromProfitSelling - initialFloat, 0.01e18, "float remaining");
     }
 
     function test_withdraw_PullsFundsFromInvestedWhenFloatAndProfitSellingIsNotEnough() public {
@@ -1649,14 +1712,14 @@ contract scUSDCv2Test is Test {
 
         bytes[] memory callData = new bytes[](2);
         callData[0] = abi.encodeWithSelector(
-            scUSDCv2.supply.selector, aaveV3.id(), initialBalance.mulWadDown(1e18 - floatPercentage)
+            scCrossAssetYieldVault.supply.selector, aaveV3.id(), initialBalance.mulWadDown(1e18 - floatPercentage)
         );
-        callData[1] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV3.id(), 200 ether);
+        callData[1] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, aaveV3.id(), 200 ether);
 
         vault.rebalance(callData);
 
         // add 50% profit to the weth vault
-        uint256 initialWethInvested = vault.wethInvested();
+        uint256 initialWethInvested = vault.targetTokenInvestedAmount();
         deal(address(weth), address(wethVault), initialWethInvested.mulWadDown(1.5e18));
 
         uint256 totalAssetsBefore = vault.totalAssets();
@@ -1683,10 +1746,10 @@ contract scUSDCv2Test is Test {
         vm.stopPrank();
 
         bytes[] memory callData = new bytes[](4);
-        callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV3.id(), initialBalance / 2);
-        callData[1] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV3.id(), initialDebt / 2);
-        callData[2] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV2.id(), initialBalance / 2);
-        callData[3] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV2.id(), initialDebt / 2);
+        callData[0] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, aaveV3.id(), initialBalance / 2);
+        callData[1] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, aaveV3.id(), initialDebt / 2);
+        callData[2] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, aaveV2.id(), initialBalance / 2);
+        callData[3] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, aaveV2.id(), initialDebt / 2);
 
         vault.rebalance(callData);
 
@@ -1723,9 +1786,9 @@ contract scUSDCv2Test is Test {
         vm.stopPrank();
 
         bytes[] memory callData = new bytes[](3);
-        callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV3.id(), initialBalance / 2);
-        callData[1] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV2.id(), initialBalance / 2);
-        callData[2] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV2.id(), 100 ether);
+        callData[0] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, aaveV3.id(), initialBalance / 2);
+        callData[1] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, aaveV2.id(), initialBalance / 2);
+        callData[2] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, aaveV2.id(), 100 ether);
 
         vault.rebalance(callData);
 
@@ -1750,11 +1813,11 @@ contract scUSDCv2Test is Test {
         vault.deposit(_amount, alice);
         vm.stopPrank();
 
-        uint256 borrowAmount = priceConverter.usdcToEth(_amount.mulWadDown(0.7e18));
+        uint256 borrowAmount = priceConverter.assetToTargetToken(_amount.mulWadDown(0.7e18));
 
         bytes[] memory callData = new bytes[](2);
-        callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV3.id(), _amount);
-        callData[1] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV3.id(), borrowAmount);
+        callData[0] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, aaveV3.id(), _amount);
+        callData[1] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, aaveV3.id(), borrowAmount);
 
         vault.rebalance(callData);
 
@@ -1780,13 +1843,17 @@ contract scUSDCv2Test is Test {
         vault.deposit(_amount, alice);
         vm.stopPrank();
 
-        uint256 borrowAmount = priceConverter.usdcToEth(_amount.mulWadDown(0.7e18));
+        uint256 borrowAmount = priceConverter.assetToTargetToken(_amount.mulWadDown(0.7e18));
 
         bytes[] memory callData = new bytes[](4);
-        callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV3.id(), _amount.mulWadDown(0.3e18));
-        callData[1] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV3.id(), borrowAmount.mulWadDown(0.3e18));
-        callData[2] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV2.id(), _amount.mulWadDown(0.7e18));
-        callData[3] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV2.id(), borrowAmount.mulWadDown(0.7e18));
+        callData[0] =
+            abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, aaveV3.id(), _amount.mulWadDown(0.3e18));
+        callData[1] =
+            abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, aaveV3.id(), borrowAmount.mulWadDown(0.3e18));
+        callData[2] =
+            abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, aaveV2.id(), _amount.mulWadDown(0.7e18));
+        callData[3] =
+            abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, aaveV2.id(), borrowAmount.mulWadDown(0.7e18));
 
         vault.rebalance(callData);
 
@@ -1818,8 +1885,8 @@ contract scUSDCv2Test is Test {
         deal(address(usdc), address(vault), initialBalance);
 
         bytes[] memory callData = new bytes[](2);
-        callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV2.id(), initialBalance);
-        callData[1] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV2.id(), 200 ether);
+        callData[0] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, aaveV2.id(), initialBalance);
+        callData[1] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, aaveV2.id(), 200 ether);
 
         vault.rebalance(callData);
 
@@ -1829,9 +1896,9 @@ contract scUSDCv2Test is Test {
 
         vault.exitAllPositions(0);
 
-        assertApproxEqRel(vault.usdcBalance(), totalBefore, 0.001e18, "vault usdc balance");
+        assertApproxEqRel(_usdcBalance(), totalBefore, 0.001e18, "vault usdc balance");
         assertEq(weth.balanceOf(address(vault)), 0, "weth balance");
-        assertEq(vault.wethInvested(), 0, "weth invested");
+        assertEq(vault.targetTokenInvestedAmount(), 0, "weth invested");
         assertEq(vault.totalCollateral(), 0, "total collateral");
         assertEq(vault.totalDebt(), 0, "total debt");
     }
@@ -1842,8 +1909,8 @@ contract scUSDCv2Test is Test {
         deal(address(usdc), address(vault), initialBalance);
 
         bytes[] memory callData = new bytes[](2);
-        callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV2.id(), initialBalance);
-        callData[1] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV2.id(), 200 ether);
+        callData[0] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, aaveV2.id(), initialBalance);
+        callData[1] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, aaveV2.id(), 200 ether);
 
         vault.rebalance(callData);
 
@@ -1859,11 +1926,11 @@ contract scUSDCv2Test is Test {
 
         assertFalse(vault.flashLoanInitiated(), "flash loan initiated");
 
-        assertApproxEqRel(vault.usdcBalance(), totalBefore, 0.01e18, "vault usdc balance");
+        assertApproxEqRel(_usdcBalance(), totalBefore, 0.01e18, "vault usdc balance");
         assertEq(vault.totalCollateral(), 0, "vault collateral");
         assertEq(vault.totalDebt(), 0, "vault debt");
         assertEq(weth.balanceOf(address(vault)), 0, "weth balance");
-        assertEq(vault.wethInvested(), 0, "weth invested");
+        assertEq(vault.targetTokenInvestedAmount(), 0, "weth invested");
     }
 
     function test_exitAllPositions_RepaysDebtAndReleasesCollateralOnOneProtocolWhenInProfit() public {
@@ -1872,8 +1939,8 @@ contract scUSDCv2Test is Test {
         deal(address(usdc), address(vault), initialBalance);
 
         bytes[] memory callData = new bytes[](2);
-        callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV2.id(), initialBalance);
-        callData[1] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV2.id(), 200 ether);
+        callData[0] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, aaveV2.id(), initialBalance);
+        callData[1] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, aaveV2.id(), 200 ether);
 
         vault.rebalance(callData);
 
@@ -1887,11 +1954,11 @@ contract scUSDCv2Test is Test {
 
         vault.exitAllPositions(0);
 
-        assertApproxEqRel(vault.usdcBalance(), totalBefore, 0.005e18, "vault usdc balance");
+        assertApproxEqRel(_usdcBalance(), totalBefore, 0.005e18, "vault usdc balance");
         assertEq(vault.totalCollateral(), 0, "vault collateral");
         assertEq(vault.totalDebt(), 0, "vault debt");
         assertEq(weth.balanceOf(address(vault)), 0, "weth balance");
-        assertEq(vault.wethInvested(), 0, "weth invested");
+        assertEq(vault.targetTokenInvestedAmount(), 0, "weth invested");
     }
 
     function test_exitAllPositions_RepaysDebtAndReleasesCollateralOnAllProtocols() public {
@@ -1903,12 +1970,17 @@ contract scUSDCv2Test is Test {
         deal(address(usdc), address(vault), initialCollateralPerProtocol * 3);
 
         bytes[] memory callData = new bytes[](6);
-        callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV3.id(), initialCollateralPerProtocol);
-        callData[1] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV3.id(), initialDebtPerProtocol);
-        callData[2] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV2.id(), initialCollateralPerProtocol);
-        callData[3] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV2.id(), initialDebtPerProtocol);
-        callData[4] = abi.encodeWithSelector(scUSDCv2.supply.selector, euler.id(), initialCollateralPerProtocol);
-        callData[5] = abi.encodeWithSelector(scUSDCv2.borrow.selector, euler.id(), initialDebtPerProtocol);
+        callData[0] =
+            abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, aaveV3.id(), initialCollateralPerProtocol);
+        callData[1] =
+            abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, aaveV3.id(), initialDebtPerProtocol);
+        callData[2] =
+            abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, aaveV2.id(), initialCollateralPerProtocol);
+        callData[3] =
+            abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, aaveV2.id(), initialDebtPerProtocol);
+        callData[4] =
+            abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, euler.id(), initialCollateralPerProtocol);
+        callData[5] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, euler.id(), initialDebtPerProtocol);
 
         vault.rebalance(callData);
 
@@ -1920,7 +1992,7 @@ contract scUSDCv2Test is Test {
 
         vault.exitAllPositions(0);
 
-        assertApproxEqRel(vault.usdcBalance(), totalBefore, 0.01e18, "vault usdc balance");
+        assertApproxEqRel(_usdcBalance(), totalBefore, 0.01e18, "vault usdc balance");
         assertEq(vault.totalCollateral(), 0, "vault collateral");
         assertEq(vault.totalDebt(), 0, "vault debt");
     }
@@ -1934,16 +2006,21 @@ contract scUSDCv2Test is Test {
         deal(address(usdc), address(vault), initialCollateralPerProtocol * 3);
 
         bytes[] memory callData = new bytes[](6);
-        callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV3.id(), initialCollateralPerProtocol);
-        callData[1] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV3.id(), initialDebtPerProtocol);
-        callData[2] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV2.id(), initialCollateralPerProtocol);
-        callData[3] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV2.id(), initialDebtPerProtocol);
-        callData[4] = abi.encodeWithSelector(scUSDCv2.supply.selector, euler.id(), initialCollateralPerProtocol);
-        callData[5] = abi.encodeWithSelector(scUSDCv2.borrow.selector, euler.id(), initialDebtPerProtocol);
+        callData[0] =
+            abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, aaveV3.id(), initialCollateralPerProtocol);
+        callData[1] =
+            abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, aaveV3.id(), initialDebtPerProtocol);
+        callData[2] =
+            abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, aaveV2.id(), initialCollateralPerProtocol);
+        callData[3] =
+            abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, aaveV2.id(), initialDebtPerProtocol);
+        callData[4] =
+            abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, euler.id(), initialCollateralPerProtocol);
+        callData[5] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, euler.id(), initialDebtPerProtocol);
 
         vault.rebalance(callData);
 
-        uint256 invested = vault.wethInvested();
+        uint256 invested = vault.targetTokenInvestedAmount();
         uint256 debt = vault.totalDebt();
         uint256 collateral = vault.totalCollateral();
 
@@ -1958,8 +2035,8 @@ contract scUSDCv2Test is Test {
         deal(address(usdc), address(vault), initialBalance);
 
         bytes[] memory callData = new bytes[](2);
-        callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV2.id(), initialBalance);
-        callData[1] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV2.id(), 200 ether);
+        callData[0] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, aaveV2.id(), initialBalance);
+        callData[1] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, aaveV2.id(), 200 ether);
 
         vault.rebalance(callData);
 
@@ -1969,7 +2046,7 @@ contract scUSDCv2Test is Test {
 
         uint256 invalidEndUsdcBalanceMin = vault.totalAssets().mulWadDown(1.05e18);
 
-        vm.expectRevert(EndUsdcBalanceTooLow.selector);
+        vm.expectRevert(EndAssetBalanceTooLow.selector);
         vault.exitAllPositions(invalidEndUsdcBalanceMin);
     }
 
@@ -1979,8 +2056,8 @@ contract scUSDCv2Test is Test {
         deal(address(usdc), address(vault), initialBalance);
 
         bytes[] memory callData = new bytes[](2);
-        callData[0] = abi.encodeWithSelector(scUSDCv2.supply.selector, aaveV2.id(), initialBalance);
-        callData[1] = abi.encodeWithSelector(scUSDCv2.borrow.selector, aaveV2.id(), 200 ether);
+        callData[0] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, aaveV2.id(), initialBalance);
+        callData[1] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, aaveV2.id(), 200 ether);
 
         vault.rebalance(callData);
 
@@ -1990,70 +2067,68 @@ contract scUSDCv2Test is Test {
 
         uint256 invalidEndUsdcBalanceMin = vault.totalAssets().mulWadDown(1.05e18);
 
-        vm.expectRevert(EndUsdcBalanceTooLow.selector);
+        vm.expectRevert(EndAssetBalanceTooLow.selector);
         vault.exitAllPositions(invalidEndUsdcBalanceMin);
     }
 
-    /// #zeroExSwap ///
+    /// #swapTokens ///
 
-    function test_zeroExSwap_FailsIfCallerIsNotKeeper() public {
+    function test_swapTokens_FailsIfCallerIsNotKeeper() public {
         _setUpForkAtBlock(EUL_SWAP_BLOCK);
         vm.startPrank(alice);
         vm.expectRevert(CallerNotKeeper.selector);
-        vault.zeroExSwap(ERC20(C.EULER_REWARDS_TOKEN), ERC20(C.USDC), 0, bytes("0"), 0);
+        vault.swapTokens(C.EULER_REWARDS_TOKEN, C.USDC, 1, 0, bytes("0"));
     }
 
-    // function test_zeroExSwap_SwapsEulerForUsdc() public {
-    //     _setUpForkAtBlock(EUL_SWAP_BLOCK);
+    function test_swapTokens_SwapsEulerForUsdc() public {
+        _setUpForkAtBlock(EUL_SWAP_BLOCK);
 
-    //     uint256 initialUsdcBalance = 2_000e6;
-    //     deal(address(usdc), address(vault), initialUsdcBalance);
-    //     deal(C.EULER_REWARDS_TOKEN, address(vault), EUL_AMOUNT * 2);
+        uint256 initialUsdcBalance = 2_000e6;
+        deal(address(usdc), address(vault), initialUsdcBalance);
+        deal(C.EULER_REWARDS_TOKEN, address(vault), EUL_AMOUNT * 2);
 
-    //     assertEq(ERC20(C.EULER_REWARDS_TOKEN).balanceOf(address(vault)), EUL_AMOUNT * 2, "euler initial balance");
-    //     assertEq(vault.usdcBalance(), initialUsdcBalance, "usdc balance");
-    //     assertEq(vault.totalAssets(), initialUsdcBalance, "total assets");
+        assertEq(ERC20(C.EULER_REWARDS_TOKEN).balanceOf(address(vault)), EUL_AMOUNT * 2, "euler initial balance");
+        assertEq(_usdcBalance(), initialUsdcBalance, "usdc balance");
+        assertEq(vault.totalAssets(), initialUsdcBalance, "total assets");
 
-    //     vault.zeroExSwap(ERC20(C.EULER_REWARDS_TOKEN), ERC20(C.USDC), EUL_AMOUNT, EUL_SWAP_DATA, EUL_SWAP_USDC_RECEIVED);
+        vault.swapTokens(C.EULER_REWARDS_TOKEN, C.USDC, EUL_AMOUNT, EUL_SWAP_USDC_RECEIVED, EUL_SWAP_DATA);
 
-    //     assertEq(ERC20(C.EULER_REWARDS_TOKEN).balanceOf(address(vault)), EUL_AMOUNT, "euler end balance");
-    //     assertEq(vault.totalAssets(), initialUsdcBalance + EUL_SWAP_USDC_RECEIVED, "vault total assets");
-    //     assertEq(vault.usdcBalance(), initialUsdcBalance + EUL_SWAP_USDC_RECEIVED, "vault usdc balance");
-    //     assertEq(ERC20(C.EULER_REWARDS_TOKEN).allowance(address(vault), C.ZERO_EX_ROUTER), 0, "0x token allowance");
-    // }
+        assertEq(ERC20(C.EULER_REWARDS_TOKEN).balanceOf(address(vault)), EUL_AMOUNT, "euler end balance");
+        assertEq(vault.totalAssets(), initialUsdcBalance + EUL_SWAP_USDC_RECEIVED, "vault total assets");
+        assertEq(_usdcBalance(), initialUsdcBalance + EUL_SWAP_USDC_RECEIVED, "vault usdc balance");
+        assertEq(ERC20(C.EULER_REWARDS_TOKEN).allowance(address(vault), C.ZERO_EX_ROUTER), 0, "0x token allowance");
+    }
 
-    // function test_zeroExSwap_EmitsEventOnSuccessfulSwap() public {
-    //     _setUpForkAtBlock(EUL_SWAP_BLOCK);
+    function test_swapTokens_EmitsEventOnSuccessfulSwap() public {
+        _setUpForkAtBlock(EUL_SWAP_BLOCK);
 
-    //     deal(C.EULER_REWARDS_TOKEN, address(vault), EUL_AMOUNT);
+        deal(C.EULER_REWARDS_TOKEN, address(vault), EUL_AMOUNT);
 
-    //     vm.expectEmit(true, true, true, true);
-    //     emit TokenSwapped(C.EULER_REWARDS_TOKEN, EUL_AMOUNT, EUL_SWAP_USDC_RECEIVED);
+        vm.expectEmit(true, true, true, true);
+        emit TokenSwapped(C.EULER_REWARDS_TOKEN, C.USDC, EUL_AMOUNT, EUL_SWAP_USDC_RECEIVED);
 
-    //     vault.zeroExSwap(ERC20(C.EULER_REWARDS_TOKEN), ERC20(C.USDC), EUL_AMOUNT, EUL_SWAP_DATA, 0);
-    // }
+        vault.swapTokens(C.EULER_REWARDS_TOKEN, C.USDC, EUL_AMOUNT, 0, EUL_SWAP_DATA);
+    }
 
-    // function test_zeroExSwap_FailsIfUsdcAmountReceivedIsLessThanMin() public {
-    //     _setUpForkAtBlock(EUL_SWAP_BLOCK);
+    function test_swapTokens_FailsIfUsdcAmountReceivedIsLessThanMin() public {
+        _setUpForkAtBlock(EUL_SWAP_BLOCK);
 
-    //     deal(C.EULER_REWARDS_TOKEN, address(vault), EUL_AMOUNT);
+        deal(C.EULER_REWARDS_TOKEN, address(vault), EUL_AMOUNT);
 
-    //     vm.expectRevert(AmountReceivedBelowMin.selector);
-    //     vault.zeroExSwap(
-    //         ERC20(C.EULER_REWARDS_TOKEN), ERC20(C.USDC), EUL_AMOUNT, EUL_SWAP_DATA, EUL_SWAP_USDC_RECEIVED + 1
-    //     );
-    // }
+        vm.expectRevert(AmountReceivedBelowMin.selector);
+        vault.swapTokens(C.EULER_REWARDS_TOKEN, C.USDC, EUL_AMOUNT, EUL_SWAP_USDC_RECEIVED + 1, EUL_SWAP_DATA);
+    }
 
-    // function test_zeroExSwap_FailsIfSwapIsNotSucessful() public {
-    //     _setUpForkAtBlock(EUL_SWAP_BLOCK);
+    function test_swapTokens_FailsIfSwapIsNotSucessful() public {
+        _setUpForkAtBlock(EUL_SWAP_BLOCK);
 
-    //     deal(C.EULER_REWARDS_TOKEN, address(vault), EUL_AMOUNT);
+        deal(C.EULER_REWARDS_TOKEN, address(vault), EUL_AMOUNT);
 
-    //     bytes memory invalidSwapData = hex"6af479b20000";
+        bytes memory invalidSwapData = hex"6af479b20000";
 
-    //     vm.expectRevert("Address: low-level call failed");
-    //     vault.zeroExSwap(ERC20(C.EULER_REWARDS_TOKEN), ERC20(C.USDC), EUL_AMOUNT, invalidSwapData, 0);
-    // }
+        vm.expectRevert(Errors.FailedCall.selector);
+        vault.swapTokens(C.EULER_REWARDS_TOKEN, C.USDC, EUL_AMOUNT, 0, invalidSwapData);
+    }
 
     /// #claimRewards ///
 
@@ -2130,8 +2205,8 @@ contract scUSDCv2Test is Test {
     }
 
     function _deployAndSetUpVault() internal {
-        priceConverter = new PriceConverter(address(this));
-        swapper = new Swapper();
+        priceConverter = new UsdcWethPriceConverter();
+        swapper = new UsdcWethSwapperHarness();
 
         vault = new scUSDCv2(address(this), keeper, wethVault, priceConverter, swapper);
 
@@ -2169,5 +2244,15 @@ contract scUSDCv2Test is Test {
         }
 
         revert("unknown protocol");
+    }
+
+    function _usdcBalance() internal view returns (uint256) {
+        return vault.asset().balanceOf(address(vault));
+    }
+}
+
+contract UsdcWethSwapperHarness is UsdcWethSwapper {
+    function swapRouter() public pure override(ISwapper, UniversalSwapper) returns (address) {
+        return C.ZERO_EX_ROUTER;
     }
 }

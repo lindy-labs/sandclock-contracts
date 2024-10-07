@@ -11,6 +11,7 @@ import {MainnetAddresses} from "script/base/MainnetAddresses.sol";
 import {scWETHv2Keeper} from "src/steth/scWETHv2Keeper.sol";
 import {scWETHv2} from "src/steth/scWETHv2.sol";
 import {InvestScWETHv2Keeper} from "script/v2/keeper-actions/InvestScWETHv2Keeper.s.sol";
+import {IScETHPriceConverter} from "src/steth/priceConverter/IScETHPriceConverter.sol";
 
 contract InvestScWETHv2KeeperTest is Test {
     using FixedPointMathLib for uint256;
@@ -52,7 +53,8 @@ contract InvestScWETHv2KeeperTest is Test {
         // assert initial vault state
         uint256 investableAmount = weth.balanceOf(address(vault)) - vault.minimumFloatAmount();
         assertTrue(investableAmount > 0, "investableAmount should be greater than 0");
-        uint256 initialCollateralInWeth = vault.priceConverter().wstEthToEth(vault.totalCollateral());
+        uint256 initialCollateralInWeth =
+            IScETHPriceConverter(address(vault.priceConverter())).wstEthToEth(vault.totalCollateral());
         uint256 targetLtv = 0.9e18;
         assertEq(script.aaveV3TargetLtv(), targetLtv, "targetLtv should be 0.9e18");
 
@@ -62,7 +64,8 @@ contract InvestScWETHv2KeeperTest is Test {
         assertApproxEqAbs(
             weth.balanceOf(address(vault)) - vault.minimumFloatAmount(), 0, 1, "investableAmount should be 0"
         );
-        uint256 finalCollateralInWeth = vault.priceConverter().wstEthToEth(vault.totalCollateral());
+        uint256 finalCollateralInWeth =
+            IScETHPriceConverter(address(vault.priceConverter())).wstEthToEth(vault.totalCollateral());
         assertApproxEqRel(
             finalCollateralInWeth - initialCollateralInWeth,
             investableAmount.divWadUp(1e18 - targetLtv),

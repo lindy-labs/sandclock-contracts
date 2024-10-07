@@ -11,7 +11,7 @@ import {IwstETH} from "../src/interfaces/lido/IwstETH.sol";
 import {ILido} from "../src/interfaces/lido/ILido.sol";
 import {Constants as C} from "../src/lib/Constants.sol";
 
-import {Swapper} from "../src/steth/Swapper.sol";
+import {Swapper} from "../src/steth/swapper/Swapper.sol";
 
 contract SwapperTest is Test {
     using Address for address;
@@ -30,24 +30,74 @@ contract SwapperTest is Test {
         ERC20(C.DAI).approve(C.SDAI, type(uint256).max);
     }
 
-    function test_uniswapSwapExactOutputMultihop() public {
-        // dai to weth
-        uint256 daiAmount = 100_000 ether;
-        deal(C.DAI, address(this), daiAmount);
+    function test_uniswapSwapExactInput() public {
+        uint256 usdcBalance = 100_000e6;
+        deal(C.USDC, address(this), usdcBalance);
+
+        bytes memory result = address(swapper).functionDelegateCall(
+            abi.encodeWithSelector(swapper.uniswapSwapExactInput.selector, C.USDC, C.WETH, usdcBalance, 20 ether, 500)
+        );
+
+        uint256 wethReceived = abi.decode(result, (uint256));
+
+        assertEq(ERC20(C.USDC).balanceOf(address(this)), 0, "usdc balance not spent");
+        assertEq(ERC20(C.WETH).balanceOf(address(this)), wethReceived, "weth balance should be equal to wethReceived");
+    }
+
+    function test_uniswapSwapExactOutput() public {
+        uint256 usdcBalance = 100_000e6;
+        deal(C.USDC, address(this), usdcBalance);
+        uint256 ethToBuy = 25 ether;
+
+        bytes memory result = address(swapper).functionDelegateCall(
+            abi.encodeWithSelector(swapper.uniswapSwapExactOutput.selector, C.USDC, C.WETH, ethToBuy, usdcBalance, 500)
+        );
+
+        uint256 usdcSpent = abi.decode(result, (uint256));
+
+        assertEq(ERC20(C.USDC).balanceOf(address(this)), usdcBalance - usdcSpent, "usdc balance not spent");
+        assertEq(ERC20(C.WETH).balanceOf(address(this)), ethToBuy, "weth balance should be equal to wethReceived");
+    }
+
+    function test_uniswapSwapExactInputMultihop() public {
+        uint256 daiBalance = 100_000 ether;
+        deal(C.DAI, address(this), daiBalance);
 
         bytes memory result = address(swapper).functionDelegateCall(
             abi.encodeWithSelector(
-                swapper.uniswapSwapExactOutputMultihop.selector,
+                swapper.uniswapSwapExactInputMultihop.selector,
                 C.DAI,
-                2 ether,
-                daiAmount,
-                abi.encodePacked(C.WETH, uint24(500), C.USDC, uint24(100), C.DAI)
+                daiBalance,
+                20 ether,
+                abi.encodePacked(C.DAI, uint24(100), C.USDC, uint24(500), C.WETH)
             )
         );
 
         uint256 wethReceived = abi.decode(result, (uint256));
 
-        console.log("wethReceived", wethReceived);
+        assertEq(ERC20(C.WETH).balanceOf(address(this)), wethReceived, "weth balance should be equal to wethReceived");
+        assertEq(ERC20(C.DAI).balanceOf(address(this)), 0, "dai balance not spent");
+    }
+
+    function test_uniswapSwapExactOutputMultihop() public {
+        uint256 daiBalance = 100_000 ether;
+        deal(C.DAI, address(this), daiBalance);
+        uint256 ethToBuy = 20 ether;
+
+        bytes memory result = address(swapper).functionDelegateCall(
+            abi.encodeWithSelector(
+                swapper.uniswapSwapExactOutputMultihop.selector,
+                C.DAI,
+                ethToBuy,
+                daiBalance, // amount in maximum
+                abi.encodePacked(C.WETH, uint24(500), C.USDC, uint24(100), C.DAI)
+            )
+        );
+
+        uint256 daiSpent = abi.decode(result, (uint256));
+
+        assertEq(ERC20(C.DAI).balanceOf(address(this)), daiBalance - daiSpent, "dai balance");
+        assertEq(ERC20(C.WETH).balanceOf(address(this)), ethToBuy, "weth balance should be equal to wethReceived");
     }
 
     function test_lidoSwapWethToWstEth_usesCurveForSmallAmounts() public {
@@ -102,34 +152,6 @@ contract SwapperTest is Test {
 
         // when using lido, stEth received should be equal to weth amount (with possible rounding errors)
         assertApproxEqAbs(stEthAmountReceived, wethAmount, 2, "stEthAmount should be equal to wethAmount");
-    }
-
-    function test_swapWethToSdai() public {
-        uint256 wethAmount = 1000 ether;
-        deal(C.WETH, address(this), wethAmount);
-
-        bytes memory result = address(swapper).functionDelegateCall(
-            abi.encodeWithSelector(swapper.swapWethToSdai.selector, wethAmount, 1)
-        );
-
-        uint256 sdaiReceived = abi.decode(result, (uint256));
-
-        assertEq(sdaiReceived, 2769454163646490100581023, "weth to sdai swap error");
-    }
-
-    function test_swapSdaiForExactWeth() public {
-        uint256 sDaiAmount = 100000 ether;
-        deal(C.SDAI, address(this), sDaiAmount);
-
-        uint256 wethToReceive = 7 ether;
-
-        address(swapper).functionDelegateCall(
-            abi.encodeWithSelector(swapper.swapSdaiForExactWeth.selector, sDaiAmount, wethToReceive)
-        );
-
-        uint256 wethReceived = ERC20(C.WETH).balanceOf(address(this));
-
-        assertEq(wethReceived, wethToReceive);
     }
 
     receive() external payable {}
