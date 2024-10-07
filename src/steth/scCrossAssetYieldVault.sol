@@ -6,8 +6,8 @@ import {
     FlashLoanAmountZero,
     EndAssetBalanceTooLow,
     FloatBalanceTooLow,
-    TargetTokenMustBeSame,
-    WithdrawInvestedAmountFirst
+    TargetTokenMismatch,
+    InvestedAmountNotWithdrawn
 } from "../errors/scErrors.sol";
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
@@ -83,21 +83,16 @@ abstract contract scCrossAssetYieldVault is BaseV2Vault {
     //////////////////////////////////////////////////////////////*/
 
     /**
-     * @notice Updates the address of the target vault
-     * @dev Make sure to disinvest all invested amount from previous target vault
-     * @dev The new target vault must have the same target token as previous one.
-     * @param _newTargetVault address of the new target vault
+     * @notice Updates the address of the target vault.
+     * @dev Reverts if invested amount is not zero or if the target token (underlying asset) is different.
+     * @param _newTargetVault address of the new target vault.
      */
     function updateTargetVault(ERC4626 _newTargetVault) external {
         _onlyAdmin();
 
-        if (_newTargetVault.asset() != targetToken) {
-            revert TargetTokenMustBeSame();
-        }
+        if (_newTargetVault.asset() != targetToken) revert TargetTokenMismatch();
 
-        if (targetTokenInvestedAmount() != 0) {
-            revert WithdrawInvestedAmountFirst();
-        }
+        if (targetTokenInvestedAmount() != 0) revert InvestedAmountNotWithdrawn();
 
         targetVault = _newTargetVault;
 

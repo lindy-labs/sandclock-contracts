@@ -160,12 +160,12 @@ contract scUSDCv2Test is Test {
         vault.updateTargetVault(wethVault);
     }
 
-    function test_updateTargetVault_FailsifTargetTokenDifferent() public {
+    function test_updateTargetVault_FailsifTargetTokenIsDifferentThanPreviousOne() public {
         _setUpForkAtBlock(BLOCK_AFTER_EULER_EXPLOIT);
 
         ERC4626 fakeVault = new FakeTargetVault(ERC20(C.USDT));
 
-        vm.expectRevert(TargetTokenMustBeSame.selector);
+        vm.expectRevert(TargetTokenMismatch.selector);
         vault.updateTargetVault(fakeVault);
     }
 
@@ -180,7 +180,7 @@ contract scUSDCv2Test is Test {
         callData[1] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, aaveV3.id(), initialDebt);
         vault.rebalance(callData);
 
-        vm.expectRevert(WithdrawInvestedAmountFirst.selector);
+        vm.expectRevert(InvestedAmountNotWithdrawn.selector);
         vault.updateTargetVault(wethVault);
     }
 
@@ -203,6 +203,7 @@ contract scUSDCv2Test is Test {
         emit TargetVaultUpdated(address(newTargetVault));
 
         vault.updateTargetVault(newTargetVault);
+        assertEq(address(vault.targetVault()), address(newTargetVault), "target vault not updated");
     }
 
     /// #setPriceConverter ///
