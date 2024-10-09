@@ -31,6 +31,10 @@ library Constants {
     address public constant DAI = 0x6B175474E89094C44Da98b954EedeAC495271d0F;
     // address of the sDAI token contract
     address public constant SDAI = 0x83F20F44975D03b1b09e64809B757c47f942BEeA;
+    // address of the USDS token contract
+    address public constant USDS = 0xdC035D45d973E3EC169d2276DDab16f1e407384F;
+    // address of the sUSDS token contract
+    address public constant SUSDS = 0xa3931d71877C0E7a3148CB7Eb4463524FEc27fbD;
     // address of the USDT token contract
     address public constant USDT = 0xdAC17F958D2ee523a2206206994597C13D831ec7;
 
@@ -117,4 +121,7 @@ library Constants {
 
     // Morpho
     address public constant MORPHO = 0x33333aea097c193e66081E930c33020272b33333;
+
+    // Sky
+    address public constant DAI_USDS_CONVERTER = 0x3225737a9Bbb6473CB4a45b7244ACa2BeFdB276A;
 }
