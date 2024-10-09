@@ -11,7 +11,7 @@ import {MainnetAddresses} from "script/base/MainnetAddresses.sol";
 import {scWETHv2Keeper} from "src/steth/scWETHv2Keeper.sol";
 import {scWETHv2} from "src/steth/scWETHv2.sol";
 import {InvestScWETHv2Keeper} from "script/v2/keeper-actions/InvestScWETHv2Keeper.s.sol";
-import {IScETHPriceConverter} from "src/steth/priceConverter/IPriceConverter.sol";
+import {IScETHPriceConverter} from "src/steth/priceConverter/IScETHPriceConverter.sol";
 
 contract InvestScWETHv2KeeperTest is Test {
     using FixedPointMathLib for uint256;

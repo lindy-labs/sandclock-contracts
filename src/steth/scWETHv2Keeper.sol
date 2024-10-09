@@ -8,7 +8,7 @@ import {AccessControl} from "openzeppelin-contracts/access/AccessControl.sol";
 import {scWETHv2} from "./scWETHv2.sol";
 import {Constants as C} from "../lib/Constants.sol";
 import {ZeroAddress, ProtocolNotSupported, Check} from "../errors/scErrors.sol";
-import {IScETHPriceConverter} from "./priceConverter/IPriceConverter.sol";
+import {IScETHPriceConverter} from "./priceConverter/IScETHPriceConverter.sol";
 
 /**
  * @title scWETHv2Keeper

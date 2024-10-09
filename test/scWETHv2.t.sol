@@ -124,15 +124,15 @@ contract scWETHv2Test is Test {
 
         vm.expectRevert(CallerNotAdmin.selector);
         vm.prank(alice);
-        vault.whiteListOutToken(ERC20(C.USDC), true);
+        vault.whiteListToken(ERC20(C.USDC), true);
 
         vm.expectRevert(ZeroAddress.selector);
-        vault.whiteListOutToken(ERC20(address(0x00)), true);
+        vault.whiteListToken(ERC20(address(0x00)), true);
 
-        vault.whiteListOutToken(ERC20(C.USDC), true);
+        vault.whiteListToken(ERC20(C.USDC), true);
         assertEq(vault.isTokenWhitelisted(ERC20(C.USDC)), true);
 
-        vault.whiteListOutToken(ERC20(C.USDC), false);
+        vault.whiteListToken(ERC20(C.USDC), false);
         assertEq(vault.isTokenWhitelisted(ERC20(C.USDC)), false);
     }
 
