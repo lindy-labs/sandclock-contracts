@@ -40,7 +40,7 @@ contract ReallocateScWethV2Test is Test {
     uint256 aaveV3InitPercent;
     uint256 compoundInitPercent;
 
-    function setUp() public {
+    constructor() {
         vm.createFork(vm.envString("RPC_URL_MAINNET"));
         vm.selectFork(mainnetFork);
         vm.rollFork(18018649);

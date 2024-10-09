@@ -23,7 +23,7 @@ contract MorphoAaveV3ScWethAdapterTest is Test {
 
     uint256 initWstEthAmount = 100 ether;
 
-    function setUp() public {
+    constructor() {
         vm.createFork(vm.envString("RPC_URL_MAINNET"));
         vm.selectFork(mainnetFork);
         vm.rollFork(17180994);

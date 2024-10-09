@@ -9,7 +9,6 @@ import {Constants as C} from "../lib/Constants.sol";
 import {scCrossAssetYieldVault} from "./scCrossAssetYieldVault.sol";
 import {ISinglePairPriceConverter} from "./priceConverter/ISinglePairPriceConverter.sol";
 import {ISinglePairSwapper} from "./swapper/ISinglePairSwapper.sol";
-import {MainnetAddresses as MA} from "../../script/base/MainnetAddresses.sol";
 
 /**
  * @title scSDAI

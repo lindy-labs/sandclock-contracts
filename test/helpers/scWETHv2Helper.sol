@@ -20,7 +20,7 @@ contract scWETHv2Helper {
     }
 
     function getCollateralInWeth(IAdapter adapter) public view returns (uint256) {
-        return priceConverter.wstEthToEth(adapter.getCollateral(address(vault)));
+        return priceConverter.wstEthToEth(vault.getCollateral(adapter.id()));
     }
 
     /// @notice returns the net leverage that the strategy is using right now (1e18 = 100%)

@@ -18,7 +18,7 @@ import {Constants} from "../../src/lib/Constants.sol";
 contract RebalanceScDaiTest is Test {
     uint256 mainnetFork;
 
-    function setUp() public {
+    constructor() {
         mainnetFork = vm.createFork(vm.envString("RPC_URL_MAINNET"));
         // vm.selectFork(mainnetFork);
         // vm.rollFork(18488739);
