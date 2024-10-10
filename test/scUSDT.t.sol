@@ -61,7 +61,7 @@ contract scUSDTTest is Test {
 
     uint256 pps;
 
-    constructor() {
+    function setUp() public {
         mainnetFork = vm.createFork(vm.envString("RPC_URL_MAINNET"));
         vm.selectFork(mainnetFork);
         vm.rollFork(20287837);

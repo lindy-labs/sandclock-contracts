@@ -5,6 +5,7 @@ import "forge-std/console2.sol";
 import "forge-std/Test.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {WETH} from "solmate/tokens/WETH.sol";
+import {ERC4626} from "solmate/mixins/ERC4626.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 import {IPool} from "aave-v3/interfaces/IPool.sol";
 import {IAToken} from "aave-v3/interfaces/IAToken.sol";
@@ -53,6 +54,7 @@ contract scUSDCv2Test is Test {
     event RewardsClaimed(uint256 adapterId);
     event SwapperUpdated(address indexed admin, ISwapper newSwapper);
     event PriceConverterUpdated(address indexed admin, address newPriceConverter);
+    event TargetVaultUpdated(address newTargetVault);
 
     uint256 constant EUL_SWAP_BLOCK = 16744453; // block at which EUL->USDC swap data was fetched
     uint256 constant EUL_AMOUNT = 1_000e18;
@@ -125,6 +127,52 @@ contract scUSDCv2Test is Test {
 
         vm.expectRevert(ZeroAddress.selector);
         new scUSDCv2(address(this), keeper, wethVault, priceConverter, swapper);
+    }
+
+    /// #updateTargetVault ///
+
+    function test_updateTargetVault_FailsIfCallerNotAdmin() public {
+        vm.prank(alice);
+        vm.expectRevert(CallerNotAdmin.selector);
+        vault.updateTargetVault(wethVault);
+    }
+
+    function test_updateTargetVault_FailsifTargetTokenIsDifferentThanPreviousOne() public {
+        ERC4626 fakeVault = new FakeTargetVault(ERC20(C.USDT));
+
+        vm.expectRevert(TargetTokenMismatch.selector);
+        vault.updateTargetVault(fakeVault);
+    }
+
+    function test_updateTargetVault_FailsIfInvestedAmountNotZero() public {
+        uint256 initialBalance = 1_000_000e6;
+        uint256 initialDebt = 100 ether;
+        _setBalance(address(vault), initialBalance);
+
+        bytes[] memory callData = _getSupplyAndBorrowCallData(new bytes[](2), aaveV3.id(), initialBalance, initialDebt);
+        vault.rebalance(callData);
+
+        vm.expectRevert(InvestedAmountNotWithdrawn.selector);
+        vault.updateTargetVault(wethVault);
+    }
+
+    function test_updateTargetVault_EmitsEvent() public {
+        uint256 initialBalance = 1_000_000e6;
+        uint256 initialDebt = 100 ether;
+        _setBalance(address(vault), initialBalance);
+
+        bytes[] memory callData = _getSupplyAndBorrowCallData(new bytes[](2), aaveV3.id(), initialBalance, initialDebt);
+        vault.rebalance(callData);
+
+        vault.disinvest(vault.targetTokenInvestedAmount());
+
+        ERC4626 newTargetVault = new FakeTargetVault(weth);
+
+        vm.expectEmit(true, true, true, true);
+        emit TargetVaultUpdated(address(newTargetVault));
+
+        vault.updateTargetVault(newTargetVault);
+        assertEq(address(vault.targetVault()), address(newTargetVault), "target vault not updated");
     }
 
     /// #setPriceConverter ///
@@ -503,9 +551,7 @@ contract scUSDCv2Test is Test {
         uint256 initialDebt = 100 ether;
         uint256 disinvestAmount = 50 ether;
 
-        bytes[] memory callData = new bytes[](2);
-        callData[0] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, aaveV3.id(), initialBalance);
-        callData[1] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, aaveV3.id(), initialDebt);
+        bytes[] memory callData = _getSupplyAndBorrowCallData(new bytes[](2), aaveV3.id(), initialBalance, initialDebt);
         vault.rebalance(callData);
 
         vault.disinvest(disinvestAmount);
@@ -519,9 +565,7 @@ contract scUSDCv2Test is Test {
         uint256 initialDebt = 100 ether;
         uint256 disinvestAmount = 1 ether;
 
-        bytes[] memory callData = new bytes[](2);
-        callData[0] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, aaveV3.id(), initialBalance);
-        callData[1] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, aaveV3.id(), initialDebt);
+        bytes[] memory callData = _getSupplyAndBorrowCallData(new bytes[](2), aaveV3.id(), initialBalance, initialDebt);
         vault.rebalance(callData);
 
         vm.expectEmit(true, true, true, true);
@@ -1549,7 +1593,7 @@ contract scUSDCv2Test is Test {
     }
 
     function testFuzz_withdraw(uint256 _amount, uint256 _withdrawAmount) public {
-        _amount = bound(_amount, 1e6, 4_000_000e6); // upper limit constrained by weth available on aave v3
+        _amount = bound(_amount, 1e6, 4_000_000e6); // upper limit constrained by weth available on aave v3 at the fork block number
         _setBalance(alice, _amount);
 
         vm.startPrank(alice);
@@ -1574,7 +1618,7 @@ contract scUSDCv2Test is Test {
     }
 
     function testFuzz_withdraw_whenInProfit(uint256 _amount, uint256 _withdrawAmount) public {
-        _amount = bound(_amount, 1e6, 10_000_000e6);
+        _amount = bound(_amount, 1e6, 10_000_000e6); // upper limit constrained by weth available on aave v3
         _setBalance(alice, _amount);
 
         vm.startPrank(alice);
@@ -1987,5 +2031,13 @@ contract scUSDCv2Test is Test {
 contract UsdcWethSwapperHarness is UsdcWethSwapper {
     function swapRouter() public pure override(ISwapper, UniversalSwapper) returns (address) {
         return C.ZERO_EX_ROUTER;
+    }
+}
+
+contract FakeTargetVault is ERC4626 {
+    constructor(ERC20 _asset) ERC4626(_asset, "Fake TARGET VAULT", "scFake") {}
+
+    function totalAssets() public pure override returns (uint256) {
+        return 1e18;
     }
 }
