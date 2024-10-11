@@ -6,12 +6,12 @@ import {WETH} from "solmate/tokens/WETH.sol";
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 import {Address} from "openzeppelin-contracts/utils/Address.sol";
 
-import {Constants as C} from "../../lib/Constants.sol";
-import {AmountReceivedBelowMin} from "../../errors/scErrors.sol";
-import {ISwapRouter} from "../../interfaces/uniswap/ISwapRouter.sol";
-import {ILido} from "../../interfaces/lido/ILido.sol";
-import {IwstETH} from "../../interfaces/lido/IwstETH.sol";
-import {ICurvePool} from "../../interfaces/curve/ICurvePool.sol";
+import {Constants as C} from "./Constants.sol";
+import {AmountReceivedBelowMin} from "src/errors/scErrors.sol";
+import {ISwapRouter} from "src/interfaces/uniswap/ISwapRouter.sol";
+import {ILido} from "src/interfaces/lido/ILido.sol";
+import {IwstETH} from "src/interfaces/lido/IwstETH.sol";
+import {ICurvePool} from "src/interfaces/curve/ICurvePool.sol";
 
 /**
  * @title SwapperLib

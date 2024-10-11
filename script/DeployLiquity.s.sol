@@ -4,7 +4,7 @@ pragma solidity ^0.8.13;
 import "forge-std/console2.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
-import {SwapperLib} from "src/steth/swapper/SwapperLib.sol";
+import {SwapperLib} from "src/lib/SwapperLib.sol";
 import {MainnetAddresses} from "script/base/MainnetAddresses.sol";
 import {MainnetDeployBase} from "script/base/MainnetDeployBase.sol";
 import {Constants as C} from "src/lib/Constants.sol";

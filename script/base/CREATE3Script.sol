@@ -17,4 +17,12 @@ abstract contract CREATE3Script is Script {
 
         return keccak256(bytes(string.concat(name, "-v", version)));
     }
+
+    // function predictDeploy(IERC4626 _vault) public view returns (YieldStreams predicted) {
+    //     predicted = YieldStreams(CREATE3.getDeployed(getSalt(_vault), address(this)));
+    // }
+
+    // function isDeployed(IERC4626 _vault) public view returns (bool) {
+    //     return address(predictDeploy(_vault)).code.length > 0;
+    // }
 }

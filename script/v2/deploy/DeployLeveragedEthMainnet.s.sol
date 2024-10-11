@@ -3,7 +3,7 @@ pragma solidity ^0.8.13;
 
 import "forge-std/console2.sol";
 
-import {SwapperLib} from "src/steth/swapper/SwapperLib.sol";
+import {SwapperLib} from "src/lib/SwapperLib.sol";
 import {DeployScWethV2AndScUsdcV2} from "script/base/DeployScWethV2AndScUsdcV2.sol";
 import {scWETH} from "src/steth/scWETH.sol";
 import {scUSDC} from "src/steth/scUSDC.sol";

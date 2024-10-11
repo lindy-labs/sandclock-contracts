@@ -6,7 +6,7 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 import {WETH} from "solmate/tokens/WETH.sol";
 import {AccessControl} from "openzeppelin-contracts/access/AccessControl.sol";
 
-import {SwapperLib} from "src/steth/swapper/SwapperLib.sol";
+import {SwapperLib} from "src/lib/SwapperLib.sol";
 import {MainnetDeployBase} from "script/base/MainnetDeployBase.sol";
 import {Constants as C} from "src/lib/Constants.sol";
 import {ISwapRouter} from "src/interfaces/uniswap/ISwapRouter.sol";
