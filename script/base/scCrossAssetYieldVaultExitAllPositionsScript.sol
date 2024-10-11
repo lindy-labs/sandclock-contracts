@@ -28,13 +28,20 @@ abstract contract scCrossAssetYieldVaultExitAllPositionsScript is scCrossAssetYi
 
     /*//////////////////////////////////////////////////////////////*/
 
-    function run() external {
-        console2.log("--Exit all positions script running--");
+    function _startMessage() internal pure override returns (string memory) {
+        return "--Exit all positions script running--";
+    }
 
-        require(vault.hasRole(vault.KEEPER_ROLE(), address(keeper)), "invalid keeper");
+    function _endMessage() internal pure override returns (string memory) {
+        return "--Exit all positions script done--";
+    }
 
-        _logScriptParams();
+    function _logScriptParams() internal view override {
+        super._logScriptParams();
+        console2.log("maxAceeptableLossPercent\t", maxAceeptableLossPercent());
+    }
 
+    function _execute() internal virtual override {
         uint256 totalAssets = vault.totalAssets();
         uint256 minEndTotalAssets = totalAssets.mulWadDown(1e18 - maxAceeptableLossPercent());
 
@@ -45,12 +52,6 @@ abstract contract scCrossAssetYieldVaultExitAllPositionsScript is scCrossAssetYi
         vm.stopBroadcast();
 
         _logVaultInfo("state after");
-        console2.log("--Exit all positions script done--");
-    }
-
-    function _logScriptParams() internal view override {
-        super._logScriptParams();
-        console2.log("maxAceeptableLossPercent\t", maxAceeptableLossPercent());
     }
 
     function _logVaultInfo(string memory message) internal view {

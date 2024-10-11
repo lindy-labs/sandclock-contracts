@@ -27,16 +27,9 @@ import {MainnetDeployBase} from "../base/MainnetDeployBase.sol";
  * Base Deployment file that handles Forked & Mainnet deployment.
  * Forked node deployments are equivalent to mainnet deployments.
  */
-abstract contract DeployLeveragedEth is MainnetDeployBase {
-    IPool aavePool = IPool(C.AAVE_V3_POOL);
-    ICurvePool curveEthStEthPool = ICurvePool(C.CURVE_ETH_STETH_POOL);
-    ISwapRouter uniswapRouter = ISwapRouter(C.UNISWAP_V3_SWAP_ROUTER);
-
+abstract contract DeployScWethV2AndScUsdcV2 is MainnetDeployBase {
     scWETH scWeth;
     scUSDC scUsdc;
-
-    address alice = DC.ALICE;
-    address bob = DC.BOB;
 
     function _deploy() internal {
         vm.startBroadcast(deployerPrivateKey);
@@ -46,10 +39,10 @@ abstract contract DeployLeveragedEth is MainnetDeployBase {
             keeper: keeper,
             targetLtv: 0.85e18,
             slippageTolerance: 0.99e18,
-            aavePool: aavePool,
+            aavePool: IPool(C.AAVE_V3_POOL),
             aaveAwstEth: IAToken(C.AAVE_V3_AWSTETH_TOKEN),
             aaveVarDWeth: ERC20(C.AAVE_V3_VAR_DEBT_WETH_TOKEN),
-            curveEthStEthPool: curveEthStEthPool,
+            curveEthStEthPool: ICurvePool(C.CURVE_ETH_STETH_POOL),
             stEth: ILido(C.STETH),
             wstEth: IwstETH(C.WSTETH),
             weth: weth,
@@ -66,11 +59,11 @@ abstract contract DeployLeveragedEth is MainnetDeployBase {
             scWETH: scWeth,
             usdc: usdc,
             weth: WETH(payable(C.WETH)),
-            aavePool: aavePool,
+            aavePool: IPool(C.AAVE_V3_POOL),
             aavePoolDataProvider: IPoolDataProvider(C.AAVE_V3_POOL_DATA_PROVIDER),
             aaveAUsdc: IAToken(C.AAVE_V3_AUSDC_TOKEN),
             aaveVarDWeth: ERC20(C.AAVE_V3_VAR_DEBT_WETH_TOKEN),
-            uniswapSwapRouter: uniswapRouter,
+            uniswapSwapRouter: ISwapRouter(C.UNISWAP_V3_SWAP_ROUTER),
             chainlinkUsdcToEthPriceFeed: AggregatorV3Interface(C.CHAINLINK_USDC_ETH_PRICE_FEED),
             balancerVault: IVault(C.BALANCER_VAULT)
         });

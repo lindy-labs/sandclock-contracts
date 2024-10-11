@@ -52,19 +52,19 @@ contract ReallocateScUsdcV2 is scCrossAssetYieldVaultReallocateScript {
         if (useMorpho) {
             if (!vault.isSupported(morphoAdapter.id())) revert("morpho adapter not supported");
 
-            _createData(morphoAdapter.id(), morphoAllocationPercent);
+            _createReallocateData(morphoAdapter.id(), morphoAllocationPercent);
         }
 
         if (useAaveV2) {
             if (!vault.isSupported(aaveV2Adapter.id())) revert("aave v2 adapter not supported");
 
-            _createData(aaveV2Adapter.id(), aaveV2AllocationPercent);
+            _createReallocateData(aaveV2Adapter.id(), aaveV2AllocationPercent);
         }
 
         if (useAaveV3) {
             if (!vault.isSupported(aaveV3Adapter.id())) revert("aave v3 adapter not supported");
 
-            _createData(aaveV3Adapter.id(), aaveV3AllocationPercent);
+            _createReallocateData(aaveV3Adapter.id(), aaveV3AllocationPercent);
         }
     }
 

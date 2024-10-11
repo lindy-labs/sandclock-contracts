@@ -18,12 +18,38 @@ import {ISinglePairPriceConverter} from "../../src/steth/priceConverter/ISingleP
  * A base script for executing keeper functions on `scCrossAssetYieldVault` contracts.
  */
 abstract contract scCrossAssetYieldVaultBaseScript is Script {
-    uint256 keeperPrivateKey = uint256(vm.envOr("KEEPER_PRIVATE_KEY", bytes32(0x0)));
+    uint256 keeperPrivateKey;
+    address keeper;
     // if keeper private key is not provided, use the default keeper address for running the script tests
-    address keeper = keeperPrivateKey != 0 ? vm.addr(keeperPrivateKey) : MainnetAddresses.KEEPER;
 
     scCrossAssetYieldVault vault = _getVaultAddress();
 
+    function _initEnv() internal virtual {
+        keeperPrivateKey = uint256(vm.envOr("KEEPER_PRIVATE_KEY", bytes32(0x0)));
+        keeper = keeperPrivateKey != 0 ? vm.rememberKey(keeperPrivateKey) : MainnetAddresses.KEEPER;
+
+        console2.log("keeper address\t", address(keeper));
+        console2.log("keeper private key\t", keeperPrivateKey);
+    }
+
+    function run() external {
+        _initEnv();
+
+        console2.log(_startMessage());
+
+        require(vault.hasRole(vault.KEEPER_ROLE(), address(keeper)), "invalid keeper");
+
+        _logScriptParams();
+
+        _execute();
+
+        console2.log(_endMessage());
+    }
+
+    function _execute() internal virtual;
+
+    function _startMessage() internal view virtual returns (string memory);
+    function _endMessage() internal view virtual returns (string memory);
     function _getVaultAddress() internal virtual returns (scCrossAssetYieldVault);
 
     function _logScriptParams() internal view virtual {

@@ -26,29 +26,29 @@ abstract contract scCrossAssetYieldVaultReallocateScript is scCrossAssetYieldVau
     bytes[] multicallData;
     uint256 flashLoanAmount;
 
-    function _initReallocateData() internal virtual;
+    function _startMessage() internal pure override returns (string memory) {
+        return "--reallocate script running--";
+    }
 
-    function run() external {
-        console2.log("--reallocate script running--");
-        require(vault.hasRole(vault.KEEPER_ROLE(), address(keeper)), "invalid keeper");
+    function _endMessage() internal pure override returns (string memory) {
+        return "--reallocate script done--";
+    }
 
+    function _execute() internal override {
         _initReallocateData();
         _createMulticallData();
         _checkAllocationPercentages();
 
-        _logScriptParams();
         _logPositions("before reallocate");
 
         vm.startBroadcast(keeper);
-
         vault.reallocate(flashLoanAmount, multicallData);
-
         vm.stopBroadcast();
 
         _logPositions("after reallocate");
-        console2.log("--reallocate script done--");
     }
 
+    function _initReallocateData() internal virtual;
     function _logPositions(string memory _message) internal virtual;
 
     function _checkAllocationPercentages() internal view {
@@ -96,7 +96,7 @@ abstract contract scCrossAssetYieldVaultReallocateScript is scCrossAssetYieldVau
         }
     }
 
-    function _createData(uint256 _adapterId, uint256 _allocationPercent) internal {
+    function _createReallocateData(uint256 _adapterId, uint256 _allocationPercent) internal {
         ReallocateData memory data;
 
         data.adapterId = _adapterId;

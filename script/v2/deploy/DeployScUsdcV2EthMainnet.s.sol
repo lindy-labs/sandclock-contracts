@@ -2,6 +2,8 @@
 pragma solidity ^0.8.13;
 
 import "forge-std/console2.sol";
+
+import {SwapperLib} from "src/steth/swapper/SwapperLib.sol";
 import {MainnetAddresses} from "script/base/MainnetAddresses.sol";
 import {MainnetDeployBase} from "script/base/MainnetDeployBase.sol";
 import {scWETHv2} from "src/steth/scWETHv2.sol";
@@ -42,7 +44,8 @@ contract DeployScUsdcV2EthMainnet is MainnetDeployBase {
         console2.log("scUSDCv2 AaveV3Adapter:", address(aaveV3Adapter));
 
         // initial deposit
-        uint256 usdcAmount = _swapWethForUsdc(0.01 ether);
+        uint256 usdcAmount = SwapperLib._uniswapSwapExactInput(address(weth), address(usdc), 0.01 ether, 0, 500);
+
         _deposit(scUsdcV2, usdcAmount); // 0.01 ether worth of USDC
 
         _transferAdminRoleToMultisig(scUsdcV2, deployerAddress);

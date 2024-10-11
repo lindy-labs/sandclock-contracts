@@ -4,7 +4,9 @@ pragma solidity ^0.8.13;
 import "forge-std/console2.sol";
 import "forge-std/Test.sol";
 
-import {DeployLeveragedEth} from "script/base/DeployLeveragedEth.sol";
+import {SwapperLib} from "src/steth/swapper/SwapperLib.sol";
+import {DeploymentConstants as DC} from "src/lib/DeploymentConstants.sol";
+import {DeployScWethV2AndScUsdcV2} from "script/base/DeployScWethV2AndScUsdcV2.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {sc4626} from "src/sc4626.sol";
 import {scWETH} from "src/steth/scWETH.sol";
@@ -15,13 +17,16 @@ import {scUSDC} from "src/steth/scUSDC.sol";
  * i.e.: ` forge script script/DeployLeveragedEthForked.s.sol
  *          --rpc-url=http://forked-node`
  */
-contract DeployLeveragedEthForked is DeployLeveragedEth, Test {
+contract DeployLeveragedEthForked is DeployScWethV2AndScUsdcV2, Test {
     uint256 public constant INITIAL_WETH_DEPOSIT = 10e18;
     uint256 public constant INITIAL_WETH_WITHDRAW = 1e18;
     uint256 public constant INITIAL_USDC_DEPOSIT = 100e6;
     uint256 public constant INITIAL_USDC_WITHDRAW = 1e6;
     uint256 public constant INITIAL_WETH_FUNDING = 10000e18;
     uint256 public constant INITIAL_USDC_FUNDING = 10000e6;
+
+    address alice = DC.ALICE;
+    address bob = DC.BOB;
 
     function run() external {
         _deploy();
@@ -135,7 +140,7 @@ contract DeployLeveragedEthForked is DeployLeveragedEth, Test {
         weth.deposit{value: 1000 ether}();
 
         console2.log("swap 1000 eth for USDC");
-        _swapWethForUsdc(1000 ether);
+        SwapperLib._uniswapSwapExactInput(address(weth), address(usdc), 1000 ether, 0, 500); // 0.05% fee
 
         vm.stopBroadcast();
     }

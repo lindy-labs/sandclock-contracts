@@ -6,6 +6,7 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 import {WETH} from "solmate/tokens/WETH.sol";
 import {AccessControl} from "openzeppelin-contracts/access/AccessControl.sol";
 
+import {SwapperLib} from "src/steth/swapper/SwapperLib.sol";
 import {MainnetDeployBase} from "script/base/MainnetDeployBase.sol";
 import {Constants as C} from "src/lib/Constants.sol";
 import {ISwapRouter} from "src/interfaces/uniswap/ISwapRouter.sol";
@@ -83,7 +84,8 @@ contract DeployV2LeveragedEthMainnet is MainnetDeployBase {
         MorphoAaveV3ScUsdcAdapter morphoAdapter = new MorphoAaveV3ScUsdcAdapter();
         vault.addAdapter(morphoAdapter);
 
-        uint256 usdcAmount = _swapWethForUsdc(0.01 ether);
+        uint256 usdcAmount = SwapperLib._uniswapSwapExactInput(address(weth), address(usdc), 0.01 ether, 0, 500);
+
         _deposit(vault, usdcAmount); // 0.01 ether worth of USDC
 
         _transferAdminRoleToMultisig(vault, deployerAddress);

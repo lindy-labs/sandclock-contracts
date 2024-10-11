@@ -45,14 +45,15 @@ abstract contract scCrossAssetYieldVaultRebalanceScript is scCrossAssetYieldVaul
 
     function _initializeAdapterSettings() internal virtual;
 
-    // script functions
+    function _startMessage() internal pure override returns (string memory) {
+        return "--Rebalance script running--";
+    }
 
-    function run() external virtual {
-        console2.log("--Rebalance script running--");
+    function _endMessage() internal pure override returns (string memory) {
+        return "--Rebalance script done--";
+    }
 
-        require(vault.hasRole(vault.KEEPER_ROLE(), address(keeper)), "invalid keeper");
-
-        _logScriptParams();
+    function _execute() internal override {
         _initializeAdapterSettings();
         _checkAllocationPercentages();
 
@@ -71,7 +72,6 @@ abstract contract scCrossAssetYieldVaultRebalanceScript is scCrossAssetYieldVaul
         vm.stopBroadcast();
 
         _logVaultInfo("state after rebalance");
-        console2.log("--Rebalance script done--");
     }
 
     function _checkAllocationPercentages() internal view {

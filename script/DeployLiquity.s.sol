@@ -4,9 +4,9 @@ pragma solidity ^0.8.13;
 import "forge-std/console2.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
+import {SwapperLib} from "src/steth/swapper/SwapperLib.sol";
 import {MainnetAddresses} from "script/base/MainnetAddresses.sol";
 import {MainnetDeployBase} from "script/base/MainnetDeployBase.sol";
-import {ISwapRouter} from "src/interfaces/uniswap/ISwapRouter.sol";
 import {Constants as C} from "src/lib/Constants.sol";
 import {scLiquity} from "src/liquity/scLiquity.sol";
 
@@ -24,8 +24,8 @@ contract DeployLiquity is MainnetDeployBase {
         // get some LUSD and make the initial deposit (addressing share inflation)
         weth.deposit{value: 0.01 ether}();
 
-        uint256 usdcAmount = _swapWethForUsdc(0.01 ether);
-        uint256 lusdAmount = _swapUsdcForLusd(usdcAmount);
+        uint256 usdcAmount = SwapperLib._uniswapSwapExactInput(address(weth), address(usdc), 0.01 ether, 0, 500); // 0.05% pool fee
+        uint256 lusdAmount = SwapperLib._uniswapSwapExactInput(address(usdc), address(lusd), usdcAmount, 0, 500); // 0.05% pool fee
 
         _deposit(vault, lusdAmount);
 
@@ -34,22 +34,5 @@ contract DeployLiquity is MainnetDeployBase {
         _transferAdminRoleToMultisig(vault, deployerAddress);
 
         vm.stopBroadcast();
-    }
-
-    function _swapUsdcForLusd(uint256 _amountIn) internal returns (uint256 amountOut) {
-        usdc.approve(C.UNISWAP_V3_SWAP_ROUTER, _amountIn);
-
-        ISwapRouter.ExactInputSingleParams memory params = ISwapRouter.ExactInputSingleParams({
-            tokenIn: address(usdc),
-            tokenOut: address(lusd),
-            fee: 500, // 0.05%
-            recipient: deployerAddress,
-            deadline: block.timestamp + 1000,
-            amountIn: _amountIn,
-            amountOutMinimum: 0,
-            sqrtPriceLimitX96: 0
-        });
-
-        amountOut = ISwapRouter(C.UNISWAP_V3_SWAP_ROUTER).exactInputSingle(params);
     }
 }
