@@ -32,7 +32,7 @@ abstract contract DeployScWethV2AndScUsdcV2 is MainnetDeployBase {
     scUSDC scUsdc;
 
     function _deploy() internal {
-        vm.startBroadcast(deployerPrivateKey);
+        vm.startBroadcast(deployerAddress);
 
         scWETH.ConstructorParams memory scWethParams = scWETH.ConstructorParams({
             admin: deployerAddress,

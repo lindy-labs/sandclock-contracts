@@ -16,11 +16,11 @@ import {AaveV2ScUsdcAdapter} from "src/steth/scUsdcV2-adapters/AaveV2ScUsdcAdapt
 import {UsdcWethSwapper} from "src/steth/swapper/UsdcWethSwapper.sol";
 
 contract DeployScUsdcV2EthMainnet is MainnetDeployBase {
-    scWETHv2 scWethV2 = scWETHv2(payable(MainnetAddresses.SCWETHV2));
-    UsdcWethSwapper swapper = new UsdcWethSwapper();
-    UsdcWethPriceConverter priceConverter = new UsdcWethPriceConverter();
-
     function run() external returns (scUSDCv2 scUsdcV2) {
+        scWETHv2 scWethV2 = scWETHv2(payable(MainnetAddresses.SCWETHV2));
+        UsdcWethSwapper swapper = new UsdcWethSwapper();
+        UsdcWethPriceConverter priceConverter = new UsdcWethPriceConverter();
+
         require(address(swapper) != address(0), "invalid address for Swapper contract");
         require(address(priceConverter) != address(0), "invalid address for PriceConverter contract");
         require(address(scWethV2) != address(0), "invalid address for ScWethV2 contract");
@@ -44,11 +44,12 @@ contract DeployScUsdcV2EthMainnet is MainnetDeployBase {
         console2.log("scUSDCv2 AaveV3Adapter:", address(aaveV3Adapter));
 
         // initial deposit
-        uint256 usdcAmount = SwapperLib._uniswapSwapExactInput(address(weth), address(usdc), 0.01 ether, 0, 500);
+        uint256 usdcAmount =
+            SwapperLib._uniswapSwapExactInput(address(weth), address(usdc), deployerAddress, 0.01 ether, 0, 500);
 
         _deposit(scUsdcV2, usdcAmount); // 0.01 ether worth of USDC
 
-        _transferAdminRoleToMultisig(scUsdcV2, deployerAddress);
+        _transferAdminRoleToMultisig(scUsdcV2);
 
         vm.stopBroadcast();
     }

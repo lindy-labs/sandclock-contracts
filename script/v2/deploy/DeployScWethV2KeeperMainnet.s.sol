@@ -20,9 +20,4 @@ contract DeployScWethV2KeeperMainnet is MainnetDeployBase {
 
         console2.log("---Deploy scWETHv2Keeper script done ---");
     }
-
-    function _init() internal override {
-        deployerPrivateKey = uint256(vm.envBytes32("PRIVATE_KEY"));
-        deployerAddress = vm.rememberKey(deployerPrivateKey);
-    }
 }

@@ -54,11 +54,12 @@ contract RedeployScUsdcV2EthMainnet is MainnetDeployBase {
         }
 
         // initial deposit
-        uint256 usdcAmount = SwapperLib._uniswapSwapExactInput(address(weth), address(usdc), 0.01 ether, 0, 500);
+        uint256 usdcAmount =
+            SwapperLib._uniswapSwapExactInput(address(weth), address(usdc), deployerAddress, 0.01 ether, 0, 500);
 
         _deposit(scUsdcV2, usdcAmount); // 0.01 ether worth of USDC
 
-        _transferAdminRoleToMultisig(scUsdcV2, deployerAddress);
+        _transferAdminRoleToMultisig(scUsdcV2);
 
         vm.stopBroadcast();
 

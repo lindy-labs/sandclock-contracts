@@ -16,7 +16,7 @@ contract DeployLeveragedEthMainnet is DeployScWethV2AndScUsdcV2 {
     }
 
     function _postDeployment() internal {
-        vm.startBroadcast(deployerPrivateKey);
+        vm.startBroadcast(deployerAddress);
 
         // scWETH
         console2.log("eth deposited for weth");

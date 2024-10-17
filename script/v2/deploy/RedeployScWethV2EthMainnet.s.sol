@@ -46,7 +46,7 @@ contract RedeployScript is MainnetDeployBase {
 
         _setTreasury(scWethV2, MainnetAddresses.TREASURY);
 
-        _transferAdminRoleToMultisig(scWethV2, deployerAddress);
+        _transferAdminRoleToMultisig(scWethV2);
 
         vm.stopBroadcast();
     }

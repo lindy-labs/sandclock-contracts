@@ -26,7 +26,7 @@ import {UsdcWethSwapper} from "src/steth/swapper/UsdcWethSwapper.sol";
 
 contract DeployV2LeveragedEthMainnet is MainnetDeployBase {
     function run() external returns (scWETHv2 scWethV2, scUSDCv2 scUsdcV2) {
-        vm.startBroadcast(deployerPrivateKey);
+        vm.startBroadcast(deployerAddress);
 
         Swapper swapper = new Swapper();
         UsdcWethSwapper scUsdcSwapper = new UsdcWethSwapper();
@@ -35,7 +35,7 @@ contract DeployV2LeveragedEthMainnet is MainnetDeployBase {
         UsdcWethPriceConverter usdcPriceConverter = new UsdcWethPriceConverter();
         console2.log("PriceConverter:", address(priceConverter));
 
-        _transferAdminRoleToMultisig(priceConverter, deployerAddress);
+        _transferAdminRoleToMultisig(priceConverter);
 
         scWethV2 = _deployScWethV2(priceConverter, swapper);
 
@@ -60,7 +60,7 @@ contract DeployV2LeveragedEthMainnet is MainnetDeployBase {
         weth.deposit{value: 0.01 ether}(); // wrap 0.01 ETH into WETH
         _deposit(vault, 0.01 ether); // 0.01 WETH
 
-        _transferAdminRoleToMultisig(vault, deployerAddress);
+        _transferAdminRoleToMultisig(vault);
 
         console2.log("scWethV2 vault:", address(vault));
         console2.log("scWethV2 AaveV3Adapter:", address(aaveV3Adapter));
@@ -84,11 +84,12 @@ contract DeployV2LeveragedEthMainnet is MainnetDeployBase {
         MorphoAaveV3ScUsdcAdapter morphoAdapter = new MorphoAaveV3ScUsdcAdapter();
         vault.addAdapter(morphoAdapter);
 
-        uint256 usdcAmount = SwapperLib._uniswapSwapExactInput(address(weth), address(usdc), 0.01 ether, 0, 500);
+        uint256 usdcAmount =
+            SwapperLib._uniswapSwapExactInput(address(weth), address(usdc), deployerAddress, 0.01 ether, 0, 500);
 
         _deposit(vault, usdcAmount); // 0.01 ether worth of USDC
 
-        _transferAdminRoleToMultisig(vault, deployerAddress);
+        _transferAdminRoleToMultisig(vault);
 
         console2.log("scUSDCv2 vault:", address(vault));
         console2.log("scUSDCv2 AaveV3Adapter:", address(aaveV3Adapter));

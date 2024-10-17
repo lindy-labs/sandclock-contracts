@@ -41,7 +41,7 @@ contract DeployScript is MainnetDeployBase {
         weth.deposit{value: 0.01 ether}(); // wrap 0.01 ETH into WETH
         _deposit(scWethV2, 0.01 ether); // 0.01 WETH
 
-        _transferAdminRoleToMultisig(scWethV2, deployerAddress);
+        _transferAdminRoleToMultisig(scWethV2);
 
         _setTreasury(scWethV2, MainnetAddresses.TREASURY);
 

@@ -24,14 +24,16 @@ contract DeployLiquity is MainnetDeployBase {
         // get some LUSD and make the initial deposit (addressing share inflation)
         weth.deposit{value: 0.01 ether}();
 
-        uint256 usdcAmount = SwapperLib._uniswapSwapExactInput(address(weth), address(usdc), 0.01 ether, 0, 500); // 0.05% pool fee
-        uint256 lusdAmount = SwapperLib._uniswapSwapExactInput(address(usdc), address(lusd), usdcAmount, 0, 500); // 0.05% pool fee
+        uint256 usdcAmount =
+            SwapperLib._uniswapSwapExactInput(address(weth), address(usdc), deployerAddress, 0.01 ether, 0, 500); // 0.05% pool fee
+        uint256 lusdAmount =
+            SwapperLib._uniswapSwapExactInput(address(usdc), address(lusd), deployerAddress, usdcAmount, 0, 500); // 0.05% pool fee
 
         _deposit(vault, lusdAmount);
 
         _setTreasury(vault, MainnetAddresses.TREASURY);
 
-        _transferAdminRoleToMultisig(vault, deployerAddress);
+        _transferAdminRoleToMultisig(vault);
 
         vm.stopBroadcast();
     }
