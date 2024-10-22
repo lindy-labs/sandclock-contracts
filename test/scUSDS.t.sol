@@ -8,33 +8,19 @@ import {WETH} from "solmate/tokens/WETH.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 import {IPool} from "aave-v3/interfaces/IPool.sol";
-import {IAToken} from "aave-v3/interfaces/IAToken.sol";
-import {IVariableDebtToken} from "aave-v3/interfaces/IVariableDebtToken.sol";
-import {IPoolDataProvider} from "aave-v3/interfaces/IPoolDataProvider.sol";
 import {ERC4626} from "solmate/mixins/ERC4626.sol";
 
 import {Constants as C} from "../src/lib/Constants.sol";
-import {ILendingPool} from "../src/interfaces/aave-v2/ILendingPool.sol";
-import {IProtocolDataProvider} from "../src/interfaces/aave-v2/IProtocolDataProvider.sol";
 import {IAdapter} from "../src/steth/IAdapter.sol";
 import {AaveV3ScUsdtAdapter} from "../src/steth/scUsdt-adapters/AaveV3ScUsdtAdapter.sol";
-import {UsdtWethPriceConverter} from "../src/steth/priceConverter/UsdtWethPriceConverter.sol";
 
 import {scWETH} from "../src/steth/scWETH.sol";
-import {scCrossAssetYieldVault} from "../src/steth/scCrossAssetYieldVault.sol";
-import {ISwapRouter} from "../src/interfaces/uniswap/ISwapRouter.sol";
-import {AggregatorV3Interface} from "../src/interfaces/chainlink/AggregatorV3Interface.sol";
 import {PriceConverter} from "../src/steth/priceConverter/PriceConverter.sol";
 import {ISinglePairPriceConverter} from "../src/steth/priceConverter/ISinglePairPriceConverter.sol";
 import {ISinglePairSwapper} from "../src/steth/swapper/ISinglePairSwapper.sol";
-import {IVault} from "../src/interfaces/balancer/IVault.sol";
-import {ICurvePool} from "../src/interfaces/curve/ICurvePool.sol";
-import {ILido} from "../src/interfaces/lido/ILido.sol";
-import {IwstETH} from "../src/interfaces/lido/IwstETH.sol";
 import "../src/errors/scErrors.sol";
 import {Address} from "openzeppelin-contracts/utils/Address.sol";
 import {MainnetAddresses as M} from "../script/base/MainnetAddresses.sol";
-import {UsdtWethSwapper} from "../src/steth/swapper/UsdtWethSwapper.sol";
 import {scUSDS} from "../src/steth/scUSDS.sol";
 import {IDaiUsds} from "../src/interfaces/sky/IDaiUsds.sol";
 import {scSDAI} from "../src/steth/scSDAI.sol";
@@ -52,6 +38,7 @@ contract scUSDSTest is Test {
 
     address constant keeper = address(0x05);
     address constant alice = address(0x06);
+    address constant bob = address(0x07);
 
     WETH weth;
     ERC20 usds;
@@ -59,6 +46,7 @@ contract scUSDSTest is Test {
 
     scWETH wethVault = scWETH(payable(M.SCWETHV2));
     scDAI scDai;
+    scSDAI scsDAI;
     scUSDS vault;
 
     AaveV3ScUsdtAdapter aaveV3Adapter;
@@ -80,6 +68,14 @@ contract scUSDSTest is Test {
         _deployAndSetUpScDai();
 
         vault = new scUSDS(ERC4626(address(scDai)));
+    }
+
+    function test_constructor() public {
+        assertEq(
+            dai.allowance(address(vault), C.DAI_USDS_CONVERTER), type(uint256).max, "dai allowance to daiusds converter"
+        );
+        assertEq(dai.allowance(address(vault), address(scDai)), type(uint256).max, "dai allowance to scDAI");
+        assertEq(usds.allowance(address(vault), C.DAI_USDS_CONVERTER), type(uint256).max, "weth allowance");
     }
 
     function test_DaiUsdsConverter() public {
@@ -123,10 +119,7 @@ contract scUSDSTest is Test {
 
     function test_withdraw_redeem() public {
         uint256 amount = 10_000e18;
-        deal(address(usds), address(this), amount);
-
-        usds.approve(address(vault), amount);
-        vault.deposit(amount, address(this));
+        _deposit(amount, address(this));
 
         uint256 withdrawAmount = amount / 2;
 
@@ -140,13 +133,57 @@ contract scUSDSTest is Test {
         assertApproxEqRel(usds.balanceOf(address(this)), amount, 1e10, "usds after full redeem");
         assertEq(vault.balanceOf(address(this)), 0, "scUSDS shares not zero");
     }
+
+    function test_withdraw_whenInProfit() public {
+        uint256 amount = 10_000e18;
+        uint256 shares = _deposit(amount, address(this));
+
+        uint256 profit = 200e18;
+
+        deal(C.SDAI, address(scsDAI), amount + profit);
+
+        vault.redeem(shares, address(this), address(this));
+
+        assertGt(usds.balanceOf(address(this)), amount + profit, "profits not withdrawn");
+    }
+
+    function test_redeem_failsIfCallerIsNotApproved() public {
+        uint256 amount = 1000e18;
+        uint256 shares = _deposit(amount, alice);
+
+        assertEq(vault.allowance(alice, bob), 0, "allowance not zero");
+
+        uint256 redeemAmount = shares / 2;
+
+        vm.expectRevert();
+        vm.prank(bob);
+        vault.redeem(redeemAmount, bob, alice);
+    }
+
+    function test_redeem_worksIfCallerIsApproved() public {
+        uint256 amount = 1000e18;
+        uint256 shares = _deposit(amount, alice);
+
+        vm.prank(alice);
+        vault.approve(bob, shares / 2);
+
+        assertEq(vault.allowance(alice, bob), shares / 2, "allowance not set");
+
+        uint256 redeemAmount = shares / 2;
+
+        vm.prank(bob);
+        vault.redeem(redeemAmount, bob, alice);
+
+        assertEq(vault.allowance(alice, bob), 0, "allowance not reduced to 0");
+    }
+
     /////////////////////////////// INTERNAL METHODS /////////////////////////////////////////////////
 
     function _deployAndSetUpScDai() internal {
         priceConverter = new SDaiWethPriceConverter();
         swapper = new SDaiWethSwapper();
 
-        scSDAI scsDAI = new scSDAI(address(this), keeper, wethVault, priceConverter, swapper);
+        scsDAI = new scSDAI(address(this), keeper, wethVault, priceConverter, swapper);
 
         scsDAI.addAdapter(new SparkScSDaiAdapter());
 
@@ -158,5 +195,16 @@ contract scUSDSTest is Test {
         scsDAI.grantRole(scsDAI.KEEPER_ROLE(), address(this));
 
         scDai = new scDAI(scsDAI);
+    }
+
+    function _deposit(uint256 amount, address owner) internal returns (uint256 shares) {
+        deal(address(usds), owner, amount);
+
+        vm.startPrank(owner);
+        usds.approve(address(vault), amount);
+
+        shares = vault.deposit(amount, owner);
+
+        vm.stopPrank();
     }
 }
