@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.19;
 
-import "forge-std/console2.sol";
-
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {ERC4626} from "solmate/mixins/ERC4626.sol";
@@ -26,7 +24,7 @@ contract scUSDS is ERC4626 {
     ERC20 public constant usds = ERC20(C.USDS);
 
     /// @notice The Dai - USDS converter contract from sky
-    IDaiUsds converter = IDaiUsds(C.DAI_USDS_CONVERTER);
+    IDaiUsds public constant converter = IDaiUsds(C.DAI_USDS_CONVERTER);
 
     /// @notice The scDAI ERC4626 vault contract.
     ERC4626 public immutable scDai;
@@ -48,18 +46,6 @@ contract scUSDS is ERC4626 {
         // returns balance in DAI
         // usds to dai conversion rate is 1:1
         return scDai.convertToAssets(scDai.balanceOf(address(this)));
-    }
-
-    /**
-     * @notice Hook called after a deposit is made.
-     * @param assets The amount of usds deposited.
-     */
-    function afterDeposit(uint256 assets, uint256) internal override {
-        // USDS => DAI
-        converter.usdsToDai(address(this), assets);
-
-        // Deposit DAI to scDAI
-        scDai.deposit(assets, address(this));
     }
 
     /**
@@ -114,6 +100,18 @@ contract scUSDS is ERC4626 {
     }
 
     ////////////////////////////////// INTERNAL METHODS ////////////////////////////////
+
+    /**
+     * @notice Hook called after a deposit is made.
+     * @param assets The amount of usds deposited.
+     */
+    function afterDeposit(uint256 assets, uint256) internal override {
+        // USDS => DAI
+        converter.usdsToDai(address(this), assets);
+
+        // Deposit DAI to scDAI
+        scDai.deposit(assets, address(this));
+    }
 
     /**
      * @notice withdraws the required dai amount from scDAI and converts it to usds
