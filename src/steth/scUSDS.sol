@@ -24,7 +24,7 @@ contract scUSDS is ERC4626 {
     ERC20 public constant usds = ERC20(C.USDS);
 
     /// @notice The Dai - USDS converter contract from sky
-    IDaiUsds converter = IDaiUsds(C.DAI_USDS_CONVERTER);
+    IDaiUsds public constant converter = IDaiUsds(C.DAI_USDS_CONVERTER);
 
     /// @notice The scDAI ERC4626 vault contract.
     ERC4626 public immutable scDai;
