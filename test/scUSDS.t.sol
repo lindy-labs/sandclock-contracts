@@ -71,6 +71,8 @@ contract scUSDSTest is Test {
     }
 
     function test_constructor() public {
+        vault = new scUSDS(ERC4626(address(scDai)));
+
         assertEq(
             dai.allowance(address(vault), C.DAI_USDS_CONVERTER), type(uint256).max, "dai allowance to daiusds converter"
         );
@@ -132,6 +134,35 @@ contract scUSDSTest is Test {
 
         assertApproxEqRel(usds.balanceOf(address(this)), amount, 1e10, "usds after full redeem");
         assertEq(vault.balanceOf(address(this)), 0, "scUSDS shares not zero");
+    }
+
+    function test_withdraw_failsIfCallerIsNotApproved() public {
+        uint256 amount = 1000e18;
+        _deposit(amount, alice);
+
+        assertEq(vault.allowance(alice, bob), 0, "allowance not zero");
+
+        uint256 withdrawAmount = amount / 2;
+
+        vm.expectRevert();
+        vm.prank(bob);
+        vault.withdraw(withdrawAmount, bob, alice);
+    }
+
+    function test_withdraw_worksIfCallerIsApproved() public {
+        uint256 amount = 1000e18;
+        uint256 shares = _deposit(amount, alice);
+
+        vm.prank(alice);
+        vault.approve(bob, shares / 2);
+
+        assertEq(vault.allowance(alice, bob), shares / 2, "allowance not set");
+
+        uint256 withdrawAmount = vault.convertToAssets(shares / 2);
+        vm.prank(bob);
+        vault.withdraw(withdrawAmount, bob, alice);
+
+        assertEq(vault.allowance(alice, bob), 0, "allowance not reduced to 0");
     }
 
     function test_withdraw_whenInProfit() public {
