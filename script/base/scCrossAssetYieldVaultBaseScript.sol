@@ -60,7 +60,9 @@ abstract contract scCrossAssetYieldVaultBaseScript is Script {
     }
 
     function targetTokensInvested() public view returns (uint256) {
-        return targetVault().convertToAssets(targetVault().balanceOf(address(vault)));
+        uint256 targetVaultShares = targetVault().balanceOf(address(vault));
+
+        return targetVaultShares != 0 ? targetVault().convertToAssets(targetVault().balanceOf(address(vault))) : 0;
     }
 
     function targetVault() public view returns (ERC4626) {
@@ -72,6 +74,45 @@ abstract contract scCrossAssetYieldVaultBaseScript is Script {
 
     function assetBalance() public view returns (uint256) {
         return vault.asset().balanceOf(address(vault));
+    }
+
+    function totalAssets() public view returns (uint256) {
+        (bool ok, bytes memory result) = address(vault).staticcall(abi.encodeWithSelector(vault.totalAssets.selector));
+
+        return ok ? abi.decode(result, (uint256)) : assetBalance();
+    }
+
+    function getProfit() public view returns (uint256) {
+        (bool ok, bytes memory result) = address(vault).staticcall(abi.encodeWithSelector(vault.getProfit.selector));
+
+        return ok ? abi.decode(result, (uint256)) : 0;
+    }
+
+    function totalCollateral() public view returns (uint256) {
+        (bool ok, bytes memory result) =
+            address(vault).staticcall(abi.encodeWithSelector(vault.totalCollateral.selector));
+
+        return ok ? abi.decode(result, (uint256)) : 0;
+    }
+
+    function totalDebt() public view returns (uint256) {
+        (bool ok, bytes memory result) = address(vault).staticcall(abi.encodeWithSelector(vault.totalDebt.selector));
+
+        return ok ? abi.decode(result, (uint256)) : 0;
+    }
+
+    function getCollateral(uint256 _adapterId) public view returns (uint256) {
+        (bool ok, bytes memory result) =
+            address(vault).staticcall(abi.encodeWithSelector(vault.getCollateral.selector, _adapterId));
+
+        return ok ? abi.decode(result, (uint256)) : 0;
+    }
+
+    function getDebt(uint256 _adapterId) public view returns (uint256) {
+        (bool ok, bytes memory result) =
+            address(vault).staticcall(abi.encodeWithSelector(vault.getDebt.selector, _adapterId));
+
+        return ok ? abi.decode(result, (uint256)) : 0;
     }
 
     function assetPriceInTargetTokens(uint256 _assetAmount) public view returns (uint256 targetTokenAmount) {

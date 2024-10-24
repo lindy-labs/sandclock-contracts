@@ -59,7 +59,7 @@ abstract contract scCrossAssetYieldVaultRebalanceScript is scCrossAssetYieldVaul
 
         uint256 minReceivedFromProfitSelling = _sellProfitIfAboveDefinedMin();
         uint256 minAssetBalance = minReceivedFromProfitSelling + assetBalance();
-        uint256 minFloatRequired = vault.totalAssets().mulWadUp(vault.floatPercentage());
+        uint256 minFloatRequired = totalAssets().mulWadUp(vault.floatPercentage());
         uint256 missingFloat = minFloatRequired > minAssetBalance ? minFloatRequired - minAssetBalance : 0;
         uint256 investableAmount = minFloatRequired < minAssetBalance ? minAssetBalance - minFloatRequired : 0;
 
@@ -85,7 +85,10 @@ abstract contract scCrossAssetYieldVaultRebalanceScript is scCrossAssetYieldVaul
     }
 
     function _sellProfitIfAboveDefinedMin() internal returns (uint256) {
-        uint256 profit = vault.getProfit();
+        uint256 profit = getProfit();
+
+        if (profit == 0) return 0;
+
         // account for slippage when swapping target token profits to underlying assets
         uint256 minExpectedProfit = targetTokensPriceInAssets(profit).mulWadDown(1e18 - maxProfitSellSlippage);
 
@@ -103,8 +106,8 @@ abstract contract scCrossAssetYieldVaultRebalanceScript is scCrossAssetYieldVaul
         uint256 _investableAmount,
         uint256 _missingFloat
     ) internal {
-        uint256 collateral = vault.getCollateral(_adapterId);
-        uint256 debt = vault.getDebt(_adapterId);
+        uint256 collateral = getCollateral(_adapterId);
+        uint256 debt = getDebt(_adapterId);
 
         uint256 targetCollateral = collateral + _investableAmount - _missingFloat;
         uint256 targetDebt = assetPriceInTargetTokens(targetCollateral).mulWadDown(_targetLtv);
@@ -196,11 +199,11 @@ abstract contract scCrossAssetYieldVaultRebalanceScript is scCrossAssetYieldVaul
         console2.log("\n\t----------------------------");
         console2.log("\t", message);
         console2.log("\t----------------------------");
-        console2.log("total assets\t\t", vault.totalAssets());
-        console2.log("profit\t\t", vault.getProfit());
+        console2.log("total assets\t\t", totalAssets());
+        console2.log("profit\t\t", getProfit());
         console2.log("float\t\t\t", assetBalance());
-        console2.log("total collateral\t", vault.totalCollateral());
-        console2.log("total debt\t\t", vault.totalDebt());
+        console2.log("total collateral\t", totalCollateral());
+        console2.log("total debt\t\t", totalDebt());
         console2.log("invested\t\t", targetTokensInvested());
         console2.log("\t----------------------------");
     }

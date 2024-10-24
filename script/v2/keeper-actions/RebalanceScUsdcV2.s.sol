@@ -88,7 +88,7 @@ contract RebalanceScUsdcV2 is scCrossAssetYieldVaultRebalanceScript {
         console2.log("morpho target ltv\t", morphoTargetLtv);
         console2.log("aave v2 invest pct\t", aaveV2InvestableAmountPercent);
         console2.log("aave v2 target ltv\t", aaveV2TargetLtv);
-        console2.log("aave v3 investa pct\t", aaveV3InvestableAmountPercent);
+        console2.log("aave v3 invest pct\t", aaveV3InvestableAmountPercent);
         console2.log("aave v3 target ltv\t", aaveV3TargetLtv);
     }
 }
