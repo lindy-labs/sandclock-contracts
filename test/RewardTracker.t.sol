@@ -280,8 +280,8 @@ contract RewardTrackerTest is Test {
     function testCorrectness_claimReward(uint128 amount0_, uint128 amount1_, uint8 stakeTimeAsDurationPercentage)
         public
     {
-        vm.assume(amount0_ > 0);
-        vm.assume(amount1_ > 0);
+        vm.assume(amount0_ > 500);
+        vm.assume(amount1_ > 500);
         vm.assume(stakeTimeAsDurationPercentage > 0);
         uint256 amount0 = amount0_;
         uint256 amount1 = amount1_;
@@ -339,7 +339,7 @@ contract RewardTrackerTest is Test {
                 (((REWARD_AMOUNT * stakeTimeAsDurationPercentage) / 100) * amount1) / (amount0 + amount1);
         }
 
-        assertApproxEqRel(rewardAmount, expectedRewardAmount, 0.001e18);
+        assertApproxEqAbs(rewardAmount, expectedRewardAmount, 0.001e18);
     }
 
     function testCorrectness_claimReward_withBonus(

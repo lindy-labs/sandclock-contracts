@@ -2,14 +2,14 @@
 pragma solidity ^0.8.13;
 
 import "forge-std/console2.sol";
-import {MainnetAddresses} from "../base/MainnetAddresses.sol";
-import {MainnetDeployBase} from "../base/MainnetDeployBase.sol";
-import {scWETHv2} from "../../src/steth/scWETHv2.sol";
-import {Swapper} from "../../src/steth/swapper/Swapper.sol";
-import {PriceConverter} from "../../src/steth/priceConverter/PriceConverter.sol";
-import {AaveV3ScWethAdapter} from "../../src/steth/scWethV2-adapters/AaveV3ScWethAdapter.sol";
-import {MorphoAaveV3ScWethAdapter} from "../../src/steth/scWethV2-adapters/MorphoAaveV3ScWethAdapter.sol";
-import {CompoundV3ScWethAdapter} from "../../src/steth/scWethV2-adapters/CompoundV3ScWethAdapter.sol";
+import {MainnetAddresses} from "script/base/MainnetAddresses.sol";
+import {MainnetDeployBase} from "script/base/MainnetDeployBase.sol";
+import {scWETHv2} from "src/steth/scWETHv2.sol";
+import {Swapper} from "src/steth/swapper/Swapper.sol";
+import {PriceConverter} from "src/steth/priceConverter/PriceConverter.sol";
+import {AaveV3ScWethAdapter} from "src/steth/scWethV2-adapters/AaveV3ScWethAdapter.sol";
+import {MorphoAaveV3ScWethAdapter} from "src/steth/scWethV2-adapters/MorphoAaveV3ScWethAdapter.sol";
+import {CompoundV3ScWethAdapter} from "src/steth/scWethV2-adapters/CompoundV3ScWethAdapter.sol";
 
 contract DeployScript is MainnetDeployBase {
     Swapper swapper = Swapper(MainnetAddresses.SWAPPER);
@@ -41,7 +41,7 @@ contract DeployScript is MainnetDeployBase {
         weth.deposit{value: 0.01 ether}(); // wrap 0.01 ETH into WETH
         _deposit(scWethV2, 0.01 ether); // 0.01 WETH
 
-        _transferAdminRoleToMultisig(scWethV2, deployerAddress);
+        _transferAdminRoleToMultisig(scWethV2);
 
         _setTreasury(scWethV2, MainnetAddresses.TREASURY);
 

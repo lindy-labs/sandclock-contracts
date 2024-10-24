@@ -6,12 +6,12 @@ import {WETH} from "solmate/tokens/WETH.sol";
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 import {Address} from "openzeppelin-contracts/utils/Address.sol";
 
-import {Constants as C} from "../../lib/Constants.sol";
-import {AmountReceivedBelowMin} from "../../errors/scErrors.sol";
-import {ISwapRouter} from "../../interfaces/uniswap/ISwapRouter.sol";
-import {ILido} from "../../interfaces/lido/ILido.sol";
-import {IwstETH} from "../../interfaces/lido/IwstETH.sol";
-import {ICurvePool} from "../../interfaces/curve/ICurvePool.sol";
+import {Constants as C} from "./Constants.sol";
+import {AmountReceivedBelowMin} from "src/errors/scErrors.sol";
+import {ISwapRouter} from "src/interfaces/uniswap/ISwapRouter.sol";
+import {ILido} from "src/interfaces/lido/ILido.sol";
+import {IwstETH} from "src/interfaces/lido/IwstETH.sol";
+import {ICurvePool} from "src/interfaces/curve/ICurvePool.sol";
 
 /**
  * @title SwapperLib
@@ -53,14 +53,35 @@ library SwapperLib {
         uint256 _amountOutMin,
         uint24 _poolFee
     ) internal returns (uint256 amountOut) {
+        amountOut = _uniswapSwapExactInput(_tokenIn, _tokenOut, address(this), _amountIn, _amountOutMin, _poolFee);
+    }
+
+    /**
+     * @notice Swap tokens on Uniswap V3 using the exact input single function.
+     * @param _tokenIn The address of the token to swap from.
+     * @param _tokenOut The address of the token to swap to.
+     * @param _recipient The address to receive the output tokens.
+     * @param _amountIn The amount of `_tokenIn` to swap.
+     * @param _amountOutMin The minimum amount of `_tokenOut` to receive.
+     * @param _poolFee The fee tier of the Uniswap V3 pool.
+     * @return amountOut The amount of `_tokenOut` received from the swap.
+     */
+    function _uniswapSwapExactInput(
+        address _tokenIn,
+        address _tokenOut,
+        address _recipient,
+        uint256 _amountIn,
+        uint256 _amountOutMin,
+        uint24 _poolFee
+    ) internal returns (uint256 amountOut) {
         ERC20(_tokenIn).safeApprove(address(swapRouter), _amountIn);
 
         ISwapRouter.ExactInputSingleParams memory params = ISwapRouter.ExactInputSingleParams({
             tokenIn: _tokenIn,
             tokenOut: _tokenOut,
             fee: _poolFee,
-            recipient: address(this),
-            deadline: block.timestamp,
+            recipient: _recipient,
+            deadline: block.timestamp + 24 hours,
             amountIn: _amountIn,
             amountOutMinimum: _amountOutMin,
             sqrtPriceLimitX96: 0

@@ -2,10 +2,10 @@
 pragma solidity ^0.8.13;
 
 import "forge-std/Script.sol";
-import {CREATE3Script} from "./base/CREATE3Script.sol";
-import {RewardTracker} from "../src/staking/RewardTracker.sol";
-import {MainnetAddresses as MA} from "./base/MainnetAddresses.sol";
-import {Constants as C} from "../src/lib/Constants.sol";
+import {CREATE3Script} from "script/base/CREATE3Script.sol";
+import {MainnetAddresses as MA} from "script/base/MainnetAddresses.sol";
+import {RewardTracker} from "src/staking/RewardTracker.sol";
+import {Constants as C} from "src/lib/Constants.sol";
 
 contract DeployStaking is CREATE3Script {
     string public NAME = "Staked Quartz";
