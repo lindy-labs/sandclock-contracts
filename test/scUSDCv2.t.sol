@@ -1593,7 +1593,7 @@ contract scUSDCv2Test is Test {
     }
 
     function testFuzz_withdraw(uint256 _amount, uint256 _withdrawAmount) public {
-        _amount = bound(_amount, 1e6, 4_000_000e6); // upper limit constrained by weth available on aave v3 at the fork block number
+        _amount = bound(_amount, 1e6, 8_000_000e6); // upper limit constrained by weth available on aave v3 at the fork block number
         _setBalance(alice, _amount);
 
         vm.startPrank(alice);
@@ -1601,7 +1601,7 @@ contract scUSDCv2Test is Test {
         vault.deposit(_amount, alice);
         vm.stopPrank();
 
-        uint256 borrowAmount = priceConverter.assetToTargetToken(_amount.mulWadDown(0.7e18));
+        uint256 borrowAmount = priceConverter.assetToTargetToken(_amount.mulWadDown(0.6e18));
 
         bytes[] memory callData;
         callData = _getSupplyAndBorrowCallData(callData, aaveV3.id(), _amount, borrowAmount);
