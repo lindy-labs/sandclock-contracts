@@ -20,11 +20,10 @@ abstract contract scCrossAssetYieldVaultExitAllPositionsScript is scCrossAssetYi
                           SCRIPT PARAMETERS
     //////////////////////////////////////////////////////////////*/
 
-    // @dev: maxAceeptableLossPercent - the maximum acceptable loss in percent of the current total assets amount
-
-    // uint256 public maxAceeptableLossPercent = 0.02e18; // 2%
-
-    function maxAceeptableLossPercent() public view virtual returns (uint256);
+    /// @dev maxAceeptableLossPercent - the maximum acceptable loss in percent of the current total assets amount
+    function maxAceeptableLossPercent() public view virtual returns (uint256) {
+        return 0.02e18; // 2%
+    }
 
     /*//////////////////////////////////////////////////////////////*/
 
