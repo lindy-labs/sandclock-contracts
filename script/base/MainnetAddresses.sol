@@ -22,6 +22,8 @@ library MainnetAddresses {
 
     address public constant SCUSDT = address(0x00); //TODO: update after deployment
 
+    address public constant SCSDAI = 0x0Fc97657B67C7E7bD4100c72851d0377DA14B470;
+
     address public constant PRICE_CONVERTER = 0xD76B0Ff4A487CaFE4E19ed15B73f12f6A92095Ca;
     address public constant SWAPPER = 0x6649f12b5ef495a3861b21E3206B1AbfA33A6531;
 

@@ -62,7 +62,7 @@ abstract contract MainnetDeployBase is CREATE3Script {
         _vault.setTreasury(_treasury);
     }
 
-    function _deposit(sc4626 _vault, uint256 _amount) internal virtual {
+    function _deposit(ERC4626 _vault, uint256 _amount) internal virtual {
         ERC20(_vault.asset()).safeApprove(address(_vault), _amount);
         _vault.deposit(_amount, deployerAddress);
     }

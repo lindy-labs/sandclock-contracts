@@ -104,12 +104,31 @@ library SwapperLib {
         uint256 _amountOutMin,
         bytes memory _path
     ) internal returns (uint256 amountOut) {
+        amountOut = _uniswapSwapExactInputMultihop(_tokenIn, _amountIn, _amountOutMin, _path, address(this));
+    }
+
+    /**
+     * @notice Swap tokens on Uniswap V3 using exact input multi-hop.
+     * @param _tokenIn The address of the token to swap from.
+     * @param _amountIn The amount of `_tokenIn` to swap.
+     * @param _amountOutMin The minimum amount of the output token to receive.
+     * @param _path The encoded path for the swap, including tokens and fees.
+     * @param _recipient The address to receive the output tokens.
+     * @return amountOut The amount of output tokens received from the swap.
+     */
+    function _uniswapSwapExactInputMultihop(
+        address _tokenIn,
+        uint256 _amountIn,
+        uint256 _amountOutMin,
+        bytes memory _path,
+        address _recipient
+    ) internal returns (uint256 amountOut) {
         ERC20(_tokenIn).safeApprove(address(swapRouter), _amountIn);
 
         ISwapRouter.ExactInputParams memory params = ISwapRouter.ExactInputParams({
             path: _path,
-            recipient: address(this),
-            deadline: block.timestamp,
+            recipient: _recipient,
+            deadline: block.timestamp + 24 hours,
             amountIn: _amountIn,
             amountOutMinimum: _amountOutMin
         });

@@ -2,10 +2,6 @@
 pragma solidity ^0.8.13;
 
 import "forge-std/console2.sol";
-import {ERC4626} from "solmate/mixins/ERC4626.sol";
-import {ERC20} from "solmate/tokens/ERC20.sol";
-import {Strings} from "openzeppelin-contracts/utils/Strings.sol";
-import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 
 import {Constants as C} from "src/lib/Constants.sol";
 import {SwapperLib} from "src/lib/SwapperLib.sol";
@@ -17,11 +13,7 @@ import {AaveV3ScUsdtAdapter} from "src/steth/scUsdt-adapters/AaveV3ScUsdtAdapter
 import {UsdtWethSwapper} from "src/steth/swapper/UsdtWethSwapper.sol";
 
 contract DeployScUsdt is MainnetDeployBase {
-    using SafeTransferLib for ERC20;
-
     function run() external returns (scUSDT scUsdt) {
-        ERC4626 scWethV2 = ERC4626(MainnetAddresses.SCWETHV2);
-
         vm.startBroadcast(deployerAddress);
 
         /// step1 - deploy adapter, swapper, and price converter
@@ -38,7 +30,8 @@ contract DeployScUsdt is MainnetDeployBase {
             deployWithCreate3(
                 type(scUSDT).name,
                 abi.encodePacked(
-                    type(scUSDT).creationCode, abi.encode(deployerAddress, keeper, scWethV2, priceConverter, swapper)
+                    type(scUSDT).creationCode,
+                    abi.encode(deployerAddress, keeper, MainnetAddresses.SCWETHV2, priceConverter, swapper)
                 )
             )
         );
