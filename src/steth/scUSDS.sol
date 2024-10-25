@@ -20,22 +20,26 @@ contract scUSDS is ERC4626 {
     /// @notice The DAI ERC20 token contract.
     ERC20 public constant dai = ERC20(C.DAI);
 
+    /// @notice The sDAI ERC4626 token contract.
+    ERC4626 public constant sDai = ERC4626(C.SDAI);
+
     /// @notice The USDS ERC20 token contract.
     ERC20 public constant usds = ERC20(C.USDS);
 
     /// @notice The Dai - USDS converter contract from sky
     IDaiUsds public constant converter = IDaiUsds(C.DAI_USDS_CONVERTER);
 
-    /// @notice The scDAI ERC4626 vault contract.
-    ERC4626 public immutable scDai;
+    /// @notice The scSDAI ERC4626 vault contract.
+    ERC4626 public immutable scsDai;
 
-    constructor(ERC4626 _scDAI) ERC4626(usds, "Sandclock Yield USDS", "scUSDS") {
-        scDai = _scDAI;
+    constructor(ERC4626 _scsDai) ERC4626(usds, "Sandclock Yield USDS", "scUSDS") {
+        scsDai = _scsDai;
 
         dai.safeApprove(C.DAI_USDS_CONVERTER, type(uint256).max);
         usds.safeApprove(C.DAI_USDS_CONVERTER, type(uint256).max);
 
-        dai.safeApprove(address(_scDAI), type(uint256).max);
+        dai.safeApprove(C.SDAI, type(uint256).max);
+        sDai.safeApprove(address(_scsDai), type(uint256).max);
     }
 
     /**
@@ -43,9 +47,12 @@ contract scUSDS is ERC4626 {
      * @return The total assets in USDS.
      */
     function totalAssets() public view override returns (uint256) {
+        // balance in sDai
+        uint256 balance = scsDai.convertToAssets(scsDai.balanceOf(address(this)));
+
         // returns balance in DAI
         // usds to dai conversion rate is 1:1
-        return scDai.convertToAssets(scDai.balanceOf(address(this)));
+        return sDai.convertToAssets(balance);
     }
 
     /**
@@ -69,8 +76,8 @@ contract scUSDS is ERC4626 {
 
         _burn(owner, shares);
 
-        // change2: removed "asset.safeTransfer(receiver, assets);" and replaced with "_withdrawUsdsFromScDai(...)" call
-        _withdrawUsdsFromScDai(assets, shares, receiver);
+        // change2: removed "asset.safeTransfer(receiver, assets);" and replaced with "_withdrawUsdsFromScSDai(...)" call
+        _withdrawUsdsFromScSDai(assets, shares, receiver);
 
         emit Withdraw(msg.sender, receiver, owner, assets, shares);
     }
@@ -94,7 +101,7 @@ contract scUSDS is ERC4626 {
 
         _burn(owner, shares);
 
-        _withdrawUsdsFromScDai(assets, shares, receiver);
+        _withdrawUsdsFromScSDai(assets, shares, receiver);
 
         emit Withdraw(msg.sender, receiver, owner, assets, shares);
     }
@@ -109,18 +116,27 @@ contract scUSDS is ERC4626 {
         // USDS => DAI
         converter.usdsToDai(address(this), assets);
 
-        // Deposit DAI to scDAI
-        scDai.deposit(assets, address(this));
+        // DAI => SDAI
+        assets = sDai.deposit(assets, address(this));
+
+        // Deposit SDAI to scsDai
+        scsDai.deposit(assets, address(this));
     }
 
     /**
-     * @notice withdraws the required dai amount from scDAI and converts it to usds
+     * @notice withdraws the required sdai amount from scSDAI and converts it to usds
      * @param usdsAmount Amount of usds to withdraw
      * @param receiver The address to receive the withdrawn USDS
      */
-    function _withdrawUsdsFromScDai(uint256 usdsAmount, uint256, address receiver) internal {
-        scDai.withdraw(usdsAmount, address(this), address(this));
+    function _withdrawUsdsFromScSDai(uint256 usdsAmount, uint256, address receiver) internal {
+        uint256 sDaiAmount = sDai.convertToShares(usdsAmount);
 
+        scsDai.withdraw(sDaiAmount, address(this), address(this));
+
+        // sdai => dai
+        sDai.redeem(sDaiAmount, address(this), address(this));
+
+        // dai => usds
         converter.daiToUsds(receiver, dai.balanceOf(address(this)));
     }
 }
