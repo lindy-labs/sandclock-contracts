@@ -43,9 +43,9 @@ contract scUSDSTest is Test {
     WETH weth;
     ERC20 usds;
     ERC20 dai = ERC20(C.DAI);
+    ERC4626 public constant sDai = ERC4626(C.SDAI);
 
     scWETH wethVault = scWETH(payable(M.SCWETHV2));
-    scDAI scDai;
     scSDAI scsDAI;
     scUSDS vault;
 
@@ -65,18 +65,19 @@ contract scUSDSTest is Test {
 
         pps = wethVault.totalAssets().divWadDown(wethVault.totalSupply());
 
-        _deployAndSetUpScDai();
+        _deployAndSetUpScSDai();
 
-        vault = new scUSDS(ERC4626(address(scDai)));
+        vault = new scUSDS(ERC4626(address(scsDAI)));
     }
 
     function test_constructor() public {
-        vault = new scUSDS(ERC4626(address(scDai)));
+        vault = new scUSDS(ERC4626(address(scsDAI)));
 
         assertEq(
             dai.allowance(address(vault), C.DAI_USDS_CONVERTER), type(uint256).max, "dai allowance to daiusds converter"
         );
-        assertEq(dai.allowance(address(vault), address(scDai)), type(uint256).max, "dai allowance to scDAI");
+        assertEq(sDai.allowance(address(vault), address(scsDAI)), type(uint256).max, "dai allowance to scDAI");
+        assertEq(dai.allowance(address(vault), C.SDAI), type(uint256).max, "dai allowance to sDai");
         assertEq(usds.allowance(address(vault), C.DAI_USDS_CONVERTER), type(uint256).max, "weth allowance");
     }
 
@@ -113,8 +114,8 @@ contract scUSDSTest is Test {
         vault.deposit(amount, address(this));
 
         assertEq(vault.balanceOf(address(this)), amount, "scUSDS shares");
-        assertEq(scDai.balanceOf(address(this)), 0, "scDAI shares to user");
-        assertEq(scDai.balanceOf(address(vault)), amount, "amount deposited in scDAI");
+        assertEq(scsDAI.balanceOf(address(this)), 0, "scsDAI shares to user");
+        assertEq(scsDAI.balanceOf(address(vault)), sDai.convertToShares(amount), "amount deposited in scsDAI");
 
         assertApproxEqRel(vault.totalAssets(), amount, 1e10, "totalAssets");
     }
@@ -210,7 +211,7 @@ contract scUSDSTest is Test {
 
     /////////////////////////////// INTERNAL METHODS /////////////////////////////////////////////////
 
-    function _deployAndSetUpScDai() internal {
+    function _deployAndSetUpScSDai() internal {
         priceConverter = new SDaiWethPriceConverter();
         swapper = new SDaiWethSwapper();
 
@@ -224,8 +225,6 @@ contract scUSDSTest is Test {
         scsDAI.setFloatPercentage(0);
         // assign keeper role to deployer
         scsDAI.grantRole(scsDAI.KEEPER_ROLE(), address(this));
-
-        scDai = new scDAI(scsDAI);
     }
 
     function _deposit(uint256 amount, address owner) internal returns (uint256 shares) {
