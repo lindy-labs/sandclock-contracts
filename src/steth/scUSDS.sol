@@ -29,7 +29,7 @@ contract scUSDS is ERC4626 {
     /// @notice The Dai - USDS converter contract from sky
     IDaiUsds public constant converter = IDaiUsds(C.DAI_USDS_CONVERTER);
 
-    /// @notice The scDAI ERC4626 vault contract.
+    /// @notice The scSDAI ERC4626 vault contract.
     ERC4626 public immutable scsDai;
 
     constructor(ERC4626 _scsDai) ERC4626(usds, "Sandclock Yield USDS", "scUSDS") {
