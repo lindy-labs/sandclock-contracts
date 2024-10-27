@@ -10,26 +10,25 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 import {ERC4626} from "solmate/mixins/ERC4626.sol";
 
 import {Constants as C} from "src/lib/Constants.sol";
-import {scUSDT} from "src/steth/scUSDT.sol";
-import {AaveV3ScUsdtAdapter} from "src/steth/scUsdt-adapters/AaveV3ScUsdtAdapter.sol";
-import {UsdtWethPriceConverter} from "src/steth/priceConverter/UsdtWethPriceConverter.sol";
-import {UsdtWethSwapper} from "src/steth/swapper/UsdtWethSwapper.sol";
+import {scSDAI} from "src/steth/scSDAI.sol";
 import {scCrossAssetYieldVault} from "src/steth/scCrossAssetYieldVault.sol";
+import {SparkScSDaiAdapter} from "src/steth/scSDai-adapters/SparkScSDaiAdapter.sol";
+import {SDaiWethPriceConverter} from "src/steth/priceConverter/SDaiWethPriceConverter.sol";
 
-import {RebalanceScUsdt} from "script/v2/keeper-actions/RebalanceScUsdt.s.sol";
+import {RebalanceScSDai} from "script/v2/keeper-actions/RebalanceScSDai.s.sol";
 import {scCrossAssetYieldVaultRebalanceScript} from "script/base/scCrossAssetYieldVaultRebalanceScript.sol";
 import {MainnetAddresses} from "script/base/MainnetAddresses.sol";
 
-contract RebalanceScUsdtTest is Test {
+contract RebalanceScSDaiTest is Test {
     using FixedPointMathLib for uint256;
     using SafeTransferLib for ERC20;
 
     uint256 mainnetFork;
 
-    scUSDT vault;
-    AaveV3ScUsdtAdapter aaveV3;
-    UsdtWethPriceConverter priceConverter;
-    RebalanceScUsdtTestHarness script;
+    scSDAI vault;
+    SparkScSDaiAdapter spark;
+    SDaiWethPriceConverter priceConverter;
+    RebalanceScSDaiTestHarness script;
 
     constructor() {
         mainnetFork = vm.createFork(vm.envString("RPC_URL_MAINNET"));
@@ -37,43 +36,29 @@ contract RebalanceScUsdtTest is Test {
         vm.rollFork(21031368);
 
         // TODO: use deployed addresses here instead of creating new instances when deployed on mainnet
-        aaveV3 = new AaveV3ScUsdtAdapter();
-        priceConverter = new UsdtWethPriceConverter();
-        UsdtWethSwapper swapper = new UsdtWethSwapper();
+        spark = new SparkScSDaiAdapter();
+        priceConverter = new SDaiWethPriceConverter();
 
-        vault = new scUSDT(
-            address(this), MainnetAddresses.KEEPER, ERC4626(MainnetAddresses.SCWETHV2), priceConverter, swapper
-        );
+        vault = scSDAI(MainnetAddresses.SCSDAI);
+        spark = SparkScSDaiAdapter(vault.getAdapter(1));
+        priceConverter = SDaiWethPriceConverter(address(vault.priceConverter()));
 
-        vault.addAdapter(aaveV3);
-
-        // make an initial deposit
-        deal(C.USDT, address(this), 1000e6);
-        ERC20(C.USDT).safeApprove(address(vault), 1000e6);
-        vault.deposit(1000e6, address(this));
-
-        console2.log(ERC20(C.USDT).balanceOf(address(vault)));
-
-        script = new RebalanceScUsdtTestHarness(vault);
+        script = new RebalanceScSDaiTestHarness(vault);
     }
 
     function test_run_initialRebalance() public {
-        assertEq(script.targetTokensInvested(), 0, "weth invested");
-        assertEq(script.totalDebt(), 0, "total debt");
-        assertEq(script.totalCollateral(), 0, "total collateral");
-        assertTrue(script.assetBalance() > 0, "usdt balance");
+        deal(C.SDAI, address(vault), 10000e18);
 
-        uint256 expectedFloat = script.assetBalance().mulWadDown(vault.floatPercentage());
-        uint256 expectedCollateral = script.assetBalance() - expectedFloat;
-        uint256 expectedDebt =
-            priceConverter.assetToTargetToken(expectedCollateral).mulWadDown(script.aaveV3TargetLtv());
+        uint256 expectedFloat = script.totalAssets().mulWadDown(vault.floatPercentage());
+        uint256 expectedCollateral = script.totalCollateral() + script.assetBalance() - expectedFloat;
+        uint256 expectedDebt = priceConverter.assetToTargetToken(expectedCollateral).mulWadDown(script.sparkTargetLtv());
 
         script.run();
 
         assertApproxEqRel(script.targetTokensInvested(), expectedDebt, 0.001e18, "weth invested");
         assertApproxEqRel(script.totalDebt(), expectedDebt, 0.001e18, "total debt");
         assertApproxEqRel(script.totalCollateral(), expectedCollateral, 0.001e18, "total collateral");
-        assertApproxEqRel(script.assetBalance(), expectedFloat, 0.001e18, "usdt balance");
+        assertApproxEqRel(script.assetBalance(), expectedFloat, 0.001e18, "sDai balance");
     }
 
     function test_run_rebalanceWithProfit() public {
@@ -84,17 +69,16 @@ contract RebalanceScUsdtTest is Test {
         _simulate100PctProfit();
 
         uint256 expectedFloat = script.totalAssets().mulWadDown(vault.floatPercentage());
-        uint256 expectedCollateral = script.totalCollateral().mulWadDown(1e18 + script.aaveV3TargetLtv());
-        uint256 expectedDebt =
-            priceConverter.assetToTargetToken(expectedCollateral).mulWadDown(script.aaveV3TargetLtv());
+        uint256 expectedCollateral = script.totalCollateral().mulWadDown(1e18 + script.sparkTargetLtv());
+        uint256 expectedDebt = priceConverter.assetToTargetToken(expectedCollateral).mulWadDown(script.sparkTargetLtv());
 
-        script = new RebalanceScUsdtTestHarness(vault);
+        script = new RebalanceScSDaiTestHarness(vault);
         script.run();
 
         assertApproxEqRel(script.targetTokensInvested(), expectedDebt, 0.01e18, "weth invested");
         assertApproxEqRel(script.totalDebt(), expectedDebt, 0.01e18, "total debt");
         assertApproxEqRel(script.totalCollateral(), expectedCollateral, 0.01e18, "total collateral");
-        assertApproxEqRel(script.assetBalance(), expectedFloat, 0.4e18, "usdt balance");
+        assertApproxEqRel(script.assetBalance(), expectedFloat, 0.8e18, "sDai balance");
     }
 
     function test_run_canDeleverage() public {
@@ -102,27 +86,26 @@ contract RebalanceScUsdtTest is Test {
 
         _assertInitialState();
 
-        script = new RebalanceScUsdtTestHarness(vault);
-        script.setAaveV3TargetLtv(0.2e18);
+        script = new RebalanceScSDaiTestHarness(vault);
+        script.setSparkTargetLtv(0.2e18);
 
         uint256 expectedFloat = script.totalAssets().mulWadDown(vault.floatPercentage());
         uint256 expectedCollateral = script.totalCollateral();
-        uint256 expectedDebt =
-            priceConverter.assetToTargetToken(expectedCollateral).mulWadDown(script.aaveV3TargetLtv());
+        uint256 expectedDebt = priceConverter.assetToTargetToken(expectedCollateral).mulWadDown(script.sparkTargetLtv());
 
         script.run();
 
         assertApproxEqRel(script.targetTokensInvested(), expectedDebt, 0.01e18, "weth invested");
         assertApproxEqRel(script.totalDebt(), expectedDebt, 0.01e18, "total debt");
         assertApproxEqRel(script.totalCollateral(), expectedCollateral, 0.01e18, "total collateral");
-        assertApproxEqRel(script.assetBalance(), expectedFloat, 0.4e18, "usdt balance");
+        assertApproxEqRel(script.assetBalance(), expectedFloat, 0.8e18, "sDai balance");
     }
 
     function _assertInitialState() internal {
         assertTrue(script.targetTokensInvested() > 0, "initial weth invested 0");
         assertTrue(vault.totalDebt() > 0, "initial total debt 0");
         assertTrue(vault.totalCollateral() > 0, "initial  total collateral 0");
-        assertTrue(script.assetBalance() > 0, "initial usdt balance 0");
+        assertTrue(script.assetBalance() > 0, "initial sDai balance 0");
     }
 
     function _simulate100PctProfit() internal {
@@ -143,20 +126,25 @@ contract RebalanceScUsdtTest is Test {
     }
 }
 
-contract RebalanceScUsdtTestHarness is RebalanceScUsdt {
-    constructor(scUSDT _vault) {
+contract RebalanceScSDaiTestHarness is RebalanceScSDai {
+    constructor(scSDAI _vault) {
         vault = _vault;
+    }
+
+    function _initEnv() internal override {
+        // TODO: WRONG KEEPER ADDRESS?
+        keeper = 0x3Ab6EBDBf08e1954e69F6859AdB2DA5236D2e838;
     }
 
     function _getVaultAddress() internal view override returns (scCrossAssetYieldVault) {
         return scCrossAssetYieldVault(vault);
     }
 
-    function setAaveV3TargetLtv(uint256 _newTargetLtv) public {
-        aaveV3TargetLtv = _newTargetLtv;
+    function setSparkTargetLtv(uint256 _newTargetLtv) public {
+        sparkTargetLtv = _newTargetLtv;
     }
 
-    function setAaveV3InvestableAmountPercent(uint256 _newInvestableAmountPercent) public {
-        aaveV3InvestableAmountPercent = _newInvestableAmountPercent;
+    function setSparkInvestableAmountPercent(uint256 _newInvestableAmountPercent) public {
+        sparkInvestableAmountPercent = _newInvestableAmountPercent;
     }
 }

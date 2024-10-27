@@ -10,7 +10,7 @@ import {Constants as C} from "../../src/lib/Constants.sol";
 import {IAdapter} from "../../src/steth/IAdapter.sol";
 import {SparkScSDaiAdapter} from "../../src/steth/scSDai-adapters/SparkScSDaiAdapter.sol";
 
-contract SparkScDaiAdapterTest is Test {
+contract SparkScSDaiAdapterTest is Test {
     SparkScSDaiAdapter adapter;
     ERC20 sDai;
     WETH weth;
