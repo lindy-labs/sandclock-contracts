@@ -5,11 +5,11 @@ import "forge-std/console2.sol";
 import "forge-std/Test.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 
-import {scCrossAssetYieldVault} from "../../src/steth/scCrossAssetYieldVault.sol";
-import {scUSDCv2} from "../../src/steth/scUSDCv2.sol";
-import {PriceConverter} from "../../src/steth/priceConverter/PriceConverter.sol";
-import {MainnetAddresses} from "../../script/base/MainnetAddresses.sol";
-import {ExitAllPositionsScUsdcV2} from "../../script/v2/keeper-actions/ExitAllPositionsScUsdcV2.s.sol";
+import {scCrossAssetYieldVault} from "src/steth/scCrossAssetYieldVault.sol";
+import {scUSDCv2} from "src/steth/scUSDCv2.sol";
+import {PriceConverter} from "src/steth/priceConverter/PriceConverter.sol";
+import {MainnetAddresses} from "script/base/MainnetAddresses.sol";
+import {ExitAllPositionsScUsdcV2} from "script/v2/keeper-actions/ExitAllPositionsScUsdcV2.s.sol";
 
 contract ExitAllPositionsScUsdcV2Test is Test {
     using FixedPointMathLib for uint256;

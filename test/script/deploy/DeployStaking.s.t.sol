@@ -5,10 +5,9 @@ import "forge-std/console2.sol";
 import "forge-std/Test.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 
-import {Constants as C} from "../../../src/lib/Constants.sol";
-import {MainnetAddresses as MA} from "../../../script/base/MainnetAddresses.sol";
-
-import {RewardTracker} from "../../../src/staking/RewardTracker.sol";
+import {Constants as C} from "src/lib/Constants.sol";
+import {RewardTracker} from "src/staking/RewardTracker.sol";
+import {MainnetAddresses as MA} from "script/base/MainnetAddresses.sol";
 import {DeployStaking} from "script/DeployStaking.s.sol";
 
 contract DeployStakingTest is Test {

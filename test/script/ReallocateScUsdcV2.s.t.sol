@@ -5,17 +5,17 @@ import "forge-std/console2.sol";
 import "forge-std/Test.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 
-import {Constants as C} from "../../src/lib/Constants.sol";
-import {AggregatorV3Interface} from "../../src/interfaces/chainlink/AggregatorV3Interface.sol";
-import {scUSDCv2} from "../../src/steth/scUSDCv2.sol";
-import {PriceConverter} from "../../src/steth/priceConverter/PriceConverter.sol";
-import {IAdapter} from "../../src/steth/IAdapter.sol";
-import {AaveV2ScUsdcAdapter} from "../../src/steth/scUsdcV2-adapters/AaveV2ScUsdcAdapter.sol";
-import {AaveV3ScUsdcAdapter} from "../../src/steth/scUsdcV2-adapters/AaveV3ScUsdcAdapter.sol";
-import {MorphoAaveV3ScUsdcAdapter} from "../../src/steth/scUsdcV2-adapters/MorphoAaveV3ScUsdcAdapter.sol";
-import {ReallocateScUsdcV2} from "../../script/v2/keeper-actions/ReallocateScUsdcV2.s.sol";
-import {MainnetAddresses} from "../../script/base/MainnetAddresses.sol";
-import {ISinglePairPriceConverter} from "../../src/steth/priceConverter/ISinglePairPriceConverter.sol";
+import {Constants as C} from "src/lib/Constants.sol";
+import {AggregatorV3Interface} from "src/interfaces/chainlink/AggregatorV3Interface.sol";
+import {scUSDCv2} from "src/steth/scUSDCv2.sol";
+import {PriceConverter} from "src/steth/priceConverter/PriceConverter.sol";
+import {IAdapter} from "src/steth/IAdapter.sol";
+import {AaveV2ScUsdcAdapter} from "src/steth/scUsdcV2-adapters/AaveV2ScUsdcAdapter.sol";
+import {AaveV3ScUsdcAdapter} from "src/steth/scUsdcV2-adapters/AaveV3ScUsdcAdapter.sol";
+import {MorphoAaveV3ScUsdcAdapter} from "src/steth/scUsdcV2-adapters/MorphoAaveV3ScUsdcAdapter.sol";
+import {ReallocateScUsdcV2} from "script/v2/keeper-actions/ReallocateScUsdcV2.s.sol";
+import {MainnetAddresses} from "script/base/MainnetAddresses.sol";
+import {ISinglePairPriceConverter} from "src/steth/priceConverter/ISinglePairPriceConverter.sol";
 
 contract ReallocateScUsdcV2Test is Test {
     using FixedPointMathLib for uint256;
