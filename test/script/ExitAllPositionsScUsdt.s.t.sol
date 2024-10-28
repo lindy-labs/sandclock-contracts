@@ -22,14 +22,12 @@ contract ExitAllPositionsScUsdtTest is Test {
     using FixedPointMathLib for uint256;
     using SafeTransferLib for ERC20;
 
-    uint256 mainnetFork;
-
     scUSDT vault;
     UsdtWethPriceConverter priceConverter;
     ExitAllPositionsScUsdt script;
 
     constructor() {
-        mainnetFork = vm.createFork(vm.envString("RPC_URL_MAINNET"));
+        uint256 mainnetFork = vm.createFork(vm.envString("RPC_URL_MAINNET"));
         vm.selectFork(mainnetFork);
         vm.rollFork(21031368);
 

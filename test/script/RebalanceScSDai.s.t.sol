@@ -35,10 +35,6 @@ contract RebalanceScSDaiTest is Test {
         vm.selectFork(mainnetFork);
         vm.rollFork(21031368);
 
-        // TODO: use deployed addresses here instead of creating new instances when deployed on mainnet
-        spark = new SparkScSDaiAdapter();
-        priceConverter = new SDaiWethPriceConverter();
-
         vault = scSDAI(MainnetAddresses.SCSDAI);
         spark = SparkScSDaiAdapter(vault.getAdapter(1));
         priceConverter = SDaiWethPriceConverter(address(vault.priceConverter()));
@@ -132,7 +128,7 @@ contract RebalanceScSDaiTestHarness is RebalanceScSDai {
     }
 
     function _initEnv() internal override {
-        // TODO: WRONG KEEPER ADDRESS?
+        // TODO: WRONG KEEPER ADDRESS???
         keeper = 0x3Ab6EBDBf08e1954e69F6859AdB2DA5236D2e838;
     }
 

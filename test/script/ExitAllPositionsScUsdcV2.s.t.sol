@@ -14,14 +14,12 @@ import {ExitAllPositionsScUsdcV2} from "script/v2/keeper-actions/ExitAllPosition
 contract ExitAllPositionsScUsdcV2Test is Test {
     using FixedPointMathLib for uint256;
 
-    uint256 mainnetFork;
-
     scUSDCv2 vault;
     PriceConverter priceConverter;
     ExitAllPositionsScUsdcV2 script;
 
     function setUp() public {
-        mainnetFork = vm.createFork(vm.envString("RPC_URL_MAINNET"));
+        uint256 mainnetFork = vm.createFork(vm.envString("RPC_URL_MAINNET"));
         vm.selectFork(mainnetFork);
         vm.rollFork(18488739);
 
