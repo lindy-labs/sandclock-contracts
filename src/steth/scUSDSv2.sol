@@ -3,6 +3,7 @@ pragma solidity ^0.8.19;
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {ERC4626} from "solmate/mixins/ERC4626.sol";
+import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 
 import {scCrossAssetYieldVault} from "./scCrossAssetYieldVault.sol";
 import {Constants as C} from "../lib/Constants.sol";
@@ -17,6 +18,8 @@ import {ISinglePairSwapper} from "./swapper/ISinglePairSwapper.sol";
  * maybe we can use the DAI Price Converter here.
  */
 contract scUSDSv2 is scCrossAssetYieldVault {
+    using SafeTransferLib for ERC20;
+
     constructor(
         address _admin,
         address _keeper,
@@ -34,5 +37,8 @@ contract scUSDSv2 is scCrossAssetYieldVault {
             "Sandclock USDS Real Yield Vault",
             "scUSDSv2"
         )
-    {}
+    {
+        ERC20(C.DAI).safeApprove(C.DAI_USDS_CONVERTER, type(uint256).max);
+        ERC20(C.USDS).safeApprove(C.DAI_USDS_CONVERTER, type(uint256).max);
+    }
 }
