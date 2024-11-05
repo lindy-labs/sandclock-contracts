@@ -260,7 +260,31 @@ contract scUSDSv2Test is Test {
         assertEq(vault.targetTokenInvestedAmount(), 0, "weth invested");
     }
 
-    function test_claimRewards() public {}
+    function test_claimRewards() public {
+        uint256 initialBalance = 1_000_000e18;
+        _deposit(address(this), initialBalance);
+
+        bytes[] memory callData = new bytes[](2);
+        callData[0] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, aaveV3Adapter.id(), initialBalance);
+        callData[1] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, aaveV3Adapter.id(), 100 ether);
+
+        vault.rebalance(callData);
+
+        ERC20 aUsds = ERC20(C.AAVE_V3_AUSDS_TOKEN);
+        uint256 initialAUsdsBalance = aUsds.balanceOf(address(vault));
+        uint256 initialCollateral = vault.totalCollateral();
+
+        vm.warp(block.timestamp + 30 days);
+
+        // the vault gets aUsds Rewards
+        vault.claimRewards(aaveV3Adapter.id(), "");
+
+        uint256 newCollateral = vault.totalCollateral();
+        uint256 newAUsdsBalance = aUsds.balanceOf(address(vault));
+
+        assertGt(newCollateral, initialCollateral, "collateral did not increase");
+        assertGt(newAUsdsBalance, initialAUsdsBalance, "no aUsds rewards");
+    }
 
     ///////////////////////////////// INTERNAL METHODS /////////////////////////////////
 

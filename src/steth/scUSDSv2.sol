@@ -16,6 +16,7 @@ import {ISinglePairSwapper} from "./swapper/ISinglePairSwapper.sol";
  * @dev Inherits from scCrossAssetYieldVault to manage and generate USDS yield.
  * @dev There is no USDS Chainlink Feed, but since USDS to DAI is always 1:1 so
  * maybe we can use the DAI Price Converter here.
+ * @dev This vault also receives aUSDS rewards which must be claimed periodically using claimRewards()
  */
 contract scUSDSv2 is scCrossAssetYieldVault {
     using SafeTransferLib for ERC20;
