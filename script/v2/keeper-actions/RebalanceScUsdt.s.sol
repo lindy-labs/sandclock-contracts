@@ -39,7 +39,7 @@ contract RebalanceScUsdt is scCrossAssetYieldVaultRebalanceScript {
     function _initializeAdapterSettings() internal override {
         adapterSettings.push(
             AdapterSettings({
-                adapterId: 1, // TODO: IAdapter(MainnetAddresses.SCUSDT_AAVEV3_ADAPTER).id(),
+                adapterId: IAdapter(MainnetAddresses.SCUSDT_AAVEV3_ADAPTER).id(),
                 investableAmountPercent: aaveV3InvestableAmountPercent,
                 targetLtv: aaveV3TargetLtv
             })

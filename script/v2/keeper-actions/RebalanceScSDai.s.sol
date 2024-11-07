@@ -3,6 +3,7 @@ pragma solidity ^0.8.13;
 
 import "forge-std/console2.sol";
 
+import {IAdapter} from "src/steth/IAdapter.sol";
 import {scCrossAssetYieldVault} from "src/steth/scCrossAssetYieldVault.sol";
 import {MainnetAddresses} from "script/base/MainnetAddresses.sol";
 import {scCrossAssetYieldVaultRebalanceScript} from "script/base/scCrossAssetYieldVaultRebalanceScript.sol";
@@ -38,7 +39,7 @@ contract RebalanceScSDai is scCrossAssetYieldVaultRebalanceScript {
     function _initializeAdapterSettings() internal override {
         adapterSettings.push(
             AdapterSettings({
-                adapterId: 1, // TODO: IAdapter(MainnetAddresses.SCSDAI_SPARK_ADAPTER).id(),
+                adapterId: IAdapter(MainnetAddresses.SCSDAI_SPARK_ADAPTER).id(),
                 investableAmountPercent: sparkInvestableAmountPercent,
                 targetLtv: sparkTargetLtv
             })
