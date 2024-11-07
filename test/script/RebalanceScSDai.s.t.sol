@@ -36,8 +36,8 @@ contract RebalanceScSDaiTest is Test {
         vm.rollFork(21031368);
 
         vault = scSDAI(MainnetAddresses.SCSDAI);
-        spark = SparkScSDaiAdapter(vault.getAdapter(1));
-        priceConverter = SDaiWethPriceConverter(address(vault.priceConverter()));
+        spark = SparkScSDaiAdapter(MainnetAddresses.SCSDAI_SPARK_ADAPTER);
+        priceConverter = SDaiWethPriceConverter(MainnetAddresses.SDAI_WETH_PRICE_CONVERTER);
 
         script = new RebalanceScSDaiTestHarness(vault);
     }

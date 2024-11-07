@@ -25,7 +25,7 @@ contract DeployLeveragedEthMainnet is DeployScWethV2AndScUsdcV2 {
 
         // scUSDC
         console2.log("eth deposited for weth to swap for usdc");
-        SwapperLib._uniswapSwapExactInput(address(weth), address(usdc), 0.01 ether, 0, 500);
+        SwapperLib._uniswapSwapExactInput(address(weth), address(usdc), deployerAddress, 0.01 ether, 0, 500);
         console2.log("eth swapped for USDC");
         _deposit(scUsdc, usdc.balanceOf(address(deployerAddress))); // 0.01 ether worth of USDC
         console2.log("usdc deposited into usdcContract");

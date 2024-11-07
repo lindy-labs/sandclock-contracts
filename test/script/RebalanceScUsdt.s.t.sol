@@ -13,11 +13,9 @@ import {Constants as C} from "src/lib/Constants.sol";
 import {scUSDT} from "src/steth/scUSDT.sol";
 import {AaveV3ScUsdtAdapter} from "src/steth/scUsdt-adapters/AaveV3ScUsdtAdapter.sol";
 import {UsdtWethPriceConverter} from "src/steth/priceConverter/UsdtWethPriceConverter.sol";
-import {UsdtWethSwapper} from "src/steth/swapper/UsdtWethSwapper.sol";
 import {scCrossAssetYieldVault} from "src/steth/scCrossAssetYieldVault.sol";
 
 import {RebalanceScUsdt} from "script/v2/keeper-actions/RebalanceScUsdt.s.sol";
-import {scCrossAssetYieldVaultRebalanceScript} from "script/base/scCrossAssetYieldVaultRebalanceScript.sol";
 import {MainnetAddresses} from "script/base/MainnetAddresses.sol";
 
 contract RebalanceScUsdtTest is Test {
@@ -36,35 +34,24 @@ contract RebalanceScUsdtTest is Test {
         vm.selectFork(mainnetFork);
         vm.rollFork(21031368);
 
-        // TODO: use deployed addresses here instead of creating new instances when deployed on mainnet
-        aaveV3 = new AaveV3ScUsdtAdapter();
-        priceConverter = new UsdtWethPriceConverter();
-        UsdtWethSwapper swapper = new UsdtWethSwapper();
+        aaveV3 = AaveV3ScUsdtAdapter(MainnetAddresses.SCUSDT_AAVEV3_ADAPTER);
+        priceConverter = UsdtWethPriceConverter(MainnetAddresses.USDT_WETH_PRICE_CONVERTER);
 
-        vault = new scUSDT(
-            address(this), MainnetAddresses.KEEPER, ERC4626(MainnetAddresses.SCWETHV2), priceConverter, swapper
-        );
-
-        vault.addAdapter(aaveV3);
-
-        // make an initial deposit
-        deal(C.USDT, address(this), 1000e6);
-        ERC20(C.USDT).safeApprove(address(vault), 1000e6);
-        vault.deposit(1000e6, address(this));
-
-        console2.log(ERC20(C.USDT).balanceOf(address(vault)));
+        vault = scUSDT(MainnetAddresses.SCUSDT);
 
         script = new RebalanceScUsdtTestHarness(vault);
     }
 
     function test_run_initialRebalance() public {
-        assertEq(script.targetTokensInvested(), 0, "weth invested");
-        assertEq(script.totalDebt(), 0, "total debt");
-        assertEq(script.totalCollateral(), 0, "total collateral");
-        assertTrue(script.assetBalance() > 0, "usdt balance");
+        uint256 newDepositAmount = vault.totalAssets();
 
-        uint256 expectedFloat = script.assetBalance().mulWadDown(vault.floatPercentage());
-        uint256 expectedCollateral = script.assetBalance() - expectedFloat;
+        // make an initial deposit
+        deal(C.USDT, address(this), newDepositAmount);
+        ERC20(C.USDT).safeApprove(address(vault), newDepositAmount);
+        vault.deposit(newDepositAmount, address(this));
+
+        uint256 expectedFloat = script.totalAssets().mulWadDown(vault.floatPercentage());
+        uint256 expectedCollateral = script.totalAssets() - expectedFloat;
         uint256 expectedDebt =
             priceConverter.assetToTargetToken(expectedCollateral).mulWadDown(script.aaveV3TargetLtv());
 
@@ -146,6 +133,11 @@ contract RebalanceScUsdtTest is Test {
 contract RebalanceScUsdtTestHarness is RebalanceScUsdt {
     constructor(scUSDT _vault) {
         vault = _vault;
+    }
+
+    function _initEnv() internal override {
+        // TODO: WRONG KEEPER ADDRESS???
+        keeper = 0x3Ab6EBDBf08e1954e69F6859AdB2DA5236D2e838;
     }
 
     function _getVaultAddress() internal view override returns (scCrossAssetYieldVault) {

@@ -140,8 +140,7 @@ contract DeployLeveragedEthForked is DeployScWethV2AndScUsdcV2, Test {
         weth.deposit{value: 1000 ether}();
 
         console2.log("swap 1000 eth for USDC");
-        // TODO: check
-        SwapperLib._uniswapSwapExactInput(address(weth), address(usdc), 1000 ether, 0, 500); // 0.05% fee
+        SwapperLib._uniswapSwapExactInput(address(weth), address(usdc), keeper, 1000 ether, 0, 500); // 0.05% fee
 
         vm.stopBroadcast();
     }

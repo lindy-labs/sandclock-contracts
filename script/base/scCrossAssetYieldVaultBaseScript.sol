@@ -19,13 +19,13 @@ import {ISinglePairPriceConverter} from "../../src/steth/priceConverter/ISingleP
  */
 abstract contract scCrossAssetYieldVaultBaseScript is Script {
     uint256 keeperPrivateKey;
-    address keeper;
-    // if keeper private key is not provided, use the default keeper address for running the script tests
+    address public keeper;
 
     scCrossAssetYieldVault vault = _getVaultAddress();
 
     function _initEnv() internal virtual {
         keeperPrivateKey = uint256(vm.envOr("KEEPER_PRIVATE_KEY", bytes32(0x0)));
+        // if keeper private key is not provided, use the default keeper address for running the script tests
         keeper = keeperPrivateKey != 0 ? vm.rememberKey(keeperPrivateKey) : MainnetAddresses.KEEPER;
 
         console2.log("keeper address\t", address(keeper));

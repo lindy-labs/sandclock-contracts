@@ -31,42 +31,16 @@ contract ExitAllPositionsScUsdtTest is Test {
         vm.selectFork(mainnetFork);
         vm.rollFork(21031368);
 
-        // TODO: use deployed addresses here instead of creating new instances when deployed on mainnet
-        priceConverter = new UsdtWethPriceConverter();
-        UsdtWethSwapper swapper = new UsdtWethSwapper();
-
-        vault = new scUSDT(
-            address(this), MainnetAddresses.KEEPER, ERC4626(MainnetAddresses.SCWETHV2), priceConverter, swapper
-        );
-
-        vault.addAdapter(new AaveV3ScUsdtAdapter());
-
-        // make an initial deposit
-        deal(C.USDT, address(this), 1000e6);
-        ERC20(C.USDT).safeApprove(address(vault), 1000e6);
-        vault.deposit(1000e6, address(this));
-
-        console2.log(ERC20(C.USDT).balanceOf(address(vault)));
+        priceConverter = UsdtWethPriceConverter(MainnetAddresses.USDT_WETH_PRICE_CONVERTER);
+        vault = scUSDT(MainnetAddresses.SCUSDT);
 
         script = new ExitAllPositionsScUsdtTestHarness(vault);
     }
 
     function test_run_exitsAllPositions() public {
-        assertEq(script.targetTokensInvested(), 0, "weth invested");
-        assertEq(vault.totalDebt(), 0, "total debt");
-        assertEq(vault.totalCollateral(), 0, "total collateral");
-        assertTrue(vault.asset().balanceOf(address(vault)) > 0, "usdc balance");
-
-        // deposit
-        deal(address(vault.asset()), address(this), 1000e6);
-        vault.asset().safeApprove(address(vault), 1000e6);
-        vault.deposit(1000e6, address(this));
-
-        // rebalance to create some debt & collateral positions
-        uint256 investAmount = vault.asset().balanceOf(address(vault)).mulWadDown(0.9e18);
-        uint256 debtAmount = priceConverter.assetToTargetToken(investAmount).mulWadDown(0.7e18);
-
-        _rebalance(investAmount, debtAmount);
+        assertTrue(vault.asset().balanceOf(address(vault)) > 0, "usdt balance");
+        assertTrue(vault.totalCollateral() > 0, "total collateral");
+        assertTrue(vault.totalDebt() > 0, "total debt");
 
         // add 20% profit
         ERC20 targetAsset = vault.targetVault().asset();
@@ -80,10 +54,6 @@ contract ExitAllPositionsScUsdtTest is Test {
 
         uint256 totalAssetsBefore = vault.totalAssets();
         uint256 maxLossPercent = script.maxAceeptableLossPercent();
-
-        assertApproxEqAbs(script.targetTokensInvested(), debtAmount.mulWadDown(1.2e18), 1, "weth invested");
-        assertApproxEqAbs(vault.totalDebt(), debtAmount, 1, "total debt");
-        assertApproxEqAbs(vault.totalCollateral(), investAmount, 1, "total collateral");
 
         // exit
         script.run();
@@ -100,7 +70,7 @@ contract ExitAllPositionsScUsdtTest is Test {
         callData[0] = abi.encodeWithSelector(scCrossAssetYieldVault.supply.selector, 1, investAmount);
         callData[1] = abi.encodeWithSelector(scCrossAssetYieldVault.borrow.selector, 1, debtAmount);
 
-        vm.prank(MainnetAddresses.KEEPER);
+        vm.prank(0x3Ab6EBDBf08e1954e69F6859AdB2DA5236D2e838);
         vault.rebalance(callData);
     }
 }
@@ -108,6 +78,11 @@ contract ExitAllPositionsScUsdtTest is Test {
 contract ExitAllPositionsScUsdtTestHarness is ExitAllPositionsScUsdt {
     constructor(scCrossAssetYieldVault _vault) {
         vault = _vault;
+    }
+
+    function _initEnv() internal override {
+        // TODO: WRONG KEEPER ADDRESS???
+        keeper = 0x3Ab6EBDBf08e1954e69F6859AdB2DA5236D2e838;
     }
 
     function _getVaultAddress() internal view override returns (scCrossAssetYieldVault) {
