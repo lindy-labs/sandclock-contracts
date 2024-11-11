@@ -6,7 +6,7 @@ import {ERC4626} from "solmate/mixins/ERC4626.sol";
 
 import {Constants as C} from "../../lib/Constants.sol";
 import {ISinglePairSwapper} from "../swapper/ISinglePairSwapper.sol";
-import {SwapperLib} from "./SwapperLib.sol";
+import {SwapperLib} from "src/lib/SwapperLib.sol";
 import {UniversalSwapper} from "./UniversalSwapper.sol";
 import {IDaiUsds} from "../../interfaces/sky/IDaiUsds.sol";
 
