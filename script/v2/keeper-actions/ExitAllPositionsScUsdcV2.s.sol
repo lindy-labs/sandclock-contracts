@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0
-pragma solidity ^0.8.13;
+pragma solidity ^0.8.19;
 
 import {scCrossAssetYieldVault} from "src/steth/scCrossAssetYieldVault.sol";
 import {scCrossAssetYieldVaultExitAllPositionsScript} from
