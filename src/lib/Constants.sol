@@ -51,11 +51,15 @@ library Constants {
     address public constant AAVE_V3_POOL = 0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2;
     // address of the Aave pool data provider contract
     address public constant AAVE_V3_POOL_DATA_PROVIDER = 0x7B4EB56E7CD4b454BA8ff71E4518426369a138a3;
+    // address of the Aave Rewards Controller contract
+    address public constant AAVE_V3_REWARDS_CONTROLLER = 0x8164Cc65827dcFe994AB23944CBC90e0aa80bFcb;
 
     // address of the Aave v3 "aEthWBTC" token (supply token)
     address public constant AAVE_V3_AWBTC_TOKEN = 0x5Ee5bf7ae06D1Be5997A1A72006FE6C607eC6DE8;
     // address of the Aave v3 "aEthUSDC" token (supply token)
     address public constant AAVE_V3_AUSDC_TOKEN = 0x98C23E9d8f34FEFb1B7BD6a91B7FF122F4e16F5c;
+    // address of the Aave v3 "aEthUSDS" token (supply token)
+    address public constant AAVE_V3_AUSDS_TOKEN = 0x32a6268f9Ba3642Dda7892aDd74f1D34469A4259;
     // address of the Aave v3 "aEthUSDT" token (supply token)
     address public constant AAVE_V3_AUSDT_TOKEN = 0x23878914EFE38d27C4D67Ab83ed1b93A74D4086a;
     // address of the Aave v3 "aEthwstETH" token (supply token)

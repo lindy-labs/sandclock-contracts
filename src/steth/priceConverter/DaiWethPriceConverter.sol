@@ -8,14 +8,14 @@ import {AggregatorV3Interface} from "../../interfaces/chainlink/AggregatorV3Inte
 import {Constants as C} from "../../lib/Constants.sol";
 
 /**
- * @title SDaiWethPriceConverter
- * @notice Contract for price conversion between sDAI and WETH.
+ * @title DaiWethPriceConverter
+ * @notice Contract for price conversion between DAI/USDS and WETH.
  */
-contract SUsdsWethPriceConverter is ISinglePairPriceConverter {
+contract DaiWethPriceConverter is ISinglePairPriceConverter {
     using FixedPointMathLib for uint256;
 
     /// @notice The address of the asset token (sDAI).
-    address public constant override asset = C.SUSDS;
+    address public constant override asset = C.DAI;
 
     /// @notice The address of the target token (WETH).
     address public constant override targetToken = C.WETH;
@@ -24,21 +24,21 @@ contract SUsdsWethPriceConverter is ISinglePairPriceConverter {
     AggregatorV3Interface public constant DAI_ETH_PRICE_FEED = AggregatorV3Interface(C.CHAINLINK_DAI_ETH_PRICE_FEED);
 
     /**
-     * @notice Converts an amount of WETH to the equivalent amount of sDAI.
+     * @notice Converts an amount of WETH to the equivalent amount of DAI.
      * @param _ethAmount The amount of WETH to convert.
-     * @return The equivalent amount of sDAI.
+     * @return The equivalent amount of DAI.
      */
     function targetTokenToAsset(uint256 _ethAmount) external view override returns (uint256) {
-        return IERC4626(asset).convertToShares(_ethToDai(_ethAmount));
+        return _ethToDai(_ethAmount);
     }
 
     /**
-     * @notice Converts an amount of sDAI to the equivalent amount of WETH.
-     * @param _sDaiAmount The amount of sDAI to convert.
+     * @notice Converts an amount of DAI to the equivalent amount of WETH.
+     * @param _daiAmount The amount of DAI to convert.
      * @return The equivalent amount of WETH.
      */
-    function assetToTargetToken(uint256 _sDaiAmount) external view override returns (uint256) {
-        return _daiToEth(IERC4626(asset).convertToAssets(_sDaiAmount));
+    function assetToTargetToken(uint256 _daiAmount) external view override returns (uint256) {
+        return _daiToEth(_daiAmount);
     }
 
     /**
