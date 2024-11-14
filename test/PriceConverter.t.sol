@@ -25,7 +25,7 @@ contract PriceConverterTest is Test {
 
     PriceConverter priceConverter;
 
-    function setUp() public {
+    constructor() {
         mainnetFork = vm.createFork(vm.envString("RPC_URL_MAINNET"));
         vm.selectFork(mainnetFork);
         vm.rollFork(17243956);

@@ -32,6 +32,10 @@ library Constants {
     address public constant DAI = 0x6B175474E89094C44Da98b954EedeAC495271d0F;
     // address of the sDAI token contract
     address public constant SDAI = 0x83F20F44975D03b1b09e64809B757c47f942BEeA;
+    // address of the USDS token contract
+    address public constant USDS = 0xdC035D45d973E3EC169d2276DDab16f1e407384F;
+    // address of the sUSDS token contract
+    address public constant SUSDS = 0xa3931d71877C0E7a3148CB7Eb4463524FEc27fbD;
     // address of the USDT token contract
     address public constant USDT = 0xdAC17F958D2ee523a2206206994597C13D831ec7;
     // address of the WBTC token contract
@@ -47,11 +51,15 @@ library Constants {
     address public constant AAVE_V3_POOL = 0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2;
     // address of the Aave pool data provider contract
     address public constant AAVE_V3_POOL_DATA_PROVIDER = 0x7B4EB56E7CD4b454BA8ff71E4518426369a138a3;
+    // address of the Aave Rewards Controller contract
+    address public constant AAVE_V3_REWARDS_CONTROLLER = 0x8164Cc65827dcFe994AB23944CBC90e0aa80bFcb;
 
     // address of the Aave v3 "aEthWBTC" token (supply token)
     address public constant AAVE_V3_AWBTC_TOKEN = 0x5Ee5bf7ae06D1Be5997A1A72006FE6C607eC6DE8;
     // address of the Aave v3 "aEthUSDC" token (supply token)
     address public constant AAVE_V3_AUSDC_TOKEN = 0x98C23E9d8f34FEFb1B7BD6a91B7FF122F4e16F5c;
+    // address of the Aave v3 "aEthUSDS" token (supply token)
+    address public constant AAVE_V3_AUSDS_TOKEN = 0x32a6268f9Ba3642Dda7892aDd74f1D34469A4259;
     // address of the Aave v3 "aEthUSDT" token (supply token)
     address public constant AAVE_V3_AUSDT_TOKEN = 0x23878914EFE38d27C4D67Ab83ed1b93A74D4086a;
     // address of the Aave v3 "aEthwstETH" token (supply token)
@@ -124,4 +132,7 @@ library Constants {
 
     // Morpho
     address public constant MORPHO = 0x33333aea097c193e66081E930c33020272b33333;
+
+    // Sky
+    address public constant DAI_USDS_CONVERTER = 0x3225737a9Bbb6473CB4a45b7244ACa2BeFdB276A;
 }

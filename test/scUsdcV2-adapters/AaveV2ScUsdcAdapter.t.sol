@@ -15,7 +15,7 @@ contract AaveV2ScUsdcAdapterTest is Test {
     ERC20 usdc;
     WETH weth;
 
-    function setUp() public {
+    constructor() {
         uint256 mainnetFork = vm.createFork(vm.envString("RPC_URL_MAINNET"));
         vm.selectFork(mainnetFork);
         vm.rollFork(17243956);
