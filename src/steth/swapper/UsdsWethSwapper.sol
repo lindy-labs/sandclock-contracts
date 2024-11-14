@@ -4,11 +4,11 @@ pragma solidity ^0.8.19;
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {ERC4626} from "solmate/mixins/ERC4626.sol";
 
-import {Constants as C} from "../../lib/Constants.sol";
-import {ISinglePairSwapper} from "../swapper/ISinglePairSwapper.sol";
+import {Constants as C} from "src/lib/Constants.sol";
+import {ISinglePairSwapper} from "src/steth/swapper/ISinglePairSwapper.sol";
 import {SwapperLib} from "src/lib/SwapperLib.sol";
+import {IDaiUsds} from "src/interfaces/sky/IDaiUsds.sol";
 import {UniversalSwapper} from "./UniversalSwapper.sol";
-import {IDaiUsds} from "../../interfaces/sky/IDaiUsds.sol";
 
 contract UsdsWethSwapper is ISinglePairSwapper, UniversalSwapper {
     /// @notice The address of the asset token (USDS).
