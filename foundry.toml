@@ -2,6 +2,7 @@
 optimizer_runs = 1000000
 verbosity = 1
 solc = "0.8.21"
+evm_version = "cancun"
 
 [fuzz]
 runs = 256
