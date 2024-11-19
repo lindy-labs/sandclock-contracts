@@ -2,19 +2,19 @@
 pragma solidity ^0.8.13;
 
 import "forge-std/console2.sol";
-import {MainnetAddresses} from "../base/MainnetAddresses.sol";
-import {MainnetDeployBase} from "../base/MainnetDeployBase.sol";
-import {scWETHv2} from "../../src/steth/scWETHv2.sol";
-import {scUSDCv2} from "../../src/steth/scUSDCv2.sol";
-import {Swapper} from "../../src/steth/swapper/Swapper.sol";
-import {PriceConverter} from "../../src/steth/priceConverter/PriceConverter.sol";
-import {UsdcWethPriceConverter} from "../../src/steth/priceConverter/UsdcWethPriceConverter.sol";
-import {AaveV3ScUsdcAdapter} from "../../src/steth/scUsdcV2-adapters/AaveV3ScUsdcAdapter.sol";
-import {MorphoAaveV3ScUsdcAdapter} from "../../src/steth/scUsdcV2-adapters/MorphoAaveV3ScUsdcAdapter.sol";
-import {AaveV2ScUsdcAdapter} from "../../src/steth/scUsdcV2-adapters/AaveV2ScUsdcAdapter.sol";
-import {UsdcWethSwapper} from "../../src/steth/swapper/UsdcWethSwapper.sol";
 
-contract RedeployScript is MainnetDeployBase {
+import {SwapperLib} from "src/lib/SwapperLib.sol";
+import {MainnetAddresses} from "script/base/MainnetAddresses.sol";
+import {MainnetDeployBase} from "script/base/MainnetDeployBase.sol";
+import {scWETHv2} from "src/steth/scWETHv2.sol";
+import {scUSDCv2} from "src/steth/scUSDCv2.sol";
+import {UsdcWethPriceConverter} from "src/steth/priceConverter/UsdcWethPriceConverter.sol";
+import {AaveV3ScUsdcAdapter} from "src/steth/scUsdcV2-adapters/AaveV3ScUsdcAdapter.sol";
+import {MorphoAaveV3ScUsdcAdapter} from "src/steth/scUsdcV2-adapters/MorphoAaveV3ScUsdcAdapter.sol";
+import {AaveV2ScUsdcAdapter} from "src/steth/scUsdcV2-adapters/AaveV2ScUsdcAdapter.sol";
+import {UsdcWethSwapper} from "src/steth/swapper/UsdcWethSwapper.sol";
+
+contract RedeployScUsdcV2EthMainnet is MainnetDeployBase {
     // @note: change scWethV2 to the address of the deployed scWethV2 contract
     scWETHv2 scWethV2 = scWETHv2(payable(vm.envOr("SC_WETH_V2", address(0))));
 
@@ -54,10 +54,12 @@ contract RedeployScript is MainnetDeployBase {
         }
 
         // initial deposit
-        uint256 usdcAmount = _swapWethForUsdc(0.01 ether);
+        uint256 usdcAmount =
+            SwapperLib._uniswapSwapExactInput(address(weth), address(usdc), deployerAddress, 0.01 ether, 0, 500);
+
         _deposit(scUsdcV2, usdcAmount); // 0.01 ether worth of USDC
 
-        _transferAdminRoleToMultisig(scUsdcV2, deployerAddress);
+        _transferAdminRoleToMultisig(scUsdcV2);
 
         vm.stopBroadcast();
 
