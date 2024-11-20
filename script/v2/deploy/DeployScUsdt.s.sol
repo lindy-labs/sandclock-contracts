@@ -46,6 +46,7 @@ contract DeployScUsdt is MainnetDeployBase {
         // deposit 0.01 ether worth of USDT
         _deposit(scUsdt, initialDeposit);
 
+        // step4 - transfer admin role to multisig
         _transferAdminRoleToMultisig(scUsdt);
 
         vm.stopBroadcast();
