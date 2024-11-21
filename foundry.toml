@@ -4,6 +4,12 @@ verbosity = 1
 solc = "0.8.21"
 evm_version = "cancun"
 
+remappings = [
+    '@layerzerolabs/oft-evm/=lib/devtools/packages/oft-evm/',
+    '@layerzerolabs/oapp-evm/=lib/devtools/packages/oapp-evm/',
+    '@layerzerolabs/lz-evm-protocol-v2/=lib/devtools/packages/layerzero-v2/evm/protocol'
+]
+
 [fuzz]
 runs = 256
 
