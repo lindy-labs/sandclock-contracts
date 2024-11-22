@@ -29,8 +29,10 @@ library MainnetAddresses {
     address public constant SDAI_WETH_PRICE_CONVERTER = 0x0dD22Ebc502f328b29a19Bf0A74373B03DfD374c;
     address public constant SDAI_WETH_SWAPPER = 0x3F76D80dfc54677262FeA7E94a73D96aC69F4A10;
 
-    address public constant SCUSDSV2 = address(0x0); // TODO: add the address of the deployed scUSDSv2 contract
-    address public constant SCUSDS_AAVEV3_ADAPTER = address(0x0); // TODO: add the address of the deployed scUSDS AaveV3 adapter contract
+    address public constant SCUSDSV2 = 0xe0400C223477E32b2A096F586b925e2602aC679F;
+    address public constant SCUSDS_AAVEV3_ADAPTER = 0x9A475eec4d8C23F324b5d4e80278fB6C971f9f64;
+    address public constant DAI_WETH_PRICE_CONVERTER = 0x4DDBf41797261CDB037ca5d76A026Cb0D835aF37;
+    address public constant USDS_WETH_SWAPPER = 0x962e74F87b29800c942d3918D271Fe15A36b23E8;
 
     address public constant PRICE_CONVERTER = 0xD76B0Ff4A487CaFE4E19ed15B73f12f6A92095Ca;
     address public constant SWAPPER = 0x6649f12b5ef495a3861b21E3206B1AbfA33A6531;
