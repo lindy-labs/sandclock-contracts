@@ -3,10 +3,10 @@ pragma solidity ^0.8.19;
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
-import {Constants as C} from "../../lib/Constants.sol";
-import {ISinglePairSwapper} from "./../swapper/ISinglePairSwapper.sol";
-import {SwapperLib} from "./SwapperLib.sol";
+import {Constants as C} from "src/lib/Constants.sol";
+import {SwapperLib} from "src/lib/SwapperLib.sol";
 import {UniversalSwapper} from "./UniversalSwapper.sol";
+import {ISinglePairSwapper} from "./../swapper/ISinglePairSwapper.sol";
 
 /**
  * @title WbtcWethSwapper

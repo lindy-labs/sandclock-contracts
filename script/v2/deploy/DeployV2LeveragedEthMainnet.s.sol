@@ -2,31 +2,31 @@
 pragma solidity ^0.8.13;
 
 import "forge-std/console2.sol";
-import {CREATE3Script} from "../base/CREATE3Script.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {WETH} from "solmate/tokens/WETH.sol";
 import {AccessControl} from "openzeppelin-contracts/access/AccessControl.sol";
 
-import {Constants as C} from "../../src/lib/Constants.sol";
-import {ISwapRouter} from "../../src/interfaces/uniswap/ISwapRouter.sol";
-import {sc4626} from "../../src/sc4626.sol";
-import {scWETHv2} from "../../src/steth/scWETHv2.sol";
-import {scUSDCv2} from "../../src/steth/scUSDCv2.sol";
-import {Swapper} from "../../src/steth/swapper/Swapper.sol";
-import {PriceConverter} from "../../src/steth/priceConverter/PriceConverter.sol";
-import {UsdcWethPriceConverter} from "../../src/steth/priceConverter/UsdcWethPriceConverter.sol";
-import {AaveV3ScWethAdapter} from "../../src/steth/scWethV2-adapters/AaveV3ScWethAdapter.sol";
-import {CompoundV3ScWethAdapter} from "../../src/steth/scWethV2-adapters/CompoundV3ScWethAdapter.sol";
-import {MorphoAaveV3ScWethAdapter} from "../../src/steth/scWethV2-adapters/MorphoAaveV3ScWethAdapter.sol";
-import {AaveV3ScUsdcAdapter} from "../../src/steth/scUsdcV2-adapters/AaveV3ScUsdcAdapter.sol";
-import {AaveV2ScUsdcAdapter} from "../../src/steth/scUsdcV2-adapters/AaveV2ScUsdcAdapter.sol";
-import {MorphoAaveV3ScUsdcAdapter} from "../../src/steth/scUsdcV2-adapters/MorphoAaveV3ScUsdcAdapter.sol";
-import {MainnetDeployBase} from "../base/MainnetDeployBase.sol";
-import {UsdcWethSwapper} from "../../src/steth/swapper/UsdcWethSwapper.sol";
+import {SwapperLib} from "src/lib/SwapperLib.sol";
+import {MainnetDeployBase} from "script/base/MainnetDeployBase.sol";
+import {Constants as C} from "src/lib/Constants.sol";
+import {ISwapRouter} from "src/interfaces/uniswap/ISwapRouter.sol";
+import {sc4626} from "src/sc4626.sol";
+import {scWETHv2} from "src/steth/scWETHv2.sol";
+import {scUSDCv2} from "src/steth/scUSDCv2.sol";
+import {Swapper} from "src/steth/swapper/Swapper.sol";
+import {PriceConverter} from "src/steth/priceConverter/PriceConverter.sol";
+import {UsdcWethPriceConverter} from "src/steth/priceConverter/UsdcWethPriceConverter.sol";
+import {AaveV3ScWethAdapter} from "src/steth/scWethV2-adapters/AaveV3ScWethAdapter.sol";
+import {CompoundV3ScWethAdapter} from "src/steth/scWethV2-adapters/CompoundV3ScWethAdapter.sol";
+import {MorphoAaveV3ScWethAdapter} from "src/steth/scWethV2-adapters/MorphoAaveV3ScWethAdapter.sol";
+import {AaveV3ScUsdcAdapter} from "src/steth/scUsdcV2-adapters/AaveV3ScUsdcAdapter.sol";
+import {AaveV2ScUsdcAdapter} from "src/steth/scUsdcV2-adapters/AaveV2ScUsdcAdapter.sol";
+import {MorphoAaveV3ScUsdcAdapter} from "src/steth/scUsdcV2-adapters/MorphoAaveV3ScUsdcAdapter.sol";
+import {UsdcWethSwapper} from "src/steth/swapper/UsdcWethSwapper.sol";
 
-contract DeployScript is MainnetDeployBase {
+contract DeployV2LeveragedEthMainnet is MainnetDeployBase {
     function run() external returns (scWETHv2 scWethV2, scUSDCv2 scUsdcV2) {
-        vm.startBroadcast(deployerPrivateKey);
+        vm.startBroadcast(deployerAddress);
 
         Swapper swapper = new Swapper();
         UsdcWethSwapper scUsdcSwapper = new UsdcWethSwapper();
@@ -35,7 +35,7 @@ contract DeployScript is MainnetDeployBase {
         UsdcWethPriceConverter usdcPriceConverter = new UsdcWethPriceConverter();
         console2.log("PriceConverter:", address(priceConverter));
 
-        _transferAdminRoleToMultisig(priceConverter, deployerAddress);
+        _transferAdminRoleToMultisig(priceConverter);
 
         scWethV2 = _deployScWethV2(priceConverter, swapper);
 
@@ -60,7 +60,7 @@ contract DeployScript is MainnetDeployBase {
         weth.deposit{value: 0.01 ether}(); // wrap 0.01 ETH into WETH
         _deposit(vault, 0.01 ether); // 0.01 WETH
 
-        _transferAdminRoleToMultisig(vault, deployerAddress);
+        _transferAdminRoleToMultisig(vault);
 
         console2.log("scWethV2 vault:", address(vault));
         console2.log("scWethV2 AaveV3Adapter:", address(aaveV3Adapter));
@@ -84,10 +84,12 @@ contract DeployScript is MainnetDeployBase {
         MorphoAaveV3ScUsdcAdapter morphoAdapter = new MorphoAaveV3ScUsdcAdapter();
         vault.addAdapter(morphoAdapter);
 
-        uint256 usdcAmount = _swapWethForUsdc(0.01 ether);
+        uint256 usdcAmount =
+            SwapperLib._uniswapSwapExactInput(address(weth), address(usdc), deployerAddress, 0.01 ether, 0, 500);
+
         _deposit(vault, usdcAmount); // 0.01 ether worth of USDC
 
-        _transferAdminRoleToMultisig(vault, deployerAddress);
+        _transferAdminRoleToMultisig(vault);
 
         console2.log("scUSDCv2 vault:", address(vault));
         console2.log("scUSDCv2 AaveV3Adapter:", address(aaveV3Adapter));

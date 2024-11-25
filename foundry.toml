@@ -11,11 +11,13 @@ runs = 256
 [profile.ci]
 fuzz_runs = 100_000
 verbosity = 4
+solc = "0.8.21"
+evm_version = "cancun"
 
 [rpc_endpoints]
 goerli = "${RPC_URL_GOERLI}"
 mainnet = "${RPC_URL_MAINNET}"
 
 [etherscan]
-goerli = {key = "${ETHERSCAN_KEY}", url = "https://api-goerli.etherscan.io/api"}
-mainnet = {key = "${ETHERSCAN_KEY}"}
+goerli = { key = "${ETHERSCAN_KEY}", url = "https://api-goerli.etherscan.io/api" }
+mainnet = { key = "${ETHERSCAN_KEY}" }

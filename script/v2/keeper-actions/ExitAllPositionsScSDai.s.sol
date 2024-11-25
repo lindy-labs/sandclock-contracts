@@ -7,10 +7,10 @@ import {scCrossAssetYieldVaultExitAllPositionsScript} from
 import {MainnetAddresses} from "script/base/MainnetAddresses.sol";
 
 /**
- * A script for executing "exitAllPositions" function on the scUsdcV2 vault.
- * This results in withdrawing all WETH invested into  leveraged staking (scWETH vault), repaying all WETH debt (using a flashloan if necessary) and withdrawing all USDC collateral to the vault.
+ * A script for executing "exitAllPositions" function on the scSDAI vault.
+ * This results in withdrawing all WETH invested into  leveraged staking (scWETH vault), repaying all WETH debt (using a flashloan if necessary) and withdrawing all sDAI collateral to the vault.
  */
-contract ExitAllPositionsScUsdcV2 is scCrossAssetYieldVaultExitAllPositionsScript {
+contract ExitAllPositionsScSDai is scCrossAssetYieldVaultExitAllPositionsScript {
     /*//////////////////////////////////////////////////////////////
                           SCRIPT PARAMETERS
     //////////////////////////////////////////////////////////////*/
@@ -21,8 +21,8 @@ contract ExitAllPositionsScUsdcV2 is scCrossAssetYieldVaultExitAllPositionsScrip
     //     return 0.02e18; // 2%
     // }
 
-    function _getVaultAddress() internal override returns (scCrossAssetYieldVault) {
-        return scCrossAssetYieldVault(vm.envOr("SC_USDC_V2", MainnetAddresses.SCUSDCV2));
+    function _getVaultAddress() internal virtual override returns (scCrossAssetYieldVault) {
+        return scCrossAssetYieldVault(vm.envOr("SC_SDAI", MainnetAddresses.SCSDAI));
     }
 
     /*//////////////////////////////////////////////////////////////*/

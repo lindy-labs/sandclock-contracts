@@ -14,13 +14,13 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 import {Address} from "openzeppelin-contracts/utils/Address.sol";
 import {WETH} from "solmate/tokens/WETH.sol";
 
-import {Constants as C} from "../../src/lib/Constants.sol";
-import {MainnetAddresses} from "../../script/base/MainnetAddresses.sol";
-import {RebalanceScWethV2} from "../../script/v2/keeper-actions/RebalanceScWethV2.s.sol";
-import {ExitAllPositionsScWethV2} from "../../script/v2/keeper-actions/ExitAllPositionsScWethV2.s.sol";
+import {Constants as C} from "src/lib/Constants.sol";
+import {MainnetAddresses} from "script/base/MainnetAddresses.sol";
+import {RebalanceScWethV2} from "script/v2/keeper-actions/RebalanceScWethV2.s.sol";
+import {ExitAllPositionsScWethV2} from "script/v2/keeper-actions/ExitAllPositionsScWethV2.s.sol";
 
-import {scWETHv2} from "../../src/steth/scWETHv2.sol";
-import {IAdapter} from "../../src/steth/IAdapter.sol";
+import {scWETHv2} from "src/steth/scWETHv2.sol";
+import {IAdapter} from "src/steth/IAdapter.sol";
 
 contract ExitAllPositionsScWETHv2Test is Test {
     using FixedPointMathLib for uint256;

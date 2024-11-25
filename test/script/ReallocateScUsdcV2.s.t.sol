@@ -5,17 +5,17 @@ import "forge-std/console2.sol";
 import "forge-std/Test.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 
-import {Constants as C} from "../../src/lib/Constants.sol";
-import {AggregatorV3Interface} from "../../src/interfaces/chainlink/AggregatorV3Interface.sol";
-import {scUSDCv2} from "../../src/steth/scUSDCv2.sol";
-import {PriceConverter} from "../../src/steth/priceConverter/PriceConverter.sol";
-import {IAdapter} from "../../src/steth/IAdapter.sol";
-import {AaveV2ScUsdcAdapter} from "../../src/steth/scUsdcV2-adapters/AaveV2ScUsdcAdapter.sol";
-import {AaveV3ScUsdcAdapter} from "../../src/steth/scUsdcV2-adapters/AaveV3ScUsdcAdapter.sol";
-import {MorphoAaveV3ScUsdcAdapter} from "../../src/steth/scUsdcV2-adapters/MorphoAaveV3ScUsdcAdapter.sol";
-import {ReallocateScUsdcV2} from "../../script/v2/keeper-actions/ReallocateScUsdcV2.s.sol";
-import {MainnetAddresses} from "../../script/base/MainnetAddresses.sol";
-import {ISinglePairPriceConverter} from "../../src/steth/priceConverter/ISinglePairPriceConverter.sol";
+import {Constants as C} from "src/lib/Constants.sol";
+import {AggregatorV3Interface} from "src/interfaces/chainlink/AggregatorV3Interface.sol";
+import {scUSDCv2} from "src/steth/scUSDCv2.sol";
+import {PriceConverter} from "src/steth/priceConverter/PriceConverter.sol";
+import {IAdapter} from "src/steth/IAdapter.sol";
+import {AaveV2ScUsdcAdapter} from "src/steth/scUsdcV2-adapters/AaveV2ScUsdcAdapter.sol";
+import {AaveV3ScUsdcAdapter} from "src/steth/scUsdcV2-adapters/AaveV3ScUsdcAdapter.sol";
+import {MorphoAaveV3ScUsdcAdapter} from "src/steth/scUsdcV2-adapters/MorphoAaveV3ScUsdcAdapter.sol";
+import {ReallocateScUsdcV2} from "script/v2/keeper-actions/ReallocateScUsdcV2.s.sol";
+import {MainnetAddresses} from "script/base/MainnetAddresses.sol";
+import {ISinglePairPriceConverter} from "src/steth/priceConverter/ISinglePairPriceConverter.sol";
 
 contract ReallocateScUsdcV2Test is Test {
     using FixedPointMathLib for uint256;
@@ -70,7 +70,7 @@ contract ReallocateScUsdcV2Test is Test {
         script.setAaveV2AllocationPercent(aaveV2AllocationPercent);
 
         uint256 totalAssetsBefore = vault.totalAssets();
-        uint256 wethInvestedBefore = script.wethInvested();
+        uint256 wethInvestedBefore = script.targetTokensInvested();
 
         script.run();
 
@@ -95,7 +95,7 @@ contract ReallocateScUsdcV2Test is Test {
             _getAllocationPercent(aaveV2), aaveV2AllocationPercent, 0.0001e18, "aave v2 allocation percent"
         );
         assertApproxEqRel(vault.totalAssets(), totalAssetsBefore, 0.0001e18, "total assets");
-        assertApproxEqRel(script.wethInvested(), wethInvestedBefore, 0.0001e18, "weth invested");
+        assertApproxEqRel(script.targetTokensInvested(), wethInvestedBefore, 0.0001e18, "weth invested");
     }
 
     function test_run_moveWholePositionFromAaveV2ToMorpho() public {
@@ -114,7 +114,7 @@ contract ReallocateScUsdcV2Test is Test {
         assertTrue(script.useMorpho(), "morpho not used");
 
         uint256 totalAssetsBefore = vault.totalAssets();
-        uint256 wethInvestedBefore = script.wethInvested();
+        uint256 wethInvestedBefore = script.targetTokensInvested();
 
         uint256 morphoAllocationPercent = 1e18;
         uint256 aaveV2AllocationPercent = 0;
@@ -138,7 +138,7 @@ contract ReallocateScUsdcV2Test is Test {
         assertEq(_getAllocationPercent(morpho), morphoAllocationPercent, "morpho allocation percent");
         assertEq(_getAllocationPercent(aaveV2), aaveV2AllocationPercent, "aave v2 allocation percent");
         assertApproxEqAbs(vault.totalAssets(), totalAssetsBefore, 1, "total assets");
-        assertEq(script.wethInvested(), wethInvestedBefore, "weth invested");
+        assertEq(script.targetTokensInvested(), wethInvestedBefore, "weth invested");
     }
 
     function test_run_moveHalfFromAaveV2AndMorphoToAaveV3() public {
@@ -159,7 +159,7 @@ contract ReallocateScUsdcV2Test is Test {
         uint256 expectedMorphoRepayAmount = morphoInitialDebt / 2;
 
         uint256 totalAssetsBefore = vault.totalAssets();
-        uint256 wethInvestedBefore = script.wethInvested();
+        uint256 wethInvestedBefore = script.targetTokensInvested();
 
         script.setUseAaveV3(true);
         assertTrue(script.useAaveV2(), "aave v2 not used");
@@ -216,7 +216,7 @@ contract ReallocateScUsdcV2Test is Test {
         );
 
         assertApproxEqAbs(vault.totalAssets(), totalAssetsBefore, 1, "total assets");
-        assertApproxEqAbs(script.wethInvested(), wethInvestedBefore, 1, "weth invested");
+        assertApproxEqAbs(script.targetTokensInvested(), wethInvestedBefore, 1, "weth invested");
     }
 
     function test_run_failsIfAllocationPercentSumIsNot100() public {

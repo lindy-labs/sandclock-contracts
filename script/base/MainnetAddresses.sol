@@ -17,8 +17,25 @@ library MainnetAddresses {
     address public constant SCUSDCV2_AAVEV2_ADAPTER = 0xE0E9E98FD963C2e69718C76939924522A9646885;
     address public constant SCUSDCV2_AAVEV3_ADAPTER = 0xf59c324fF111D86894f175E22B70b0d54998ff3E;
 
-    address public constant SCDAI = address(0x00); //todo: update after deployment
-    address public constant SCDAI_SPARK_ADAPTER = address(0x00); //TODO: update after deployment
+    address public constant SCUSDT = 0x237eCDF745d2a0052AeaF6f027ce82F77431871E;
+    address public constant SCUSDT_AAVEV3_ADAPTER = 0x795FDAC1bB26D219991f1923190cA7eB0046e32E;
+    address public constant USDT_WETH_PRICE_CONVERTER = 0x8e045458385d51d047bCA5b2B3b74053e235f5F9;
+    address public constant USDT_WETH_SWAPPER = 0xcD0Ae497068980ce94fbe20A6F7431329F0e4D08;
+
+    address public constant SCDAI = 0x16f3cdA06743a58bDdE123687F99E80DCbc28d14;
+
+    address public constant SCSDAI = 0x0Fc97657B67C7E7bD4100c72851d0377DA14B470;
+    address public constant SCSDAI_SPARK_ADAPTER = 0xeD81a1D7cb2AdC2ee379B594e0dA6a988a865ae4;
+    address public constant SDAI_WETH_PRICE_CONVERTER = 0x0dD22Ebc502f328b29a19Bf0A74373B03DfD374c;
+    address public constant SDAI_WETH_SWAPPER = 0x3F76D80dfc54677262FeA7E94a73D96aC69F4A10;
+
+    address public constant SCUSDSV2 = address(0x0); // TODO: add the address of the deployed scUSDSv2 contract
+    address public constant SCUSDS_AAVEV3_ADAPTER = address(0x0); // TODO: add the address of the deployed scUSDS AaveV3 adapter contract
+
+    address public constant SCWBTC = address(0x00); // TODO: add the address of the deployed scWBTC contract
+    address public constant SCWBTC_AAVEV3_ADAPTER = address(0x00);
+    address public constant WBTC_WETH_PRICE_CONVERTER = address(0x00);
+    address public constant WBTC_WETH_SWAPPER = address(0x00);
 
     address public constant PRICE_CONVERTER = 0xD76B0Ff4A487CaFE4E19ed15B73f12f6A92095Ca;
     address public constant SWAPPER = 0x6649f12b5ef495a3861b21E3206B1AbfA33A6531;

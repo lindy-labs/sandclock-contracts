@@ -4,36 +4,22 @@ pragma solidity ^0.8.19;
 import "forge-std/console2.sol";
 import "forge-std/Test.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
-import {WETH} from "solmate/tokens/WETH.sol";
 
-import {scUSDCv2} from "../../src/steth/scUSDCv2.sol";
-import {scWETHv2} from "../../src/steth/scWETHv2.sol";
-import {PriceConverter} from "../../src/steth/priceConverter/PriceConverter.sol";
-import {AaveV2ScUsdcAdapter} from "../../src/steth/scUsdcV2-adapters/AaveV2ScUsdcAdapter.sol";
-import {AaveV3ScUsdcAdapter} from "../../src/steth/scUsdcV2-adapters/AaveV3ScUsdcAdapter.sol";
-import {MorphoAaveV3ScUsdcAdapter} from "../../src/steth/scUsdcV2-adapters/MorphoAaveV3ScUsdcAdapter.sol";
-import {RebalanceScUsdcV2} from "../../script/v2/keeper-actions/RebalanceScUsdcV2.s.sol";
-import {MainnetAddresses} from "../../script/base/MainnetAddresses.sol";
-import {Constants} from "../../src/lib/Constants.sol";
-
-import {RedeployScript} from "../../script/v2/RedeployScUsdcV2EthMainnet.s.sol";
-import {ExitAllPositionsScUsdcV2} from "../../script/v2/keeper-actions/ExitAllPositionsScUsdcV2.s.sol";
-import {scCrossAssetYieldVault} from "../../src/steth/scCrossAssetYieldVault.sol";
+import {scCrossAssetYieldVault} from "src/steth/scCrossAssetYieldVault.sol";
+import {scUSDCv2} from "src/steth/scUSDCv2.sol";
+import {PriceConverter} from "src/steth/priceConverter/PriceConverter.sol";
+import {MainnetAddresses} from "script/base/MainnetAddresses.sol";
+import {ExitAllPositionsScUsdcV2} from "script/v2/keeper-actions/ExitAllPositionsScUsdcV2.s.sol";
 
 contract ExitAllPositionsScUsdcV2Test is Test {
     using FixedPointMathLib for uint256;
 
-    uint256 mainnetFork;
-
     scUSDCv2 vault;
-    AaveV3ScUsdcAdapter aaveV3;
-    AaveV2ScUsdcAdapter aaveV2;
-    MorphoAaveV3ScUsdcAdapter morpho;
     PriceConverter priceConverter;
     ExitAllPositionsScUsdcV2 script;
 
     function setUp() public {
-        mainnetFork = vm.createFork(vm.envString("RPC_URL_MAINNET"));
+        uint256 mainnetFork = vm.createFork(vm.envString("RPC_URL_MAINNET"));
         vm.selectFork(mainnetFork);
         vm.rollFork(18488739);
 
@@ -44,7 +30,7 @@ contract ExitAllPositionsScUsdcV2Test is Test {
     }
 
     function test_run_exitsAllPositions() public {
-        assertEq(script.wethInvested(), 0, "weth invested");
+        assertEq(script.targetTokensInvested(), 0, "weth invested");
         assertEq(vault.totalDebt(), 0, "total debt");
         assertEq(vault.totalCollateral(), 0, "total collateral");
         assertTrue(vault.asset().balanceOf(address(vault)) > 0, "usdc balance");
@@ -63,14 +49,14 @@ contract ExitAllPositionsScUsdcV2Test is Test {
         uint256 totalAssetsBefore = vault.totalAssets();
         uint256 maxLossPercent = script.maxAceeptableLossPercent();
 
-        assertApproxEqAbs(script.wethInvested(), debtAmount, 1, "weth invested");
+        assertApproxEqAbs(script.targetTokensInvested(), debtAmount, 1, "weth invested");
         assertApproxEqAbs(vault.totalDebt(), debtAmount, 1, "total debt");
         assertApproxEqAbs(vault.totalCollateral(), investAmount, 1, "total collateral");
 
         // exit
         script.run();
 
-        assertEq(script.wethInvested(), 0, "weth invested");
+        assertEq(script.targetTokensInvested(), 0, "weth invested");
         assertEq(vault.totalDebt(), 0, "total debt");
         assertEq(vault.totalCollateral(), 0, "total collateral");
         assertApproxEqRel(vault.totalAssets(), totalAssetsBefore, maxLossPercent, "total assets");

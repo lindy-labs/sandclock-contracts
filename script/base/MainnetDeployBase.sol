@@ -20,7 +20,6 @@ import {sc4626} from "../../src/sc4626.sol";
 abstract contract MainnetDeployBase is CREATE3Script {
     using SafeTransferLib for ERC20;
 
-    uint256 deployerPrivateKey;
     address deployerAddress;
     address keeper;
     address multisig;
@@ -33,42 +32,38 @@ abstract contract MainnetDeployBase is CREATE3Script {
     }
 
     function _init() internal virtual {
-        deployerPrivateKey = uint256(vm.envBytes32("PRIVATE_KEY"));
+        uint256 deployerPrivateKey = uint256(vm.envBytes32("PRIVATE_KEY"));
+
+        require(deployerPrivateKey != 0, "Deployer private key not set");
+
         deployerAddress = vm.rememberKey(deployerPrivateKey);
-        keeper = vm.envAddress("KEEPER");
-        multisig = vm.envAddress("MULTISIG");
+
+        keeper = vm.envOr("KEEPER", MainnetAddresses.KEEPER);
+        multisig = vm.envOr("MULTISIG", MainnetAddresses.MULTISIG);
     }
 
-    function _transferAdminRoleToMultisig(AccessControl _contract, address _currentAdmin) internal {
+    function deployWithCreate3(string memory _name, bytes memory _creationCode) public returns (address deployed) {
+        deployed = getCreate3Contract(deployerAddress, _name);
+
+        if (deployed.code.length != 0) {
+            console2.log("Existing", _name, ":", deployed);
+        } else {
+            create3.deploy(getCreate3ContractSalt(_name), _creationCode);
+            console2.log("Deployed", _name, ":", deployed);
+        }
+    }
+
+    function _transferAdminRoleToMultisig(AccessControl _contract) internal {
         _contract.grantRole(_contract.DEFAULT_ADMIN_ROLE(), multisig);
-        _contract.revokeRole(_contract.DEFAULT_ADMIN_ROLE(), _currentAdmin);
+        _contract.revokeRole(_contract.DEFAULT_ADMIN_ROLE(), deployerAddress);
     }
 
     function _setTreasury(sc4626 _vault, address _treasury) internal {
         _vault.setTreasury(_treasury);
     }
 
-    function _deposit(sc4626 _vault, uint256 _amount) internal virtual {
-        _vault.asset().approve(address(_vault), _amount);
+    function _deposit(ERC4626 _vault, uint256 _amount) internal virtual {
+        ERC20(_vault.asset()).safeApprove(address(_vault), _amount);
         _vault.deposit(_amount, deployerAddress);
-    }
-
-    function _swapWethForUsdc(uint256 _amount) internal returns (uint256 amountOut) {
-        weth.deposit{value: _amount}();
-
-        weth.approve(C.UNISWAP_V3_SWAP_ROUTER, _amount);
-
-        ISwapRouter.ExactInputSingleParams memory params = ISwapRouter.ExactInputSingleParams({
-            tokenIn: address(weth),
-            tokenOut: address(usdc),
-            fee: 500, // 0.05%
-            recipient: deployerAddress,
-            deadline: block.timestamp + 1000,
-            amountIn: _amount,
-            amountOutMinimum: 0,
-            sqrtPriceLimitX96: 0
-        });
-
-        amountOut = ISwapRouter(C.UNISWAP_V3_SWAP_ROUTER).exactInputSingle(params);
     }
 }

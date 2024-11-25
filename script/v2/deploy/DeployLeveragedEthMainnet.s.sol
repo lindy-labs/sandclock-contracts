@@ -3,14 +3,12 @@ pragma solidity ^0.8.13;
 
 import "forge-std/console2.sol";
 
-import {DeployLeveragedEth} from "./base/DeployLeveragedEth.sol";
-import {scWETH} from "../src/steth/scWETH.sol";
-import {scUSDC} from "../src/steth/scUSDC.sol";
-import {sc4626} from "../src/sc4626.sol";
-import {Constants as C} from "../src/lib/Constants.sol";
-import {ISwapRouter} from "../src/interfaces/uniswap/ISwapRouter.sol";
+import {SwapperLib} from "src/lib/SwapperLib.sol";
+import {DeployScWethV2AndScUsdcV2} from "script/base/DeployScWethV2AndScUsdcV2.sol";
+import {scWETH} from "src/steth/scWETH.sol";
+import {scUSDC} from "src/steth/scUSDC.sol";
 
-contract DeployLeveragedEthMainnet is DeployLeveragedEth {
+contract DeployLeveragedEthMainnet is DeployScWethV2AndScUsdcV2 {
     function run() external {
         _deploy();
 
@@ -18,7 +16,7 @@ contract DeployLeveragedEthMainnet is DeployLeveragedEth {
     }
 
     function _postDeployment() internal {
-        vm.startBroadcast(deployerPrivateKey);
+        vm.startBroadcast(deployerAddress);
 
         // scWETH
         console2.log("eth deposited for weth");
@@ -27,7 +25,7 @@ contract DeployLeveragedEthMainnet is DeployLeveragedEth {
 
         // scUSDC
         console2.log("eth deposited for weth to swap for usdc");
-        _swapWethForUsdc(0.01 ether);
+        SwapperLib._uniswapSwapExactInput(address(weth), address(usdc), deployerAddress, 0.01 ether, 0, 500);
         console2.log("eth swapped for USDC");
         _deposit(scUsdc, usdc.balanceOf(address(deployerAddress))); // 0.01 ether worth of USDC
         console2.log("usdc deposited into usdcContract");
