@@ -30,7 +30,6 @@ contract ExitAllPositionsScUsdsV2Test is Test {
         vm.selectFork(mainnetFork);
         vm.rollFork(21031368);
 
-        // TODO: use deployed addresses here instead of creating new instances when deployed on mainnet
         priceConverter = new DaiWethPriceConverter();
         UsdsWethSwapper swapper = new UsdsWethSwapper();
 

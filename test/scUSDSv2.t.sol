@@ -21,6 +21,7 @@ import "../src/errors/scErrors.sol";
 import {Address} from "openzeppelin-contracts/utils/Address.sol";
 import {MainnetAddresses as M} from "../script/base/MainnetAddresses.sol";
 import {UsdsWethSwapper} from "../src/steth/swapper/UsdsWethSwapper.sol";
+import {IRewardsController} from "../src/interfaces/aave-v3/IRewardsController.sol";
 
 contract scUSDSv2Test is Test {
     using Address for address;
@@ -271,10 +272,19 @@ contract scUSDSv2Test is Test {
         vault.rebalance(callData);
 
         ERC20 aUsds = ERC20(C.AAVE_V3_AUSDS_TOKEN);
-        uint256 initialAUsdsBalance = aUsds.balanceOf(address(vault));
-        uint256 initialCollateral = vault.totalCollateral();
 
         vm.warp(block.timestamp + 30 days);
+
+        address[] memory assets = new address[](1);
+        assets[0] = C.AAVE_V3_AUSDS_TOKEN;
+        uint256 claimable = IRewardsController(C.AAVE_V3_REWARDS_CONTROLLER).getUserRewards(
+            assets, address(vault), C.AAVE_V3_AUSDS_TOKEN
+        );
+
+        assertTrue(claimable != 0, "no claimable rewards");
+
+        uint256 initialAUsdsBalance = aUsds.balanceOf(address(vault));
+        uint256 initialCollateral = vault.totalCollateral();
 
         // the vault gets aUsds Rewards
         vault.claimRewards(aaveV3Adapter.id(), "");
@@ -284,6 +294,7 @@ contract scUSDSv2Test is Test {
 
         assertGt(newCollateral, initialCollateral, "collateral did not increase");
         assertGt(newAUsdsBalance, initialAUsdsBalance, "no aUsds rewards");
+        assertEq(newAUsdsBalance - initialAUsdsBalance, claimable, "incorrect aUsds rewards");
     }
 
     ///////////////////////////////// INTERNAL METHODS /////////////////////////////////

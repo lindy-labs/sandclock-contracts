@@ -3,7 +3,9 @@ pragma solidity ^0.8.19;
 
 import "forge-std/console2.sol";
 
+import {Constants as C} from "src/lib/Constants.sol";
 import {IAdapter} from "src/steth/IAdapter.sol";
+import {IRewardsController} from "src/interfaces/aave-v3/IRewardsController.sol";
 import {scCrossAssetYieldVault} from "src/steth/scCrossAssetYieldVault.sol";
 import {MainnetAddresses} from "script/base/MainnetAddresses.sol";
 import {scCrossAssetYieldVaultRebalanceScript} from "script/base/scCrossAssetYieldVaultRebalanceScript.sol";
@@ -27,6 +29,16 @@ contract RebalanceScUsdsV2 is scCrossAssetYieldVaultRebalanceScript {
         return 100e18; // 100 USDS
     }
 
+    function _claimAndHandleRewards() internal override {
+        address[] memory assets = new address[](1);
+        assets[0] = C.AAVE_V3_AUSDS_TOKEN;
+        uint256 claimableAmount = IRewardsController(C.AAVE_V3_REWARDS_CONTROLLER).getUserRewards(
+            assets, address(vault), C.AAVE_V3_AUSDS_TOKEN
+        );
+
+        if (claimableAmount != 0) vault.claimRewards(IAdapter(MainnetAddresses.SCUSDS_AAVEV3_ADAPTER).id(), "");
+    }
+
     function _getVaultAddress() internal virtual override returns (scCrossAssetYieldVault) {
         return scCrossAssetYieldVault(vm.envOr("SC_USDSV2", MainnetAddresses.SCUSDSV2));
     }
@@ -39,7 +51,7 @@ contract RebalanceScUsdsV2 is scCrossAssetYieldVaultRebalanceScript {
     function _initializeAdapterSettings() internal override {
         adapterSettings.push(
             AdapterSettings({
-                adapterId: 1, //TODO: update to IAdapter(MainnetAddresses.SCUSDS_AAVEV3_ADAPTER).id(),
+                adapterId: IAdapter(MainnetAddresses.SCUSDS_AAVEV3_ADAPTER).id(),
                 investableAmountPercent: aaveV3InvestableAmountPercent,
                 targetLtv: aaveV3TargetLtv
             })
