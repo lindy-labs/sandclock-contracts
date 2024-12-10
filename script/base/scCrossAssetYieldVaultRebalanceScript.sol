@@ -53,9 +53,14 @@ abstract contract scCrossAssetYieldVaultRebalanceScript is scCrossAssetYieldVaul
         return "--Rebalance script done--";
     }
 
-    function _execute() internal override {
+    function _execute() internal virtual override {
         _initializeAdapterSettings();
         _checkAllocationPercentages();
+
+        _logVaultInfo("state before rebalance");
+
+        vm.startBroadcast(keeper);
+        _claimAndHandleRewards();
 
         uint256 minReceivedFromProfitSelling = _sellProfitIfAboveDefinedMin();
         uint256 minAssetBalance = minReceivedFromProfitSelling + assetBalance();
@@ -65,14 +70,13 @@ abstract contract scCrossAssetYieldVaultRebalanceScript is scCrossAssetYieldVaul
 
         _createRebalanceMulticallDataForAllAdapters(investableAmount, missingFloat);
 
-        _logVaultInfo("state before rebalance");
-
-        vm.startBroadcast(keeper);
         vault.rebalance(multicallData);
         vm.stopBroadcast();
 
         _logVaultInfo("state after rebalance");
     }
+
+    function _claimAndHandleRewards() internal virtual {}
 
     function _checkAllocationPercentages() internal view {
         uint256 totalAllocationPercent = 0;

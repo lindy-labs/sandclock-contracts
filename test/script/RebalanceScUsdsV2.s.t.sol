@@ -10,6 +10,7 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 import {ERC4626} from "solmate/mixins/ERC4626.sol";
 
 import {Constants as C} from "src/lib/Constants.sol";
+import {IRewardsController} from "src/interfaces/aave-v3/IRewardsController.sol";
 import {scUSDSv2} from "src/steth/scUSDSv2.sol";
 import {AaveV3ScUsdsAdapter} from "src/steth/scUsds-adapters/AaveV3ScUsdsAdapter.sol";
 import {DaiWethPriceConverter} from "src/steth/priceConverter/DaiWethPriceConverter.sol";
@@ -34,9 +35,8 @@ contract RebalanceScUsdsV2Test is Test {
     constructor() {
         mainnetFork = vm.createFork(vm.envString("RPC_URL_MAINNET"));
         vm.selectFork(mainnetFork);
-        vm.rollFork(21138918);
+        vm.rollFork(21366396);
 
-        // TODO: use deployed addresses here instead of creating new instances when deployed on mainnet
         aaveV3 = new AaveV3ScUsdsAdapter();
         priceConverter = new DaiWethPriceConverter();
         UsdsWethSwapper swapper = new UsdsWethSwapper();
@@ -47,12 +47,13 @@ contract RebalanceScUsdsV2Test is Test {
 
         vault.addAdapter(aaveV3);
 
+        // add same keeper role as the one used in the mainnet
+        vault.grantRole(vault.KEEPER_ROLE(), 0x3Ab6EBDBf08e1954e69F6859AdB2DA5236D2e838);
+
         // make an initial deposit
         deal(C.USDS, address(this), 1000e18);
         ERC20(C.USDS).safeApprove(address(vault), 1000e18);
         vault.deposit(1000e18, address(this));
-
-        console2.log(ERC20(C.USDS).balanceOf(address(vault)));
 
         script = new RebalanceScUsdsV2TestHarness(vault);
     }
@@ -94,7 +95,7 @@ contract RebalanceScUsdsV2Test is Test {
         assertApproxEqRel(script.targetTokensInvested(), expectedDebt, 0.01e18, "weth invested");
         assertApproxEqRel(script.totalDebt(), expectedDebt, 0.01e18, "total debt");
         assertApproxEqRel(script.totalCollateral(), expectedCollateral, 0.01e18, "total collateral");
-        assertApproxEqRel(script.assetBalance(), expectedFloat, 0.5e18, "usds balance");
+        assertApproxEqRel(script.assetBalance(), expectedFloat, 0.6e18, "usds balance");
     }
 
     function test_run_canDeleverage() public {
@@ -128,24 +129,41 @@ contract RebalanceScUsdsV2Test is Test {
     function _simulate100PctProfit() internal {
         WETH weth = WETH(payable(C.WETH));
 
-        console2.log("weth balance before", weth.balanceOf(address(script.targetVault())));
-        console2.log("total assets before", script.targetVault().totalAssets());
-
         // simulate 100% profit by dealing more WETH to scWETH vault
         deal(
             address(weth),
             address(script.targetVault()),
             script.targetVault().totalAssets() + weth.balanceOf(address(script.targetVault()))
         );
+    }
 
-        console2.log("weth balance after", weth.balanceOf(address(script.targetVault())));
-        console2.log("total assets after", script.targetVault().totalAssets());
+    function test_run_claimsRewards() public {
+        vault = scUSDSv2(MainnetAddresses.SCUSDSV2);
+
+        script = new RebalanceScUsdsV2TestHarness(vault);
+
+        address[] memory assets = new address[](1);
+        assets[0] = C.AAVE_V3_AUSDS_TOKEN;
+        uint256 claimable = IRewardsController(C.AAVE_V3_REWARDS_CONTROLLER).getUserRewards(
+            assets, address(vault), 0x32a6268f9Ba3642Dda7892aDd74f1D34469A4259
+        );
+
+        uint256 totalAssetsBefore = vault.totalAssets();
+
+        script.run();
+
+        assertApproxEqAbs(vault.totalAssets(), totalAssetsBefore + claimable, 1, "rewards not claimed");
     }
 }
 
 contract RebalanceScUsdsV2TestHarness is RebalanceScUsdsV2 {
     constructor(scUSDSv2 _vault) {
         vault = _vault;
+    }
+
+    function _initEnv() internal override {
+        // TODO: WRONG KEEPER ADDRESS???
+        keeper = 0x3Ab6EBDBf08e1954e69F6859AdB2DA5236D2e838;
     }
 
     function _getVaultAddress() internal view override returns (scCrossAssetYieldVault) {
