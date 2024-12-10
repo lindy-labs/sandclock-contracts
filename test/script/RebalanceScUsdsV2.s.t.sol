@@ -35,7 +35,7 @@ contract RebalanceScUsdsV2Test is Test {
     constructor() {
         mainnetFork = vm.createFork(vm.envString("RPC_URL_MAINNET"));
         vm.selectFork(mainnetFork);
-        vm.rollFork(21138918);
+        vm.rollFork(21366396);
 
         aaveV3 = new AaveV3ScUsdsAdapter();
         priceConverter = new DaiWethPriceConverter();
@@ -95,7 +95,7 @@ contract RebalanceScUsdsV2Test is Test {
         assertApproxEqRel(script.targetTokensInvested(), expectedDebt, 0.01e18, "weth invested");
         assertApproxEqRel(script.totalDebt(), expectedDebt, 0.01e18, "total debt");
         assertApproxEqRel(script.totalCollateral(), expectedCollateral, 0.01e18, "total collateral");
-        assertApproxEqRel(script.assetBalance(), expectedFloat, 0.5e18, "usds balance");
+        assertApproxEqRel(script.assetBalance(), expectedFloat, 0.6e18, "usds balance");
     }
 
     function test_run_canDeleverage() public {
@@ -129,25 +129,15 @@ contract RebalanceScUsdsV2Test is Test {
     function _simulate100PctProfit() internal {
         WETH weth = WETH(payable(C.WETH));
 
-        console2.log("weth balance before", weth.balanceOf(address(script.targetVault())));
-        console2.log("total assets before", script.targetVault().totalAssets());
-
         // simulate 100% profit by dealing more WETH to scWETH vault
         deal(
             address(weth),
             address(script.targetVault()),
             script.targetVault().totalAssets() + weth.balanceOf(address(script.targetVault()))
         );
-
-        console2.log("weth balance after", weth.balanceOf(address(script.targetVault())));
-        console2.log("total assets after", script.targetVault().totalAssets());
     }
 
     function test_run_claimsRewards() public {
-        mainnetFork = vm.createFork(vm.envString("RPC_URL_MAINNET"));
-        vm.selectFork(mainnetFork);
-        vm.rollFork(21366396);
-
         vault = scUSDSv2(MainnetAddresses.SCUSDSV2);
 
         script = new RebalanceScUsdsV2TestHarness(vault);

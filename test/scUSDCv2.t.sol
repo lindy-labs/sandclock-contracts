@@ -1601,7 +1601,7 @@ contract scUSDCv2Test is Test {
         vault.deposit(_amount, alice);
         vm.stopPrank();
 
-        uint256 borrowAmount = priceConverter.assetToTargetToken(_amount.mulWadDown(0.6e18));
+        uint256 borrowAmount = priceConverter.assetToTargetToken(_amount.mulWadDown(0.5e18));
 
         bytes[] memory callData;
         callData = _getSupplyAndBorrowCallData(callData, aaveV3.id(), _amount, borrowAmount);
