@@ -9,7 +9,5 @@ contract Sandy is OFT {
     constructor(address _lzEndpoint, address _delegate)
         OFT("Sandclock Sandy", "SANDY", _lzEndpoint, _delegate)
         Ownable(_delegate)
-    {
-        _mint(_delegate, 100000e18);
-    }
+    {}
 }
