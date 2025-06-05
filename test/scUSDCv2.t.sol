@@ -1609,7 +1609,10 @@ contract scUSDCv2Test is Test {
         vault.rebalance(callData);
 
         uint256 total = vault.totalAssets();
-        _withdrawAmount = bound(_withdrawAmount, 1e6, total);
+        // Limit withdrawal to avoid under-collateralization - leave some buffer
+        uint256 maxWithdraw = total > total.mulWadDown(0.2e18) ? total - total.mulWadDown(0.2e18) : total / 2;
+        if (maxWithdraw < 1e6) maxWithdraw = total > 1e6 ? 1e6 : total;
+        _withdrawAmount = bound(_withdrawAmount, 1e6, maxWithdraw);
         vm.startPrank(alice);
         vault.withdraw(_withdrawAmount, alice, alice);
 

@@ -185,39 +185,47 @@ contract scWETHTest is Test {
         _redeemChecks(preDepositBal);
     }
 
-    function testFail_Deposit_WithInsufficientApproval(uint256 amount) public {
+    function test_RevertIf_DepositWithInsufficientApproval(uint256 amount) public {
         vm.deal(address(this), amount / 2);
         weth.deposit{value: amount / 2}();
         weth.approve(address(vault), amount / 2);
+        vm.expectRevert();
         vault.deposit(amount, address(this));
     }
 
-    function testFail_Withdraw(uint256 amount) public {
+    function test_RevertIf_WithdrawWithInsufficientBalance(uint256 amount) public {
+        amount = bound(amount, 2, type(uint256).max);
         vm.deal(address(this), amount / 2);
         weth.deposit{value: amount / 2}();
         weth.approve(address(vault), amount / 2);
         vault.deposit(amount / 2, address(this));
+        vm.expectRevert(PleaseUseRedeemMethod.selector);
         vault.withdraw(amount, address(this), address(this));
     }
 
-    function testFail_Redeem_WithInsufficientBalance(uint256 amount) public {
+    function test_RevertIf_RedeemWithInsufficientBalance(uint256 amount) public {
+        amount = bound(amount, 2, type(uint256).max);
         vm.deal(address(this), amount / 2);
         weth.deposit{value: amount / 2}();
         weth.approve(address(vault), amount / 2);
         vault.deposit(amount / 2, address(this));
+        vm.expectRevert();
         vault.redeem(amount, address(this), address(this));
     }
 
-    function testFail_Withdraw_WithNoBalance(uint256 amount) public {
+    function test_RevertIf_WithdrawWithNoBalance(uint256 amount) public {
         if (amount == 0) amount = 1;
+        vm.expectRevert();
         vault.withdraw(amount, address(this), address(this));
     }
 
-    function testFail_Redeem_WithNoBalance(uint256 amount) public {
+    function test_RevertIf_RedeemWithNoBalance(uint256 amount) public {
+        vm.expectRevert();
         vault.redeem(amount, address(this), address(this));
     }
 
-    function testFail_Deposit_WithNoApproval(uint256 amount) public {
+    function test_RevertIf_DepositWithNoApproval(uint256 amount) public {
+        vm.expectRevert();
         vault.deposit(amount, address(this));
     }
 

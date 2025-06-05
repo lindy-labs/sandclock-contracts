@@ -77,36 +77,47 @@ contract SandclockLUSDTest is DSTestPlus {
         assertEq(underlying.balanceOf(address(this)), preDepositBal);
     }
 
-    function testFailDepositWithNotEnoughApproval(uint256 amount) public {
+    function test_RevertIf_DepositWithNotEnoughApproval(uint256 amount) public {
+        amount = bound(amount, 2, type(uint256).max);
         underlying.mint(address(this), amount / 2);
         underlying.approve(address(vault), amount / 2);
+        hevm.expectRevert("TRANSFER_FROM_FAILED");
         vault.deposit(amount, address(this));
     }
 
-    function testFailWithdrawWithNotEnoughBalance(uint256 amount) public {
+    function test_RevertIf_WithdrawWithNotEnoughBalance(uint256 amount) public {
+        amount = bound(amount, 2, 1e27);
         underlying.mint(address(this), amount / 2);
         underlying.approve(address(vault), amount / 2);
         vault.deposit(amount / 2, address(this));
+        hevm.expectRevert(abi.encodeWithSignature("Panic(uint256)", 0x11));
         vault.withdraw(amount, address(this), address(this));
     }
 
-    function testFailRedeemWithNotEnoughBalance(uint256 amount) public {
+    function test_RevertIf_RedeemWithNotEnoughBalance(uint256 amount) public {
+        amount = bound(amount, 2, 1e27);
         underlying.mint(address(this), amount / 2);
         underlying.approve(address(vault), amount / 2);
         vault.deposit(amount / 2, address(this));
+        hevm.expectRevert(abi.encodeWithSignature("Panic(uint256)", 0x11));
         vault.redeem(amount, address(this), address(this));
     }
 
-    function testFailWithdrawWithNoBalance(uint256 amount) public {
+    function test_RevertIf_WithdrawWithNoBalance(uint256 amount) public {
         if (amount == 0) amount = 1;
+        hevm.expectRevert(abi.encodeWithSignature("Panic(uint256)", 0x11));
         vault.withdraw(amount, address(this), address(this));
     }
 
-    function testFailRedeemWithNoBalance(uint256 amount) public {
+    function test_RevertIf_RedeemWithNoBalance(uint256 amount) public {
+        amount = bound(amount, 1, type(uint256).max);
+        hevm.expectRevert(abi.encodeWithSignature("Panic(uint256)", 0x11));
         vault.redeem(amount, address(this), address(this));
     }
 
-    function testFailDepositWithNoApproval(uint256 amount) public {
+    function test_RevertIf_DepositWithNoApproval(uint256 amount) public {
+        amount = bound(amount, 1, type(uint256).max);
+        hevm.expectRevert("TRANSFER_FROM_FAILED");
         vault.deposit(amount, address(this));
     }
 
@@ -137,21 +148,23 @@ contract SandclockLUSDTest is DSTestPlus {
         assertEq(totalAssetsBefore + lqtyAmount + ethAmount, totalAssetsAfter);
     }
 
-    function testFailHarvestLQTY(uint256 lqtyAmount) public {
+    function test_RevertIf_HarvestLQTY(uint256 lqtyAmount) public {
         lqtyAmount = bound(lqtyAmount, 1, 1e27);
         lqty.mint(address(stabilityPool), lqtyAmount);
         bytes memory lqtySwapData = abi.encode(address(lqty), address(underlying), lqtyAmount);
         bytes memory ethSwapData = abi.encode(address(0), address(underlying), 0);
         xrouter.setShouldFailOnSwap(true);
+        hevm.expectRevert("Mock0x: swap failed");
         vault.harvest(lqtyAmount, lqtySwapData, 0, ethSwapData);
     }
 
-    function testFailHarvestETH(uint256 ethAmount) public {
+    function test_RevertIf_HarvestETH(uint256 ethAmount) public {
         ethAmount = bound(ethAmount, 1, 1e27);
         hevm.deal(address(stabilityPool), ethAmount);
         bytes memory lqtySwapData = abi.encode(address(lqty), address(underlying), 0);
         bytes memory ethSwapData = abi.encode(address(0), address(underlying), ethAmount);
         xrouter.setShouldFailOnSwap(true);
+        hevm.expectRevert("Mock0x: swap failed");
         vault.harvest(0, lqtySwapData, ethAmount, ethSwapData);
     }
 

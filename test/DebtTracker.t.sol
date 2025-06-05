@@ -88,7 +88,7 @@ contract BonusTrackerTest is DSTestPlus {
         assertEq(stakingPool.debtFor(address(this)), 0);
     }
 
-    function testFail_deposit(uint256 amount0, uint256 stakeTime) public {
+    function test_RevertIf_DepositBeforeUnlockTime(uint256 amount0, uint256 stakeTime) public {
         amount0 = bound(amount0, 1, 1e27);
         stakeTime = bound(stakeTime, 1, 30 days - 1);
 
@@ -99,10 +99,11 @@ contract BonusTrackerTest is DSTestPlus {
         hevm.warp(stakeTime);
 
         // stake
+        hevm.expectRevert(abi.encodeWithSignature("UserHasDebt()"));
         stakingPool.deposit(amount0, address(this));
     }
 
-    function testFail_mint(uint256 amount0, uint256 stakeTime) public {
+    function test_RevertIf_MintBeforeUnlockTime(uint256 amount0, uint256 stakeTime) public {
         amount0 = bound(amount0, 1, 1e27);
         stakeTime = bound(stakeTime, 1, 30 days - 1);
 
@@ -113,10 +114,11 @@ contract BonusTrackerTest is DSTestPlus {
         hevm.warp(stakeTime);
 
         // stake
+        hevm.expectRevert(abi.encodeWithSignature("UserHasDebt()"));
         stakingPool.mint(amount0, address(this));
     }
 
-    function testFail_withdraw(uint256 amount0, uint256 stakeTime) public {
+    function test_RevertIf_WithdrawBeforeUnlockTime(uint256 amount0, uint256 stakeTime) public {
         amount0 = bound(amount0, 1, stakingPool.balanceOf(address(this)));
         stakeTime = bound(stakeTime, 1, 30 days - 1);
 
@@ -124,10 +126,11 @@ contract BonusTrackerTest is DSTestPlus {
         hevm.warp(stakeTime);
 
         // stake
+        hevm.expectRevert(abi.encodeWithSignature("UserHasDebt()"));
         stakingPool.withdraw(amount0, address(this), address(this));
     }
 
-    function testFail_redeem(uint256 amount0, uint256 stakeTime) public {
+    function test_RevertIf_RedeemBeforeUnlockTime(uint256 amount0, uint256 stakeTime) public {
         amount0 = bound(amount0, 1, stakingPool.balanceOf(address(this)));
         stakeTime = bound(stakeTime, 1, 30 days - 1);
 
@@ -135,10 +138,11 @@ contract BonusTrackerTest is DSTestPlus {
         hevm.warp(stakeTime);
 
         // stake
+        hevm.expectRevert(abi.encodeWithSignature("UserHasDebt()"));
         stakingPool.redeem(amount0, address(this), address(this));
     }
 
-    function testFail_transfer(uint256 amount0, uint256 stakeTime) public {
+    function test_RevertIf_TransferBeforeUnlockTime(uint256 amount0, uint256 stakeTime) public {
         amount0 = bound(amount0, 1, stakingPool.balanceOf(address(this)));
         stakeTime = bound(stakeTime, 1, 30 days - 1);
 
@@ -146,10 +150,11 @@ contract BonusTrackerTest is DSTestPlus {
         hevm.warp(stakeTime);
 
         // stake
+        hevm.expectRevert(abi.encodeWithSignature("UserHasDebt()"));
         stakingPool.transfer(address(0x70), amount0);
     }
 
-    function testFail_transferFrom(uint256 amount0, uint256 stakeTime) public {
+    function test_RevertIf_TransferFromBeforeUnlockTime(uint256 amount0, uint256 stakeTime) public {
         amount0 = bound(amount0, 1, stakingPool.balanceOf(address(this)));
         stakeTime = bound(stakeTime, 1, 30 days - 1);
 
@@ -157,6 +162,7 @@ contract BonusTrackerTest is DSTestPlus {
         hevm.warp(stakeTime);
 
         // stake
+        hevm.expectRevert(abi.encodeWithSignature("UserHasDebt()"));
         stakingPool.transferFrom(address(this), address(0x70), amount0);
     }
 }

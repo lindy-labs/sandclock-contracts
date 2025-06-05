@@ -582,24 +582,25 @@ contract RewardTrackerTest is Test {
         stakingPool.fetchRewards(ERC4626(vault));
     }
 
-    function testFail_fetchRewards_notWhitelisted(uint256 amount) public {
+    function test_RevertIf_FetchRewardsNotWhitelisted(uint256 amount) public {
         amount = bound(amount, 1e5, 1e27);
         rewardToken.mint(address(this), amount);
         rewardToken.approve(address(vault), amount);
         vault.deposit(amount, address(stakingPool));
         stakingPool.grantRole(DISTRIBUTOR, address(this));
+        vm.expectRevert();
         stakingPool.fetchRewards(ERC4626(vault));
     }
 
-    function testFail_fetchRewards_notSupportedAsset(uint256 amount) public {
+    function test_RevertIf_FetchRewardsNotSupportedAsset(uint256 amount) public {
         amount = bound(amount, 1e5, 1e27);
         vault = new MockERC4626(ERC20(stakeToken), "Vault", "scQuartz");
         stakeToken.mint(address(this), amount);
         stakeToken.approve(address(vault), amount);
         vault.deposit(amount, address(stakingPool));
         stakingPool.grantRole(DISTRIBUTOR, address(this));
+        vm.expectRevert(abi.encodeWithSignature("VaultAssetNotSupported()"));
         stakingPool.addVault(address(vault));
-        stakingPool.fetchRewards(ERC4626(vault));
     }
 
     function test_setTreasury() public {
