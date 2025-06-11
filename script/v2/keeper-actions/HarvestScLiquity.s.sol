@@ -30,7 +30,7 @@ contract HarvestScLiquity is Script {
 
     // Minimum output amounts (to be set by caller based on oracle data or market conditions)
     uint256 public minLUSDFromLQTY; // Minimum LUSD expected from LQTY swap
-    uint256 public minLUSDFromETH;  // Minimum LUSD expected from ETH swap
+    uint256 public minLUSDFromETH; // Minimum LUSD expected from ETH swap
 
     /*//////////////////////////////////////////////////////////////*/
 
@@ -46,7 +46,7 @@ contract HarvestScLiquity is Script {
 
         // Initialize contracts and keeper
         _init();
-        
+
         // Set minimum amounts from environment variables
         _setMinimumAmounts();
 
@@ -63,7 +63,8 @@ contract HarvestScLiquity is Script {
         }
 
         // Prepare swap data only if minimum amounts are set and tokens are available
-        bytes memory lqtySwapData = (totalLQTY > 0 && minLUSDFromLQTY > 0) ? _createLQTYSwapData(totalLQTY) : new bytes(0);
+        bytes memory lqtySwapData =
+            (totalLQTY > 0 && minLUSDFromLQTY > 0) ? _createLQTYSwapData(totalLQTY) : new bytes(0);
         bytes memory ethSwapData = (totalETH > 0 && minLUSDFromETH > 0) ? _createETHSwapData(totalETH) : new bytes(0);
 
         // Calculate actual amounts to be swapped
@@ -109,8 +110,8 @@ contract HarvestScLiquity is Script {
     function _setMinimumAmounts() internal {
         // Set minimum LUSD amounts directly in the script
         minLUSDFromLQTY = 150e18; // 150 LUSD minimum from LQTY swap
-        minLUSDFromETH = 0.5e18;  // 0.5 LUSD minimum from ETH swap
-        
+        minLUSDFromETH = 0.5e18; // 0.5 LUSD minimum from ETH swap
+
         console2.log("Minimum LUSD from LQTY:", minLUSDFromLQTY);
         console2.log("Minimum LUSD from ETH:", minLUSDFromETH);
     }
@@ -152,23 +153,23 @@ contract HarvestScLiquity is Script {
     function _createLQTYSwapData(uint256 swapAmount) internal view returns (bytes memory) {
         // Create Uniswap V3 encoded path: LQTY -> WETH -> LUSD
         bytes memory encodedPath = abi.encodePacked(
-            C.LIQUITY_LQTY_TOKEN,  // LQTY
-            uint24(3000),          // 0.3% fee tier LQTY/WETH
-            C.WETH,                // WETH
-            uint24(3000),          // 0.3% fee tier WETH/LUSD  
-            C.LUSD                 // LUSD
+            C.LIQUITY_LQTY_TOKEN, // LQTY
+            uint24(3000), // 0.3% fee tier LQTY/WETH
+            C.WETH, // WETH
+            uint24(3000), // 0.3% fee tier WETH/LUSD
+            C.LUSD // LUSD
         );
 
         return abi.encodeWithSignature(
-            "sellTokenForTokenToUniswapV3(bytes,uint256,uint256,address)", 
+            "sellTokenForTokenToUniswapV3(bytes,uint256,uint256,address)",
             encodedPath,
-            swapAmount, 
+            swapAmount,
             minLUSDFromLQTY, // Use absolute minimum amount
             address(0) // Router handles return to caller
         );
     }
 
-    function _createETHSwapData(uint256 /* ethAmount */) internal view returns (bytes memory) {
+    function _createETHSwapData(uint256 /* ethAmount */ ) internal view returns (bytes memory) {
         // Uniswap V3 encoded path: ETH (WETH) -> LUSD
         bytes memory encodedPath = abi.encodePacked(
             C.WETH, // WETH
